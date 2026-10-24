@@ -1364,8 +1364,6 @@ mod retail_construction_tests {
             crate::skirmish_launch::AiDifficulty,
         )],
     ) -> (HeadlessScenario, Vec<crate::sim::intern::InternedId>) {
-        use crate::sim::intern::InternedId;
-
         let ra2 = std::path::PathBuf::from(
             std::env::var("RA2_DIR").expect("set RA2_DIR to the retail RA2/YR install directory"),
         );
@@ -1667,7 +1665,13 @@ mod retail_construction_tests {
                 .factories()
                 .view(owner, ProductionCategory::Vehicle)
                 .is_some_and(|head| head.object.is_some() && head.suspended),
-            "EMP must hold the real paid production head"
+            "EMP must hold the real paid production head: {:?}",
+            scenario
+                .sim()
+                .production
+                .factories()
+                .view(owner, ProductionCategory::Vehicle)
+                .map(|head| (head.object, head.suspended, head.progress))
         );
         let sim = &mut scenario.runtime.simulation;
         sim.queue_command(CommandEnvelope::new(
@@ -1818,6 +1822,301 @@ mod retail_construction_tests {
         assert!(
             crate::sim::credit_income::available_money(&sim.houses, america) > before,
             "the real AY Tanya kill must pay spendable credits, not only score or experience"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_nearby_pair(
+        actor_type: &str,
+        target_type: &str,
+        friendly: bool,
+    ) -> (HeadlessScenario, u64, u64) {
+        let mut scenario = aymod_battle(0);
+        let runtime = &mut scenario.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let owner = house_of(sim, "Americans");
+        let enemy = house_of(sim, "Russians");
+        let sites = cells_nearest(aymod_anchor(sim, owner));
+        let actor = spawn_on_free_cells(sim, rules, owner, sites, &[actor_type])[0];
+        let at = sim.entities().get(actor).unwrap().position;
+        let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+            .into_iter()
+            .filter(|&(x, y)| {
+                let distance = (x - i32::from(at.rx()))
+                    .abs()
+                    .max((y - i32::from(at.ry())).abs());
+                (1..=3).contains(&distance)
+                    && u16::try_from(x)
+                        .ok()
+                        .zip(u16::try_from(y).ok())
+                        .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+            })
+            .collect::<Vec<_>>();
+        let target = spawn_on_free_cells(
+            sim,
+            rules,
+            if friendly { owner } else { enemy },
+            sites,
+            &[target_type],
+        )[0];
+        (scenario, actor, target)
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_kill_for_experience(scenario: &mut HeadlessScenario, killer: u64) {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        let runtime = &mut scenario.runtime;
+        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+        let enemy = house_of(sim, "Russians");
+        let sites = cells_nearest(aymod_anchor(sim, enemy));
+        let victim = spawn_on_free_cells(sim, &resources.rules, enemy, sites, &["APOC"])[0];
+        let owner = sim.entities().get(killer).unwrap().owner();
+        let kind = sim
+            .object_type(
+                sim.entities().get(killer).unwrap().type_ref(),
+                &resources.rules,
+            )
+            .unwrap();
+        let weapon = resources.rules.weapon(kind.primary().unwrap()).unwrap();
+        let warhead = sim.interner.intern(weapon.warhead.as_deref().unwrap());
+        let hit = EntityDamageEvent::direct_receiver(
+            victim,
+            sim.entities().get(victim).unwrap().health.current(),
+            0,
+            killer,
+            Some(owner),
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: true,
+            },
+        );
+        sim.commit_direct_damage_receiver(
+            &resources.rules,
+            Some(&resources.overlay_registry),
+            hit,
+            Default::default(),
+        );
+        assert!(
+            sim.entities()
+                .get(victim)
+                .is_none_or(|entity| entity.health.current() <= 0 || entity.death.is_dying())
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY spy boarding and permanent ownership"]
+    fn aymod_spy_attack_consumes_boarder_and_keeps_stolen_tank() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, spy, tank) = aymod_nearby_pair("SPY", "MTNK", false);
+        let sim = &mut scenario.runtime.simulation;
+        let owner = sim.entities().get(spy).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: spy,
+                target_id: tank,
+            },
+        ));
+        for _ in 0..400 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(tank)
+                .is_some_and(|entity| entity.owner() == owner)
+            {
+                break;
+            }
+        }
+        let stolen = scenario
+            .sim()
+            .entities()
+            .get(tank)
+            .expect("the stolen tank survives");
+        assert_eq!(
+            stolen.owner(),
+            owner,
+            "the authored SpyJack attack must steal the tank"
+        );
+        assert!(stolen.mind_control.permanent());
+        assert!(stolen.mind_control.controller().is_none());
+        assert!(
+            scenario.sim().entities().get(spy).is_none(),
+            "boarding consumes the real spy, not an invisible limbo remainder"
+        );
+        for _ in 0..60 {
+            tick_with_due_commands(&mut scenario);
+        }
+        assert_eq!(scenario.sim().entities().get(tank).unwrap().owner(), owner);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY controlled kill experience routing"]
+    fn aymod_yuri_receives_controlled_kill_experience_and_elite_falls_back() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, yuri, tank) = aymod_nearby_pair("YURI", "MTNK", false);
+        let sim = &mut scenario.runtime.simulation;
+        let owner = sim.entities().get(yuri).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: yuri,
+                target_id: tank,
+            },
+        ));
+        for _ in 0..400 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(tank)
+                .is_some_and(|entity| entity.owner() == owner)
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(tank)
+                .unwrap()
+                .mind_control
+                .controller(),
+            Some(yuri)
+        );
+        aymod_kill_for_experience(&mut scenario, tank);
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(yuri)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0
+        );
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(tank)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            0
+        );
+        scenario
+            .runtime
+            .simulation
+            .substrate
+            .entities
+            .get_mut(yuri)
+            .unwrap()
+            .veterancy
+            .set_elite();
+        aymod_kill_for_experience(&mut scenario, tank);
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(tank)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY boarding and TrainPassengers kill credit"]
+    fn aymod_fortress_passenger_trains_before_carrier_then_elite_falls_back() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, carrier, passenger) = aymod_nearby_pair("BFRT", "E1", true);
+        let sim = &mut scenario.runtime.simulation;
+        let owner = sim.entities().get(passenger).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::clicked_mission(
+                passenger,
+                crate::sim::mission::MissionType::Enter,
+                crate::sim::combat::TargetKind::Entity(carrier),
+            ),
+        ));
+        for _ in 0..400 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(passenger)
+                .is_some_and(|entity| entity.passenger_role.inside_transport_id() == Some(carrier))
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(passenger)
+                .unwrap()
+                .passenger_role
+                .open_transport_id(),
+            Some(carrier)
+        );
+        aymod_kill_for_experience(&mut scenario, passenger);
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(passenger)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0
+        );
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            0
+        );
+        scenario
+            .runtime
+            .simulation
+            .substrate
+            .entities
+            .get_mut(passenger)
+            .unwrap()
+            .veterancy
+            .set_elite();
+        aymod_kill_for_experience(&mut scenario, passenger);
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0
         );
     }
 
