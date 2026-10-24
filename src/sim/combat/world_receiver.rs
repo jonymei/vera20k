@@ -3047,6 +3047,20 @@ fn emit_detonation_receivers<'r>(
             });
     }
 
+    #[cfg(feature = "npatch")]
+    world.apply_npatch_emp_detonation(
+        detonation.impact,
+        match detonation.target {
+            ProjectileTarget::Entity(id) => Some(id),
+            _ => None,
+        },
+        (detonation.source_id != 0).then_some(detonation.source_id),
+        detonation.payload.base_damage,
+        warhead,
+        rules,
+        effects,
+    );
+
     // Installed Ares46920B ->100536E0/10052870 runs after radiation,
     // before the exclusive special/ordinary damage arms (including Damage=0).
     #[cfg(feature = "ares")]

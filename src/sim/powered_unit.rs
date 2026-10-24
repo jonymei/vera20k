@@ -353,7 +353,7 @@ impl Simulation {
         // Installed Ares Activate1004CCB0 replaces70FBE0 and vetoes before
         // ResetOrders/Power_On/sound. Keep this admission in the shared owner:
         // House50E010's power-center recovery also calls this function.
-        #[cfg(feature = "ares")]
+        #[cfg(any(feature = "ares", feature = "npatch"))]
         {
             let entity = self.substrate.entities.get(id).expect("same receiver");
             // Selected live Drive/Walk path: Techno70EFD0 tests signed>0.

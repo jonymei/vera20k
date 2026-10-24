@@ -317,7 +317,7 @@ impl Simulation {
                 // both AI Hunt deploy and Guard→Unload through this owner.
                 // Active-retail EMP producer reachability is not established;
                 // default builds retain their current constructor-zero path.
-                #[cfg(feature = "ares")]
+                #[cfg(any(feature = "ares", feature = "npatch"))]
                 if entity.emp_remaining() > 0 {
                     return false;
                 }

@@ -1,8 +1,8 @@
-//! Ordinary ground-victim and independent powered-building Ares EMP.
+//! Shared EMP state and lifecycle for Ares and NPatch compatibility delivery.
 //! The Techno+504 counter and held Anim have one private owner; the existing powered-unit owner keeps +1C8.
 //! Installed Bullet46920B ->100536E0/10062320 and AI6FAF0D ->10053DF0.
 //! Evidence/transport bounds: tools/rules_oracle/ares_emp.{py,json,meta.json};
-//! full chain ownership and residuals: docs/ares-emp.md.
+//! Full chain ownership and residuals: docs/ares-emp.md and docs/npatch-emp.md.
 use super::GameEntity;
 use std::hash::{Hash, Hasher};
 
@@ -42,7 +42,7 @@ impl GameEntity {
     }
 }
 
-#[cfg(feature = "ares")]
+#[cfg(any(feature = "ares", feature = "npatch"))]
 mod receiver {
     use super::*;
     use crate::map::entities::EntityCategory;
@@ -58,6 +58,7 @@ mod receiver {
     use crate::util::native_x87::{MaskedX87Chop53 as X87, NativeF64Bits};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg(feature = "ares")]
     enum EmpDelivery {
         Rejected,
         Applied,
@@ -65,6 +66,7 @@ mod receiver {
         Unsupported,
     }
     /// Installed10062476..100624B4; signed32 addition wraps before max0.
+    #[cfg(feature = "ares")]
     fn capped_duration(old: i32, delta: i32, cap: i32) -> i32 {
         let sum = old.wrapping_add(delta);
         // Preserve10062476..A7's separate signed branches: moving max/min
@@ -84,6 +86,7 @@ mod receiver {
         };
         new.max(0)
     }
+    #[cfg(feature = "ares")]
     fn duration_delta(duration: i32, modifier: NativeF64Bits) -> i32 {
         X87::fistp_i32_masked(X87::mul(
             X87::load_i32(duration),
@@ -186,9 +189,96 @@ mod receiver {
         square[0] + square[1] + square[2] <= cutoff * cutoff
     }
     impl Simulation {
+        /// VERA's NPatch compatibility policy, not a claim of NPAE arithmetic:
+        /// positive Damage is EMP frames (zero uses 90), capped at 900. Rehits
+        /// refresh rather than stack. The shared EMP owner handles all expiry.
+        #[cfg(feature = "npatch")]
+        pub(crate) fn apply_npatch_emp_detonation(
+            &mut self,
+            impact: crate::sim::projectile::ProjectileCoord,
+            direct_target: Option<u64>,
+            source: Option<u64>,
+            damage: i32,
+            warhead: &WarheadType,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            if !warhead.em_effect {
+                return;
+            }
+            // An explicitly configured Ares EMP owns delivery in mixed builds.
+            if warhead.ares_rules().is_some_and(|emp| emp.duration() != 0) {
+                return;
+            }
+            let duration = if damage == 0 {
+                90
+            } else {
+                damage.clamp(1, 900)
+            };
+            let targets = if warhead.cell_spread_f64 <= 0.0 {
+                direct_target.into_iter().collect()
+            } else {
+                self.ares_effect_ground_targets(impact, warhead.cell_spread_f64, rules)
+            };
+            for target in targets {
+                let Some(victim) = self.substrate.entities.get(target) else {
+                    continue;
+                };
+                let Some(object) = self.interner.object_type(victim.type_ref(), rules) else {
+                    continue;
+                };
+                let source_owner = source
+                    .and_then(|source| self.substrate.entities.get(source))
+                    .map(|entity| entity.owner());
+                let allied = source_owner.is_some_and(|owner| {
+                    crate::sim::combat::combat_weapon::is_ally_by_object(
+                        Some(self.house_alliances.as_map()),
+                        &self.interner,
+                        owner,
+                        victim.owner(),
+                    )
+                });
+                let susceptible = match victim.category() {
+                    EntityCategory::Unit => !object.organic,
+                    EntityCategory::Infantry => object.cyborg,
+                    EntityCategory::Structure => !object.invisible_in_game && object.powered,
+                    _ => false,
+                };
+                if !susceptible
+                    || victim.lifecycle.in_limbo()
+                    || !victim.lifecycle.object_alive()
+                    || victim.is_warped_out()
+                    || victim.is_falling_down()
+                    || !advisable(victim)
+                    || allied && !warhead.affects_allies
+                    || matches!(
+                        victim.locomotor.as_ref().map(|loco| loco.active_kind()),
+                        Some(LocomotorKind::Fly | LocomotorKind::Jumpjet | LocomotorKind::Rocket)
+                    )
+                    || crate::sim::superweapon::invulnerability::is_invulnerable(
+                        victim.invulnerability.as_ref(),
+                        self.session.binary_frame(),
+                    )
+                    || f64::from_bits(warhead.interaction(object.armor_id()).multiplier().bits())
+                        .abs()
+                        < 0.001
+                    || object.emp_rules().is_some_and(|emp| {
+                        emp.immune() == Some(true) || emp.rank_immune(victim.veterancy.rank())
+                    })
+                    || self.unit_in_contact_war_factory(target, rules)
+                {
+                    continue;
+                }
+                let remaining = victim.emp.remaining.max(duration);
+                let sparkle = rules.emp_sparkles().map(str::to_owned);
+                self.commit_emp_duration(target, source, remaining, sparkle, true, rules, effects);
+            }
+        }
+
         /// Installed Bullet46920B calls this pre-effect even when Damage=0.
         /// The bounded producer collects the ground CellClass lists. Airborne
         /// victims and their half-distance collector remain a later mechanism.
+        #[cfg(feature = "ares")]
         pub(crate) fn apply_ares_emp_detonation(
             &mut self,
             impact: crate::sim::projectile::ProjectileCoord,
@@ -293,6 +383,7 @@ mod receiver {
         /// One actual10062320 delivery. Supported victims are human
         /// Drive/Walk and ordinary AI Drive, with no Team/managers/harvester/positive death threshold.
         /// Their distinct detach/AI/aircraft/building paths remain explicit residuals.
+        #[cfg(feature = "ares")]
         fn deliver_ares_emp(
             &mut self,
             target: u64,
@@ -435,6 +526,37 @@ mod receiver {
                     }
                 })
                 .map(str::to_owned);
+            self.commit_emp_duration(
+                target,
+                source,
+                remaining,
+                sparkle_name,
+                settings.sparkles().is_some(),
+                rules,
+                effects,
+            );
+            EmpDelivery::Applied
+        }
+
+        fn commit_emp_duration(
+            &mut self,
+            target: u64,
+            source: Option<u64>,
+            remaining: i32,
+            sparkle_name: Option<String>,
+            refresh_sparkle: bool,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            let Some(old) = self
+                .substrate
+                .entities
+                .get(target)
+                .map(|entity| entity.emp.remaining)
+            else {
+                return;
+            };
+            let first_activation = old <= 0 && remaining > 0;
             self.substrate
                 .entities
                 .get_mut(target)
@@ -494,12 +616,11 @@ mod receiver {
                     }
                 }
             } else if old == remaining {
-                return EmpDelivery::Applied;
+                return;
             }
-            if first_activation || settings.sparkles().is_some() {
+            if first_activation || refresh_sparkle {
                 self.ares_emp_sparkle(target, sparkle_name.as_deref(), rules);
             }
-            EmpDelivery::Applied
         }
         fn enable_ares_emp(&mut self, target: u64, rules: &RuleSet, effects: FrameEffects<'_>) {
             let building = self
@@ -609,7 +730,7 @@ mod receiver {
                 || !self
                     .interner
                     .object_type(entity.type_ref(), rules)
-                    .is_some_and(ordinary_building)
+                    .is_some_and(|object| crate::rules::NPATCH_ENABLED || ordinary_building(object))
                 || self.building_operational_state(target, rules) != Some(true)
             {
                 return;
@@ -632,9 +753,12 @@ mod receiver {
             if !entity.category().is_foot() || self.owner_is_human(entity.owner()) {
                 return;
             }
+            #[cfg(feature = "ares")]
             let mission = rules
                 .ares_emp_ai_recover_mission()
                 .unwrap_or(MissionType::Hunt);
+            #[cfg(not(feature = "ares"))]
+            let mission = MissionType::Hunt;
             let _ = self.mission_queue_exact(
                 target,
                 crate::sim::mission::MissionId::from_known(mission),
@@ -716,7 +840,7 @@ mod receiver {
             }
         }
     }
-    #[cfg(test)]
+    #[cfg(all(test, feature = "ares"))]
     mod tests {
         use super::*;
         use crate::rules::ini_parser::IniFile;
@@ -2717,3 +2841,7 @@ mod receiver {
         }
     }
 }
+
+#[cfg(all(test, feature = "npatch"))]
+#[path = "npatch_emp_tests.rs"]
+mod npatch_tests;

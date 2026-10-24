@@ -6578,7 +6578,7 @@ impl RuleSet {
             .collect::<BTreeMap<_, _>>()
             .hash(&mut hasher);
 
-        #[cfg(feature = "ares")]
+        #[cfg(any(feature = "ares", feature = "npatch"))]
         {
             b"ares-emp-rules-v1".hash(&mut hasher);
             self.emp_sparkles.hash(&mut hasher);
