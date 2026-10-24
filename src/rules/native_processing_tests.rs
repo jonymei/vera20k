@@ -2367,6 +2367,52 @@ fn airburst_reference_retains_rebinds_and_keeps_native_factory_timing() {
     }
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_impact_children_follow_retained_projectiles_across_layers() {
+    let mut layers = RulesLayerStack::new(IniFile::from_str(
+        "[VehicleTypes]\n0=TANK\n[TANK]\nPrimary=PARENT\n\
+         [PARENT]\nProjectile=SHOT\nWarhead=WH\n\
+         [SHOT]\nAirburst=no\nAirburstWeapon=FIRST\n\
+         [FIRST]\nDamage=1\nProjectile=FRAGMENT\nWarhead=WH\n\
+         [FRAGMENT]\nInviso=yes\n[Warheads]\n0=WH\n[WH]\n",
+    ));
+    layers.push(
+        RulesLayerKind::GameMode,
+        IniFile::from_str(
+            "[PARENT]\nDamage=7\n[SHOT]\nAirburstWeapon=SECOND\n\
+         [SECOND]\nDamage=5\nProjectile=FRAGMENT\nWarhead=WH\n",
+        ),
+    );
+    layers.push(
+        RulesLayerKind::Scenario,
+        IniFile::from_str(
+            "[SHOT]\nAirburstWeapon=THIRD\n\
+         [THIRD]\nDamage=9\nProjectile=FRAGMENT\nWarhead=WH\n",
+        ),
+    );
+    let processed = layers.process().unwrap();
+    let rules = crate::rules::ruleset::RuleSet::from_processed_rules(&processed).unwrap();
+    assert_eq!(
+        rules.weapon("SECOND").unwrap().damage,
+        5,
+        "missing Projectile key retains the parent pointer"
+    );
+    assert_eq!(
+        rules.weapon("THIRD").unwrap().damage,
+        9,
+        "missing parent section still discovers the changed impact child"
+    );
+    assert_eq!(
+        rules.weapon("THIRD").unwrap().projectile.as_deref(),
+        Some("FRAGMENT")
+    );
+    assert_eq!(
+        rules.projectile("SHOT").unwrap().airburst_weapon.as_deref(),
+        Some("THIRD")
+    );
+}
+
 #[test]
 fn techno_weapon_bank_uses_effective_native_gates_and_elite_slot_order() {
     let mut layers = RulesLayerStack::new(IniFile::from_str(

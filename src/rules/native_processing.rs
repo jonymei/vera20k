@@ -6188,22 +6188,6 @@ impl RulesPassProcessor {
                 let incoming = raw.read_string("Projectile", "", 0x80);
                 let projectile = (!incoming.is_empty())
                     .then(|| self.find_or_allocate(RulesTypeFamily::Projectile, &incoming));
-                // NPatch compatibility: AYMod's impact child must enter this
-                // same Weapon sweep, not remain a late Bullet-created stub.
-                // Eager reference discovery is a deliberate VERA load policy.
-                #[cfg(feature = "npatch")]
-                if let Some(child) = projectile
-                    .flatten()
-                    .and_then(|index| {
-                        let member = &self.families[&RulesTypeFamily::Projectile][index];
-                        let section = pass.section(&member.native_stored_id)?;
-                        (!section.read_bool("Airburst", member.projectile_art.is_airburst()))
-                            .then_some(section)
-                    })
-                    .and_then(|section| section.read_name("AirburstWeapon", 0x80))
-                {
-                    self.find_or_allocate(RulesTypeFamily::Weapon, child);
-                }
                 let state = &mut self.family_mut(RulesTypeFamily::Weapon)[index].weapon;
                 if let Some(projectile) = projectile {
                     state.projectile = projectile;
@@ -6211,6 +6195,23 @@ impl RulesPassProcessor {
                 if let Some(warhead) = warhead {
                     state.warhead = warhead;
                 }
+            }
+            // NPatch compatibility: discover through the retained pointer even
+            // when this pass omits the parent Weapon or its Projectile key.
+            // The same sweep initializes each new child, without body replay.
+            #[cfg(feature = "npatch")]
+            if let Some(child) = self.families[&RulesTypeFamily::Weapon][index]
+                .weapon
+                .projectile
+                .and_then(|projectile| {
+                    let member = &self.families[&RulesTypeFamily::Projectile][projectile];
+                    let section = pass.section(&member.native_stored_id)?;
+                    (!section.read_bool("Airburst", member.projectile_art.is_airburst()))
+                        .then_some(section)
+                })
+                .and_then(|section| section.read_name("AirburstWeapon", 0x80))
+            {
+                self.find_or_allocate(RulesTypeFamily::Weapon, child);
             }
             index += 1;
         }

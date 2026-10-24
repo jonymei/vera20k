@@ -35,6 +35,10 @@ and the existing building operational edges handle powered defenses/providers.
 Ownership changes and power-center recovery cannot bypass a live counter. On
 expiry the owner reactivates only where power allows, retires the held sparkle
 and returns computer-controlled ground victims to the existing Hunt mission.
+If EMP expires during low power, a later operational recovery also enables the
+existing building Stuff owner, restoring lights and powered animations. This is
+an intentional player-friendly correction to Ares's delayed recovery, which
+reactivates but leaves Stuff disabled. It does not change the manual online latch.
 Lifecycle pointer-expiry/destruction already retires the same held Anim; no new
 timer, dead-object sweep or duplicate power state is introduced.
 
@@ -52,6 +56,9 @@ child while its parent's Weapon is being read. The existing Weapon factory and
 same ordered sweep then read the new child, including its own Projectile and
 Warhead. No second body reader or duplicate registry is introduced. This loader
 ordering is also an explicit compatibility choice, not asserted NPAE chronology.
+Discovery follows the retained Projectile pointer on later passes too: changing
+only the projectile's AirburstWeapon cannot strand a new child as a stub when
+the parent Weapon/Projectile entry is omitted.
 
 The NPatch compatibility policy emits one real child projectile after the
 parent's shared impact receivers, preserving the live source and original target.

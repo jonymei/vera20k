@@ -41,8 +41,11 @@ enables Stuff through452410 and reactivates, preserving Focus. Low-power expiry
 retires the EMP sparkle but leaves Stuff disabled and Techno deactivated.
 Restored power resumes the retained powered slot via the next Building
 operational edge; the actual common Techno head1004B528..575 then reactivates.
-That later path does not EnableStuff or preserve Focus: the shared Guard reset
-clears it. Structure lacks the Foot flag tested at100628B2, so neither AI nor
+Native's later path does not EnableStuff or preserve Focus. VERA deliberately
+enables Stuff at this recovered operational edge so building lights and powered
+animations do not remain permanently dark; this is a player-friendly difference,
+not native equivalence. The shared Guard reset still clears Focus. Structure lacks
+the Foot flag tested at100628B2, so neither AI nor
 human buildings queue the ground-unit Hunt recovery mission.
 
 The pre-effect coordinate100536E0/10053727 is local to the extension effects;

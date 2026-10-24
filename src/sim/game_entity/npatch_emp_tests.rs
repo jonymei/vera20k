@@ -200,3 +200,67 @@ fn emp_spares_organic_and_allied_units_but_disables_a_powered_tower() {
     sim.tick_ares_emp(tower, &rules, FrameEffects::default());
     assert!(sim.entities().get(tower).is_none());
 }
+
+#[test]
+fn expired_emp_restores_building_stuff_when_house_power_returns() {
+    let (mut sim, rules, source, _) = scene();
+    sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
+        .unwrap();
+    let tower = sim
+        .spawn_object("TOWER", "Russians", 20, 20, 0, &rules)
+        .unwrap();
+    sim.entities_mut_for_test()
+        .get_mut(tower)
+        .unwrap()
+        .mission
+        .set_current_for_test(
+            crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Guard),
+            0,
+        );
+    crate::sim::power_system::tick_power_states(
+        &mut sim.power_states,
+        &mut sim.substrate.entities,
+        &rules,
+        &sim.interner,
+        0,
+    );
+    let owner = sim.entities().get(tower).unwrap().owner();
+    hit(&mut sim, &rules, source, tower, 1);
+    assert!(
+        !sim.entities()
+            .get(tower)
+            .unwrap()
+            .building_art
+            .stuff_enabled()
+    );
+    sim.power_states
+        .map_mut_for_test()
+        .get_mut(&owner)
+        .unwrap()
+        .set_total_output_for_test(0);
+    sim.tick_ares_emp(tower, &rules, FrameEffects::default());
+    assert_eq!(sim.entities().get(tower).unwrap().emp_remaining(), 0);
+    assert!(sim.entities().get(tower).unwrap().deactivated.is_offline());
+    assert!(
+        !sim.entities()
+            .get(tower)
+            .unwrap()
+            .building_art
+            .stuff_enabled()
+    );
+    sim.power_states
+        .map_mut_for_test()
+        .get_mut(&owner)
+        .unwrap()
+        .set_total_output_for_test(200);
+    sim.update_ares_emp_operability(tower, &rules, FrameEffects::default());
+    assert!(!sim.entities().get(tower).unwrap().deactivated.is_offline());
+    assert!(
+        sim.entities()
+            .get(tower)
+            .unwrap()
+            .building_art
+            .stuff_enabled(),
+        "the shared light and powered-animation gate must recover too"
+    );
+}
