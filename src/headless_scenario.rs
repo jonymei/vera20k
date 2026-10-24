@@ -1955,6 +1955,68 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY elite Yuri permanent building control"]
+    fn aymod_elite_yuri_keeps_captured_building_after_controller_removal() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, yuri, building) = aymod_nearby_pair("YURIPR", "GAPOWR", false);
+        for _ in 0..240 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .mission
+                .effective()
+                .known()
+                != Some(crate::sim::mission::MissionType::Construction)
+            {
+                break;
+            }
+        }
+        let sim = &mut scenario.runtime.simulation;
+        let owner = sim.entities().get(yuri).unwrap().owner();
+        sim.substrate
+            .entities
+            .get_mut(yuri)
+            .unwrap()
+            .veterancy
+            .set_elite();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: yuri,
+                target_id: building,
+            },
+        ));
+        for _ in 0..400 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(building)
+                .is_some_and(|entity| entity.owner() == owner)
+            {
+                break;
+            }
+        }
+        let captured = scenario.sim().entities().get(building).unwrap();
+        assert_eq!(captured.owner(), owner);
+        assert!(captured.mind_control.permanent());
+        assert!(captured.mind_control.controller().is_none());
+        aymod_remove_shooter(&mut scenario, yuri);
+        for _ in 0..60 {
+            tick_with_due_commands(&mut scenario);
+        }
+        assert_eq!(
+            scenario.sim().entities().get(building).unwrap().owner(),
+            owner
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY controlled kill experience routing"]
     fn aymod_yuri_receives_controlled_kill_experience_and_elite_falls_back() {
         use crate::sim::command::{Command, CommandEnvelope};

@@ -110,14 +110,31 @@ focused coverage, but combined-delivery feature combinations, save/load and real
 AYMod window/gameplay acceptance remain unverified. No row above is closed by
 implementation or a green focused test alone.
 
-The combined local candidate has loaded the maintained AYMod data in the
-headless scenario runtime: a real TTNK Attack delivers EMP to an APOC and
-expires through actual simulation frames after removing the shooter; a real
-Tanya kill receiver increases its House's spendable credits. The maintained
-technology/shipyard regression also passes through production CanBuild and
-building Unlimbo/Limbo counters. The paid-factory EMP/manual-power scenario is
-still failing its suspension assertion and remains open; the passing combat
-checks do not certify production recovery or GUI acceptance.
+The combined local candidate passes seven opt-in scenarios against the maintained
+AYMod rules and assets through the headless scenario runtime:
+
+- A real TTNK Attack delivers EMP to an APOC; actual frames expire it after the
+  shooter is removed.
+- EMP suspends a paid MTNK factory head without losing the object or its cost;
+  manual Off survives expiry, and On resumes real production progress.
+- A real Tanya kill receiver increases its House's spendable credits.
+- Actual Enter boarding into a BFRT trains its passenger; an elite passenger's
+  next kill trains the carrier instead.
+- Actual Yuri Attack captures a tank; its kills train the controller at the
+  authored ratio, and an elite controller leaves subsequent XP with the tank.
+- Actual Spy Attack consumes the boarder and permanently retains the tank.
+- Actual elite Yuri Attack permanently captures a building; removing Yuri does
+  not release it.
+
+The maintained technology/shipyard regression also passes through production
+CanBuild and building Unlimbo/Limbo counters. Eight combined NPatch EMP tests
+cover production identity/cash/progress, other online producers, user holds,
+low-power recovery and saved EMP/manual-power intent. The production fix keeps
+physical factory lookup separate from online admission and notifies the existing
+queue owner on EMP transitions. No second hold state was added.
+
+These are headless production-path checks, not GUI or rendering certification.
+Normal-window acceptance and installation of the combined build remain pending.
 
 ## Initial data families
 
