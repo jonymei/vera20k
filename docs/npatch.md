@@ -10,6 +10,12 @@ cargo run --release --bin vera20k --features npatch
 The feature compiles to `rules::NPATCH_ENABLED`. A build without it ignores the extension keys
 and keeps stock behavior, like a build without `ares` or `phobos`.
 
+NPatch generations are not one interchangeable reader contract. AYMod uses NPAE
+#0011 Extended #174, including `AIBasePlanningCount`, not NPSE #359's
+`AIPlanningCount`. The [AYMod compatibility ledger](aymod-compatibility.md)
+separates actual data, implemented consumers, missing chains and validation
+boundaries; enabling this feature does not certify whole-mod support.
+
 `[General] VehicleParachute=` chooses the canopy for airdropped non-infantry, falling back to
 `Parachute=` when unset. Infantry keeps `Parachute=`. The name uses the retained animation
 reference and asset-loading owners, including empty-layer retention and `none` clearing.
