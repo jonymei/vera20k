@@ -665,6 +665,7 @@ mod receiver {
                         .set_archive_target(focus);
                 }
             }
+            self.update_emp_factory_queue(target, rules, effects);
         }
         fn disable_ares_emp(&mut self, target: u64, rules: &RuleSet, effects: FrameEffects<'_>) {
             let building = self
@@ -711,6 +712,30 @@ mod receiver {
             }
             self.retire_ares_emp_sparkle(target);
             self.recover_ares_emp_ai_mission(target, rules);
+            self.update_emp_factory_queue(target, rules, effects);
+        }
+        // Compatibility policy: EMP transitions notify the existing509140
+        // queue owner, just like manual power. Physical factory searches still
+        // see the building, preserving the paid head instead of refunding it.
+        fn update_emp_factory_queue(
+            &mut self,
+            target: u64,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            use crate::sim::production::{
+                ProductionCategory, factory_category_for_building, update_factory_queue,
+            };
+            let Some((owner, category)) = self.substrate.entities.get(target).and_then(|entity| {
+                let object = self.entity_object_type(entity, rules)?;
+                Some((entity.owner(), factory_category_for_building(object)?))
+            }) else {
+                return;
+            };
+            update_factory_queue(self, rules, owner, category, effects);
+            if category == ProductionCategory::Building {
+                update_factory_queue(self, rules, owner, ProductionCategory::Defense, effects);
+            }
         }
         /// Installed common TechnoUpdate1004B528..575, before original tint:
         /// an offline Building recovers on its next reached head after power
@@ -742,6 +767,7 @@ mod receiver {
             if let Some(house) = self.houses.get_mut(&owner) {
                 house.request_tech_recheck();
             }
+            self.update_emp_factory_queue(target, rules, effects);
         }
         /// Installed disable100627F0's final1006293A block, after the
         /// Reactivate/manager/Anim owners. Human control is50B730, not merely

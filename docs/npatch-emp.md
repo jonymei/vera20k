@@ -42,6 +42,15 @@ reactivates but leaves Stuff disabled. It does not change the manual online latc
 Lifecycle pointer-expiry/destruction already retires the same held Anim; no new
 timer, dead-object sweep or duplicate power state is introduced.
 
+EMP transitions also notify the existing House factory-queue owner. An affected
+factory remains physically present, so its paid product and FIFO survive; only
+online searches reject its live EMP/deactivated state. With no other eligible
+online producer, production takes an automatic system hold. Expiry or later
+power recovery resumes that same head, but never overrides a player hold or a
+manual offline latch. Construction yards update both Building and Defense slots.
+This is an explicit playable-compatibility policy shared with Ares, not a claim
+about NPAE's queue callbacks.
+
 ## AYMod's Tesla projectile
 
 AYMod authors `TankBolt -> ElectricbounceT` (elite `TankBoltE -> ElectricbounceTE`)

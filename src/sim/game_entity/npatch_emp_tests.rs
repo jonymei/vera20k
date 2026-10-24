@@ -10,14 +10,16 @@ use crate::sim::{
 
 fn scene() -> (Simulation, RuleSet, u64, u64) {
     let ini = arena_fixture::clear_ground_ini(
-        "[VehicleTypes]\n0=TTNK\n1=TANK\n2=ORGANIC\n\
-         [InfantryTypes]\n0=PERSON\n[BuildingTypes]\n0=TOWER\n1=POWER\n\
+        "[Countries]\n0=Americans\n1=Russians\n\
+         [VehicleTypes]\n0=TTNK\n1=TANK\n2=ORGANIC\n\
+         [InfantryTypes]\n0=PERSON\n[BuildingTypes]\n0=TOWER\n1=POWER\n2=FACTORY\n\
          [TTNK]\nStrength=300\nPrimary=TankBolt\nSpeed=5\n\
-         [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\n\
+         [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\nCost=700\nTechLevel=1\nOwner=Americans,Russians\n\
          [ORGANIC]\nStrength=100\nOrganic=yes\nSpeed=5\n\
          [PERSON]\nStrength=100\nSpeed=5\n\
          [TOWER]\nStrength=500\nArmor=concrete\nPowered=yes\nPower=-10\nPrimary=TankBolt\n\
          [POWER]\nStrength=500\nPower=200\n\
+         [FACTORY]\nStrength=1000\nPowered=yes\nPower=-10\nFactory=UnitType\nOwner=Americans,Russians\n\
          [TankBolt]\nDamage=1\nROF=50\nRange=6\nProjectile=ElectricbounceT\nWarhead=ElectricT\n\
          [TankBoltEMP]\nDamage=3\nROF=50\nRange=1\nProjectile=InvisibleSpecial\nWarhead=EMPulsWH\n\
          [ElectricbounceT]\nInviso=yes\nImage=none\nCluster=1\nAirburst=no\nAirburstWeapon=TankBoltEMP\n\
@@ -37,6 +39,191 @@ fn scene() -> (Simulation, RuleSet, u64, u64) {
         .spawn_object("TANK", "Russians", 10, 20, 0, &rules)
         .unwrap();
     (sim, rules, source, target)
+}
+
+fn paid_factory_scene() -> (Simulation, RuleSet, u64, u64) {
+    let (mut sim, rules, source, _) = scene();
+    sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
+        .unwrap();
+    let factory = sim
+        .spawn_object("FACTORY", "Russians", 20, 20, 0, &rules)
+        .unwrap();
+    sim.entities_mut_for_test()
+        .get_mut(factory)
+        .unwrap()
+        .mission
+        .set_current_for_test(
+            crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Guard),
+            0,
+        );
+    crate::sim::power_system::tick_power_states(
+        &mut sim.power_states,
+        &mut sim.substrate.entities,
+        &rules,
+        &sim.interner,
+        0,
+    );
+    let owner = sim.entities().get(factory).unwrap().owner();
+    sim.houses
+        .get_mut(&owner)
+        .unwrap()
+        .economy_mut()
+        .set_credits_for_test(10_000);
+    assert!(crate::sim::production::enqueue_by_type(
+        &mut sim,
+        &rules,
+        "Russians",
+        "TANK",
+        FrameEffects::default(),
+        true,
+    ));
+    (sim, rules, source, factory)
+}
+
+#[test]
+fn emp_system_hold_preserves_paid_head_and_manual_off_until_power_restores() {
+    use crate::sim::production::{ProductionCategory, step_factories};
+    let (mut sim, rules, source, factory) = paid_factory_scene();
+    let owner = sim.entities().get(factory).unwrap().owner();
+    let category = ProductionCategory::Vehicle;
+    let before = sim.production.factories().view(owner, category).unwrap();
+    let head = before.object.unwrap().clone();
+    let progress = before.progress;
+    let wallet = sim.houses[&owner].economy().clone();
+    hit(&mut sim, &rules, source, factory, 2);
+    assert!(
+        sim.production
+            .factories()
+            .view(owner, category)
+            .unwrap()
+            .suspended
+    );
+    for frame in 1..=1000 {
+        sim.session.set_binary_frame_for_test(frame);
+        step_factories(&mut sim);
+    }
+    let held = sim.production.factories().view(owner, category).unwrap();
+    assert_eq!(held.object, Some(&head));
+    assert_eq!(held.progress, progress);
+    assert_eq!(*sim.houses[&owner].economy(), wallet);
+    assert!(sim.go_building_offline(factory, &rules, FrameEffects::default()));
+    for _ in 0..2 {
+        sim.tick_ares_emp(factory, &rules, FrameEffects::default());
+    }
+    assert!(
+        sim.production
+            .factories()
+            .view(owner, category)
+            .unwrap()
+            .suspended
+    );
+    assert!(sim.go_building_online(factory, &rules, FrameEffects::default()));
+    sim.update_ares_emp_operability(factory, &rules, FrameEffects::default());
+    let resumed = sim.production.factories().view(owner, category).unwrap();
+    assert!(!resumed.suspended);
+    assert_eq!(resumed.object, Some(&head));
+    assert_eq!(resumed.progress, progress);
+    hit(&mut sim, &rules, source, factory, 1);
+    sim.power_states
+        .map_mut_for_test()
+        .get_mut(&owner)
+        .unwrap()
+        .set_total_output_for_test(0);
+    sim.tick_ares_emp(factory, &rules, FrameEffects::default());
+    assert!(
+        sim.production
+            .factories()
+            .view(owner, category)
+            .unwrap()
+            .suspended
+    );
+    sim.power_states
+        .map_mut_for_test()
+        .get_mut(&owner)
+        .unwrap()
+        .set_total_output_for_test(200);
+    sim.update_ares_emp_operability(factory, &rules, FrameEffects::default());
+    let resumed = sim.production.factories().view(owner, category).unwrap();
+    assert!(!resumed.suspended);
+    assert_eq!(resumed.object, Some(&head));
+}
+
+#[test]
+fn emp_expiry_resumes_system_hold_but_not_player_hold() {
+    use crate::sim::production::{ProductionCategory, suspend_production};
+    let (mut sim, rules, source, factory) = paid_factory_scene();
+    let owner = sim.entities().get(factory).unwrap().owner();
+    let category = ProductionCategory::Vehicle;
+    let head = sim
+        .production
+        .factories()
+        .view(owner, category)
+        .unwrap()
+        .object
+        .unwrap()
+        .clone();
+    hit(&mut sim, &rules, source, factory, 1);
+    assert!(
+        sim.production
+            .factories()
+            .view(owner, category)
+            .unwrap()
+            .suspended
+    );
+    sim.tick_ares_emp(factory, &rules, FrameEffects::default());
+    let resumed = sim.production.factories().view(owner, category).unwrap();
+    assert!(!resumed.suspended);
+    assert_eq!(resumed.object, Some(&head));
+    assert!(suspend_production(
+        &sim.interner,
+        &mut sim.production,
+        &sim.session,
+        "Russians",
+        category
+    ));
+    hit(&mut sim, &rules, source, factory, 1);
+    sim.tick_ares_emp(factory, &rules, FrameEffects::default());
+    assert!(
+        sim.production
+            .factories()
+            .view(owner, category)
+            .unwrap()
+            .suspended
+    );
+}
+
+#[test]
+fn emp_does_not_hold_a_paid_head_with_another_online_producer() {
+    use crate::sim::production::ProductionCategory;
+    let (mut sim, rules, source, factory) = paid_factory_scene();
+    let second = sim
+        .spawn_object("FACTORY", "Russians", 24, 20, 0, &rules)
+        .unwrap();
+    sim.entities_mut_for_test()
+        .get_mut(second)
+        .unwrap()
+        .mission
+        .set_current_for_test(
+            crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Guard),
+            0,
+        );
+    let owner = sim.entities().get(factory).unwrap().owner();
+    let head = sim
+        .production
+        .factories()
+        .view(owner, ProductionCategory::Vehicle)
+        .unwrap()
+        .object
+        .unwrap()
+        .clone();
+    hit(&mut sim, &rules, source, factory, 2);
+    let running = sim
+        .production
+        .factories()
+        .view(owner, ProductionCategory::Vehicle)
+        .unwrap();
+    assert!(!running.suspended);
+    assert_eq!(running.object, Some(&head));
 }
 
 fn hit(sim: &mut Simulation, rules: &RuleSet, source: u64, target: u64, duration: i32) {

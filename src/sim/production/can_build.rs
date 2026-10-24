@@ -712,7 +712,11 @@ fn query_factory(
         };
         if !building.lifecycle.in_limbo()
             && building_type.factory_type() == Some(factory_type)
-            && (crate::rules::ARES_ENABLED || !require_online || building.building_online())
+            && (crate::rules::ARES_ENABLED
+                || !require_online
+                || (building.building_online()
+                    && (!crate::rules::NPATCH_ENABLED
+                        || (building.emp_remaining() <= 0 && !building.deactivated.is_offline()))))
             && building.mission.effective() != selling
             && building.mission.queued() != selling
             && (crate::rules::ARES_ENABLED
@@ -752,7 +756,9 @@ fn query_factory(
                 //10020E73..10020E92 preserves offline availability separately
                 // from an earlier online candidate; it cannot downgrade one.
                 if require_online
-                    && (!building.building_online() || building.deactivated.is_offline())
+                    && (!building.building_online()
+                        || building.deactivated.is_offline()
+                        || (crate::rules::NPATCH_ENABLED && building.emp_remaining() > 0))
                 {
                     if !matches!(
                         candidate,
