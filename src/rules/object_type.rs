@@ -608,6 +608,7 @@ pub struct ObjectType {
     /// these on the map skips CanBuild's tech and prerequisite gates. Parsed
     /// like [`Self::prerequisite`].
     pub prerequisite_override: Vec<crate::rules::prerequisite::Prerequisite>,
+    pub npatch_prerequisites: crate::rules::prerequisite::NpatchPrerequisites,
     /// `BuildLimit=` (`TechnoTypeClass+0x3B8`, ReadINI `0x00713157`): the
     /// constructor's `0x7FFFFFFF` (`0x00710CF0`) when absent. `CanBuild`
     /// caps a positive limit by the house's tracked count of the type and a
@@ -627,7 +628,7 @@ pub struct ObjectType {
     /// the start skips. Clearing a building choice leaves its base-plan node
     /// unsatisfied, so the planner can select the same capped type again.
     pub aibuild_limit: i32,
-    /// `[BuildingTypes] AIPlanningCount=` — the NPSE count of plan nodes a
+    /// Retained NPatch count of plan nodes a
     /// computer house's base plan gives this building. The techno reader
     /// extension chain reads it with the current field as its default and
     /// stores the result through `al` (`0xC2E223..0xC2E237`), so the
@@ -638,6 +639,9 @@ pub struct ObjectType {
     /// per-candidate counter reaches the count with signed CMP/JL. Counts
     /// 1..127 repeat eligible entries before seed selection; 0 and high-bit
     /// counts keep one entry, rather than repeating the final priority list.
+    /// NPAE174 reads AIBasePlanningCount at C2EF3E into Type+5A2,
+    /// constructor1 at C2EF82, consumed by5056C1 -> C2D8C1. The ordered
+    /// Rules owner accepts both spellings, preferring NPAE within each pass.
     pub ai_planning_count: i32,
     pub(crate) npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards,
     /// Requires spy infiltration of an Allied Battle Lab to unlock.
@@ -3227,6 +3231,7 @@ impl ObjectType {
             allowed_to_start_in_multiplayer: section.read_bool("AllowedToStartInMultiplayer", true),
             prerequisite: Vec::new(),
             prerequisite_override: Vec::new(),
+            npatch_prerequisites: Default::default(),
             // ReadInt over the constructor's 0x7FFFFFFF (`0x00713152`).
             build_limit: section.read_int("BuildLimit", i32::MAX),
             aibuild_limit: if crate::rules::NPATCH_ENABLED {
@@ -3234,11 +3239,7 @@ impl ObjectType {
             } else {
                 i32::MAX
             },
-            ai_planning_count: if crate::rules::NPATCH_ENABLED {
-                building_int(section, category, "AIPlanningCount") & 0xFF
-            } else {
-                0
-            },
+            ai_planning_count: 0,
             requires_stolen_allied_tech: section.read_bool("RequiresStolenAlliedTech", false),
             npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards::read(section),
             requires_stolen_soviet_tech: section.read_bool("RequiresStolenSovietTech", false),

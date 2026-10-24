@@ -4738,7 +4738,14 @@ impl RuleSet {
                 object.lepton_mind_control_offset = offset;
             }
         }
-        for (category, name, prerequisite, prerequisite_override) in processed.prerequisite_states()
+        for (
+            category,
+            name,
+            prerequisite,
+            prerequisite_override,
+            npatch_prerequisites,
+            ai_planning_count,
+        ) in processed.prerequisite_states()
         {
             if let Some(object) = rules
                 .object_list
@@ -4747,6 +4754,8 @@ impl RuleSet {
             {
                 object.prerequisite = prerequisite.to_vec();
                 object.prerequisite_override = prerequisite_override.to_vec();
+                object.npatch_prerequisites = npatch_prerequisites.clone();
+                object.ai_planning_count = ai_planning_count;
             }
         }
         for (category, name, gunner_turrets) in processed.gunner_turret_states() {

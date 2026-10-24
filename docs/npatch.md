@@ -24,10 +24,39 @@ This follows NPSE 2.0 #359's ReadGeneral (`0xC31005..0xC31017`) and ObjectClass:
 [author-linked release drive](https://zhytat.ysepan.com/). Parachuted bombs and their `IsBomb=`
 branch remain outside the current descent implementation.
 
-Per-building `AIPlanningCount=` repeats eligible base-plan candidates before seed selection
-(`0x5056C1 → 0xC2C331`). The reader stores one byte; the native signed loop comparison repeats
-counts 1–127, while zero and high-bit counts retain one entry. The existing planner and RNG
-owners handle the resulting candidate vector.
+`AIBasePlanningCount=` (NPAE174, `0x7138C7 → 0xC2EF3E`) and
+`AIPlanningCount=` (NPSE359, `0xC2E223`) share the existing base-plan candidate
+repetition owner. Both readers store one byte; the signed loop comparison repeats
+counts 1–127, while zero and high-bit counts retain one entry. NPAE's constructor
+starts at one (`0xC2EF82`); NPSE starts at zero, with the same one-entry result.
+VERA uses NPAE's default and retained per-pass value. Compatibility policy: when
+both keys occur in one physical pass, `AIBasePlanningCount` wins; a later pass
+may explicitly replace the value with either spelling. Missing/failed reads keep
+the current value. The NPAE consumer is `0x5056C1 → 0xC2D8C1`, and NPSE uses
+`0x5056C1 → 0xC2C331`; neither repeats the finished plan or owns another RNG.
+
+`AlternatePrerequisite=` and `Prerequisite2=` are alternative complete AND groups,
+not additional requirements. NPAE174 reads them with the original 128-byte
+prerequisite parser (`0xC27010`) on each physical Rules pass. Missing/empty reads
+retain the list; a comma-only or all-unknown list clears it. A human's failing
+CanBuild tries the first nonempty satisfied group, in that order, through the
+existing prerequisite evaluator (`0x4F7F46 → 0xC27E80 → 0x4F7BF1`). This fallback
+also follows early rejections such as `TechLevel=-1` or missing stolen tech;
+it is deliberately not restricted to ordinary prerequisite failure.
+
+`NegativePrerequisite=` rejects when any listed concrete BuildingType has a
+positive on-map count (`0x4F7F9E → 0xC27EED`, House counter `+0x5550`). It also
+applies to skip-tech, Secret Lab and prerequisite-override shortcuts before the
+build limit. The ordinarily qualified nonhuman AI retains its native early Yes
+and bypasses these checks; an AI admitted by the alternative fallback still
+checks negatives and the limit. Negative generic groups cause native invalid
+counter indexing; VERA safely ignores those entries rather than emulating heap
+reads. AYMod's three negative lists contain only concrete shipyards.
+
+In a mixed Ares/NPatch build, NPatch vectors still use the stock parser; their
+ordinary group entries use the shared Ares prerequisite evaluator, while Ares
+factory ownership and online checks remain required. This is an explicit playable
+compatibility policy, not a claim that both binary patches coexist natively.
 
 Per-type `AIBuildLimit=` limits AI production using the existing tracked and produced-count
 owners (`Factory_AI`, `0xC335A0..0xC33726`). Positive limits include limbo factory objects;

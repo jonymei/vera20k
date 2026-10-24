@@ -95,105 +95,122 @@ pub(crate) fn can_build(
     if trainer.tech_all {
         return build_limit(sim, rules, owner, obj, count_in_production);
     }
-    if skip_tech {
-        return build_limit(sim, rules, owner, obj, count_in_production);
-    }
     let Some(house) = sim.houses.get(&owner) else {
         return CanBuild::No;
     };
+    // NPAE174 CanBuild4F7F9E -> C27EED checks negative prerequisites
+    // even on skip-tech, Secret Lab and PrerequisiteOverride shortcuts.
+    let negative_blocks = || {
+        crate::rules::NPATCH_ENABLED
+            && obj
+                .npatch_prerequisites
+                .negative
+                .iter()
+                .any(|entry| match *entry {
+                    Prerequisite::Building(index) => buildings_on_map(sim, rules, house, index) > 0,
+                    // Native Counter49FAE0 dereferences negative indices. Keep
+                    // that undefined input safe instead of inventing group rules.
+                    Prerequisite::Group(_) | Prerequisite::GenericGroup(_) => false,
+                })
+    };
+    if skip_tech {
+        return if negative_blocks() {
+            CanBuild::No
+        } else {
+            build_limit(sim, rules, owner, obj, count_in_production)
+        };
+    }
     let controlled_by_human = house.is_controlled_by_human(sim.session.game_mode_nonzero());
     let override_on_map = obj.prerequisite_override.iter().any(|&entry| {
         if crate::rules::ARES_ENABLED {
-            // Ares3.0 qualification10021FF0 calls
-            // HouseOwnsAny100081E0 at100220C0, before its human/AI split.
             prerequisite_on_map(sim, rules, house, entry)
         } else {
-            // A negative stock-group code reads before the vanilla counter
-            // array: the residual in `crate::rules::prerequisite`.
             match entry {
                 Prerequisite::Building(index) => buildings_on_map(sim, rules, house, index) > 0,
                 Prerequisite::Group(_) | Prerequisite::GenericGroup(_) => false,
             }
         }
     });
-    // House4F78E4..4F7925 scans House+110 and calls459840. This
-    // shortcut precedes all ordinary tech/country/prerequisite gates, for
-    // humans and AI alike, and still asks the common build-limit owner.
     let bypass_prerequisites =
         override_on_map || crate::sim::secret_lab::house_grants(sim, rules, house, obj);
-    #[cfg(not(feature = "ares"))]
-    if bypass_prerequisites {
-        return build_limit(sim, rules, owner, obj, count_in_production);
-    }
-    // Ares qualification4 skips ordinary requirements/prerequisites, but its
-    // outer CanBuild10021BA1 still asks the real factory and build-limit owners.
-    if !bypass_prerequisites {
-        // `0x004F7976..0x004F79E2`: each `RequiresStolen*Tech=` needs the
-        // house's stolen-tech byte, which a spy's BuildTech infiltration sets.
+    let ordinary_qualifies = bypass_prerequisites || {
         let type_tech_level = sim.object_tech_level(obj);
-        // Installed qualification100220FE calls10020AD0, the same session-
-        //aware human predicate; only its human arm rejects TechLevel=-1.
-        if (type_tech_level == -1 && (!crate::rules::ARES_ENABLED || controlled_by_human))
-            || !house.has_stolen_tech_for(obj)
-        {
-            return CanBuild::No;
-        }
         let house_bit = crate::sim::ai_buildable::house_country_bit(
             rules,
             sim.interner.resolve(house.house_type_id()),
         );
         let required = obj.required_houses_mask(rules);
-        if required != u32::MAX && required & house_bit == 0 {
-            return CanBuild::No;
-        }
-        // CanBuild4F7A7D treats raw-1 as its skip sentinel, even when a
-        // nonempty authored list actually resolved to all32 Country bits.
         let forbidden = rules.house_type_mask(&obj.forbidden_houses);
-        if forbidden != u32::MAX && forbidden & house_bit != 0 {
-            return CanBuild::No;
-        }
-        #[cfg(feature = "ares")]
-        if !crate::sim::factory_owners::qualifies(sim, rules, house, obj) {
-            return CanBuild::No;
-        }
-        // Ares disabled-shell predicate10021A00..10021A6A bypasses this
-        // skirmish-shell restriction in mode0, before inspecting the Type.
-        if (!crate::rules::ARES_ENABLED || sim.session.game_mode_nonzero())
+        let shell_disables = (!crate::rules::ARES_ENABLED || sim.session.game_mode_nonzero())
             && !sim.session.game_options().super_weapons
             && obj.category == ObjectCategory::Building
-            && let Some(super_weapon) = obj.super_weapon.as_deref()
-            && !rules.is_build_tech(&obj.id)
-            && rules
-                .super_weapon(super_weapon)
-                .is_some_and(|super_weapon| super_weapon.disableable_from_shell)
-        {
-            return CanBuild::No;
-        }
+            && obj.super_weapon.as_deref().is_some_and(|name| {
+                !rules.is_build_tech(&obj.id)
+                    && rules
+                        .super_weapon(name)
+                        .is_some_and(|weapon| weapon.disableable_from_shell)
+            });
         #[cfg(feature = "debug-tools")]
         let exceeds_tech_level = type_tech_level > house.tech_level() && !trainer.tech_boost;
         #[cfg(not(feature = "debug-tools"))]
         let exceeds_tech_level = type_tech_level > house.tech_level();
-        if exceeds_tech_level {
-            return CanBuild::No;
-        }
-    }
-    if !crate::rules::ARES_ENABLED && !controlled_by_human {
+        !(type_tech_level == -1 && (!crate::rules::ARES_ENABLED || controlled_by_human))
+            && house.has_stolen_tech_for(obj)
+            && (required == u32::MAX || required & house_bit != 0)
+            && (forbidden == u32::MAX || forbidden & house_bit == 0)
+            && !shell_disables
+            && !exceeds_tech_level
+    };
+    // Unmodified native4F7B94..4F7BEE returns Yes for an ordinarily
+    // qualified AI before either prerequisites, negative checks or the limit.
+    if ordinary_qualifies
+        && !bypass_prerequisites
+        && !crate::rules::ARES_ENABLED
+        && !controlled_by_human
+    {
         return CanBuild::Yes;
     }
-    if !bypass_prerequisites
-        && controlled_by_human
-        && !obj
-            .prerequisite
-            .iter()
-            .all(|&entry| prerequisite_on_map(sim, rules, house, entry))
-    {
+    let primary_qualifies = ordinary_qualifies
+        && (bypass_prerequisites
+            || !controlled_by_human
+            || obj
+                .prerequisite
+                .iter()
+                .all(|&entry| prerequisite_on_map(sim, rules, house, entry)));
+    // NPAE174 failure4F7F46 -> C27E80 retries alternate then second through
+    // the original AND reader4F7BF1. Even TechLevel=-1 reaches this fallback.
+    let fallback_qualifies = || {
+        crate::rules::NPATCH_ENABLED
+            && [
+                &obj.npatch_prerequisites.alternate,
+                &obj.npatch_prerequisites.second,
+            ]
+            .into_iter()
+            .any(|group| {
+                !group.is_empty()
+                    && group
+                        .iter()
+                        .all(|&entry| prerequisite_on_map(sim, rules, house, entry))
+            })
+    };
+    if !primary_qualifies && !fallback_qualifies() {
         return CanBuild::No;
     }
+    if negative_blocks() {
+        return CanBuild::No;
+    }
+    // Mixed-build policy: NPatch alternatives never bypass Ares' factory
+    // ownership/online constraints; they share its prerequisite interpretation.
     #[cfg(feature = "ares")]
-    match query_factory(sim, rules, owner, obj, true, true, false, true) {
-        FactorySearch::Missing | FactorySearch::BuildLimitRefused => return CanBuild::No,
-        FactorySearch::Offline => return CanBuild::AtLimit,
-        FactorySearch::Online(_) | FactorySearch::Primary(_) => {}
+    {
+        if !bypass_prerequisites && !crate::sim::factory_owners::qualifies(sim, rules, house, obj) {
+            return CanBuild::No;
+        }
+        match query_factory(sim, rules, owner, obj, true, true, false, true) {
+            FactorySearch::Missing | FactorySearch::BuildLimitRefused => return CanBuild::No,
+            FactorySearch::Offline => return CanBuild::AtLimit,
+            FactorySearch::Online(_) | FactorySearch::Primary(_) => {}
+        }
     }
     build_limit(sim, rules, owner, obj, count_in_production)
 }

@@ -244,12 +244,14 @@ pub(crate) fn recalc_base_plan(
     plan.rebuild(final_values);
 }
 
-/// The NPSE per-type `[BuildingTypes] AIPlanningCount=` count of collection
+/// The NPatch per-type count of collection
 /// nodes the candidate contributes, `1` for the stock single node. The
 /// extension constructor zeroes the field (`0xC3039B`) and the reader stores
 /// the `ReadInt` result through `al` (`0xC2E223..0xC2E237`). The loop's
 /// byte CMP/JL (`0xC2C35A..0xC2C361`) is signed, so 0 and high-bit counts
 /// keep one entry. Source: author-linked NPSE 2.0 #359 release.
+/// NPAE174 AIBasePlanningCount shares this loop: 5056C1 -> C2D8C1,
+/// reading TechnoType+5A2 with the same signed byte CMP/JL.
 fn planning_repeats(candidate: &ObjectType) -> usize {
     if crate::rules::NPATCH_ENABLED {
         (candidate.ai_planning_count as i8).max(1) as usize
@@ -442,6 +444,24 @@ mod tests {
             .iter()
             .map(|node| node.type_or_control)
             .collect()
+    }
+
+    #[test]
+    fn npatch_legacy_planning_count_repeats_the_actual_candidate() {
+        let rules = basic_rules(
+            "7=TEST\n",
+            "[TEST]\nOwner=Americans\nAIBuildThis=yes\nTechLevel=1\n\
+             AIPlanningCount=3\nAIBasePlanningCount=2\n",
+        );
+        let (plan, _) = generated_values(&rules, "Americans", 0, HouseDifficulty::Normal, 17);
+        let index = rules.object("TEST").unwrap().base_plan_type_index;
+        assert_eq!(
+            values(&plan)
+                .iter()
+                .filter(|value| **value == index)
+                .count(),
+            if crate::rules::NPATCH_ENABLED { 2 } else { 1 }
+        );
     }
 
     #[test]

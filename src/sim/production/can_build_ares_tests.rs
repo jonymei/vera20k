@@ -202,6 +202,37 @@ fn lifecycle_world(query_section: &str) -> (Simulation, RuleSet, InternedId) {
     (sim, rules, owner)
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_fallback_and_negative_share_ares_factory_and_lifecycle_owners() {
+    let (mut sim, rules, owner) = lifecycle_world(
+        "TechLevel=1\nPrerequisite=MISSING\nPrerequisite2=MEMBER\nNegativePrerequisite=MISSING\n[MISSING]\nStrength=100",
+    );
+    let product = rules.object("Q").unwrap();
+    sim.spawn_object("MEMBER", "H0", 10, 10, 0, &rules).unwrap();
+    assert_eq!(
+        can_build(&sim, &rules, owner, product, false, true),
+        CanBuild::Yes
+    );
+    let blocker = sim
+        .spawn_object("MISSING", "H0", 14, 10, 0, &rules)
+        .unwrap();
+    assert_eq!(
+        can_build(&sim, &rules, owner, product, false, true),
+        CanBuild::No
+    );
+    sim.techno_limbo_with_rules(blocker, &rules, None);
+    assert_eq!(
+        can_build(&sim, &rules, owner, product, false, true),
+        CanBuild::Yes
+    );
+    sim.techno_limbo_with_rules(10_000, &rules, None);
+    assert_eq!(
+        can_build(&sim, &rules, owner, product, false, true),
+        CanBuild::No
+    );
+}
+
 #[test]
 fn generic_member_follows_capture_and_limbo_through_existing_owners() {
     let (mut sim, rules, owner) = lifecycle_world("TechLevel=1\nPrerequisite=custom");

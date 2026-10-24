@@ -2004,7 +2004,16 @@ impl ProcessedRulesLayers {
     /// the last pass that read them.
     pub(crate) fn prerequisite_states(
         &self,
-    ) -> impl Iterator<Item = (ObjectCategory, &str, &[Prerequisite], &[Prerequisite])> {
+    ) -> impl Iterator<
+        Item = (
+            ObjectCategory,
+            &str,
+            &[Prerequisite],
+            &[Prerequisite],
+            &crate::rules::prerequisite::NpatchPrerequisites,
+            i32,
+        ),
+    > {
         self.native_type_construction_trace
             .registry_state()
             .families
@@ -2019,6 +2028,8 @@ impl ProcessedRulesLayers {
                         member.native_stored_id.as_str(),
                         member.prerequisite.as_slice(),
                         member.prerequisite_override.as_slice(),
+                        &member.npatch_prerequisites,
+                        member.ai_planning_count,
                     )
                 })
             })
@@ -2837,6 +2848,7 @@ impl NativeRulesRegistryState {
                 .prerequisite
                 .iter()
                 .chain(&member.prerequisite_override)
+                .chain(member.npatch_prerequisites.entries())
                 .any(|entry| !valid_entry(entry))
         }) {
             return Err(RulesError::InvalidSavedState(
@@ -3426,6 +3438,10 @@ struct ProcessedType {
     /// (`+0x654`), each read with its current list as the default.
     prerequisite: Vec<Prerequisite>,
     prerequisite_override: Vec<Prerequisite>,
+    #[serde(default)]
+    npatch_prerequisites: crate::rules::prerequisite::NpatchPrerequisites,
+    #[serde(default)]
+    ai_planning_count: i32,
     weapon_slots: WeaponSlots,
     techno_references: TechnoTypeReferences,
     weapon: WeaponReadState,
@@ -3869,6 +3885,9 @@ impl ProcessedType {
                 crate::rules::object_type::DEFAULT_LEPTON_MIND_CONTROL_OFFSET,
             prerequisite: Vec::new(),
             prerequisite_override: Vec::new(),
+            npatch_prerequisites: Default::default(),
+            // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
+            ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
             weapon_slots: WeaponSlots::default(),
             weapon: WeaponReadState::default(),
             warhead_anim: WarheadAnimReadState::default(),
@@ -5530,9 +5549,23 @@ impl RulesPassProcessor {
                     |name| self.building_index(name),
                     self.ares_prerequisites.as_ref(),
                 );
+                let mut npatch_prerequisites = member.npatch_prerequisites.clone();
+                npatch_prerequisites.apply_pass(&raw, |name| self.building_index(name));
                 let member = &mut self.families.get_mut(&family).unwrap()[index];
                 member.prerequisite = prerequisite;
                 member.prerequisite_override = prerequisite_override;
+                member.npatch_prerequisites = npatch_prerequisites;
+                if crate::rules::NPATCH_ENABLED {
+                    // NPAE174 ReadINI7138C7 -> C2EF3E retains the byte;
+                    // NPSE359 reads AIPlanningCount at C2E223. Compatibility
+                    // policy: the legacy spelling wins within the same pass.
+                    let key = if raw.is_present("AIBasePlanningCount") {
+                        "AIBasePlanningCount"
+                    } else {
+                        "AIPlanningCount"
+                    };
+                    member.ai_planning_count = raw.read_int(key, member.ai_planning_count) & 0xff;
+                }
                 self.families.get_mut(&family).unwrap()[index]
                     .recoil
                     .apply_pass(&raw);
