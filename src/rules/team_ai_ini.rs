@@ -10,7 +10,10 @@ use std::collections::BTreeMap;
 
 use crate::assets::asset_manager::AssetManager;
 use crate::rules::ini_parser::{IniFile, IniSection, is_native_none_type_name};
-use crate::rules::ini_value::{crt_atoi, parse_leading_f64, scan_decimal_i32};
+use crate::rules::ini_value::{
+    crt_atoi, parse_leading_f64, scan_decimal_i32, scan_hex_u32, strtrim_ascii,
+    truncate_native_bytes,
+};
 use crate::util::native_x87::NativeF64Bits;
 
 const SCRIPT_ACTION_CAPACITY: usize = 50;
@@ -93,11 +96,12 @@ impl TeamTypeIni {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AiTriggerOwnerIni {
+    None,
     All,
     Country(String),
 }
 
-/// One AITriggerType after the fixed/map replacement pass.
+/// One AITriggerType after the fixed/map sequential read passes.
 ///
 /// The typed fields are limited to storage proven in the active YR raw reader
 /// at `0x0041F580`. Token 11 is read and discarded (the `strtok` at
@@ -127,6 +131,76 @@ pub struct AiTriggerTypeIni {
     pub difficulty_enabled: [bool; 3],
     pub enabled: bool,
     pub source: TeamAiDefinitionSource,
+    /// References at the last completed tech post-read, or null after token 3
+    /// clears +0xB0. A shorter reread can change primary without recomputing it.
+    pub(crate) tech_level_teams: [Option<String>; 2],
+}
+
+impl AiTriggerTypeIni {
+    /// AITriggerTypeClass constructor @ 0x0041E350 (gamemd.exe).
+    fn new(id: &str, source: TeamAiDefinitionSource) -> Self {
+        Self {
+            id: id.to_string(),
+            tokens: std::array::from_fn(|_| String::new()),
+            display_name: truncate_native_bytes(id, 48).to_string(),
+            primary_team_type: None,
+            owner: AiTriggerOwnerIni::None,
+            condition: -1,
+            object_type: None,
+            comparison_mask: [0; 32],
+            weights: [NativeF64Bits::from_bits(1.0_f64.to_bits()); 3],
+            multiplayer: false,
+            side: 0,
+            storage_flag_d1: false,
+            secondary_team_type: None,
+            difficulty_enabled: [true; 3],
+            enabled: false,
+            source,
+            tech_level_teams: [None, None],
+        }
+    }
+
+    /// AITriggerTypeClass::Read_INI @ 0x0041F580 updates in token order.
+    /// Before comparison, a missing token returns early without undoing writes;
+    /// later missing tokens retain their fields and still run the tech post-read.
+    fn read_tokens(&mut self, tokens: &[&str]) {
+        for (index, token) in tokens.iter().take(AI_TRIGGER_TOKEN_COUNT).enumerate() {
+            self.tokens[index] = (*token).to_string();
+            match index {
+                0 => self.display_name = truncate_native_bytes(token, 48).to_string(),
+                1 => self.primary_team_type = optional_reference(token),
+                2 => {
+                    let name = strtrim_ascii(truncate_native_bytes(token, 23));
+                    self.owner = if name.eq_ignore_ascii_case("<all>") {
+                        AiTriggerOwnerIni::All
+                    } else if name.eq_ignore_ascii_case("<none>") {
+                        AiTriggerOwnerIni::None
+                    } else {
+                        AiTriggerOwnerIni::Country(name.to_string())
+                    };
+                }
+                3 => self.tech_level_teams = [None, None],
+                4 => self.condition = crt_atoi(token),
+                5 => self.object_type = optional_reference(token),
+                6 => read_ai_trigger_comparison(token, &mut self.comparison_mask),
+                7..=9 => self.weights[index - 7] = ai_trigger_weight(token),
+                10 => self.multiplayer = crt_atoi(token) != 0,
+                12 => self.side = crt_atoi(token),
+                13 => self.storage_flag_d1 = crt_atoi(token) != 0,
+                14 => self.secondary_team_type = optional_reference(token),
+                15..=17 => self.difficulty_enabled[index - 15] = crt_atoi(token) != 0,
+                _ => {}
+            }
+        }
+        if tokens.len() >= 7 {
+            // 0x0041FA5C..0x0041FADD: freeze these inputs when the post-read
+            // actually runs, not from pointers changed by a later short read.
+            self.tech_level_teams = [
+                self.primary_team_type.clone(),
+                self.secondary_team_type.clone(),
+            ];
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,11 +227,6 @@ pub enum TeamAiIniDiagnostic {
         token_count: usize,
         source: TeamAiDefinitionSource,
     },
-    MalformedAiTriggerComparison {
-        trigger_id: String,
-        value: String,
-        source: TeamAiDefinitionSource,
-    },
     UnknownAiTriggerEnable {
         trigger_id: String,
     },
@@ -169,22 +238,21 @@ impl TeamAiIniDiagnostic {
             Self::MissingDefinitionSection { source, .. }
             | Self::MalformedScriptAction { source, .. }
             | Self::MalformedTaskForceEntry { source, .. }
-            | Self::MalformedAiTrigger { source, .. }
-            | Self::MalformedAiTriggerComparison { source, .. } => *source,
+            | Self::MalformedAiTrigger { source, .. } => *source,
             Self::UnknownAiTriggerEnable { .. } => TeamAiDefinitionSource::Scenario,
         }
     }
 
     fn refuses_fixed_source(&self) -> bool {
-        // TaskForceClass::LoadFromINIList @ 0x006E8220 ignores Read_INI's
-        // missing-section return at 0x006E831A and retains the allocated object.
+        // List loaders retain allocated objects after a failed Read_INI:
+        // TaskForce 0x006E831A; AITrigger 0x0041F39C..0x0041F3B2 (gamemd.exe).
         self.source() == TeamAiDefinitionSource::FixedAimd
             && !matches!(
                 self,
                 Self::MissingDefinitionSection {
                     registry: "TaskForces",
                     ..
-                }
+                } | Self::MalformedAiTrigger { .. }
             )
     }
 }
@@ -197,9 +265,8 @@ pub struct TeamAiRegistryCounts {
     pub ai_triggers: usize,
 }
 
-/// Immutable definitions captured immediately after the fixed AIMD pass for
-/// each registry. Map overlays may replace the live record, but cannot erase a
-/// fixed-source resolution obligation that production loading must validate.
+/// Immutable definitions captured immediately after each fixed AIMD pass.
+/// Keep its diagnostics even when map rereads replace the live fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct FixedTeamAiDefinitions {
     team_types: Vec<TeamTypeIni>,
@@ -333,6 +400,18 @@ impl TeamAiIniRegistry {
         self.team_type_read_transactions.iter()
     }
 
+    /// TeamTypeClass::Find @ 0x006F0FC0: first ID or display-name match
+    /// in construction order, without allocating an unknown reference.
+    pub(crate) fn find_team_type(&self, name: &str) -> Option<&TeamTypeIni> {
+        self.team_types.iter().find(|team| {
+            team.id.eq_ignore_ascii_case(name)
+                || team
+                    .section()
+                    .read_string("Name", &team.id, 49)
+                    .eq_ignore_ascii_case(name)
+        })
+    }
+
     fn read_team_types(&mut self, ini: &IniFile, source: TeamAiDefinitionSource) {
         let Some(list) = ini.section("TeamTypes") else {
             return;
@@ -402,8 +481,9 @@ impl TeamAiIniRegistry {
                 continue;
             };
             // ScriptTypeClass::Read_INI `0x006918A0`: ReadString 0x80 per
-            // numbered key, then `sscanf("%d,%d")` (`0x00723CA0`). A partial
-            // scan leaves stale stack values natively; VERA refuses the entry.
+            // numbered key, then scanner `0x00723CA0`. A missing second
+            // integer copies its output-this pointer into the argument;
+            // VERA refuses that address-dependent input rather than guessing.
             let mut actions = Vec::new();
             for key in 0..SCRIPT_ACTION_CAPACITY {
                 let name = key.to_string();
@@ -526,75 +606,33 @@ impl TeamAiIniRegistry {
             return;
         };
         let mut index = identity_index(self.ai_triggers.iter().map(|entry| entry.id.as_str()));
-        // AITriggerTypeClass::Read_INI `0x0041F580`: ReadString 0x200, then
-        // one `strtok(",")` per field. Native skips a missing field; VERA
-        // refuses a record without all eighteen.
+        // AITriggerTypeClass::LoadFromINIList @ 0x0041F2E0 allocates first
+        // and ignores Read_INI's result. Fixed reads enable even partial rows.
         for id in section.keys().filter(|id| valid_identity(id)) {
-            let Some(tokens) = section.read_list(id, 0x200) else {
-                continue;
-            };
+            let tokens = section.read_list(id, 0x200).unwrap_or_default();
             let token_count = tokens.len();
-            let Ok(tokens) = <[&str; AI_TRIGGER_TOKEN_COUNT]>::try_from(tokens) else {
+            if token_count < 7 {
                 self.diagnostics
                     .push(TeamAiIniDiagnostic::MalformedAiTrigger {
                         trigger_id: id.to_string(),
                         token_count,
                         source,
                     });
-                continue;
-            };
-            let tokens = tokens.map(str::to_string);
-            let Some(comparison_mask) = parse_ai_trigger_comparison(&tokens[6]) else {
-                self.diagnostics
-                    .push(TeamAiIniDiagnostic::MalformedAiTriggerComparison {
-                        trigger_id: id.to_string(),
-                        value: tokens[6].clone(),
-                        source,
-                    });
-                continue;
-            };
+            }
             let identity = canonical_identity(id);
-            let enabled = index
-                .get(&identity)
-                .map_or(source == TeamAiDefinitionSource::FixedAimd, |position| {
-                    self.ai_triggers[*position].enabled
-                });
-            let definition = AiTriggerTypeIni {
-                id: id.to_string(),
-                display_name: tokens[0].clone(),
-                primary_team_type: optional_reference(&tokens[1]),
-                owner: if tokens[2].eq_ignore_ascii_case("<all>") {
-                    AiTriggerOwnerIni::All
-                } else {
-                    AiTriggerOwnerIni::Country(tokens[2].clone())
-                },
-                condition: crt_atoi(&tokens[4]),
-                object_type: optional_reference(&tokens[5]),
-                comparison_mask,
-                weights: [
-                    ai_trigger_weight(&tokens[7]),
-                    ai_trigger_weight(&tokens[8]),
-                    ai_trigger_weight(&tokens[9]),
-                ],
-                // `atoi(token) != 0` (`0x0041F929`..`0x0041FA56`).
-                multiplayer: crt_atoi(&tokens[10]) != 0,
-                side: crt_atoi(&tokens[12]),
-                storage_flag_d1: crt_atoi(&tokens[13]) != 0,
-                secondary_team_type: optional_reference(&tokens[14]),
-                difficulty_enabled: [
-                    crt_atoi(&tokens[15]) != 0,
-                    crt_atoi(&tokens[16]) != 0,
-                    crt_atoi(&tokens[17]) != 0,
-                ],
-                tokens,
-                enabled,
-                source,
-            };
-            if let Some(position) = index.get(&identity).copied() {
-                self.ai_triggers[position] = definition;
+            let position = if let Some(&position) = index.get(&identity) {
+                position
             } else {
-                index.insert(identity, self.ai_triggers.len());
-                self.ai_triggers.push(definition);
+                let position = self.ai_triggers.len();
+                index.insert(identity, position);
+                self.ai_triggers.push(AiTriggerTypeIni::new(id, source));
+                position
+            };
+            let definition = &mut self.ai_triggers[position];
+            definition.read_tokens(&tokens);
+            definition.source = source;
+            if source == TeamAiDefinitionSource::FixedAimd {
+                definition.enabled = true;
             }
         }
     }
@@ -626,30 +664,24 @@ fn valid_identity(id: &str) -> bool {
 }
 
 fn optional_reference(raw: &str) -> Option<String> {
-    valid_identity(raw).then(|| raw.trim().to_string())
+    let name = strtrim_ascii(truncate_native_bytes(raw, 23));
+    (!name.eq_ignore_ascii_case("<none>")).then(|| name.to_string())
 }
 
-fn parse_ai_trigger_comparison(raw: &str) -> Option<[u8; 32]> {
-    let bytes = raw.trim().as_bytes();
-    if bytes.len() != 64 {
-        return None;
-    }
-
-    let mut decoded = [0_u8; 32];
-    for (index, slot) in decoded.iter_mut().enumerate() {
-        let high = hex_nibble(bytes[index * 2])?;
-        let low = hex_nibble(bytes[index * 2 + 1])?;
-        *slot = (high << 4) | low;
-    }
-    Some(decoded)
-}
-
-fn hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
+/// AITriggerTypeClass::Read_INI @ 0x0041F7FA..0x0041F880: strtoul of
+/// successive one/two-character chunks overwrites only the supplied prefix.
+fn read_ai_trigger_comparison(raw: &str, current: &mut [u8; 32]) {
+    let mut chars = raw.chars().peekable();
+    for slot in current {
+        while chars.peek().is_some_and(|ch| ch.is_ascii_whitespace()) {
+            chars.next();
+        }
+        let Some(first) = chars.next() else { break };
+        let mut pair = [u8::try_from(first).unwrap_or(0xff), 0];
+        if let Some(second) = chars.next() {
+            pair[1] = u8::try_from(second).unwrap_or(0xff);
+        }
+        *slot = scan_hex_u32(&pair).unwrap_or(0) as u8;
     }
 }
 
@@ -1053,11 +1085,18 @@ mod tests {
     }
 
     #[test]
-    fn malformed_ai_trigger_is_refused_without_padding() {
+    fn partial_ai_trigger_keeps_fields_written_before_native_early_return() {
         let fixed = IniFile::from_str("[AITriggerTypes]\nBAD=a,b,c\n");
         let loaded = TeamAiIniRegistry::from_sources(&fixed, &IniFile::from_str(""), false);
 
-        assert!(loaded.ai_triggers.is_empty());
+        let trigger = &loaded.ai_triggers[0];
+        assert_eq!(trigger.display_name, "a");
+        assert_eq!(trigger.primary_team_type.as_deref(), Some("b"));
+        assert_eq!(trigger.owner, AiTriggerOwnerIni::Country("c".to_string()));
+        assert_eq!(trigger.condition, -1);
+        assert_eq!(trigger.difficulty_enabled, [true; 3]);
+        assert!(!trigger.multiplayer);
+        assert!(trigger.enabled);
         assert_eq!(
             loaded.diagnostics,
             vec![TeamAiIniDiagnostic::MalformedAiTrigger {
@@ -1069,27 +1108,24 @@ mod tests {
     }
 
     #[test]
-    fn malformed_ai_trigger_comparison_is_a_source_tagged_refusal() {
+    fn short_ai_trigger_comparison_updates_prefix_and_retains_previous_fields() {
         let fixed = IniFile::from_str(&format!(
             "[AITriggerTypes]\nBAD={}\n",
-            [
-                "Bad", "<none>", "<all>", "0", "0", "<none>", "0g", "1", "1", "1", "1", "0", "1",
-                "0", "<none>", "1", "1", "1",
-            ]
-            .join(",")
+            eighteen_tokens("Fixed", "<none>").replace(&"00".repeat(32), &"ff".repeat(32))
         ));
-        let loaded = TeamAiIniRegistry::from_sources(&fixed, &IniFile::from_str(""), false);
+        let scenario = IniFile::from_str("[AITriggerTypes]\nBAD=Map,<none>,<all>,0,0,<none>,0g\n");
+        let loaded = TeamAiIniRegistry::from_sources(&fixed, &scenario, false);
 
-        assert!(loaded.ai_triggers.is_empty());
+        let trigger = &loaded.ai_triggers[0];
+        assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+        assert_eq!(trigger.display_name, "Map");
+        assert_eq!(trigger.comparison_mask[0], 0);
+        assert_eq!(&trigger.comparison_mask[1..], &[0xff; 31]);
         assert_eq!(
-            loaded.diagnostics,
-            vec![TeamAiIniDiagnostic::MalformedAiTriggerComparison {
-                trigger_id: "BAD".to_string(),
-                value: "0g".to_string(),
-                source: TeamAiDefinitionSource::FixedAimd,
-            }]
+            trigger.weights[0],
+            NativeF64Bits::from_bits(40.0_f64.to_bits())
         );
-        assert!(!loaded.fixed_source_is_complete());
+        assert!(trigger.multiplayer);
     }
 
     #[test]

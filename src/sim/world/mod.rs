@@ -7696,7 +7696,7 @@ impl Simulation {
     /// only: the installed VM contains no live TeamClass instances.
     ///
     /// Unsupported fixed-AIMD resolution failures refuse the whole install
-    /// (`Err`, nothing installed). Native TaskForce member omissions and
+    /// (`Err`, nothing installed). Native member omissions, null lookups and
     /// scenario-origin omissions install with logged, nonfatal diagnostics.
     pub fn install_team_ai_registry(
         &mut self,

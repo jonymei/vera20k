@@ -237,7 +237,7 @@ fn production_install_keeps_native_task_force_omissions_from_both_sources() {
 }
 
 #[test]
-fn production_install_refuses_fixed_resolution_loss_masked_by_same_identity_map_overlays() {
+fn production_install_keeps_native_null_lookups_and_final_map_fields() {
     let rules = RuleSet::from_ini(&IniFile::from_str(
         "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
     ))
@@ -262,7 +262,7 @@ fn production_install_refuses_fixed_resolution_loss_masked_by_same_identity_map_
 
     let diagnostics = sim
         .install_team_ai_registry(&registry, &rules)
-        .expect_err("a fixed-origin resolution loss refuses the install");
+        .expect("native null lookups are diagnosed without refusing the install");
 
     assert_eq!(
         diagnostics,
@@ -280,11 +280,11 @@ fn production_install_refuses_fixed_resolution_loss_masked_by_same_identity_map_
         ]
     );
     assert!(!diagnostics[0].is_fixed_source_refusal());
-    assert!(diagnostics[1].is_fixed_source_refusal());
+    assert!(!diagnostics[1].is_fixed_source_refusal());
     assert_eq!(
         sim.team_script_vm.registry_counts(),
-        (0, 0, 0, 0),
-        "map repair/relabeling cannot erase fixed-AIMD resolution obligations"
+        (1, 2, 1, 1),
+        "native map rereads keep the same identities and update their fields"
     );
 }
 

@@ -233,7 +233,7 @@ impl TeamScriptVm {
             let primary_team_type = resolve_trigger_team_type(
                 &trigger.id,
                 trigger.primary_team_type.as_deref(),
-                &vm.team_types,
+                registry,
                 interner,
                 &mut diagnostics,
                 trigger.source,
@@ -241,23 +241,28 @@ impl TeamScriptVm {
             let secondary_team_type = resolve_trigger_team_type(
                 &trigger.id,
                 trigger.secondary_team_type.as_deref(),
-                &vm.team_types,
+                registry,
                 interner,
                 &mut diagnostics,
                 trigger.source,
             );
             let owner = resolve_trigger_owner(trigger, rules, &mut diagnostics);
             let object_type = resolve_trigger_object(trigger, rules, interner, &mut diagnostics);
+            let threshold_teams = trigger.tech_level_teams.each_ref().map(|name| {
+                name.as_deref()
+                    .and_then(|name| registry.find_team_type(name))
+                    .and_then(|team| interner.get(&team.id))
+            });
             let primary_tech_level = trigger_task_force_tech_level(
                 &vm,
-                primary_team_type,
+                threshold_teams[0],
                 interner,
                 rules,
                 registry.game_mode_nonzero(),
             );
             let secondary_tech_level = trigger_task_force_tech_level(
                 &vm,
-                secondary_team_type,
+                threshold_teams[1],
                 interner,
                 rules,
                 registry.game_mode_nonzero(),
@@ -385,15 +390,15 @@ fn find_or_allocate_definition<T>(
 fn resolve_trigger_team_type(
     trigger_id: &str,
     requested: Option<&str>,
-    definitions: &BTreeMap<InternedId, TeamTypeDefinition>,
+    registry: &TeamAiIniRegistry,
     interner: &StringInterner,
     diagnostics: &mut Vec<TeamAiInstallDiagnostic>,
     source: TeamAiDefinitionSource,
 ) -> Option<InternedId> {
     let requested = requested?;
-    let resolved = interner
-        .get(requested)
-        .filter(|id| definitions.contains_key(id));
+    let resolved = registry
+        .find_team_type(requested)
+        .and_then(|team| interner.get(&team.id));
     if resolved.is_none() {
         diagnostics.push(TeamAiInstallDiagnostic::MissingAiTriggerTeamType {
             trigger_id: trigger_id.to_string(),
@@ -410,6 +415,7 @@ fn resolve_trigger_owner(
     diagnostics: &mut Vec<TeamAiInstallDiagnostic>,
 ) -> Option<TeamAiTriggerOwner> {
     match &trigger.owner {
+        AiTriggerOwnerIni::None => None,
         AiTriggerOwnerIni::All => Some(TeamAiTriggerOwner::All),
         AiTriggerOwnerIni::Country(owner) => rules
             .country_index(owner)
