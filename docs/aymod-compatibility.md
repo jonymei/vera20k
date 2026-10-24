@@ -110,6 +110,15 @@ focused coverage, but combined-delivery feature combinations, save/load and real
 AYMod window/gameplay acceptance remain unverified. No row above is closed by
 implementation or a green focused test alone.
 
+The combined local candidate has loaded the maintained AYMod data in the
+headless scenario runtime: a real TTNK Attack delivers EMP to an APOC and
+expires through actual simulation frames after removing the shooter; a real
+Tanya kill receiver increases its House's spendable credits. The maintained
+technology/shipyard regression also passes through production CanBuild and
+building Unlimbo/Limbo counters. The paid-factory EMP/manual-power scenario is
+still failing its suspension assertion and remains open; the passing combat
+checks do not certify production recovery or GUI acceptance.
+
 ## Initial data families
 
 The 207 main queries were grouped as follows. Counts are query instances, not
