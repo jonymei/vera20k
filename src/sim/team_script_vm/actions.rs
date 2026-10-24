@@ -34,8 +34,9 @@
 //!   answers true for its own cell. Infantry's and Aircraft's `0x0041C060`
 //!   answer false. No retail type sets either key, so every retail member
 //!   answers false. That includes the "Soviet SChop" teams' Siege Choppers,
-//!   which action 9 sets unloading just before the team's attack actions:
-//!   natively, as in VERA, those actions take them off Unload in the air.
+//!   which action 9 sets unloading just before the team's attack actions.
+//!   Attack is queued, not forced: Unit readiness (`0x00744270`) can defer
+//!   commencement while the jumpjet descends (`Is_Moving_Now @ 0x0054D0D0`).
 //!   Trigger: a member of a modded type deploying when its team attacks.
 //!   Effect: it stops deploying and attacks.
 //! - Non-aircraft ammunition (`+0x2FC`) retains its constructor and chrono

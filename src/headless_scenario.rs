@@ -2279,11 +2279,13 @@ mod retail_construction_tests {
     ///
     /// Put on line 3 instead, as action 6 would, the team's action 9 orders
     /// each chopper (`IsSimpleDeployer=`) to Unload, and they start to land.
-    /// Action 9 is done at once, and the team's next attack order takes them
-    /// off Unload in the air, as `Coordinate_Attack` does natively
-    /// (`0x006EB79A..0x006EB7B5`): Unit vt+0x4E4 (`0x00736D50`) keeps only a
-    /// `DeployToFire=` unit, or a computer one deploying into a `TickTank=`
-    /// building, on Unload, and the Siege Chopper is neither.
+    /// Action 9 is done at once, and `Coordinate_Attack` queues Attack even
+    /// during Unload (`0x006EB79A..0x006EB7CB`): Unit vt+0x4E4 (`0x00736D50`)
+    /// keeps only a `DeployToFire=` unit, or a computer one deploying into a
+    /// `TickTank=` building, on Unload, and the Siege Chopper is neither. Queue_Mission
+    /// (`0x005B35E0`) does not force commencement. A descending jumpjet reports
+    /// moving (`0x0054D0D0`), so Unit readiness (`0x00744270`) can keep the
+    /// queued Attack waiting until landing; cancelling Unload need not be airborne.
     #[test]
     #[ignore = "requires RA2_DIR with installed retail RA2/YR assets"]
     fn retail_soviet_siege_chopper_team_holds_then_attacks_undeployed() {
@@ -2393,10 +2395,19 @@ mod retail_construction_tests {
             )
         };
         let (mut on_9, mut past, mut attacking) = (None, None, None);
+        let mut attack_waited_for_landing = false;
         for frame in 1..=600u32 {
             scenario.tick();
             let sim = scenario.sim();
             let states: Vec<_> = choppers.iter().map(|&id| state(sim, id)).collect();
+            attack_waited_for_landing |= choppers.iter().zip(&states).any(|(&id, state)| {
+                state.0 == Some(STATE_DESCEND)
+                    && state.1 > 0
+                    && state.3 == Some(MissionType::Unload)
+                    && sim.entities().get(id).is_some_and(|entity| {
+                        entity.mission.queued().known() == Some(MissionType::Attack)
+                    })
+            });
             assert!(
                 states.iter().all(|state| !state.2),
                 "a chopper deployed at frame {frame}: {states:?}"
@@ -2428,10 +2439,10 @@ mod retail_construction_tests {
             "action 9 did not set both choppers landing to unload: {unloading:?}"
         );
         assert!(past.is_some(), "the team stayed on action 9");
-        let (_, _, airborne) = attacking.expect("no attack order took the choppers off Unload");
+        attacking.expect("no attack order took the choppers off Unload");
         assert!(
-            airborne.iter().all(|state| state.1 > 0),
-            "a chopper landed before its attack order: {airborne:?}"
+            attack_waited_for_landing,
+            "a queued Attack never waited on the descending member's readiness"
         );
     }
 
