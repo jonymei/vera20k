@@ -7695,9 +7695,9 @@ impl Simulation {
     /// are interned and before the first gameplay tick. This is data ingress
     /// only: the installed VM contains no live TeamClass instances.
     ///
-    /// A fixed-AIMD definition that fails RuleSet resolution refuses the whole
-    /// install (`Err`, nothing installed); scenario-origin omissions install
-    /// and come back as logged, nonfatal diagnostics.
+    /// Unsupported fixed-AIMD resolution failures refuse the whole install
+    /// (`Err`, nothing installed). Native TaskForce member omissions and
+    /// scenario-origin omissions install with logged, nonfatal diagnostics.
     pub fn install_team_ai_registry(
         &mut self,
         registry: &crate::rules::team_ai_ini::TeamAiIniRegistry,

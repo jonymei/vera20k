@@ -165,7 +165,7 @@ fn team_member_order_is_hashed() {
 }
 
 #[test]
-fn production_install_refuses_fixed_resolution_loss_but_keeps_scenario_omissions() {
+fn production_install_keeps_native_task_force_omissions_from_both_sources() {
     let rules = RuleSet::from_ini(&IniFile::from_str(
         "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
     ))
@@ -186,7 +186,7 @@ fn production_install_refuses_fixed_resolution_loss_but_keeps_scenario_omissions
     fixed_sim.resolve_type_handles(&rules);
     let fixed_diagnostics = fixed_sim
         .install_team_ai_registry(&fixed_registry, &rules)
-        .expect_err("a fixed-origin resolution loss refuses the install");
+        .expect("native TaskForce member omissions do not refuse the install");
 
     assert_eq!(
         fixed_diagnostics,
@@ -196,11 +196,11 @@ fn production_install_refuses_fixed_resolution_loss_but_keeps_scenario_omissions
             source: TeamAiDefinitionSource::FixedAimd,
         }]
     );
-    assert!(fixed_diagnostics[0].is_fixed_source_refusal());
+    assert!(!fixed_diagnostics[0].is_fixed_source_refusal());
     assert_eq!(
         fixed_sim.team_script_vm.registry_counts(),
-        (0, 0, 0, 0),
-        "a fixed-origin resolution refusal must not install a partial registry"
+        (1, 1, 1, 1),
+        "an unresolved member leaves an installed empty TaskForce, not a failed scenario"
     );
 
     let clean_fixed = IniFile::from_str(&format!(
@@ -279,11 +279,8 @@ fn production_install_refuses_fixed_resolution_loss_masked_by_same_identity_map_
             },
         ]
     );
-    assert!(
-        diagnostics
-            .iter()
-            .all(TeamAiInstallDiagnostic::is_fixed_source_refusal)
-    );
+    assert!(!diagnostics[0].is_fixed_source_refusal());
+    assert!(diagnostics[1].is_fixed_source_refusal());
     assert_eq!(
         sim.team_script_vm.registry_counts(),
         (0, 0, 0, 0),

@@ -472,7 +472,10 @@ impl TeamAiInstallDiagnostic {
     }
 
     pub(crate) fn is_fixed_source_refusal(&self) -> bool {
+        // TaskForceClass::Read_INI @ 0x006E8420 (gamemd.exe),
+        // 0x006E84B5..0x006E84C7: a null member is omitted, not a load failure.
         self.source() == TeamAiDefinitionSource::FixedAimd
+            && !matches!(self, Self::UnknownTaskForceMember { .. })
     }
 }
 
