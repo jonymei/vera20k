@@ -1777,20 +1777,10 @@ mod retail_construction_tests {
         let russia = house_of(sim, "Russians");
         let american_cells = cells_nearest(aymod_anchor(sim, america));
         let russian_cells = cells_nearest(aymod_anchor(sim, russia));
-        let tanya = spawn_on_free_cells(
-            sim,
-            &resources.rules,
-            america,
-            american_cells,
-            &["TANY"],
-        )[0];
-        let target = spawn_on_free_cells(
-            sim,
-            &resources.rules,
-            russia,
-            russian_cells,
-            &["APOC"],
-        )[0];
+        let tanya =
+            spawn_on_free_cells(sim, &resources.rules, america, american_cells, &["TANY"])[0];
+        let target =
+            spawn_on_free_cells(sim, &resources.rules, russia, russian_cells, &["APOC"])[0];
         let weapon = resources.rules.object("TANY").unwrap().primary().unwrap();
         let warhead = resources
             .rules
