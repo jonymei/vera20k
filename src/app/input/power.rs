@@ -193,6 +193,44 @@ mod tests {
     }
 
     #[test]
+    fn fresh_world_reset_retires_power_even_when_the_incoming_house_has_buildings() {
+        let mut sim = Simulation::new();
+        let owner = sim.intern("Local");
+        let mut house = HouseState::new(owner, 0, None, true, 1000, 10);
+        house.tracking_mut_for_test().set_buildings_for_test(1);
+        sim.houses_mut_for_test().register(house);
+        let mut sidebar = SidebarGadgetState::default();
+        sidebar.command_bar_closed = true;
+        assert!(sidebar.toggle_selection_mode(SelectionMode::Power, false, 1));
+        let mut input = MatchInputState::new(HotkeyBindings::default());
+
+        // The common fresh/saved world-install boundary clears outgoing modes
+        // before saved routes can restore their supported incoming local view.
+        input.reset_targeting_for_new_world(&mut sidebar);
+        crate::app::presentation::sidebar_gadgets::exit_sell_mode_without_buildings(
+            &mut sidebar,
+            &sim,
+            Some(owner),
+            false,
+        );
+
+        assert!(
+            !sidebar.power_mode_on
+                && !sidebar.repair_mode_on
+                && !sidebar.sell_mode_on
+                && !sidebar.place_beacon_mode_on
+        );
+        assert_eq!(
+            input.tactical_pointer_mode(&sidebar, true),
+            TacticalPointerMode::Ordinary
+        );
+        assert!(
+            sidebar.command_bar_closed,
+            "world replacement must retain display preferences"
+        );
+    }
+
+    #[test]
     fn manual_power_commands_reuse_online_latch_and_reassess_drain() {
         let rules = RuleSet::from_ini(&IniFile::from_str(
             "[BuildingTypes]\n0=RADAR\n1=LOCKED\n2=PLANT\n\

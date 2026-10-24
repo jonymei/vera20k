@@ -118,7 +118,8 @@ pub(crate) struct MapPresentationInputs {
 
 /// Install the complete map presentation after its runtime and process assets
 /// are available. Fresh startup and saved restoration share this replacement;
-/// route-specific input, sidebar order, waterlines and timers stay outside it.
+/// cursor modes are cleared here; saved routes restore their supported incoming
+/// modes afterwards. Sidebar order, waterlines and timers stay route-specific.
 /// Missing map-owned surfaces replace the old ones with absence, so a different
 /// map can never inherit the outgoing geometry or shroud dimensions.
 pub(crate) fn install_world_presentation(
@@ -126,6 +127,9 @@ pub(crate) fn install_world_presentation(
     map: MapPresentationInputs,
     assets: init::PresentationLoadAssets,
 ) {
+    state.match_state.input.reset_targeting_for_new_world(
+        &mut state.match_state.match_presentation.sidebar_gadget_state,
+    );
     if let Some(names) = map.campaign_names {
         state.match_state.campaign_names = names;
     }
@@ -526,7 +530,6 @@ pub(crate) fn apply_map_load_result(state: &mut AppState, result: init::MapLoadR
         state,
         result.scenario.opening_view_cell,
     );
-    state.match_state.input.reset_targeting_for_new_world();
     state.match_state.match_presentation.active_sidebar_tab = SidebarTab::default_active_tab();
     state.match_state.match_presentation.message_list = crate::ui::messages::MessageList::new(
         3,

@@ -620,7 +620,11 @@ impl MatchInputState {
     }
 
     /// New-scenario installation discards references into the outgoing world.
-    pub(crate) fn reset_targeting_for_new_world(&mut self) {
+    pub(crate) fn reset_targeting_for_new_world(
+        &mut self,
+        sidebar: &mut crate::ui::sidebar::gadget_flash::SidebarGadgetState,
+    ) {
+        sidebar.disable_cursor_modes();
         self.reset_cheer_clock();
         self.planning.reset();
         self.targeting_mode = None;

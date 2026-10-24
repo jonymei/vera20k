@@ -5505,7 +5505,9 @@ mod tests {
         assert_eq!(orphan.current.as_ref().unwrap().type_id, "GAPILL");
         assert_eq!(orphan.saved_retry.as_ref().unwrap().product_id, Some(20));
 
-        input.reset_targeting_for_new_world();
+        input.reset_targeting_for_new_world(
+            &mut crate::ui::sidebar::gadget_flash::SidebarGadgetState::default(),
+        );
         let reset = MapBuildingPlacementObservation::capture(&input, &interner);
         assert_eq!(reset.sample_count(), 1);
         assert_eq!(serde_json::to_value(reset).unwrap(), empty);
