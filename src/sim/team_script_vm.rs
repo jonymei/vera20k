@@ -2340,19 +2340,27 @@ mod tests {
             "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
         ))
         .expect("minimal rules");
-        let fixed =
-            IniFile::from_str("[TaskForces]\n0=PARTIAL_TF\n[PARTIAL_TF]\n0=1,E1\n1=2,GHOST\n");
+        let fixed = IniFile::from_str(
+            "[TaskForces]\n0=PARTIAL_TF\n[PARTIAL_TF]\n0=1,E1\n1=2,GHOST\n2=1,<none>\n",
+        );
         let registry = TeamAiIniRegistry::from_sources(&fixed, &IniFile::from_str(""), true);
         let mut interner = StringInterner::new();
         let (vm, diagnostics) = TeamScriptVm::from_ini_registry(&registry, &mut interner, &rules);
 
         assert_eq!(
             diagnostics,
-            [TeamAiInstallDiagnostic::UnknownTaskForceMember {
-                task_force_id: "PARTIAL_TF".to_string(),
-                member_type: "GHOST".to_string(),
-                source: TeamAiDefinitionSource::FixedAimd,
-            }]
+            [
+                TeamAiInstallDiagnostic::UnknownTaskForceMember {
+                    task_force_id: "PARTIAL_TF".to_string(),
+                    member_type: "GHOST".to_string(),
+                    source: TeamAiDefinitionSource::FixedAimd,
+                },
+                TeamAiInstallDiagnostic::UnknownTaskForceMember {
+                    task_force_id: "PARTIAL_TF".to_string(),
+                    member_type: "<none>".to_string(),
+                    source: TeamAiDefinitionSource::FixedAimd,
+                },
+            ]
         );
         assert_eq!(
             vm.task_forces[&interner.get("PARTIAL_TF").unwrap()]
