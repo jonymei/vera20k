@@ -202,6 +202,83 @@ fn emp_spares_organic_and_allied_units_but_disables_a_powered_tower() {
 }
 
 #[test]
+fn snapshot_retains_emp_remaining_and_manual_power_intent_through_expiry() {
+    let (mut sim, rules, source, _) = scene();
+    sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
+        .unwrap();
+    let online = sim
+        .spawn_object("TOWER", "Russians", 20, 20, 0, &rules)
+        .unwrap();
+    let manual_off = sim
+        .spawn_object("TOWER", "Russians", 22, 20, 0, &rules)
+        .unwrap();
+    for id in [online, manual_off] {
+        sim.entities_mut_for_test()
+            .get_mut(id)
+            .unwrap()
+            .mission
+            .set_current_for_test(
+                crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Guard),
+                0,
+            );
+    }
+    crate::sim::power_system::tick_power_states(
+        &mut sim.power_states,
+        &mut sim.substrate.entities,
+        &rules,
+        &sim.interner,
+        0,
+    );
+    for id in [online, manual_off] {
+        hit(&mut sim, &rules, source, id, 3);
+        sim.tick_ares_emp(id, &rules, FrameEffects::default());
+    }
+    assert!(sim.go_building_offline(manual_off, &rules, FrameEffects::default()));
+    let saved = crate::sim::snapshot::GameSnapshot::save(
+        &sim,
+        0,
+        rules.simulation_config_hash(),
+        "NP EMP manual power",
+        0,
+    );
+    let mut loaded = crate::sim::snapshot::GameSnapshot::load(&saved)
+        .unwrap()
+        .sim;
+    loaded.restore_after_snapshot_load().unwrap();
+    loaded.resolve_type_handles(&rules);
+
+    for id in [online, manual_off] {
+        let entity = loaded.entities().get(id).unwrap();
+        assert_eq!(entity.emp_remaining(), 2);
+        assert_eq!(entity.building_online(), id == online);
+        assert!(entity.deactivated.is_offline());
+        assert!(!entity.building_art.stuff_enabled());
+        assert_eq!(loaded.building_operational_state(id, &rules), Some(false));
+    }
+    assert!(!loaded.go_building_online(manual_off, &rules, FrameEffects::default()));
+    for id in [online, manual_off] {
+        loaded.tick_ares_emp(id, &rules, FrameEffects::default());
+        assert_eq!(loaded.entities().get(id).unwrap().emp_remaining(), 1);
+        assert!(loaded.entities().get(id).unwrap().deactivated.is_offline());
+        loaded.tick_ares_emp(id, &rules, FrameEffects::default());
+        let entity = loaded.entities().get(id).unwrap();
+        assert_eq!(entity.emp_remaining(), 0);
+        assert_eq!(entity.building_online(), id == online);
+        assert_eq!(entity.deactivated.is_offline(), id == manual_off);
+        assert_eq!(entity.building_art.stuff_enabled(), id == online);
+        assert_eq!(
+            loaded.building_operational_state(id, &rules),
+            Some(id == online)
+        );
+    }
+    assert!(loaded.go_building_online(manual_off, &rules, FrameEffects::default()));
+    loaded.update_ares_emp_operability(manual_off, &rules, FrameEffects::default());
+    let entity = loaded.entities().get(manual_off).unwrap();
+    assert!(entity.building_online() && !entity.deactivated.is_offline());
+    assert!(entity.building_art.stuff_enabled());
+}
+
+#[test]
 fn expired_emp_restores_building_stuff_when_house_power_returns() {
     let (mut sim, rules, source, _) = scene();
     sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
