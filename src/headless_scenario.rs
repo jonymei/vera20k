@@ -1369,12 +1369,20 @@ mod retail_construction_tests {
         let ra2 = std::path::PathBuf::from(
             std::env::var("RA2_DIR").expect("set RA2_DIR to the retail RA2/YR install directory"),
         );
+        retail_battle_in(&ra2, configure, opponents)
+    }
+
+    fn retail_battle_in(
+        ra2: &Path,
+        configure: impl FnOnce(&mut crate::skirmish_launch::SkirmishLaunchSession),
+        opponents: &[(LaunchCountry, AiDifficulty)],
+    ) -> (HeadlessScenario, Vec<InternedId>) {
         // A four-start map: fewer start waypoints than houses would seed the
         // extra starts at random, which the lobby never allows.
         let map = "XMP03T4.MAP";
         let mut session = battle_session(map, opponents);
         configure(&mut session);
-        let scenario = load_session(&ra2, map, 0x00C0_FFEE, session).unwrap();
+        let scenario = load_session(ra2, map, 0x00C0_FFEE, session).unwrap();
         let computers: Vec<InternedId> = scenario
             .sim()
             .houses
@@ -1384,6 +1392,443 @@ mod retail_construction_tests {
             .collect();
         assert_eq!(computers.len(), opponents.len());
         (scenario, computers)
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_battle(local_country: u32) -> HeadlessScenario {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("VERA20K_AYMOD_DIR")
+                .expect("set VERA20K_AYMOD_DIR to the unmodified AYMod install"),
+        );
+        let opponent = if local_country == 1 { 0 } else { 1 };
+        retail_battle_in(
+            &root,
+            |session| {
+                // AYMod's registry is Americans=0, Russians=1, YuriCountry=2.
+                session.local_slot_mut().country = LaunchCountry::from_country_index(local_country);
+                session.options.unit_count = 0;
+            },
+            &[(
+                LaunchCountry::from_country_index(opponent),
+                AiDifficulty::Easy,
+            )],
+        )
+        .0
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_anchor(sim: &Simulation, owner: InternedId) -> (i32, i32) {
+        sim.entities()
+            .values()
+            .find(|entity| entity.owner() == owner)
+            .map(|entity| {
+                (
+                    i32::from(entity.position.rx()),
+                    i32::from(entity.position.ry()),
+                )
+            })
+            .expect("the loaded house has its starting force")
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_emp_duel(local_country: u32, victim_type: &str) -> (HeadlessScenario, u64, u64) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::movement::locomotor::MovementLayer;
+        use crate::sim::production::ProductionCategory;
+
+        let mut scenario = aymod_battle(local_country);
+        let victim = {
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let america = house_of(sim, "Americans");
+            let anchor = aymod_anchor(sim, america);
+            let sites: Vec<_> =
+                cells_nearest(anchor)
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        let level = u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .and_then(|(x, y)| sim.terrain_cell_level(x, y));
+                        level.is_some()
+                            && (-2..=2).all(|dx| {
+                                (-2..=2).all(|dy| {
+                                    let Some((rx, ry)) =
+                                        u16::try_from(x + dx).ok().zip(u16::try_from(y + dy).ok())
+                                    else {
+                                        return false;
+                                    };
+                                    sim.terrain_cell_level(rx, ry) == level
+                                        && sim.path_grid().is_some_and(|grid| {
+                                            grid.is_walkable_for_infantry(rx, ry)
+                                        })
+                                        && sim.substrate.occupancy.get(rx, ry).is_none_or(|cell| {
+                                            cell.is_empty_on(MovementLayer::Ground)
+                                        })
+                                })
+                            })
+                    })
+                    .collect();
+            let victim = spawn_on_free_cells(sim, rules, america, sites, &[victim_type])[0];
+            if victim_type == "GAWEAP" {
+                let at = sim.entities().get(victim).unwrap().position;
+                let cells = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (x - i32::from(at.rx()))
+                            .abs()
+                            .max((y - i32::from(at.ry())).abs())
+                            >= 4
+                    });
+                spawn_on_free_cells(sim, rules, america, cells, &["GAPOWR"]);
+            }
+            victim
+        };
+        for _ in 0..240 {
+            tick_with_due_commands(&mut scenario);
+            let entity = scenario
+                .sim()
+                .entities()
+                .get(victim)
+                .expect("the victim lives");
+            if entity.mission.effective().known() != Some(MissionType::Construction)
+                && (victim_type != "GAWEAP"
+                    || scenario
+                        .sim()
+                        .building_operational_state(victim, &scenario.runtime.resources.rules)
+                        == Some(true))
+            {
+                break;
+            }
+        }
+        if victim_type == "GAWEAP" {
+            assert_eq!(
+                scenario
+                    .sim()
+                    .building_operational_state(victim, &scenario.runtime.resources.rules),
+                Some(true)
+            );
+            let sim = &mut scenario.runtime.simulation;
+            let owner = sim.entities().get(victim).unwrap().owner();
+            let type_id = sim.interner.get("MTNK").expect("real AY Grizzly type");
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::QueueProduction { type_id },
+            ));
+            for _ in 0..30 {
+                tick_with_due_commands(&mut scenario);
+                if scenario
+                    .sim()
+                    .production
+                    .factories()
+                    .view(owner, ProductionCategory::Vehicle)
+                    .is_some_and(|head| head.object.is_some() && !head.suspended)
+                {
+                    break;
+                }
+            }
+            assert!(
+                scenario
+                    .sim()
+                    .production
+                    .factories()
+                    .view(owner, ProductionCategory::Vehicle)
+                    .is_some_and(|head| head.object.is_some() && !head.suspended),
+                "real GAWEAP must start its paid MTNK head before EMP"
+            );
+        }
+        let shooter = {
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let russia = house_of(sim, "Russians");
+            let at = sim.entities().get(victim).unwrap().position;
+            let cells: Vec<_> = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        <= 1
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect();
+            assert_eq!(rules.object("TTNK").unwrap().primary(), Some("TankBolt"));
+            assert!(
+                rules.object("TTNK").unwrap().secondary().is_none(),
+                "do not pre-register the impact child through a fake Secondary"
+            );
+            spawn_on_free_cells(sim, rules, russia, cells, &["TTNK"])[0]
+        };
+        (scenario, shooter, victim)
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_attack_until_emp(scenario: &mut HeadlessScenario, shooter: u64, target: u64) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let sim = &mut scenario.runtime.simulation;
+        let owner = sim.entities().get(shooter).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: shooter,
+                target_id: target,
+            },
+        ));
+        for _ in 0..240 {
+            tick_with_due_commands(scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(target)
+                .is_some_and(|entity| entity.emp_remaining() > 0)
+            {
+                return;
+            }
+        }
+        panic!("actual AY TTNK Attack never delivered EMP to live target {target}");
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_remove_shooter(scenario: &mut HeadlessScenario, shooter: u64) {
+        let runtime = &mut scenario.runtime;
+        runtime.simulation.uninit_with_context(
+            shooter,
+            crate::sim::world::UninitContext::new(
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+            ),
+        );
+        runtime.simulation.flush_pending_delete();
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR with the original AYMod rules/assets"]
+    fn aymod_tesla_attack_delivers_emp_and_actual_frames_recover() {
+        let (mut scenario, shooter, target) = aymod_emp_duel(1, "APOC");
+        aymod_attack_until_emp(&mut scenario, shooter, target);
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(target)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        );
+        aymod_remove_shooter(&mut scenario, shooter);
+        for _ in 0..1000 {
+            tick_with_due_commands(&mut scenario);
+            let victim = scenario
+                .sim()
+                .entities()
+                .get(target)
+                .expect("EMP must not kill the mechanical victim");
+            if victim.emp_remaining() == 0 {
+                assert!(
+                    !victim.deactivated.is_offline(),
+                    "real Techno AI must restore control"
+                );
+                return;
+            }
+        }
+        panic!("actual AY EMP never expired after removing the shooter");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR with the original AYMod rules/assets"]
+    fn aymod_enemy_emp_and_manual_power_hold_and_resume_paid_factory() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::production::ProductionCategory;
+        let (mut scenario, shooter, factory) = aymod_emp_duel(0, "GAWEAP");
+        aymod_attack_until_emp(&mut scenario, shooter, factory);
+        aymod_remove_shooter(&mut scenario, shooter);
+        let owner = scenario.sim().entities().get(factory).unwrap().owner();
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scenario);
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .building_operational_state(factory, &scenario.runtime.resources.rules),
+            Some(false)
+        );
+        assert!(
+            scenario
+                .sim()
+                .production
+                .factories()
+                .view(owner, ProductionCategory::Vehicle)
+                .is_some_and(|head| head.object.is_some() && head.suspended),
+            "EMP must hold the real paid production head"
+        );
+        let sim = &mut scenario.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::SetBuildingOnLine {
+                entity_id: factory,
+                on: false,
+            },
+        ));
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scenario);
+        }
+        assert!(
+            !scenario
+                .sim()
+                .entities()
+                .get(factory)
+                .unwrap()
+                .building_online()
+        );
+        let held = scenario
+            .sim()
+            .production
+            .factories()
+            .view(owner, ProductionCategory::Vehicle)
+            .unwrap()
+            .progress;
+        for _ in 0..1000 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(factory)
+                .unwrap()
+                .emp_remaining()
+                == 0
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(factory)
+                .unwrap()
+                .emp_remaining(),
+            0
+        );
+        assert!(
+            !scenario
+                .sim()
+                .entities()
+                .get(factory)
+                .unwrap()
+                .building_online(),
+            "EMP expiry must not override the player's Off choice"
+        );
+        let head = scenario
+            .sim()
+            .production
+            .factories()
+            .view(owner, ProductionCategory::Vehicle)
+            .unwrap();
+        assert!(head.suspended);
+        assert_eq!(head.progress, held);
+        let sim = &mut scenario.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::SetBuildingOnLine {
+                entity_id: factory,
+                on: true,
+            },
+        ));
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .production
+                .factories()
+                .view(owner, ProductionCategory::Vehicle)
+                .is_some_and(|head| !head.suspended && head.progress > held)
+            {
+                assert_eq!(
+                    scenario
+                        .sim()
+                        .building_operational_state(factory, &scenario.runtime.resources.rules),
+                    Some(true)
+                );
+                return;
+            }
+        }
+        panic!("real paid MTNK production did not resume after manual On");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY bounty reader/kill-credit integration"]
+    fn aymod_tanya_kill_receiver_pays_real_house_bounty() {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        let mut scenario = aymod_battle(0);
+        let runtime = &mut scenario.runtime;
+        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+        let america = house_of(sim, "Americans");
+        let russia = house_of(sim, "Russians");
+        let american_cells = cells_nearest(aymod_anchor(sim, america));
+        let russian_cells = cells_nearest(aymod_anchor(sim, russia));
+        let tanya = spawn_on_free_cells(
+            sim,
+            &resources.rules,
+            america,
+            american_cells,
+            &["TANY"],
+        )[0];
+        let target = spawn_on_free_cells(
+            sim,
+            &resources.rules,
+            russia,
+            russian_cells,
+            &["APOC"],
+        )[0];
+        let weapon = resources.rules.object("TANY").unwrap().primary().unwrap();
+        let warhead = resources
+            .rules
+            .weapon(weapon)
+            .unwrap()
+            .warhead
+            .as_deref()
+            .unwrap();
+        let warhead = sim.interner.intern(warhead);
+        let health = sim.entities().get(target).unwrap().health.current();
+        let before = crate::sim::credit_income::available_money(&sim.houses, america);
+        let hit = EntityDamageEvent::direct_receiver(
+            target,
+            health,
+            0,
+            tanya,
+            Some(america),
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: true,
+            },
+        );
+        sim.commit_direct_damage_receiver(
+            &resources.rules,
+            Some(&resources.overlay_registry),
+            hit,
+            Default::default(),
+        );
+        assert!(
+            sim.entities()
+                .get(target)
+                .is_none_or(|entity| entity.health.current() <= 0 || entity.death.is_dying())
+        );
+        assert!(
+            crate::sim::credit_income::available_money(&sim.houses, america) > before,
+            "the real AY Tanya kill must pay spendable credits, not only score or experience"
+        );
     }
 
     /// Whether `entity` aims at an object of another house.
