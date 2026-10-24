@@ -253,6 +253,7 @@ pub struct WarheadType {
     /// string `0x0081BBC8`), tested first in the detonation chain at
     /// `BulletClass::DetonateAtCoord @ 0x00469211`.
     pub mind_control: bool,
+    pub(crate) is_perma_controlled: bool,
     /// Poison damage. `WarheadTypeClass+0x156` (ReadINI `0x0075D800`, key
     /// string `0x00847D58`).
     pub poison: bool,
@@ -348,6 +349,9 @@ pub struct WarheadType {
 }
 
 impl WarheadType {
+    pub(crate) fn is_permanent_hijack(&self) -> bool {
+        self.is_perma_controlled && self.mind_control && self.parasite
+    }
     pub(crate) fn ares_rules(&self) -> Option<&crate::rules::ares_warhead::AresWarheadRules> {
         self.ares.as_ref()
     }
@@ -492,6 +496,8 @@ impl WarheadType {
             psychedelic: section.read_bool("Psychedelic", false),
             ivan_bomb: section.read_bool("IvanBomb", false),
             mind_control: section.read_bool("MindControl", false),
+            is_perma_controlled: crate::rules::NPATCH_ENABLED
+                && section.read_bool("IsPermaControlled", false),
             poison: section.read_bool("Poison", false),
             airstrike: section.read_bool("Airstrike", false),
             radiation: section.read_bool("Radiation", false),

@@ -4335,6 +4335,7 @@ pub struct RuleSet {
     pub super_weapon_order: Vec<String>,
     /// Default particle systems from `[CombatDamage]` (smoke, sparks, debris, fire-stream).
     pub combat_damage: CombatDamageDefaults,
+    pub(crate) npatch_rewards: crate::rules::npatch_rewards::NpatchRewards,
     /// Pre-resolved bridge-related warhead names (`[CombatDamage]
     /// IonCannonWarhead=`, `C4Warhead=`, `CrushWarhead=`). Resolution to interned IDs happens
     /// at world init.
@@ -5857,6 +5858,7 @@ impl RuleSet {
             super_weapons,
             super_weapon_order,
             combat_damage,
+            npatch_rewards: crate::rules::npatch_rewards::NpatchRewards::read(ini),
             bridge_warheads,
             mind_control,
             missile_spawn,
@@ -6336,6 +6338,15 @@ impl RuleSet {
         // v34: Country starting-veterancy; optional extensions add domains below.
         b"rules-simulation-config-v34".hash(&mut hasher);
         self.source_ini_hash.hash(&mut hasher);
+        if crate::rules::NPATCH_ENABLED {
+            b"npatch-rewards-v1".hash(&mut hasher);
+            self.npatch_rewards.hash(&mut hasher);
+            self.object_list
+                .iter()
+                .map(|object| (&object.id, &object.npatch_rewards))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+        }
         // OverlayRead5FE8BE / InitTheater5FE620 retain typed history that a
         // flattened Image key cannot recover; saved resource plans matter too.
         self.overlay_registry.hash_configuration(&mut hasher);

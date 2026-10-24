@@ -358,6 +358,68 @@ fn v3_launcher_gets_a_missile_pool_on_spawn() {
 }
 
 #[test]
+fn npatch_regenerated_child_inherits_parent_veterancy() {
+    let rules = make_spawner_rules();
+    let mut sim = Simulation::new();
+    let parent = sim
+        .spawn_object("V3", "Russians", 10, 10, 0, &rules)
+        .unwrap();
+    let child = sim
+        .entities()
+        .get(parent)
+        .unwrap()
+        .spawn_manager
+        .as_ref()
+        .unwrap()
+        .slots()[0]
+        .spawn()
+        .unwrap();
+    sim.substrate
+        .entities
+        .get_mut(parent)
+        .unwrap()
+        .veterancy
+        .set_elite();
+    sim.uninit_with_context(child, crate::sim::world::UninitContext::with_rules(&rules));
+    let now = sim.session.binary_frame();
+    {
+        let manager = sim
+            .substrate
+            .entities
+            .get_mut(parent)
+            .unwrap()
+            .spawn_manager
+            .as_mut()
+            .unwrap();
+        manager.set_rates_for_test(0, 0);
+        manager.set_update_timer_for_test(CdTimer::started(now as i32, 0));
+        manager.slots[0].timer = CdTimer::started(now as i32, 0);
+    }
+    spawn_manager_ai(
+        &mut sim,
+        &rules,
+        parent,
+        None,
+        crate::sim::world::FrameEffects::default(),
+    );
+    let replacement = sim
+        .entities()
+        .get(parent)
+        .unwrap()
+        .spawn_manager
+        .as_ref()
+        .unwrap()
+        .slots()[0]
+        .spawn()
+        .unwrap();
+    assert_ne!(replacement, child);
+    assert_eq!(
+        sim.entities().get(replacement).unwrap().veterancy.rank(),
+        if crate::rules::NPATCH_ENABLED { 200 } else { 0 }
+    );
+}
+
+#[test]
 fn hornet_launcher_maximum_matches_native_distance_ties() {
     let rules = make_spawner_rules();
     // SpawnManager6B7B43 -> Unit+3AC/6F7780 -> CanFireAt6F77B0 ->
@@ -2570,13 +2632,14 @@ struct StrafingSortie {
     bombs: BTreeMap<u64, Vec<u32>>,
     /// Each Hornet's NavCom whenever it changed, with the frame.
     navs: BTreeMap<u64, Vec<(u32, Option<crate::sim::components::NavTargetRef>)>>,
+    returned: BTreeMap<u64, (i32, i32, i32)>,
 }
 
 /// The sortie with strafing Hornets: `HornetBomb` fires a `NormalBomb` (ROT 1,
 /// not Inviso), ROF 3. `hornet_keys` extends the fixture's HORNET section. The
 /// wing's target is handed to the manager as the Carrier's spawner shot does
 /// (`SpawnManagerClass::SetTarget`).
-fn strafing_carrier_sortie(hornet_keys: &str) -> StrafingSortie {
+fn strafing_carrier_sortie(hornet_keys: &str, wait_for_return: bool) -> StrafingSortie {
     let text = spawner_rules_text()
         .replace(
             "[HORNET]
@@ -2663,7 +2726,8 @@ CurleyShuffle=yes
     let hornet_bomb = sim.interner.intern("HornetBomb");
     let mut bombs: BTreeMap<u64, Vec<u32>> = BTreeMap::new();
     let mut navs: BTreeMap<u64, Vec<_>> = BTreeMap::new();
-    for _ in 0..600 {
+    let mut returned = BTreeMap::new();
+    for _ in 0..if wait_for_return { 1200 } else { 600 } {
         if let Some(manager) = sim
             .substrate
             .entities
@@ -2693,6 +2757,26 @@ CurleyShuffle=yes
                 seen.push((frame, nav));
             }
         }
+        if let Some(manager) = sim
+            .entities()
+            .get(carrier)
+            .and_then(|carrier| carrier.spawn_manager.as_ref())
+        {
+            for slot in manager.slots() {
+                if slot.state() == SpawnSlotState::Reloading
+                    && let Some(id) = slot.spawn()
+                    && let Some(child) = sim.entities().get(id)
+                    && child.lifecycle.in_limbo()
+                {
+                    let coord =
+                        crate::sim::movement::ground_pose::position_world_coord(&child.position);
+                    returned.entry(id).or_insert((coord.x, coord.y, coord.z));
+                }
+            }
+        }
+        if wait_for_return && wing.iter().all(|id| returned.contains_key(id)) {
+            break;
+        }
     }
     StrafingSortie {
         sim,
@@ -2700,6 +2784,7 @@ CurleyShuffle=yes
         wing,
         bombs,
         navs,
+        returned,
     }
 }
 
@@ -2721,7 +2806,7 @@ CurleyShuffle=yes
 #[ignore = "slow; run when changing what it covers"]
 fn every_hornet_of_a_carrier_wing_flies_a_whole_strafe_pass() {
     for (shape, hornet_keys) in [("cruising", ""), ("Landable", "Landable=yes\nROT=3\n")] {
-        let sortie = strafing_carrier_sortie(hornet_keys);
+        let sortie = strafing_carrier_sortie(hornet_keys, false);
         for hornet in &sortie.wing {
             let frames = sortie.bombs.get(hornet).map_or(&[][..], Vec::as_slice);
             assert_eq!(
@@ -2750,37 +2835,37 @@ fn every_hornet_of_a_carrier_wing_flies_a_whole_strafe_pass() {
 
 /// After its pass a Hornet is recalled with the Carrier itself as its NavCom
 /// (`Assign_Destination(owner, 1)`, `0x006B766D`), and Mission_Move flies it
-/// home. Over the Carrier's cell, stopped, Fly's landing trigger
-/// (`0x004CE3C0`) sets it down on the deck, a landing zone a Spawned aircraft
-/// may share with its spawner (`0x004DDC60`), and the manager takes it in to
-/// reload.
+/// home. SpawnManagerClass::AI (`0x006B77B4..0x006B780F`) takes it into
+/// Limbo and Reloading in the carrier's cell once its signed Z difference
+/// is below 20 leptons; it does not snap the aircraft to the deck's Z.
 #[test]
 fn a_recalled_hornet_flies_home_and_lands_on_the_carrier() {
-    use crate::sim::spawn_manager::SpawnSlotState;
-    let sortie = strafing_carrier_sortie("Landable=yes\nROT=3\n");
+    let sortie = strafing_carrier_sortie("Landable=yes\nROT=3\n", true);
     let carrier = sortie.sim.substrate.entities.get(sortie.carrier).unwrap();
     let deck = crate::sim::movement::ground_pose::position_world_coord(&carrier.position);
-    let slots = &carrier.spawn_manager.as_ref().unwrap().slots;
     for hornet in &sortie.wing {
         let navs = &sortie.navs[hornet];
-        assert_eq!(
-            navs.iter().rev().find_map(|&(_, nav)| nav),
-            Some(crate::sim::components::NavTargetRef::Object { id: sortie.carrier }),
+        // Recall assigns the carrier object; the landing mission may later
+        // replace NavCom with its deck cell. Check the recall transition,
+        // then independently require the docking window, Limbo and Reloading.
+        assert!(
+            navs.iter().any(|&(_, nav)| nav
+                == Some(crate::sim::components::NavTargetRef::Object { id: sortie.carrier })),
             "Hornet {hornet} is sent home to the Carrier: {navs:?}"
         );
-        let h = sortie.sim.substrate.entities.get(*hornet).unwrap();
-        let landed = crate::sim::movement::ground_pose::position_world_coord(&h.position);
+        let &(x, y, z) = sortie
+            .returned
+            .get(hornet)
+            .expect("the returning Hornet must enter Limbo and Reloading");
         assert_eq!(
-            ((landed.x / 256, landed.y / 256), landed.z),
-            ((deck.x / 256, deck.y / 256), deck.z),
-            "Hornet {hornet} lands on the deck"
+            (x / 256, y / 256),
+            (deck.x / 256, deck.y / 256),
+            "Hornet {hornet} docks in the carrier's cell"
         );
-        assert!(h.lifecycle.in_limbo(), "Hornet {hornet} is taken in");
-        let slot = slots
-            .iter()
-            .find(|slot| slot.spawn == Some(*hornet))
-            .unwrap();
-        assert_eq!(slot.state, SpawnSlotState::Reloading, "Hornet {hornet}");
+        assert!(
+            z.wrapping_sub(deck.z) < 0x14,
+            "Hornet {hornet} enters the native docking height window"
+        );
     }
 }
 

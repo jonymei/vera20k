@@ -2053,6 +2053,15 @@ fn fireat_tail(
             overlay_registry,
             effects,
         );
+        if bullet.is_none()
+            && weapon
+                .warhead
+                .as_deref()
+                .and_then(|name| rules.warhead(name))
+                .is_some_and(|warhead| warhead.is_permanent_hijack())
+        {
+            world.parasite_attach(snap.stable_id, None, rules, effects);
+        }
     }
     // FireAt6FF872..6FF8EB uses its explicit argument, on both successful
     // and failed-launch tails. Unit mission Attack(1) bypasses this arm;

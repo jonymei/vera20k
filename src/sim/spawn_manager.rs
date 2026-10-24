@@ -1511,8 +1511,20 @@ impl SpawnHost for WorldSpawn<'_, '_> {
     }
 
     fn adopt(&mut self, child: u64) {
+        let veterancy = crate::rules::NPATCH_ENABLED
+            .then(|| {
+                self.sim
+                    .substrate
+                    .entities
+                    .get(self.owner_id)
+                    .map(|owner| owner.veterancy.clone())
+            })
+            .flatten();
         if let Some(entity) = self.sim.substrate.entities.get_mut(child) {
             entity.spawn_owner_id.owner = Some(self.owner_id);
+            if let Some(veterancy) = veterancy {
+                entity.veterancy.inherit(&veterancy);
+            }
         }
     }
 

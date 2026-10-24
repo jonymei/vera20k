@@ -639,6 +639,7 @@ pub struct ObjectType {
     /// 1..127 repeat eligible entries before seed selection; 0 and high-bit
     /// counts keep one entry, rather than repeating the final priority list.
     pub ai_planning_count: i32,
+    pub(crate) npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards,
     /// Requires spy infiltration of an Allied Battle Lab to unlock.
     pub requires_stolen_allied_tech: bool,
     /// Requires spy infiltration of a Soviet Battle Lab to unlock.
@@ -3239,6 +3240,7 @@ impl ObjectType {
                 0
             },
             requires_stolen_allied_tech: section.read_bool("RequiresStolenAlliedTech", false),
+            npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards::read(section),
             requires_stolen_soviet_tech: section.read_bool("RequiresStolenSovietTech", false),
             requires_stolen_third_tech: section.read_bool("RequiresStolenThirdTech", false),
             // Constructor value; only the ordered Process owner reads it.

@@ -2574,7 +2574,33 @@ fn run_special_detonation_arm(
             }
         }
         SpecialDetonationAction::MindControl => {
+            let hijacker = rules
+                .warhead(world.interner.resolve(detonation.payload.warhead))
+                .filter(|warhead| warhead.is_permanent_hijack())
+                .and_then(|_| world.entities().get(owner))
+                .filter(|firer| firer.lifecycle.in_limbo())
+                .map(|firer| firer.owner());
             world.mind_control_detonation(*detonation, rules, overlay_registry, effects);
+            if let Some(house) = hijacker {
+                // A SpyJack is a one-use boarding attack. Consume the spy
+                // only after capture; a refused/missed jump uses the same
+                // parasite release owner as an ordinary failed boarding.
+                let captured =
+                    object
+                        .and_then(|id| world.entities().get(id))
+                        .is_some_and(|target| {
+                            target.owner() == house && target.mind_control.permanent()
+                        });
+                if captured {
+                    world.uninit_with_context(
+                        owner,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(effects),
+                    );
+                } else {
+                    world.parasite_attach(owner, None, rules, effects);
+                }
+            }
         }
         SpecialDetonationAction::Temporal => {
             let target = match target {

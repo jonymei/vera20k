@@ -771,7 +771,31 @@ impl Simulation {
         let ProjectileTarget::Entity(target_id) = current.target else {
             return;
         };
-        if !self.capture_unit(current.source_id, target_id, rules, registry, frame_effects) {
+        let permanent = rules
+            .warhead(self.interner.resolve(current.payload.warhead))
+            .is_some_and(|warhead| warhead.is_perma_controlled);
+        let captured = if permanent {
+            // NP compatibility policy: keep ordinary weapon admission, but
+            // commit through the existing permanent owner without transient
+            // manager links or an intermediate release/recapture callback.
+            if !self.can_capture(current.source_id, target_id, rules) {
+                return;
+            }
+            let Some(owner) = self
+                .substrate
+                .entities
+                .get(current.source_id)
+                .map(GameEntity::owner)
+            else {
+                return;
+            };
+            self.perma_capture(target_id, owner, rules, registry, frame_effects);
+            self.reset_captured_orders(target_id, rules, frame_effects);
+            true
+        } else {
+            self.capture_unit(current.source_id, target_id, rules, registry, frame_effects)
+        };
+        if !captured {
             return;
         }
         let Some(sound) = rules.mind_control.mind_control_sound.clone() else {

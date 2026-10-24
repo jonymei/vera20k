@@ -53,6 +53,41 @@ the existing Scenario RNG and assignment order. The value is not clamped to rost
 unallocated or unrepresentable results are refused instead of remapped. Cooperative
 selection and the stock mode-null fallback retain their separate behavior.
 
+## AYMod reward and control policy
+
+With `npatch`, `TrainPassengers=yes` gives an open-topped shooter's kill XP to
+the trainable passenger until it reaches elite; elite or untrainable passengers
+retain the carrier fallback. A `Spawned` child's kills instead train its living,
+trainable mother unit, even when the child is itself trainable. Live managed
+children mirror that award, and regenerated children inherit the parent's
+veterancy through the existing spawn owner.
+
+`[General] MindControllerGainExperienceRatio` shares the existing XP award with
+a valid, non-elite, positive-cost controller. `100%` transfers it all; unavailable
+or elite controllers leave the award with the ordinary recipient. The ratio is
+bounded to 0..1, with integer points conserved rather than duplicated.
+
+The killer's `GetsBounty`, `VeteranGetsBounty` and `EliteGetsBounty` select bounty
+eligibility by its rank before the kill. Payout is the victim's effective cost
+times its rank's `[CombatDamage] BountyCostMult` family and its own rank's `Bounty`
+family. The defaults are 25/50/100 percent and 1 respectively. Higher-tier absent
+per-type values inherit the preceding tier. Multipliers are bounded to 0..16.
+Only hostile terminal kills pay, once through the existing KillRecord and
+Economy owners; capture bookkeeping and friendly fire cannot farm cash. The
+balance cannot overflow, and registered `BountyAnim` uses the existing AnimClass
+owner at the victim's position.
+
+`IsPermaControlled=yes` MindControl warheads retain ordinary capture admission
+but commit directly through the existing permanent-control owner, without a
+temporary manager link. Controller death therefore cannot release them. The
+combined MindControl/Parasite LimboLaunch boarding attack consumes its spy on
+success; refused or missed boarding uses the existing parasite release path
+instead of leaving an invisible tracked infantryman in limbo.
+
+These are deliberate player-facing compatibility policies, not a claim that
+unexamined NPAE #174 formulas and callback ordering have been reproduced exactly.
+Without `npatch`, the added reward/control keys remain disabled.
+
 ## Cross-extension compatibility
 
 The three capabilities — `ares`, `phobos`, `npatch` — are orthogonal and mixable:

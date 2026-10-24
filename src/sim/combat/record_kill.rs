@@ -3,6 +3,11 @@
 //! concrete-class and base Tag prefixes before the arithmetic/accounting continuation.
 
 use super::*;
+use crate::sim::anim_class::AnimWorldCoord;
+
+#[cfg(test)]
+#[path = "npatch_rewards_tests.rs"]
+mod npatch_rewards_tests;
 
 /// Pay one kill's veterancy award ([`record_the_kill`]'s `points`); the
 /// recipient's own cost divides it inside `VeterancyClass::Add @ 0x0074FF50`.
@@ -62,7 +67,35 @@ fn award_kill_experience(
     // Branch 1: a passenger firing from an OpenTopped transport pays its
     // transporter (the `+0x82`/`+0x11C` pair).
     let open_transporter = killer.passenger_role.open_transport_id();
-    let recipient = if let Some(transporter) = open_transporter.and_then(trainable_cost) {
+    // AYMod's TrainPassengers keeps the shooter's XP until it is elite;
+    // untrainable/elite riders retain the existing transport fallback.
+    let trains_passenger = killer_type.trainable
+        && killer.veterancy.rank() < 200
+        && open_transporter
+            .and_then(|id| entities.get(id))
+            .and_then(|carrier| interner.object_type(carrier.type_ref(), rules))
+            .is_some_and(|carrier| carrier.npatch_rewards.train_passengers);
+    let spawn_parent = if crate::rules::NPATCH_ENABLED && killer_type.spawned {
+        killer
+            .spawn_owner_id
+            .owner()
+            .filter(|&id| {
+                entities
+                    .get(id)
+                    .is_some_and(|parent| parent.is_object_alive() && parent.health.current() > 0)
+            })
+            .and_then(trainable_cost)
+            .filter(|&(_, cost)| cost > 0)
+    } else {
+        None
+    };
+    let recipient = if let Some(parent) = spawn_parent {
+        // Disposable, trainable AY missiles must not swallow the launcher's
+        // XP; reusable children use the same mother-ship reward owner.
+        Some(parent)
+    } else if trains_passenger {
+        Some((killer_id, cost_of(killer_type)))
+    } else if let Some(transporter) = open_transporter.and_then(trainable_cost) {
         Some(transporter)
     } else if killer_type.trainable {
         // Branch 2: the killer itself.
@@ -80,14 +113,63 @@ fn award_kill_experience(
     let Some((recipient_id, recipient_cost)) = recipient else {
         return;
     };
-    if let Some(recipient) = entities.get_mut(recipient_id) {
-        recipient.veterancy.award_kill(
-            recipient_cost,
-            points,
-            true,
-            rules.general.veteran_ratio,
-            rules.general.veteran_cap,
-        );
+    let controller = entities
+        .get(recipient_id)
+        .and_then(|recipient| recipient.mind_control.controller())
+        .filter(|&id| id != recipient_id)
+        .filter(|&id| {
+            entities.get(id).is_some_and(|entity| {
+                entity.is_object_alive()
+                    && entity.health.current() > 0
+                    && entity.veterancy.rank() < 200
+            })
+        })
+        .and_then(trainable_cost)
+        .filter(|&(_, cost)| cost > 0);
+    let shared = if controller.is_some() {
+        rules.npatch_rewards.controller_points(points)
+    } else {
+        0
+    };
+    // Share the existing award, never mint a second full XP award. An elite
+    // or absent controller leaves the points with the controlled shooter.
+    for (id, cost, award) in [
+        Some((recipient_id, recipient_cost, points - shared)),
+        controller.map(|(id, cost)| (id, cost, shared)),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(recipient) = entities.get_mut(id) {
+            recipient.veterancy.award_kill(
+                cost,
+                award,
+                true,
+                rules.general.veteran_ratio,
+                rules.general.veteran_cap,
+            );
+        }
+    }
+    if crate::rules::NPATCH_ENABLED {
+        let synchronized = entities.get(recipient_id).and_then(|parent| {
+            parent.spawn_manager.as_ref().map(|manager| {
+                (
+                    parent.veterancy.clone(),
+                    manager
+                        .slots()
+                        .iter()
+                        .filter_map(crate::sim::spawn_manager::SpawnSlot::spawn)
+                        .collect::<Vec<_>>(),
+                )
+            })
+        });
+        if let Some((veterancy, children)) = synchronized {
+            for child in children {
+                if let Some(child) = entities.get_mut(child) {
+                    child.veterancy.inherit(&veterancy);
+                }
+            }
+        }
     }
 }
 
@@ -157,9 +239,9 @@ fn record_the_kill(
     victim_cost: i32,
     callback: KillCallback,
     rules: &RuleSet,
-) {
+) -> Option<AnimWorldCoord> {
     let Some(victim) = entities.get(victim_id) else {
-        return;
+        return None;
     };
     // E0's `DontScore=` (+C9F) returns AFTER the Tag prefix and before
     // bookkeeping. E4 has no such entry return: it awards score and victim
@@ -168,7 +250,7 @@ fn record_the_kill(
     // it on `SLAV`, `V3ROCKET`, `DMISL` and `CMISL`: without it every missile
     // shot down would promote its interceptor.
     if matches!(source, KillSource::Techno(_)) && victim.tracking_facts.dont_score() {
-        return;
+        return None;
     }
     let killer_id = match source {
         KillSource::Techno(source) => source,
@@ -204,6 +286,29 @@ fn record_the_kill(
     });
     let points =
         super::veterancy::kill_award_points(victim_cost, victim.veterancy.rank_kind(), allied);
+    // Bounty is a terminal hostile kill reward, not capture bookkeeping.
+    // Reuse KillRecord's existing terminal bit so callbacks cannot farm cash.
+    let bounty = if callback == KillCallback::Terminal
+        && !allied
+        && !victim.kill_record.is_recorded()
+        && killer_id
+            .and_then(|id| entities.get(id))
+            .is_some_and(|killer| {
+                interner
+                    .object_type(killer.type_ref(), rules)
+                    .is_some_and(|kind| {
+                        kind.npatch_rewards.collects_bounty(killer.veterancy.rank())
+                    })
+            }) {
+        victim_type.map_or(0, |kind| {
+            rules
+                .npatch_rewards
+                .bounty(victim_cost, victim.veterancy.rank(), &kind.npatch_rewards)
+        })
+    } else {
+        0
+    };
+    let location = crate::sim::movement::ground_pose::position_world_coord(&victim.position);
     if let Some(killer_id) = killer_id {
         award_kill_experience(
             entities,
@@ -215,6 +320,16 @@ fn record_the_kill(
             victim_house.as_ref(),
         );
     }
+    let paid = killer_owner
+        .and_then(|owner| houses.get_mut(&owner))
+        .map_or(0, |house| {
+            let room = (i64::from(i32::MAX) - i64::from(house.economy().available_money())).max(0);
+            let paid = i64::from(bounty).min(room) as i32;
+            if paid > 0 {
+                house.economy_mut().add_credits(paid);
+            }
+            paid
+        });
     // 702FF0 awards experience before 703003..7031DC book the House fields.
     if let Some(victim) = entities.get_mut(victim_id) {
         let count_killer = !victim.tracking_facts.dont_score();
@@ -228,6 +343,11 @@ fn record_the_kill(
             callback,
         );
     }
+    (paid > 0).then_some(AnimWorldCoord {
+        x: location.x,
+        y: location.y,
+        z: location.z,
+    })
 }
 
 impl crate::sim::world::Simulation {
@@ -280,7 +400,7 @@ impl crate::sim::world::Simulation {
             .object_type(victim.type_ref(), rules)
             .map_or(0, |object| rules.cost_of(object, victim_house.as_ref()));
         self.record_kill_tag_prefix(victim_id, source, context);
-        record_the_kill(
+        let bounty_location = record_the_kill(
             &mut self.substrate.entities,
             &mut self.houses,
             &self.interner,
@@ -291,6 +411,11 @@ impl crate::sim::world::Simulation {
             callback,
             rules,
         );
+        if let Some(location) = bounty_location
+            && let Some(name) = rules.npatch_rewards.bounty_anim.as_deref()
+        {
+            self.spawn_named_anim(rules, name, location, 0, 0x600, 0);
+        }
         #[cfg(any(test, feature = "test-support"))]
         self.trace_lifecycle_for_test(
             crate::sim::world::LifecycleTestEvent::RecordKillBookkeeping {
