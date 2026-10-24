@@ -174,6 +174,19 @@ impl TeamAiIniDiagnostic {
             Self::UnknownAiTriggerEnable { .. } => TeamAiDefinitionSource::Scenario,
         }
     }
+
+    fn refuses_fixed_source(&self) -> bool {
+        // TaskForceClass::LoadFromINIList @ 0x006E8220 ignores Read_INI's
+        // missing-section return at 0x006E831A and retains the allocated object.
+        self.source() == TeamAiDefinitionSource::FixedAimd
+            && !matches!(
+                self,
+                Self::MissingDefinitionSection {
+                    registry: "TaskForces",
+                    ..
+                }
+            )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -287,7 +300,7 @@ impl TeamAiIniRegistry {
             && !self
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.source() == TeamAiDefinitionSource::FixedAimd)
+                .any(TeamAiIniDiagnostic::refuses_fixed_source)
     }
 
     pub(crate) fn fixed_resolution_view(&self) -> Self {
@@ -436,6 +449,23 @@ impl TeamAiIniRegistry {
             else {
                 continue;
             };
+            // LoadFromINIList @ 0x006E8220 finds/allocates before Read_INI.
+            // Constructor @ 0x006E7E80 starts Group=-1 and entry count=0;
+            // Read_INI @ 0x006E8420 leaves both untouched without a section.
+            let identity = canonical_identity(id);
+            let position = if let Some(&position) = index.get(&identity) {
+                position
+            } else {
+                let position = self.task_forces.len();
+                index.insert(identity, position);
+                self.task_forces.push(TaskForceIni {
+                    id: id.to_string(),
+                    group: -1,
+                    entries: Vec::new(),
+                    source,
+                });
+                position
+            };
             let Some(section) = ini.section(id) else {
                 self.diagnostics
                     .push(TeamAiIniDiagnostic::MissingDefinitionSection {
@@ -481,18 +511,13 @@ impl TeamAiIniRegistry {
             // gamemd.exe TaskForceClass::Read_INI6E8420 passes its current
             // +98 Group as ReadInt's default at6E84CD..6E84E2. A reread that
             // omits Group retains it; only the constructor starts at -1.
-            let group_default = index
-                .get(&canonical_identity(id))
-                .map_or(-1, |&position| self.task_forces[position].group);
-            let definition = TaskForceIni {
+            let group_default = self.task_forces[position].group;
+            self.task_forces[position] = TaskForceIni {
                 id: id.to_string(),
                 group: section.read_int("Group", group_default),
                 entries,
                 source,
             };
-            upsert_ordered(&mut self.task_forces, &mut index, definition, |entry| {
-                &entry.id
-            });
         }
     }
 
@@ -789,6 +814,39 @@ mod tests {
                 source: TeamAiDefinitionSource::Scenario,
             }]
         );
+    }
+
+    #[test]
+    fn missing_task_force_sections_allocate_empty_or_retain_previous_fields() {
+        let mut fixed = complete_fixed_aimd();
+        fixed.merge(&IniFile::from_str(
+            "[TaskForces]\n1=UNFILLED\n[FORCE]\nGroup=9\n",
+        ));
+        let scenario = IniFile::from_str("[TaskForces]\n0=FORCE\n1=MAP_UNFILLED\n");
+        let loaded = TeamAiIniRegistry::from_sources(&fixed, &scenario, true);
+
+        assert!(loaded.fixed_source_is_complete());
+        assert_eq!(
+            loaded
+                .task_forces
+                .iter()
+                .map(|force| force.id.as_str())
+                .collect::<Vec<_>>(),
+            ["FORCE", "UNFILLED", "MAP_UNFILLED"]
+        );
+        assert_eq!(loaded.task_forces[0].group, 9);
+        assert_eq!(loaded.task_forces[0].entries[0].member_type, "E1");
+        assert!(
+            loaded.task_forces[1..]
+                .iter()
+                .all(|force| { force.group == -1 && force.entries.is_empty() })
+        );
+        assert!(loaded.diagnostics.iter().any(|diagnostic| matches!(
+            diagnostic,
+            TeamAiIniDiagnostic::MissingDefinitionSection {
+                registry: "TaskForces", id, source: TeamAiDefinitionSource::FixedAimd,
+            } if id == "UNFILLED"
+        )));
     }
 
     #[test]

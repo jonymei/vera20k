@@ -2356,6 +2356,48 @@ mod tests {
     }
 
     #[test]
+    fn gsi_04_05_missing_task_force_sections_preserve_factory_order() {
+        use crate::rules::ini_parser::IniFile;
+
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
+        ))
+        .unwrap();
+        let fixed = IniFile::from_str(
+            "[TeamTypes]\n0=TT\n[TT]\nScript=S\nTaskForce=REFERENCED\n\
+             [ScriptTypes]\n0=S\n[S]\n0=2,0\n\
+             [TaskForces]\n0=LIST_ONLY\n1=FILLED\n2=REFERENCED\n\
+             [FILLED]\n0=2,E1\nGroup=7\n",
+        );
+        let scenario = IniFile::from_str("[TaskForces]\n0=FILLED\n1=MAP_ONLY\n");
+        let registry = TeamAiIniRegistry::from_sources(&fixed, &scenario, true);
+        let mut interner = StringInterner::new();
+        let (vm, diagnostics) = TeamScriptVm::from_ini_registry(&registry, &mut interner, &rules);
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(
+            vm.task_force_order()
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .collect::<Vec<_>>(),
+            ["REFERENCED", "LIST_ONLY", "FILLED", "MAP_ONLY"]
+        );
+        let filled = &vm.task_forces[&interner.get("FILLED").unwrap()];
+        assert_eq!(filled.group, 7);
+        assert_eq!(filled.entries[0].count, 2);
+        assert!(
+            vm.task_forces[&interner.get("LIST_ONLY").unwrap()]
+                .entries
+                .is_empty()
+        );
+        assert!(
+            vm.task_forces[&interner.get("MAP_ONLY").unwrap()]
+                .entries
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn gsi_04_05_aimd_install_fills_placeholders_without_reordering_first_references() {
         use crate::rules::ini_parser::IniFile;
 
