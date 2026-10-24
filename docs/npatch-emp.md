@@ -45,6 +45,14 @@ with `Airburst=no`, `Cluster=1` and `AirburstWeapon=TankBoltEMP`. The child weap
 uses `EMPulsWH` with `EMEffect=yes`. Stock Airburst requires `Airburst=yes`, so it
 previously discarded this producer before EMP delivery was possible.
 
+Stock Rules processing also discovers that child only in the Bullet sweep,
+after the Weapon sweep: a child referenced nowhere else retains constructor
+fields until a later pass. NPatch compatibility eagerly discovers this impact
+child while its parent's Weapon is being read. The existing Weapon factory and
+same ordered sweep then read the new child, including its own Projectile and
+Warhead. No second body reader or duplicate registry is introduced. This loader
+ordering is also an explicit compatibility choice, not asserted NPAE chronology.
+
 The NPatch compatibility policy emits one real child projectile after the
 parent's shared impact receivers, preserving the live source and original target.
 It uses the existing projectile allocation, launch, admission and collision

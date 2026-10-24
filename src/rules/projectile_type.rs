@@ -195,6 +195,11 @@ pub(crate) struct ProjectileArtState {
 }
 
 impl ProjectileArtState {
+    #[cfg(feature = "npatch")]
+    pub(crate) fn is_airburst(&self) -> bool {
+        self.airburst
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             color_scheme: 0,

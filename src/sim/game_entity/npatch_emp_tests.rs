@@ -12,7 +12,7 @@ fn scene() -> (Simulation, RuleSet, u64, u64) {
     let ini = arena_fixture::clear_ground_ini(
         "[VehicleTypes]\n0=TTNK\n1=TANK\n2=ORGANIC\n\
          [InfantryTypes]\n0=PERSON\n[BuildingTypes]\n0=TOWER\n1=POWER\n\
-         [TTNK]\nStrength=300\nPrimary=TankBolt\nSecondary=TankBoltEMP\nSpeed=5\n\
+         [TTNK]\nStrength=300\nPrimary=TankBolt\nSpeed=5\n\
          [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\n\
          [ORGANIC]\nStrength=100\nOrganic=yes\nSpeed=5\n\
          [PERSON]\nStrength=100\nSpeed=5\n\

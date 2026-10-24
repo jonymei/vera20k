@@ -2272,7 +2272,7 @@ fn fixed_art_and_member_major_type_data_follow_live_native_order() {
          [UNIT]\nPrimary=W1\nSecondary=W2\n\
          [W1]\nAnim=A1,A2\nAssaultAnim=A3\nOccupantAnim=A4\nOpenToppedAnim=A5\nAttachedParticleSystem=PS1\nWarhead=WH1\nProjectile=P1\n\
          [W2]\nAnim=B1,B2\nAssaultAnim=B3\nOccupantAnim=B4\nOpenToppedAnim=B5\nAttachedParticleSystem=PS2\nWarhead=WH2\nProjectile=P2\n\
-         [P1]\nImage=P1ART\nAirburstWeapon=LATEW1\nShrapnelWeapon=LATEW2\n\
+         [P1]\nImage=P1ART\nAirburst=yes\nAirburstWeapon=LATEW1\nShrapnelWeapon=LATEW2\n\
          [P2]\nImage=P2ART\n",
     );
     let fixed_art = IniFile::from_str(
