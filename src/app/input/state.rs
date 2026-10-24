@@ -18,6 +18,7 @@ pub(crate) enum TacticalPointerMode<'a> {
     Ordinary,
     SuperWeapon(&'a str),
     RepairSell,
+    Power,
 }
 
 /// Client-side handles installed by ManualPlace4FB840. The House factory
@@ -163,6 +164,7 @@ impl PreparedSavedLocalView {
         input.planning.reset();
         sidebar.repair_mode_on = modes.repair;
         sidebar.sell_mode_on = modes.sell;
+        sidebar.power_mode_on = false;
         input.targeting_mode = self.targeting;
         // The preview is derived from the cursor; the next tactical frame
         // recomputes it. The BandBoxLeftUp retry copy (+1190..+1198) loads
@@ -289,6 +291,9 @@ impl MatchInputState {
         if sidebar.repair_mode_on || sidebar.sell_mode_on {
             return TacticalPointerMode::RepairSell;
         }
+        if sidebar.power_mode_on {
+            return TacticalPointerMode::Power;
+        }
         TacticalPointerMode::Ordinary
     }
 
@@ -296,7 +301,7 @@ impl MatchInputState {
     /// placement product, Repair/Sell, then Super. Repair/Sell setters still
     /// refuse a retained placement TYPE after its product expires. The
     /// caller handles the beacon rung (4AAE47) and the final UnselectAll rung.
-    /// Power/Waypoint remain unrepresented Display flags.
+    /// NPatch Power shares this cancellation rung; Waypoint remains unrepresented.
     /// Source: original gamemd.exe4AAD34..4AAE84.
     pub(crate) fn cancel_pointer_mode(
         &mut self,
@@ -305,7 +310,7 @@ impl MatchInputState {
         if self.cancel_building_placement() {
             return true;
         }
-        if sidebar.repair_mode_on || sidebar.sell_mode_on {
+        if sidebar.repair_mode_on || sidebar.sell_mode_on || sidebar.power_mode_on {
             let placement_armed = self
                 .targeting_mode
                 .as_ref()

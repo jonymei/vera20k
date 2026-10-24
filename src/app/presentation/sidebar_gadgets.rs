@@ -31,18 +31,22 @@ use crate::ui::sidebar::gadget_flash::SidebarGadgetState;
 /// drops sell mode a frame early (invisible); gaining one after that turn, in
 /// the frame the last one went, keeps it on. Both need the count to change
 /// after the House rung; the second needs a loss and a gain in one frame.
+/// NPatch Power also retires when the local house or its last building is
+/// lost, rather than leaving a targeting cursor with no possible own target.
 pub(crate) fn exit_sell_mode_without_buildings(
     gadgets: &mut SidebarGadgetState,
     sim: &Simulation,
     local_house: Option<InternedId>,
     placement_armed: bool,
 ) {
-    if !gadgets.sell_mode_on {
+    if !gadgets.sell_mode_on && !gadgets.power_mode_on {
         return;
     }
     let holds_no_building = local_house
         .and_then(|house| sim.houses().get(&house))
-        .is_some_and(|house| house.tracking().buildings() == 0);
+        .map_or(gadgets.power_mode_on, |house| {
+            house.tracking().buildings() == 0
+        });
     if holds_no_building {
         gadgets.disable_selection_modes(placement_armed);
     }

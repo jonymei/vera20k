@@ -117,6 +117,32 @@ These are deliberate player-facing compatibility policies, not a claim that
 unexamined NPAE #174 formulas and callback ordering have been reproduced exactly.
 Without `npatch`, the added reward/control keys remain disabled.
 
+## Manual building power
+
+`[UISettings] UseTogglePower=yes` enables manual power with the `npatch` capability.
+The input owner reads the immutable startup-selected Rules root; missing values default
+to false, and mode/map overrides cannot silently enable this process UI feature.
+The NPExt174 `ReadBool` site is `0xC2A362..0xC2A377` (`0x5295F0`); root-only timing
+and the false fallback are explicit VERA policy where the original global lifetime is
+not fully established.
+
+The default key is V, unless already assigned to another command. `TogglePower` can be
+rebound or explicitly unbound in the keyboard settings. It arms a sticky power cursor;
+click an own, visible, live building with `TogglePower=yes` to change its online state.
+Right-click or the key again exits; Repair, Sell, Beacon, placement and world replacement
+clear the competing cursor modes. Losing the local house or its last building also exits.
+Entering Power cancels an armed superweapon cursor; entering Planning clears Power,
+and V does not interrupt a held Planning gesture.
+Power producers without a powered/drain requirement and Firestorm walls are refused.
+
+Hover and release share admission and queue the existing `SetBuildingOnLine` command.
+There is no client-owned copy of building power state: `GoOnline/GoOffline`
+(`0x452260`/`0x452360`) retain the authoritative latch, power invalidation, factory
+pause/resume, Stuff and EVA callbacks. This path is not a power bar click shortcut,
+and the transient targeting mode is intentionally cleared, not restored, on saved-world load.
+Hover, release and the writers share the core admission query. Active EMP refuses
+going online; switching off remains allowed and never clears the EMP counter.
+
 ## Cross-extension compatibility
 
 The three capabilities — `ares`, `phobos`, `npatch` — are orthogonal and mixable:

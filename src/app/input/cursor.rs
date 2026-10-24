@@ -223,6 +223,11 @@ pub(crate) fn current_cursor_feedback_kind(state: &AppState) -> Option<CursorFee
             CursorFeedbackKind::SellMode(valid)
         });
     }
+    if matches!(pointer_mode, super::state::TacticalPointerMode::Power) {
+        return Some(CursorFeedbackKind::PowerMode(
+            super::power::command_at_cursor(state).is_some(),
+        ));
+    }
     // No early return for an empty selection here. `242c79ad0` carried
     // `if selected.is_empty() { return None; }` (no comment, no native
     // backing), which made the no-selection arm below unreachable and showed
@@ -1581,6 +1586,11 @@ pub(crate) fn cursor_id_for_feedback(kind: CursorFeedbackKind) -> Option<CursorI
             CursorId::Sell
         } else {
             CursorId::NoSell
+        }),
+        CursorFeedbackKind::PowerMode(valid) => Some(if valid {
+            CursorId::TogglePower
+        } else {
+            CursorId::NoTogglePower
         }),
         CursorFeedbackKind::SuperWeaponTarget(id) => Some(id),
         // Row 0x4E: mouse.sha frames 435..449 at rate 4.

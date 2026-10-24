@@ -38,6 +38,7 @@ pub(crate) enum HotkeyCommand {
     CenterBase,
     ToggleRepair,
     ToggleSell,
+    TogglePower,
     PreviousObject,
     NextObject,
     CombatantSelect,
@@ -191,10 +192,10 @@ impl HotkeyBindings {
 
     pub(crate) fn reload_from_ini_bytes(bytes: Option<&[u8]>) -> Self {
         let mut bindings = Self::default();
-        if let Some(section) = bytes
+        let section = bytes
             .and_then(|bytes| IniFile::from_bytes(bytes).ok())
-            .and_then(|ini| ini.section("Hotkey").cloned())
-        {
+            .and_then(|ini| ini.section("Hotkey").cloned());
+        if let Some(section) = &section {
             for name in section.keys() {
                 let Some(command) = command_from_name(name) else {
                     continue;
@@ -209,7 +210,17 @@ impl HotkeyBindings {
                 bindings.by_key.insert(encoded, command);
             }
         }
-
+        // NPatch's ordinary V binding is a fallback, never a replacement for
+        // a player's existing binding or explicit TogglePower=0.
+        if crate::rules::NPATCH_ENABLED
+            && !section
+                .as_ref()
+                .is_some_and(|s| s.keys().any(|key| key == "TogglePower"))
+            && !bindings.by_key.contains_key(&86)
+            && bindings.first_key(HotkeyCommand::TogglePower).is_none()
+        {
+            bindings.by_key.insert(86, HotkeyCommand::TogglePower);
+        }
         bindings
     }
 
@@ -277,6 +288,9 @@ impl HotkeyBindings {
         let mut output = String::from("[Hotkey]\n");
         for (name, key) in entries {
             writeln!(output, "{name}={key}").expect("writing a String cannot fail");
+        }
+        if crate::rules::NPATCH_ENABLED && self.first_key(HotkeyCommand::TogglePower).is_none() {
+            output.push_str("TogglePower=0\n");
         }
         output
     }
@@ -618,8 +632,11 @@ mod tests {
         let fixture = native_keyboard_fixture();
         let native = fixture["catalog"].as_array().unwrap();
         let catalog = catalog::registered_commands();
-        assert_eq!(catalog.len(), 87);
-        assert_eq!(catalog.len(), native.len());
+        assert_eq!(native.len(), 87);
+        assert_eq!(
+            catalog.len(),
+            native.len() + usize::from(crate::rules::NPATCH_ENABLED)
+        );
         for (index, (actual, expected)) in catalog.iter().zip(native).enumerate() {
             assert_eq!(expected["index"].as_u64(), Some(index as u64));
             assert_eq!(actual.ini_name, expected["ini_name"].as_str().unwrap());
@@ -655,12 +672,18 @@ mod tests {
             writeln!(ini, "{}={key}", row["ini_name"].as_str().unwrap()).unwrap();
         }
         let loaded = HotkeyBindings::reload_from_ini_bytes(Some(ini.as_bytes()));
-        assert_eq!(loaded.by_key.len(), 87);
-        for (index, metadata) in catalog::registered_commands().iter().enumerate() {
+        assert_eq!(
+            loaded.by_key.len(),
+            87 + usize::from(crate::rules::NPATCH_ENABLED)
+        );
+        for (index, metadata) in catalog::registered_commands().iter().take(87).enumerate() {
             assert_eq!(
                 loaded.command_at(0x200 + index as u16),
                 Some(metadata.command)
             );
+        }
+        if crate::rules::NPATCH_ENABLED {
+            ini.insert_str("[Hotkey]\n".len(), "TogglePower=86\n");
         }
         let saved = loaded.to_ini_string();
         assert_eq!(saved, ini);
@@ -694,10 +717,9 @@ mod tests {
             assert_eq!(command_from_name(alias), None);
             writeln!(ini, "{alias}={}", 0x200 + index).unwrap();
         }
-        assert!(
-            HotkeyBindings::reload_from_ini_bytes(Some(ini.as_bytes()))
-                .by_key
-                .is_empty()
+        assert_eq!(
+            HotkeyBindings::reload_from_ini_bytes(Some(ini.as_bytes())).by_key,
+            HotkeyBindings::reload_from_ini_bytes(None).by_key,
         );
         // The stock team10 -> engine slot0 mapping remains valid through metadata.
         assert_eq!(
@@ -763,10 +785,12 @@ mod tests {
             HotkeyBindings::from_ini_bytes(Some(b"[Hotkey]\nDelete=110\nStopObject=83\n"));
         assert_eq!(startup.first_key(HotkeyCommand::Delete), Some(46));
         let serialized = startup.to_ini_string();
-        assert_eq!(
-            serialized,
-            "[Hotkey]\nOptions=27\nCenterOnRadarEvent=32\nDelete=110\nStopObject=83\n"
-        );
+        let mut expected =
+            "[Hotkey]\nOptions=27\nCenterOnRadarEvent=32\nDelete=110\nStopObject=83\n".to_string();
+        if crate::rules::NPATCH_ENABLED {
+            expected.push_str("TogglePower=86\n");
+        }
+        assert_eq!(serialized, expected);
         let mut reloaded = HotkeyBindings::reload_from_ini_bytes(Some(serialized.as_bytes()));
         assert_eq!(reloaded.command_at(46), None);
         assert_eq!(reloaded.first_key(HotkeyCommand::Delete), Some(110));

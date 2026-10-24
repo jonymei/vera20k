@@ -41,7 +41,7 @@ pub(crate) fn registered_commands() -> &'static [CommandMetadata] {
 /// commands. The CSF has no entry, so the page shows the key itself.
 pub(crate) const VERA_CATEGORY_KEY: &str = "vera20k";
 
-const REGISTERED_COMMANDS: [CommandMetadata; 87] = [
+const REGISTERED_COMMANDS: [CommandMetadata; 87 + cfg!(feature = "npatch") as usize] = [
     command!(
         HotkeyCommand::Follow,
         "Follow",
@@ -736,6 +736,15 @@ const REGISTERED_COMMANDS: [CommandMetadata; 87] = [
         "Cmnd:Delete",
         "TXT_INTERFACE",
         "Cmnd:DeleteDesc",
+        None
+    ),
+    #[cfg(feature = "npatch")]
+    command!(
+        HotkeyCommand::TogglePower,
+        "TogglePower",
+        "Toggle building power",
+        "TXT_INTERFACE",
+        "Turn an owned building on or off",
         None
     ),
 ];

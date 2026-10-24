@@ -32,6 +32,26 @@ impl GameEntity {
 }
 
 impl Simulation {
+    /// Shared GoOnline452260/GoOffline452360 admission, also used by the
+    /// manual power cursor. EMP blocks going online, not a player's request
+    /// to keep a building offline after the pulse expires.
+    pub fn can_set_building_online(&self, id: u64, on: bool, rules: &RuleSet) -> bool {
+        let Some(entity) = self.substrate.entities.get(id) else {
+            return false;
+        };
+        if entity.category() != EntityCategory::Structure || entity.building_online() == on {
+            return false;
+        }
+        if on {
+            return entity.emp_remaining() <= 0;
+        }
+        self.object_type(entity.type_ref(), rules)
+            .is_some_and(|object| {
+                crate::sim::power_system::native_building_power_drain(object.power) > 0
+                    || object.powered
+            })
+    }
+
     /// GoOffline452360: only positive native PowerDrain or Powered types
     /// can turn off. Return the actual transition, not Execute61's receipt.
     pub(crate) fn go_building_offline(
@@ -40,20 +60,11 @@ impl Simulation {
         rules: &RuleSet,
         effects: FrameEffects<'_>,
     ) -> bool {
-        let Some(entity) = self.substrate.entities.get(id) else {
-            return false;
-        };
-        if entity.category() != EntityCategory::Structure || !entity.building_online() {
+        if !self.can_set_building_online(id, false, rules) {
             return false;
         }
-        let Some(object) = self.object_type(entity.type_ref(), rules) else {
-            return false;
-        };
-        if crate::sim::power_system::native_building_power_drain(object.power) <= 0
-            && !object.powered
-        {
-            return false;
-        }
+        let entity = self.substrate.entities.get(id).unwrap();
+        let object = self.object_type(entity.type_ref(), rules).unwrap();
         let owner = entity.owner();
         let factory = crate::sim::production::factory_category_for_building(object);
         self.substrate
@@ -78,21 +89,18 @@ impl Simulation {
         true
     }
 
-    /// GoOnline452260, also inlined by ReadINI44FC27..44FD1F. The native
-    /// EMP+504 gate remains at its constructor zero: the engine has no EMP
-    /// producer yet (the same bound as OperationalFacts' existing adapter).
+    /// GoOnline452260, also inlined by ReadINI44FC27..44FD1F. The existing
+    /// EMP owner supplies the admission counter; manual power never clears it.
     pub(crate) fn go_building_online(
         &mut self,
         id: u64,
         rules: &RuleSet,
         effects: FrameEffects<'_>,
     ) -> bool {
-        let Some(entity) = self.substrate.entities.get(id) else {
-            return false;
-        };
-        if entity.category() != EntityCategory::Structure || entity.building_online() {
+        if !self.can_set_building_online(id, true, rules) {
             return false;
         }
+        let entity = self.substrate.entities.get(id).unwrap();
         let owner = entity.owner();
         let factory = self
             .object_type(entity.type_ref(), rules)

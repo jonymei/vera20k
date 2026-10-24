@@ -220,6 +220,13 @@ fn ui_sound(state: &mut AppState, sound: Option<String>) {
 }
 
 fn set_active(state: &mut AppState, active: bool) {
+    if active {
+        state
+            .match_state
+            .match_presentation
+            .sidebar_gadget_state
+            .power_mode_on = false;
+    }
     let rt = state.match_state.sim_runtime.as_mut();
     let command = state.match_state.input.planning.set_active(
         active,

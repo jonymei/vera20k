@@ -155,6 +155,10 @@ pub struct SidebarGadgetState {
     /// Mutually exclusive with `repair_mode_on`; pending placement refuses changes.
     pub sell_mode_on: bool,
 
+    /// NPatch manual-power cursor mode. The building's actual online latch
+    /// remains owned by sim::building_power.
+    pub power_mode_on: bool,
+
     /// Mirrors Display +0x11B4, beacon placement mode, which only
     /// SetPlaceBeaconMode 4AC960 sets (`app::input::beacon`). Repair and Sell
     /// changes clear it (4AC916, 4AC6BB).
@@ -186,6 +190,7 @@ pub struct SidebarGadgetState {
 pub(crate) enum SelectionMode {
     Repair,
     Sell,
+    Power,
 }
 
 impl SidebarGadgetState {
@@ -210,9 +215,11 @@ impl SidebarGadgetState {
             && !match mode {
                 SelectionMode::Repair => self.repair_mode_on,
                 SelectionMode::Sell => self.sell_mode_on,
+                SelectionMode::Power => self.power_mode_on,
             };
         self.repair_mode_on = enabled && matches!(mode, SelectionMode::Repair);
         self.sell_mode_on = enabled && matches!(mode, SelectionMode::Sell);
+        self.power_mode_on = enabled && matches!(mode, SelectionMode::Power);
         enabled
     }
 
@@ -243,15 +250,16 @@ impl SidebarGadgetState {
     }
 
     /// Display4AC8C0(0)/4AC660(0): a pending building placement refuses mode
-    /// changes. Only the Repair/Sell bytes clear here; the Beacon byte has
-    /// its own owner (app::input::beacon, 4AC960). Power (4AC820) and the
-    /// Waypoint byte (+0x11B3, 4AC700) are never armed in YR, and the
+    /// changes. Repair/Sell and the optional NPatch Power mode clear here;
+    /// Beacon has its own owner (app::input::beacon, 4AC960). Power (4AC820)
+    /// and Waypoint (+0x11B3, 4AC700) are never armed in stock YR, and the
     /// PlanMgr planning mode and the bare Super pointer are separate owners
     /// these Display setters do not cancel.
     pub(crate) fn disable_selection_modes(&mut self, placement_armed: bool) {
         if !placement_armed {
             self.repair_mode_on = false;
             self.sell_mode_on = false;
+            self.power_mode_on = false;
         }
     }
 
@@ -261,8 +269,8 @@ impl SidebarGadgetState {
     /// locks (6DEDB2..6DEDD0, 6E268A..6E26A6) share. Only the first two are
     /// refused while a placement is pending. SetTogglePowerMode (4AC87B) and
     /// SetWaypointMode (4AC756) also clear the beacon byte, and
-    /// SetPlaceBeaconMode clears +0x11B2/+0x11B3; VERA has no owner for the
-    /// Power or Planning-waypoint modes, so neither path exists here.
+    /// SetPlaceBeaconMode clears +0x11B2/+0x11B3. The optional Power mode
+    /// shares this owner; Planning-waypoint remains unrepresented.
     pub(crate) fn disable_cursor_modes(&mut self) {
         self.disable_selection_modes(false);
         self.place_beacon_mode_on = false;
