@@ -37,6 +37,16 @@ NPSE #359 replaced the global switch with `AIBuildLimit=`. If a VERA ruleset exp
 both, both constraints apply before production starts. Clearing a choice does not skip an
 unsatisfied building-plan node or guarantee the mobile chooser selects an uncapped type.
 
+`[General] NewPlayableCountries=` adjusts the ordinary selected-mode random-country range
+from `0..9` to `0..(9 + value)`, inclusive. It defaults to zero and is read once from the
+startup-selected rules root, not from LANGRULE, mode or map overrides. AYMod's `-7` selects
+its first three countries without including the non-player entries later in the registry.
+This follows its NP initializer `0xB9902D`, root reader `0xC275C2..0xC275DD` and shared
+country-selector hook `0xB93618..0xB9363B` behind `0x69B670`. Both human and AI slots use
+the existing Scenario RNG and assignment order. The value is not clamped to roster size;
+unallocated or unrepresentable results are refused instead of remapped. Cooperative
+selection and the stock mode-null fallback retain their separate behavior.
+
 ## Cross-extension compatibility
 
 The three capabilities — `ares`, `phobos`, `npatch` — are orthogonal and mixable:

@@ -206,6 +206,9 @@ pub(crate) struct MultiplayerShellRuntime {
     cooperative_registry: CooperativeRegistry,
     cooperative_progress: CooperativeProgressState,
     cooperative_country_roster: Vec<CooperativeCountryRosterEntry>,
+    /// Derived from the immutable startup Rules owner, refreshed with the
+    /// country catalog; never inferred from country count or map overrides.
+    ordinary_country_upper_bound: i32,
     /// Process A8EB68, initialized0; independent of COOPMD AIDifficulty.
     cooperative_difficulty: i32,
     /// `[0xA8B254]`, the multiplayer scenario index (catalog order, BSS 0).
@@ -239,6 +242,9 @@ impl MultiplayerShellRuntime {
             .multiplayer_countries()
             .map(|(id, name)| CooperativeCountryRosterEntry::new(id, name))
             .collect();
+        self.ordinary_country_upper_bound = process_assets
+            .native_rules()
+            .map_or(9, |rules| rules.ordinary_random_country_upper_bound());
     }
 
     /// CreateHouses687FBD directly dereferences HouseTypeArray[index]. Reject
@@ -827,8 +833,9 @@ impl MultiplayerShellRuntime {
         });
         let registry = &self.cooperative_registry;
         let roster = &self.cooperative_country_roster;
+        let upper_bound = self.ordinary_country_upper_bound;
         let mut draw_country = |role, rng: &mut SimRng| {
-            draw_shell_country(registry, progress.as_ref(), roster, role, rng)
+            draw_shell_country(registry, progress.as_ref(), roster, upper_bound, role, rng)
         };
         let mut assignments = ShellRandomAssignmentState::new(session);
         assignments.resolve_humans(&mut self.scenario_rng, &mut draw_country)?;
@@ -890,6 +897,7 @@ impl MultiplayerShellRuntime {
             cooperative_registry,
             cooperative_progress,
             cooperative_country_roster,
+            ordinary_country_upper_bound: 9,
             cooperative_difficulty: 0,
             scenario_index: 0,
             scenario_start_header: crate::map::preview::ScenarioStartHeader::default(),
@@ -1026,9 +1034,11 @@ impl MultiplayerShellRuntime {
         // no campaign record takes part here.
         let registry = &self.cooperative_registry;
         let roster = &self.cooperative_country_roster;
+        let upper_bound = self.ordinary_country_upper_bound;
         let mut assignments = ShellRandomAssignmentState::new(&staged_session);
-        let mut draw_country =
-            |role, rng: &mut SimRng| draw_shell_country(registry, None, roster, role, rng);
+        let mut draw_country = |role, rng: &mut SimRng| {
+            draw_shell_country(registry, None, roster, upper_bound, role, rng)
+        };
 
         assignments.resolve_local_country(&mut self.scenario_rng, &mut draw_country)?;
         assignments.pack_ai_assignments(&session.opponents);
@@ -1535,6 +1545,7 @@ fn draw_shell_country(
     registry: &CooperativeRegistry,
     progress: Option<&CooperativeProgressRecord>,
     roster: &[CooperativeCountryRosterEntry],
+    ordinary_upper_bound: i32,
     role: RandomCountryRole,
     rng: &mut SimRng,
 ) -> Result<LaunchCountry, CooperativeError> {
@@ -1546,9 +1557,12 @@ fn draw_shell_country(
         draw_country_for_progress(registry, progress, cooperative_role, roster, rng)
             .map(|index| LaunchCountry::from_country_index(index as u32))
     } else {
-        Ok(LaunchCountry::from_country_index(
-            rng.next_range_u32_inclusive(0, 9),
-        ))
+        // Battle selector69B670 -> NP B93618: one existing Scenario RNG
+        // RandomRanged call with inclusive high9+NewPlayableCountries.
+        let index = rng.next_range_i32_inclusive(0, ordinary_upper_bound);
+        let country = u16::try_from(index)
+            .map_err(|_| CooperativeError::InvalidRandomCountryIndex { index })?;
+        Ok(LaunchCountry::from_country_index(u32::from(country)))
     }
 }
 
@@ -1841,6 +1855,7 @@ mod tests {
             cooperative_registry,
             cooperative_progress,
             cooperative_country_roster: controlled_ten_country_roster(),
+            ordinary_country_upper_bound: 9,
             cooperative_difficulty: 0,
             scenario_index: 0,
             scenario_start_header: crate::map::preview::ScenarioStartHeader::default(),
@@ -1870,6 +1885,7 @@ mod tests {
             cooperative_registry: CooperativeRegistry::default(),
             cooperative_progress: CooperativeProgressState::default(),
             cooperative_country_roster: controlled_ten_country_roster(),
+            ordinary_country_upper_bound: 9,
             cooperative_difficulty: 0,
             scenario_index: 0,
             scenario_start_header: crate::map::preview::ScenarioStartHeader::default(),
@@ -2320,6 +2336,43 @@ mod tests {
                 crate::skirmish_launch::PreFillHouseRoster::from_compact_skirmish(1),
             options: SkirmishLaunchOptions::default(),
         }
+    }
+
+    #[test]
+    fn selected_mode_country_bound_keeps_both_roles_on_the_same_scenario_stream() {
+        let mut process = runtime(
+            MultiplayerSetupSnapshot::from_global_defaults(defaults(), SetupProfile::Skirmish),
+            11,
+        );
+        process.cooperative_country_roster = [
+            "Americans",
+            "Russians",
+            "YuriCountry",
+            "GDI",
+            "Nod",
+            "Neutral",
+            "Special",
+        ]
+        .into_iter()
+        .map(|id| CooperativeCountryRosterEntry::new(id, None))
+        .collect();
+        process.ordinary_country_upper_bound = 2;
+        let mut session = random_session();
+        session.local_slot_mut().color_random = false;
+        session.opponents[0].color_random = false;
+        let mut expected = process.scenario_rng.clone();
+        let human = expected.next_range_i32_inclusive(0, 2) as u16;
+        let computer = expected.next_range_i32_inclusive(0, 2) as u16;
+
+        let resolved = process.resolve_network_assignments(&session).unwrap();
+
+        assert_eq!(resolved.local_slot().country.raw_index(), human);
+        assert_eq!(resolved.opponents[0].country.raw_index(), computer);
+        assert_eq!(
+            process.scenario_rng.logical_state(),
+            expected.logical_state()
+        );
+        assert!(session.local_slot().country_random);
     }
 
     #[test]
