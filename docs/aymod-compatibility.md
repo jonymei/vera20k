@@ -103,9 +103,9 @@ own classification and affected-path evidence; they must not be marked missing
 merely because the MOD uses them differently from retail data.
 
 The implemented rows describe local delivery candidates, not the installed
-`82594335b` build identified above. Reward/control rows refer to the integration
-owner's uncommitted candidate at the time of this update; their focused results
-do not establish a merged revision. Some individual mixed-feature paths have
+`82594335b` build identified above. Reward/control is committed as `dd3756a77`;
+the technology, power and EMP commits are now combined on the local integration
+branch. Some individual mixed-feature paths have
 focused coverage, but combined-delivery feature combinations, save/load and real
 AYMod window/gameplay acceptance remain unverified. No row above is closed by
 implementation or a green focused test alone.
