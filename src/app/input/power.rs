@@ -40,15 +40,30 @@ pub(super) fn toggle_mode(state: &mut AppState) {
         })
         .map_or(0, |house| house.tracking().buildings());
     let placement = state.armed_building_type().is_some();
-    if state
-        .match_state
-        .match_presentation
-        .sidebar_gadget_state
-        .toggle_selection_mode(SelectionMode::Power, placement, owned_buildings)
-    {
-        state.match_state.input.targeting_mode = None;
+    if transition_mode(
+        &mut state.match_state.input,
+        &mut state.match_state.match_presentation.sidebar_gadget_state,
+        placement,
+        owned_buildings,
+    ) {
         crate::app::input::dispatch::unselect_all(state);
     }
+}
+
+fn transition_mode(
+    input: &mut super::state::MatchInputState,
+    sidebar: &mut crate::ui::sidebar::gadget_flash::SidebarGadgetState,
+    placement: bool,
+    owned_buildings: i32,
+) -> bool {
+    if !sidebar.toggle_selection_mode(SelectionMode::Power, placement, owned_buildings) {
+        return false;
+    }
+    input.targeting_mode = None;
+    // Friendly policy: a release from the outgoing gesture cannot click the
+    // newly armed cursor mode. Keep physical held state until the real release.
+    input.cancel_tactical_drag();
+    true
 }
 
 /// Shared hover/release admission; reject enemies, dead/limbo objects and
@@ -189,6 +204,34 @@ mod tests {
         assert!(
             !sidebar.power_mode_on,
             "losing the local house retires the mode"
+        );
+    }
+
+    #[test]
+    fn entering_power_cancels_held_selection_gesture_until_a_fresh_press() {
+        let mut sidebar = SidebarGadgetState::default();
+        let mut input = MatchInputState::new(HotkeyBindings::default());
+        assert!(input.tactical_mouse.begin_left_press());
+        input.selection_state.begin_drag(10.0, 10.0);
+        input.selection_state.update_drag(40.0, 40.0);
+        assert!(input.selection_state.is_dragging());
+
+        assert!(transition_mode(&mut input, &mut sidebar, false, 1));
+        assert_eq!(
+            input.tactical_pointer_mode(&sidebar, true),
+            TacticalPointerMode::Power
+        );
+        assert!(input.tactical_mouse.left_held());
+        assert!(
+            !input.tactical_mouse.end_left_press(),
+            "the old release must not dispatch a power click"
+        );
+        assert!(!input.selection_state.is_dragging());
+
+        assert!(input.tactical_mouse.begin_left_press());
+        assert!(
+            input.tactical_mouse.end_left_press(),
+            "a fresh gesture admits the normal power release path"
         );
     }
 
