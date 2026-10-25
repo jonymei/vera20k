@@ -183,3 +183,27 @@ npm run build
 Commit the TypeScript and generated JavaScript together. The manual Dashboard
 workflow checks they agree. Vendored Three.js r180 is unchanged upstream code;
 its license is in `vendor/THREE-LICENSE.txt`.
+
+## Inspect a retained save without playing it
+
+The existing `telemetry-serve` tool also has a local, read-only inspection mode:
+
+```sh
+python -m tools.cargo_run -- build --profile fast -p vera20k --bin telemetry-serve --no-default-features --features telemetry-dashboard,npatch
+```
+
+Resolve `telemetry-serve` with `tools.cargo_run --resolve telemetry-serve --profile fast`,
+then run that executable with `--inspect-save <path>`. It prints JSON to stdout and
+exits without a server, asset loading, simulation steps or save writes. Use the
+save's actual gameplay capability (omit `npatch` for a stock save). The production
+`GameSnapshot::load_with_resources` gate must accept the exact saved layout and
+capability; never replace a header or bypass this check to inspect an old save.
+Use a source checkout matching the writing build when layouts differ.
+
+The report contains all retained houses, factories, team definitions and teams,
+entities and the ID-to-string table, not the dashboard's capped lists. Normal
+player-load planning cleanup still applies; resources and derived caches are not
+rebound. It is a point-in-time observation, not proof of progress or strength, and
+does not recompute provider availability. Reports can contain player names and
+all match positions: keep them local (for example under ignored `target/`) unless
+the player explicitly authorizes sharing. Do not commit user saves or reports.

@@ -1,4 +1,8 @@
-//! Headless telemetry demo: a live simulation with the browser dashboard,
+//! Local save inspection and headless telemetry demo.
+//!
+//! `--inspect-save` reads a layout-compatible save through production admission
+//! and prints retained owners locally without running the simulation. Otherwise,
+//! this runs a live synthetic simulation with the browser dashboard,
 //! no retail assets required.
 //!
 //! Builds the same synthetic two-house world `parity-digest` validates
@@ -49,6 +53,7 @@ struct Args {
     structures: u16,
     ticks: u64,
     seed: u32,
+    inspect_save: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -58,10 +63,12 @@ fn parse_args() -> Result<Args, String> {
     let mut structures = DEFAULT_STRUCTURES;
     let mut ticks = 0u64;
     let mut seed = 0x5EED_0001u32;
+    let mut inspect_save = None;
     let mut argv = std::env::args().skip(1);
     while let Some(flag) = argv.next() {
         let mut next = |what: &str| argv.next().ok_or(format!("{flag} needs {what}"));
         match flag.as_str() {
+            "--inspect-save" => inspect_save = Some(PathBuf::from(next("a save path")?)),
             "--addr" => {
                 let raw = next("an address")?;
                 addr = raw
@@ -96,7 +103,11 @@ fn parse_args() -> Result<Args, String> {
                 println!(
                     "usage: telemetry-serve [--addr 127.0.0.1:9741] [--web tools/telemetry-dashboard] \
                      [--units 120] [--structures 6] [--ticks 0] [--seed 0x5EED0001]\n\
+                     or: telemetry-serve --inspect-save <path>\n\
                      \n\
+                     --inspect-save <path> prints a local read-only JSON report and exits.\n\
+                     It admits only compatible saves; no server or ticks are started.\n\
+                     Reports contain complete retained owners, not dashboard-limited rows.\n\
                      Runs the synthetic two-house simulation headlessly and serves the\n\
                      browser dashboard. --ticks 0 (the default) runs until interrupted."
                 );
@@ -112,6 +123,7 @@ fn parse_args() -> Result<Args, String> {
         structures,
         ticks,
         seed,
+        inspect_save,
     })
 }
 
@@ -362,6 +374,56 @@ fn synthetic_terrain(width: u16, height: u16) -> TerrainGrid {
     }
 }
 
+/// Project complete retained owners, not the dashboard's bounded collections.
+/// Production admission stays authoritative; no resource binding or ticks occur.
+fn inspect_save(path: &std::path::Path) -> Result<(), String> {
+    use serde_json::json;
+    use vera20k_core::sim::intern::InternedId;
+    use vera20k_core::sim::snapshot::GameSnapshot;
+
+    let bytes =
+        std::fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let snapshot = GameSnapshot::load_with_resources(&bytes)
+        .map_err(|error| format!("cannot inspect {}: {error}", path.display()))?;
+    let sim = &snapshot.sim;
+    let interner = sim.interner();
+    let strings: Vec<_> = (0..interner.len())
+        .map(|index| interner.resolve(InternedId::from_index(index as u32)))
+        .collect();
+    let houses: Vec<_> = sim.houses().in_order().collect();
+    let factories = sim.production().factories().iter_insertion_ordered();
+    let entities: Vec<_> = sim
+        .entities()
+        .iter_sorted()
+        .map(|(id, entity)| {
+            json!({"id": id, "type": interner.resolve(entity.type_ref()),
+            "owner": interner.resolve(entity.owner()), "retained": entity})
+        })
+        .collect();
+    let teams = serde_json::to_value(sim.team_script_vm())
+        .map_err(|error| format!("cannot project retained teams: {error}"))?;
+    let report = json!({
+        "inspection_schema": 1,
+        "metadata": {"layout": format!("{:#010x}", snapshot.layout),
+            "tick": snapshot.tick, "map_name": snapshot.map_name,
+            "map_hash": format!("{:#018x}", snapshot.map_hash),
+            "rules_hash": format!("{:#018x}", snapshot.rules_hash)},
+        "coverage": {"houses": "all in registration order",
+            "factories": "all in construction order", "entities": "all in stable-id order",
+            "teams_and_definitions": "complete retained TeamScriptVm, including task forces and scripts",
+            "interned_ids": "indices into strings",
+            "interpretation": "point-in-time retained state; no AI-strength or progress claim",
+            "load_policy": "normal production load admission and planning reset; no ticks advanced",
+            "resources": "not rebound; derived caches and provider availability are not recomputed"},
+        "strings": strings, "houses": houses, "factories": factories,
+        "teams_and_definitions": teams, "entities": entities,
+    });
+    serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
+        .map_err(|error| format!("cannot write inspection: {error}"))?;
+    println!();
+    Ok(())
+}
+
 fn main() -> Result<(), String> {
     let args = match parse_args() {
         Ok(args) => args,
@@ -370,6 +432,9 @@ fn main() -> Result<(), String> {
             std::process::exit(2);
         }
     };
+    if let Some(path) = &args.inspect_save {
+        return inspect_save(path);
+    }
     vera20k::util::logging::init_stderr_logger("info").map_err(|error| error.to_string())?;
 
     let mut runtime = SimRuntime {
