@@ -259,7 +259,9 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   ignored实际AY项已单独执行通过。无NP别名隔离1 passed、PostMortem4 passed。未跑全仓库。
   实际场景是伤害入口/正常引爆，不是完整基洛夫飞行→投弹→碰撞或GUI验收，也不重新认证全部死亡算术。
 - 新保留字段改变保存registry布局及规则hash；旧保存仍按正常门禁拒绝，不强读或改写用户原文件。
-  F08当前源码待独立保留玩家构建；既有最新玩家入口仍为下述cloak-crate版本。
+  已从干净c7cdf572c保存普通fast+npatch构建 `aymod-playtest-20261026-delay-kill`，manifest及固定标签解析通过。
+  最新入口 `D:/Workshop/vera20k/target/AYMOD-test-20261026-delay-kill.cmd`；包含本轮F08、F02及此前修复。
+  旧入口/构建保留，未自动启动或替换进行中的游戏。新构建须新局；无本任务构建待完成。
 - V01/A06只读追踪取得下一整链依据：provider返回时Reactivate即使EMP非零也必须先ResetOrders并清provider latch，
   只跳过PowerOn/激活声音；EMP到期直接检查该latch后恢复供电，不经Reactivate且不下Hunt。
   当前NP借用Ares的提前return/Deactivate/到期Hunt会混淆+1C8与+504。详见npatch-emp的Drive边界；尚未改代码。
