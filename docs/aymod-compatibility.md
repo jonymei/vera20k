@@ -243,6 +243,23 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
+### A01/A04补充排除：同需求择兵不是本局弱攻势原因（2026-10-26）
+
+- 复读实际NPAE174的Unit chooser：C2B479..C2B481在need相等时也重置候选；
+  stock 4FEDF6..4FEDFE仅在need严格增加时重置。Infantry4FF120/Aircraft4FF450仍为stock比较，
+  不能把Unit特例套给全部类别。
+- 但该列表只供第二次随机选择：C2B4D0先抽Scenario[0,0x7FFFFFFE]，
+  C2B4FE..C2B50B通过FillEarliestTeamProbability门后直接选最早队伍，不访问候选列表。
+- 新增`aymod_return_dubai_hard_uses_earliest_team_without_a_tie_draw`，通过正式load_session加载
+  实际AYMOD重返迪拜Battle/美国对困难苏联；根、模式、地图处理后的概率为100,100,100。
+  复用生产pick，两个相同need且不同创建时间的候选，即便首draw为最大值仍选最早者，
+  只调用一次Scenario draw、不产生第二次候选draw。NP显式实际资源测试1项通过；择兵模块既有4项回归通过。
+- 因此这个未移植差异在本次具体配置下不影响被选兵种，不能当作已定位的弱攻势原因或据此调整权重。
+  其他地图/模式覆盖概率时仍是residual；未修改chooser、MOD数值、随机数owner或存档布局。
+- 上一轮重跑Walk集结→下一脚本行1项、真实AY大厅白/蓝色块1项均通过；保留玩家测试版
+  `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
+  下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
+
 ### 当前检查点：F03爆炸箱生产链与即时伤害通知（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；玩法提交
