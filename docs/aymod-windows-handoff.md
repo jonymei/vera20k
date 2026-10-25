@@ -29,9 +29,15 @@
 - 环境：`RA2_DIR`为本机Steam正版目录，`VERA20K_AYMOD_DIR`为本机AYMOD，
   `VERA20K_REQUIRE_RETAIL_INI=1`；当前工作树忽略的`ini/`来自正版资源。使用VS C++开发环境，
   Cargo一律经过`python -m tools.cargo_run --`。
-- 普通游戏已成功构建：`build --profile fast -p vera20k --bin vera20k --no-default-features --features npatch`。
-  当前resolve文件为`D:/Workshop/vera20k/target/owned-worktrees/146dfaa91a3a669a/fast/vera20k.exe`，
-  启动工作目录应为本工作树；未启动或替换安装。后续仍使用resolve，不假定路径永远不变。
+- 用户现要求先提供测试版，然后继续功能优先的适配。已从干净`4f0f5afa6`成功构建并保留
+  `aymod-playtest-20261025-f04`（fast、无默认功能、启用npatch）；manifest位于主工作树
+  `.git/owned-builds/artifacts/aymod-playtest-20261025-f04/manifest.json`。
+  本机启动入口`D:/Workshop/vera20k/target/AYMOD-test-20261025.cmd`，固定引用manifest记录的
+  `0/vera20k.exe`，使用主工作树配置与AYMOD资源，未启动或替换安装。后续编译不覆盖此版。
+  构建成功；自动缓存清理因PE调试目录闭包不受支持停止，未删除缓存，不影响保留的exe。
+- 后续已开始V01原生复读：共享House计数门确实存在于当前AYMOD文件指令，不可仅凭多类型配置
+  就擅改为按类型计数；具体地址/覆盖边界见兼容清单。三组完整EMP/恢复/换主场景尚未完成，
+  无供电玩法新改动。接续需核运行时补丁和实际生产路径，不能宣布V01通过。
 - 新保留Rules字段改变自动存档layout；旧layout照常拒绝。不仿真空WH或自定义回调复活stale slots的
   原生非法引用，安全差异见[npatch.md](npatch.md)。未做GUI、全模式/地图、多AI长局或原生运行对照。
 - 没有遗留拥有的Cargo/合并操作。F04不再是待适配项；下一功能链可从V01三类无人单位供电或
