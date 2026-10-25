@@ -4,9 +4,17 @@
 不代表本轮重新执行全部旧验收。当前兼容性结论以分类清单和Windows实际结果为准。
 
 ## 当前 Windows 接续检查点
+- 最新玩家问题已优先处理：Return Dubai/1v1/困难，鱿鱼缠绕驱逐舰后海豚攻击时闪退。
+  日志首个panic是声波扫描行越界，非已证明的缠绕清理错误。修复代码`e18a67f21`，只改render共享扫描owner。
+  生产Wave生命周期回归1项、既有native Wave4项、真实GPU1项通过；无伤害/模拟状态/RNG改动，
+  不宣称已重放玩家整局。原生首次分配skip视觉残差见兼容清单与源码。
+- 修正版`aymod-playtest-20261025-sonic-fix`从干净`e18a67f21`以fast+npatch构建成功并独立保留。
+  manifest位于主工作树`.git/owned-builds/artifacts/aymod-playtest-20261025-sonic-fix/manifest.json`，
+  新启动入口`D:/Workshop/vera20k/target/AYMOD-test-20261025-sonic-fix.cmd`；未启动/替换安装，旧测试版保留。
+  下一步仍为功能/AI优先，结合玩家新条件查弱攻势；V01三组供电核对保持开放。无拥有的Cargo待完成。
 
 - 当前工作树：`D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`。
-  代码HEAD `5ccd884b9`；后续文档提交不改变游戏行为。原main工作树与用户的 `.gitignore` 未动，
+  此前F04代码HEAD `5ccd884b9`；最新声波修复为`e18a67f21`，后续文档提交不改变游戏行为。原main工作树与用户的 `.gitignore` 未动，
   AYMOD配置仓库也未改。所有改动仅本地提交，没有推送、PR、合并或资源发布。
 - 总体授权仍为功能优先、UI随后；本次goal为F04驻军保护/穿透。该链已实现并通过功能验收。
   总清单仍以[兼容性清单](aymod-compatibility.md)为准，未把全部MOD标成兼容。
