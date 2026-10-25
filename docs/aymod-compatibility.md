@@ -260,7 +260,30 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：A04海军184卡在跨水域集结（2026-10-26）
+### 当前检查点：A04原生连通复算排除算法分区差异（2026-10-26）
+
+- 工作树/分支仍为`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`；
+  本批基于`65e821929`，只修改诊断/测试/说明，不改游戏玩法/保存布局、MOD配置或保留玩家构建。
+  没有PR/推送、运行中的Cargo或待完成命令；无需玩法critic（无行为改动）。
+- 复用既有bridge_test_evidence::navigation_snapshot，不复制导航状态导出器；仅将该test-support
+  只读函数开放给本crate的海军测试。实际地图的Size100,110、210x210类别/高度平面和空桥记录
+  通过可选VERA20K_AYMOD_NAVIGATION_EXPORT写入忽略的本机target，不提交完整平面或玩家存档。
+- 扩展原有tools.spatial_oracle.bridge_connectivity，独立较大node/height内存仍调用既有native
+  初始化/分配钩子。实际NPAE174 Map56C510、Flood56CB90、pair56C6CB及13行producer执行到返回；
+  未供应任何连通结果。Water是原生row10，不是Infantry row7；最终复算99,149→4，108,55→2，109,55→2。
+- 仅保留三点输入/输出的aymod_naval_connectivity.json及复现命令说明；真实AY测试现消费这些
+  原生结果并通过，既有live Foot门禁/集结生成器诊断保留。原工具9条旧native用例--check通过。
+  此结论排除“相同保留类别/高度输入下，Rust连通算法错误拆水域”；不证明原生地图加载/Cell
+  Recalc生成相同平面，不证明原生FNPC最终点或完整Foot任务，不能将原战术/地图问题提前定案。
+- Python新工具2项通过，真实AY Rust测试1项通过。工具全套实际运行936项：2failure/6error/49skip；
+  逐项查明6error均在未改的cache/seed测试创建symlink时触发Windows1314权限错误；
+  dependency一致性失败的实际差异为hashbrown0.16.1（workspace额外allocator-api2/default/equivalent/raw-entry），
+  本批未改Cargo清单、runner或这些测试。另一failure是本任务旧交接中的个人home路径，已改成~，
+  no_home_paths3项+新增工具2项重跑通过。剩余7项仍未通过，不声称Python全套通过，也不在本链改依赖。
+- 下一步：继续核对原生Cell/Recalc地形类别来源和FNPC最终点；这是海军184剩余证据边界。
+  AI整体、多House/长局及其他F/V项照PLAN继续；原生/作者设计供电政策问题仍未获答复，不能擅自定案。
+
+### 已定位批次：A04海军184卡在跨水域集结（2026-10-26）
 
 - 任务仍在`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`；
   本批基于`4187596e2`，仅新增诊断测试/台账，无玩法改动、无PR/推送，无待完成Cargo。

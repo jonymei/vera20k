@@ -18,7 +18,7 @@
   已由匹配历史源码e18a67f21通过正式GameSnapshot::load_with_resources完整载入；当前源码布局91e21ca0
   正确拒绝旧数据，未放松门禁。报告在忽略的`D:/Workshop/vera20k/target/aymod-save-analysis/{mid,late}.json`，
   包含所有保留owner，无推进、无资源重绑；不得提交用户存档/完整报告。
-- 历史分析工作树已注册附着：`C:/Users/ahume/.codex/worktrees/aymod-save-analysis/vera20k`，
+- 历史分析工作树已注册附着：`~/.codex/worktrees/aymod-save-analysis/vera20k`，
   detached e18a67f21，仅有本任务telemetry-serve工具改动，prepare_checkout完成。
   其fast telemetry-serve已成功读取两份旧存档；源码/二进制仍为分析所需，不归档或清理。
 - 当前工作树同一工具也已fast构建；旧布局、缺文件拒绝与help验证通过。命令为tools.cargo_run build

@@ -1817,6 +1817,35 @@ fn aymod_return_dubai_saved_naval_focus_fails_the_live_zone_precheck() {
     let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
     let runtime = &mut scenario.runtime;
     let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+    if let Some(path) = std::env::var_os("VERA20K_AYMOD_NAVIGATION_EXPORT") {
+        let mut navigation = crate::sim::world::bridge_test_evidence::navigation_snapshot(
+            sim,
+            "aymod-return-dubai-initial",
+            [(109, 55), (108, 55), (99, 149)],
+        );
+        navigation["map"] = serde_json::json!(map);
+        serde_json::to_writer(std::fs::File::create(path).unwrap(), &navigation).unwrap();
+    }
+    let native = crate::test_fixture::json("tools/spatial_oracle/aymod_naval_connectivity.json");
+    assert_eq!(native["input"]["map"], map);
+    for query in native["queries"].as_array().unwrap() {
+        let cell = query["cell"].as_array().unwrap();
+        let coord = (
+            cell[0].as_i64().unwrap() as i32,
+            cell[1].as_i64().unwrap() as i32,
+        );
+        assert_eq!(
+            sim.zone_grid()
+                .unwrap()
+                .get_zone_id_nonbridge_native(
+                    coord,
+                    crate::rules::locomotor_type::MovementZone::Water,
+                )
+                .map(u64::from),
+            query["water_zone"].as_u64(),
+            "native56C510 water component at {coord:?}",
+        );
+    }
     let sub = sim
         .spawn_object("SUB", "Computer1", 109, 55, 0, rules)
         .unwrap();

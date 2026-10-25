@@ -5,7 +5,7 @@ use crate::sim::command::{Command, CommandEnvelope};
 use crate::sim::world::Simulation;
 use serde_json::{Value, json};
 
-pub(super) fn navigation_snapshot(
+pub(crate) fn navigation_snapshot(
     sim: &Simulation,
     name: &str,
     points: impl IntoIterator<Item = (u16, u16)>,
