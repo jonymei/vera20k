@@ -2031,6 +2031,9 @@ fn hash_entity(entity: &GameEntity, frame: u32, hasher: &mut StateHasher) {
     entity.low_bridge_tube_state.hash(hasher);
     if let Some(cloak) = entity.cloak.as_ref() {
         1u8.hash(hasher);
+        if cloak.crate_granted() {
+            b"cloak-crate-ability-v1".hash(hasher);
+        }
         cloak.state().hash(hasher);
         cloak.depth().hash(hasher);
         cloak.step_delta().hash(hasher);

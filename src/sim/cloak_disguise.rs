@@ -40,6 +40,10 @@ impl CloakStepTimer {
 /// every state/progress/timer write below. Stock YR exercises this continuously
 /// through DLPH/SUB/SQD/BSUB.
 pub struct CloakRuntime {
+    /// The permanent crate write to Techno+3D2 beyond its immutable type seed.
+    /// CellPickup48294F sets it; the existing cloak owner carries its lifetime.
+    #[serde(default)]
+    crate_granted: bool,
     /// Native state id: 0 uncloaked, 1 cloaking, 2 fully cloaked, 3 uncloaking.
     state: i32,
     /// Native `CloakProgress +0x224`.
@@ -258,6 +262,21 @@ pub struct CloakTickResult {
 }
 
 impl CloakRuntime {
+    /// HasStealthAbility70C5A0: constructor Cloakable seed or the crate write.
+    pub(crate) fn has_stealth_ability(slot: Option<&Self>, type_seed: bool) -> bool {
+        type_seed || slot.is_some_and(|state| state.crate_granted)
+    }
+
+    pub(crate) fn crate_granted(&self) -> bool {
+        self.crate_granted
+    }
+
+    /// CellPickup48294F changes ability, not cloak state, timers or rank.
+    pub(crate) fn grant_from_crate(slot: &mut Option<Self>, frame: i32) {
+        Self::install_if_absent(slot, frame);
+        slot.as_mut().expect("installed cloak owner").crate_granted = true;
+    }
+
     /// The native state id: 0 uncloaked, 1 cloaking, 2 fully cloaked, 3
     /// uncloaking.
     pub fn state(&self) -> i32 {
@@ -298,6 +317,7 @@ impl CloakRuntime {
 
     pub fn new(current_frame: i32) -> Self {
         Self {
+            crate_granted: false,
             state: 0,
             depth: 0,
             step_delta: 0,
@@ -310,17 +330,6 @@ impl CloakRuntime {
     /// ability is present and stored Techno+0x3D5 is clear.
     pub fn establish_unlimbo_fully_cloaked(&mut self) {
         self.state = 2;
-    }
-
-    /// The constructor's cloak state for an object with the Cloak ability
-    /// (the constructor copy at `0x007355B6`/`0x00517D88`), fully cloaked
-    /// when Unlimbo establishes state 2 ([`Self::establish_unlimbo_fully_cloaked`]).
-    pub(crate) fn install(slot: &mut Option<Self>, current_frame: i32, fully_cloaked: bool) {
-        let mut cloak = Self::new(current_frame);
-        if fully_cloaked {
-            cloak.establish_unlimbo_fully_cloaked();
-        }
-        *slot = Some(cloak);
     }
 
     /// The cloak AI's install for an object that has the Cloak ability but no

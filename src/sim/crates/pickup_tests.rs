@@ -409,6 +409,201 @@ fn multiplayer_pickup_places_one_replacement_crate() {
     );
 }
 
+fn cloak_crate_scene() -> (Simulation, RuleSet, OverlayTypeRegistry, u64) {
+    let rules = RuleSet::from_ini(&crate::sim::arena_fixture::clear_ground_ini(
+        "[VehicleTypes]\n0=TNK\n[InfantryTypes]\n0=E1\n[BuildingTypes]\n0=B\n[AircraftTypes]\n0=A\n\
+         [TNK]\nStrength=300\nSpeed=5\nSpeedType=Track\nCloakingSpeed=1\nLocomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\n\
+         [E1]\nStrength=100\nSpeed=4\nSpeedType=Foot\nCloakingSpeed=1\nLocomotor={4A582744-9839-11D1-B709-00A024DDAFD1}\n\
+         [B]\nStrength=500\n[A]\nStrength=150\n\
+         [Clear]\nTrack=100%\nFoot=100%\nWheel=100%\n\
+         [CrateRules]\nCrateRadius=3.0\n[Powerups]\nCloak=10,<none>,yes\nMoney=20,<none>,yes,2000\n",
+    )).unwrap();
+    let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 31);
+    sim.session
+        .set_game_mode(crate::sim::scenario_session::ScenarioGameMode::from_legacy_nonzero(true));
+    sim.session.game_options_mut_for_test().bases = false;
+    sim.session.game_options_mut_for_test().crates = false;
+    sim.session.game_options_mut_for_test().short_game = false;
+    sim.overlay_grid = Some(OverlayGrid::new(32, 32));
+    let actor = sim
+        .spawn_object("TNK", "Americans", 10, 10, 0, &rules)
+        .unwrap();
+    let registry = crate_registry();
+    place_registered_crate(&mut sim, &registry, CELL, POWERUP_CLOAK as u8);
+    (sim, rules, registry, actor)
+}
+
+#[test]
+fn cloak_crate_grants_instances_in_strict_radius_then_mobile_ai_cloaks() {
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    let infantry = sim
+        .spawn_object("E1", "Americans", 11, 10, 0, &rules)
+        .unwrap();
+    let enemy = sim
+        .spawn_object("TNK", "Russians", 12, 10, 0, &rules)
+        .unwrap();
+    let edge = sim
+        .spawn_object("TNK", "Americans", 13, 10, 0, &rules)
+        .unwrap();
+    let building = sim
+        .spawn_object("B", "Americans", 10, 11, 0, &rules)
+        .unwrap();
+    let aircraft = sim
+        .spawn_object("A", "Americans", 10, 12, 0, &rules)
+        .unwrap();
+    let rng = sim.scenario_rng.native_state_hex();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    assert_eq!(
+        sim.scenario_rng.native_state_hex(),
+        rng,
+        "the ability arm draws no RNG"
+    );
+    for id in [actor, infantry, enemy, building, aircraft] {
+        assert!(
+            sim.entities().get(id).unwrap().cloak.is_some(),
+            "recipient {id}"
+        );
+    }
+    assert!(
+        sim.entities().get(edge).unwrap().cloak.is_none(),
+        "strict radius boundary"
+    );
+    assert!(
+        !rules.object("TNK").unwrap().cloakable,
+        "do not alter the whole type"
+    );
+    for frame in 1..=120 {
+        sim.session.set_binary_frame_for_test(frame);
+        for id in [actor, infantry] {
+            sim.object_ai_visit_one(id, Some(&rules), Default::default());
+        }
+    }
+    for id in [actor, infantry] {
+        assert!(
+            sim.entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        );
+    }
+}
+
+#[test]
+fn cloak_crate_ability_is_hashed_saved_and_repeated_pickup_falls_back() {
+    use crate::sim::{cloak_disguise::CloakRuntime, snapshot::GameSnapshot};
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    let granted = *sim.entities().get(actor).unwrap().cloak.as_ref().unwrap();
+    let with_grant = sim.state_hash();
+    sim.substrate.entities.get_mut(actor).unwrap().cloak =
+        Some(CloakRuntime::new(sim.session.binary_frame() as i32));
+    assert_ne!(
+        with_grant,
+        sim.state_hash(),
+        "ability alone must affect determinism"
+    );
+    sim.substrate.entities.get_mut(actor).unwrap().cloak = Some(granted);
+    let bytes = GameSnapshot::save(&sim, 0, 0, "cloak crate", 0);
+    let mut restored = GameSnapshot::load(&bytes).unwrap().sim;
+    restored.restore_after_snapshot_load().unwrap();
+    assert!(
+        restored
+            .entities()
+            .get(actor)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .unwrap()
+            .crate_granted()
+    );
+    assert_eq!(
+        multiplayer_eligible_slot(
+            &restored,
+            &rules,
+            actor,
+            LandType::Clear.as_index(),
+            POWERUP_CLOAK
+        ),
+        POWERUP_MONEY
+    );
+    let owner = sim.entities().get(actor).unwrap().owner();
+    let credits = sim.houses[&owner].economy().credits();
+    place_registered_crate(&mut sim, &registry, CELL, POWERUP_CLOAK as u8);
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    assert!(sim.houses[&owner].economy().credits() > credits);
+}
+
+#[test]
+fn cloak_crate_survives_capture_and_same_identity_unlimbo_without_timer_reset() {
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    let rival = sim.interner.get("Russians").unwrap();
+    sim.change_owner_with_rules(
+        actor,
+        rival,
+        &rules,
+        Some(&registry),
+        FrameEffects::default(),
+    );
+    for frame in 1..=120 {
+        sim.session.set_binary_frame_for_test(frame);
+        sim.object_ai_visit_one(actor, Some(&rules), Default::default());
+    }
+    let before = *sim.entities().get(actor).unwrap().cloak.as_ref().unwrap();
+    assert!(before.is_fully_cloaked());
+    sim.techno_limbo_with_rules(actor, &rules, Some(&registry));
+    assert_eq!(
+        sim.reveal_constructed_object_at_height(
+            actor,
+            15,
+            10,
+            0,
+            0,
+            PlacementEvidence::MarkSucceeded,
+            &rules,
+            FrameEffects::default()
+        ),
+        Some(actor)
+    );
+    assert_eq!(
+        sim.entities().get(actor).unwrap().cloak,
+        Some(before),
+        "Unlimbo is not InitFromType"
+    );
+    assert_eq!(sim.entities().get(actor).unwrap().owner(), rival);
+}
+
 fn effect_rules(extra: &str) -> RuleSet {
     RuleSet::from_ini(&IniFile::from_str(&format!(
         "[General]\nBaseUnit=AMCV\n[InfantryTypes]\n0=E1\n1=CIV\n[VehicleTypes]\n[AircraftTypes]\n[BuildingTypes]\n\

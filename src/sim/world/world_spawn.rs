@@ -2349,7 +2349,13 @@ impl Simulation {
         else {
             return;
         };
-        if !matches!(category, EntityCategory::Unit | EntityCategory::Infantry) {
+        let prior_cloak = substrate
+            .entities
+            .get(stable_id)
+            .and_then(|entity| entity.cloak.as_ref());
+        let granted =
+            prior_cloak.is_some_and(crate::sim::cloak_disguise::CloakRuntime::crate_granted);
+        if !matches!(category, EntityCategory::Unit | EntityCategory::Infantry) && !granted {
             return;
         }
         let Some(object) = interner.object_type_in_category(type_ref, category.into(), rules)
@@ -2357,19 +2363,29 @@ impl Simulation {
             return;
         };
         let rank_cloak = has_weapon_ability(rank_from_u16(veterancy), object, Ability::Cloak);
-        if !object.cloakable && !rank_cloak {
+        let intrinsic = crate::sim::cloak_disguise::CloakRuntime::has_stealth_ability(
+            prior_cloak,
+            object.cloakable,
+        );
+        if !intrinsic && !rank_cloak {
             return;
         }
         let frame = session.binary_frame() as i32;
         // Only UnitClass owns the direct Unlimbo state write, and it tests the
         // copied runtime Cloakable byte rather than rank-granted CLOAK.
-        let fully_cloaked = category == EntityCategory::Unit && object.cloakable && !in_playfield;
+        let fully_cloaked = category == EntityCategory::Unit && intrinsic && !in_playfield;
         if let Some(entity) = substrate.entities.get_mut(stable_id) {
-            crate::sim::cloak_disguise::CloakRuntime::install(
-                &mut entity.cloak,
-                frame,
-                fully_cloaked,
-            );
+            // Unit737BEB is the only cloak write through Unit/Infantry,
+            // Foot4D7170, Techno6F6CA0 and Object5F4EC0 Unlimbo: constructors
+            // seed the owner once; repeated Unlimbo preserves timers/ability.
+            crate::sim::cloak_disguise::CloakRuntime::install_if_absent(&mut entity.cloak, frame);
+            if fully_cloaked {
+                entity
+                    .cloak
+                    .as_mut()
+                    .expect("installed cloak owner")
+                    .establish_unlimbo_fully_cloaked();
+            }
         }
     }
 

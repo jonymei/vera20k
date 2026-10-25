@@ -139,6 +139,22 @@ fn ground_members_in_radius(
         .collect()
 }
 
+/// CellPickup482840..48296D: marked ground Technos, any house, strictly
+/// inside CrateRadius receive +3D2=1. The shared collector owns radius/order.
+/// No RNG, timers, cloak transition or detach is performed by this arm.
+pub(crate) fn apply_cloak_crate(
+    substrate: &mut ObjectSubstrate,
+    center: DriveCoord,
+    radius: i32,
+    frame: i32,
+) {
+    for id in ground_members_in_radius(substrate, center, radius) {
+        if let Some(entity) = substrate.entities.get_mut(id) {
+            crate::sim::cloak_disguise::CloakRuntime::grant_from_crate(&mut entity.cloak, frame);
+        }
+    }
+}
+
 /// The Armor and Firepower arms: every Techno within the radius whose
 /// multiplier is exactly 1.0 takes `multiplier * magnitude` (x87 double
 /// multiply, `0x00482E6D..0x00482E79`). Returns the owners of the changed
