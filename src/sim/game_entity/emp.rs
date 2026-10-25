@@ -276,18 +276,29 @@ mod receiver {
                     continue;
                 }
                 #[cfg(not(feature = "ares"))]
-                if victim.category() == EntityCategory::Unit
-                    && victim
-                        .locomotor
-                        .as_ref()
-                        .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
-                    && crate::sim::movement::air_movement::current_fly_height(
-                        victim,
-                        self.resolved_terrain.as_ref(),
-                    ) <= 0
                 {
-                    self.commit_npatch_ground_drive_emp(target, duration, rules, effects);
-                    continue;
+                    // Keep the first activation's lifecycle until this counter
+                    // expires. Reclassifying a legacy positive-height hit on
+                    // landing would turn its synthetic offline latch into a
+                    // permanent provider outage. Special-path migration remains
+                    // explicit policy, not a second owner for this same timer.
+                    let native = if victim.emp.remaining > 0 {
+                        victim.emp.native_ground_drive
+                    } else {
+                        victim.category() == EntityCategory::Unit
+                            && victim
+                                .locomotor
+                                .as_ref()
+                                .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
+                            && crate::sim::movement::air_movement::current_fly_height(
+                                victim,
+                                self.resolved_terrain.as_ref(),
+                            ) <= 0
+                    };
+                    if native {
+                        self.commit_npatch_ground_drive_emp(target, duration, rules, effects);
+                        continue;
+                    }
                 }
                 let remaining = victim.emp.remaining.max(duration);
                 let sparkle = rules.emp_sparkles().map(str::to_owned);
@@ -629,7 +640,7 @@ mod receiver {
                 // Unit746720, reached by B990EB's virtual ClearDisguise.
                 disguise.clear_unit();
             }
-            let play_sound = !victim.deactivated.is_offline() && victim.emp.remaining == 0;
+            let play_sound = !victim.power_effect_disabled();
             if play_sound {
                 Self::emit_power_transition_sound(
                     &self.interner,

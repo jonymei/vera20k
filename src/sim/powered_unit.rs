@@ -121,6 +121,16 @@ impl Deactivation {
     }
 }
 
+impl crate::sim::game_entity::GameEntity {
+    /// Techno70FBD0: stock provider latch; NPAE1747E0F9D adds nonzero+504.
+    /// Unit7360C9's spark arm and B99115's first-hit sound use this query,
+    /// unlike locomotor admission (positive EMP) or expiry (provider only).
+    pub(crate) fn power_effect_disabled(&self) -> bool {
+        self.deactivated.is_offline()
+            || (cfg!(all(feature = "npatch", not(feature = "ares"))) && self.emp_remaining() != 0)
+    }
+}
+
 impl Simulation {
     /// The `PowersUnit=` arms of the operational-edge dispatcher
     /// (`0x004549B0`), which run before the rest of it: coming online, an
@@ -522,7 +532,7 @@ impl Simulation {
         let Some(entity) = self.substrate.entities.get(id) else {
             return;
         };
-        if !entity.deactivated.is_offline() {
+        if !entity.power_effect_disabled() {
             return;
         }
         let location = object_location(entity, self.resolved_terrain.as_ref());

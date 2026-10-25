@@ -689,7 +689,9 @@ fn drive_provider_scene() -> (Simulation, RuleSet, u64, u64, u64) {
          Locomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\nActivateSound=On\nDeactivateSound=Off\n\
          [SOURCE]\nStrength=100\n[CENTER]\nStrength=500\nPowersUnit=DRON\n\
          [Warheads]\n0=EMPulsWH\n[EMPulsWH]\nEMEffect=yes\nAffectsAllies=no\n\
-         [Animations]\n0=EMPFX\n",
+         [Animations]\n0=EMPFX\n[CombatDamage]\nDefaultSparkSystem=SparkSys\n\
+         [ParticleSystems]\n0=SparkSys\n[SparkSys]\nBehavesLike=Spark\nHoldsWhat=Spark\nLifetime=5\n\
+         [Particles]\n0=Spark\n[Spark]\nBehavesLike=Spark\n",
     );
     let art = IniFile::from_str("[EMPFX]\nLoopCount=-1\nRate=1\nEnd=4\n");
     let mut rules = RuleSet::from_ini_with_fixed_art_for_test(&ini, &art).unwrap();
@@ -791,6 +793,40 @@ fn npatch_drive_hit_and_equal_rehit_preserve_provider_mission_and_selection() {
         1,
         "only the first online hit plays Off"
     );
+    // Reuse an executed spark-frame vector to test NPAE70FBD0's EMP
+    // disjunct, rather than inventing another RNG/phase implementation.
+    let vectors: serde_json::Value =
+        serde_json::from_str(crate::test_fixture::text("tools/robot_offline_oracle.json")).unwrap();
+    let row = vectors["sparks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["name"] == "offline, a spark frame, seed 1")
+        .unwrap();
+    let victim = sim.substrate.entities.get_mut(target).unwrap();
+    victim.position.put_world_xy([
+        row["location"][0].as_i64().unwrap() as i32,
+        row["location"][1].as_i64().unwrap() as i32,
+    ]);
+    victim
+        .position
+        .set_exact_z_leptons_for_test(Some(row["location"][2].as_i64().unwrap() as i32));
+    victim.set_native_unique_id_for_test(row["id"].as_i64().unwrap() as i32);
+    sim.session
+        .set_binary_frame_for_test(row["frame"].as_u64().unwrap() as u32);
+    sim.scenario_rng = crate::sim::rng::SimRng::new(row["seed"].as_u64().unwrap());
+    sim.deactivated_unit_sparks(target, &rules);
+    let systems: Vec<_> = sim.particle_systems().iter().collect();
+    assert_eq!(
+        systems.len(),
+        1,
+        "EMP alone must reach the native disabled spark arm"
+    );
+    let at = systems[0].1.coords();
+    assert_eq!(
+        serde_json::json!([at.x, at.y, at.z]),
+        row["expected"]["systems"][0]["coords"]
+    );
     let rng = sim.scenario_rng.logical_state();
     hit(&mut sim, &rules, source, target, 2);
     assert_eq!(
@@ -859,7 +895,7 @@ fn npatch_drive_provider_returns_during_emp_then_saved_expiry_powers_on_without_
 
 #[cfg(not(feature = "ares"))]
 #[test]
-fn npatch_drive_expiry_without_provider_keeps_latch_and_power_off() {
+fn npatch_drive_expiry_respects_provider_and_legacy_policy_transition() {
     let (mut sim, rules, source, target, center) = drive_provider_scene();
     sim.powered_center_edge(center, false, &rules, Default::default());
     hit(&mut sim, &rules, source, target, 2);
@@ -872,4 +908,34 @@ fn npatch_drive_expiry_without_provider_keeps_latch_and_power_off() {
     assert!(victim.deactivated.is_offline());
     assert!(!victim.locomotor.as_ref().unwrap().is_powered());
     assert!(sim.sound_events.take_for_test().is_empty());
+    // A positive-height compatibility hit followed by a ground rehit must
+    // not reinterpret its synthetic offline latch as a missing provider.
+    let (mut sim, rules, source, target, _) = drive_provider_scene();
+    let ground = crate::sim::movement::ground_pose::object_location(
+        sim.entities().get(target).unwrap(),
+        sim.resolved_terrain.as_ref(),
+    )
+    .z;
+    sim.substrate
+        .entities
+        .get_mut(target)
+        .unwrap()
+        .position
+        .set_exact_z_leptons_for_test(Some(ground + 128));
+    hit(&mut sim, &rules, source, target, 3);
+    assert!(sim.entities().get(target).unwrap().deactivated.is_offline());
+    sim.substrate
+        .entities
+        .get_mut(target)
+        .unwrap()
+        .position
+        .set_exact_z_leptons_for_test(Some(ground));
+    hit(&mut sim, &rules, source, target, 3);
+    for _ in 0..3 {
+        sim.tick_ares_emp(target, &rules, Default::default());
+    }
+    assert!(
+        !sim.entities().get(target).unwrap().deactivated.is_offline(),
+        "legacy EMP ownership must not be converted into a permanent provider latch"
+    );
 }
