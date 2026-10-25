@@ -260,7 +260,33 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：F03爆炸箱生产链与即时伤害通知（2026-10-26）
+### 当前检查点：A04海军184卡在跨水域集结（2026-10-26）
+
+- 任务仍在`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`；
+  本批基于`4187596e2`，仅新增诊断测试/台账，无玩法改动、无PR/推送，无待完成Cargo。
+  总体范围与[PLAN](aymod-plan.md)不变；V01作者设计/原生冲突及F11等未完成项仍开放。
+- 重新读原始完整mid报告：队184成员SQD30732、HYD30542/30541、SUB11968/11967
+  均属于Computer1，Health非0、非limbo、非deactivated，attack_target均为空。
+  五者mission.current=2是Move，不是AreaGuard(11)，也不是SUB在攻击己方HYD；
+  SUB11968的NavCom108,55恰好落在同队HYD脚下，导航位置不能当作攻击对象。
+  脚本FFFFFFF1-G实际为53→11,6，队伍仍在第0行动，尚未执行后继任务。
+- 已有正式旧存档300帧追踪中，五人成型团队仍停在53，focus99,149不变；
+  新增实际AYMOD/Return Dubai/Battle/困难加载诊断，按旧SUB109,55出生，
+  直接调用Foot4D3810→Map56D100生产门禁：108,55可达，99,149不可达。
+  这比仅比较raw Water2/4更强；初始地图即重现，不依赖存档中派生缓存损坏。
+- 同一测试使用存档记录的Computer1基地117,44与玩家基地93,154，经现有gather_seed_cell、
+  team_assign_gather_cell/FNPC生产路径重新选点，结果也被同一SUB运动门禁拒绝。
+  是新地图+记录位置的定向诊断，不是恢复原局、原生地图执行或全队长局回放。
+- 实读NPAE174 Gather_At_Enemy_Base6EF947..6EF98A，FNPC传leader SpeedType、3x3，
+  不约束领队的水域编号；Coordinate_Move6EBE42..6EBEAC没有给普通船只增设跨水域绕过。
+  现有Rust沿用这些参数。尚未证明原生在这张地图上生成相同连通分区/最终集结点，
+  所以不能据此宣布“原版也必卡死”，也不能直接合并水域或发明可达点回退来冒充兼容修复。
+- 验证：新增显式实际资源测试1项通过；TeamActions既有25项通过，新增ignored项已单独运行。
+  无新随机draw、计时器、Detach或持久状态；原始存档和保留玩家构建未改，不需重构游戏。
+- 下一步：核原生地图水域拓扑/FNPC最终点与Foot准入，区分地形/区域生成差异与原战术限制；
+  不再把海军184解释为发展不足、缺员或近敌交战。其他海军、多AI/长局和整体攻势仍未验收。
+
+### 已完成批次：F03爆炸箱生产链与即时伤害通知（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；玩法提交
   `27050a89f`，另补连续两帧通知断言已通过。一次独立只读critic未发现具体新增缺陷；未推送/PR/合并/启动游戏。
