@@ -105,6 +105,26 @@ overflow beyond five continues to return a zero FLH. The separate
 `UseAlternateFLH` burst-index hook remains outside this passenger chain; the
 inspected AYMod BFRT does not enable that key.
 
+## NPAE aircraft AACombat
+
+`AACombat` belongs to AircraftType, not WeaponType. NPAE174's constructor
+`41C8C3..41C8DD` clears the range containing byte `+E4C`, so it defaults false.
+The Aircraft ReadINI hook `41CD68 -> B956C0`, at `B95875..B95889`, reads the
+exact Rules key with `ReadBool5295F0` and the retained current value. VERA
+retains it across physical Rules passes, registry saves and config hashing;
+other type families and non-`npatch` reads do not enable it.
+
+The active `AircraftAI414D36 -> C27C60` hook returns false for enabled types
+instead of calling the target's `IsHighFlying`. This bypasses only the
+per-frame airborne-target removal; the following cloak/alliance/sensor check
+still runs. The existing `techno_ai::drop_airborne_target_step` owns this
+policy. It does not change acquisition, pursuit, weapon selection,
+`GetFireError6FC705..6FC73C`'s projectile AA requirement, or
+`AircraftAssignDestination41AA91..41AAAE`'s airborne object-destination refusal.
+Actual AY ORCA Attack commands expend ammo and damage both a still-airborne
+ZEP and a ground MTNK. Long-range moving-target interception, elite air fire,
+GUI interaction and sustained AI tactics remain separate acceptance coverage.
+
 ## NPAE garrison protection and penetration
 
 NPAE174 reads `BunkerProtectionLevel` into TechnoType's byte `+0x5A3`
