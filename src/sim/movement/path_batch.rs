@@ -38,7 +38,8 @@
 //! without reaching code6's close-enough Stop75B7E1. That one retry searches
 //! synchronously and draws no search RNG. Drive/Ship's Process_Movement
 //! re-entries (the 0x4B4541 tail expires its timer) and a code-2 re-path
-//! right after a found route, whose timer Find_Path left run out. So a Foot
+//! right after a found route, whose timer Find_Path left run out, still wait.
+//! So a Drive/Ship Foot
 //! whose next cell refuses it stands that frame with its head cleared and
 //! re-paths the next, where native re-paths and usually steps at once, and a
 //! Foot whose new route is blocked at its first step by a moving friendly
