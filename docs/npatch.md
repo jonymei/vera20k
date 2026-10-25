@@ -155,7 +155,9 @@ Safety residuals: a missing warhead keeps the existing safe-drop policy rather
 than emulating a null-pointer crash. If a kill callback removes additional
 occupants, tail finalization never grows an already shortened vector to revive
 native stale references; arbitrary custom-trigger dangling-pointer behavior is
-not claimed equivalent. Ordinary positive/negative penetration, protected
+not claimed equivalent. The frequency of these exceptional custom-trigger or
+invalid-reference inputs is not certified; divergent continuation is limited
+to those error paths. Ordinary positive/negative penetration, protected
 garrisons, kill credit, synchronous first-DieSound ordering, absorber separation
 and actual AYMod sniper/Boris-sortie paths have production regressions.
 
