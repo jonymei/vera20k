@@ -241,7 +241,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：海军初始地图对照（2026-10-26）
+### 当前检查点：EMP运动准入前置修复（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
   F06代码提交`84b7e5e2c`。无推送/PR/合并授权；主工作区的用户`.gitignore`修改、历史分析工作区、
@@ -290,11 +290,19 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 新模式验证：当前/历史fast+npatch+telemetry构建通过；真实地图三格观察通过；缺根目录/缺格子、
   非零ticks、entity/team观察者、与两种保存模式混用均在加载前拒绝。历史inspect输出仍与原基线逐字节一致。
   报告仅留本机忽略目录`target/aymod-save-analysis/dubai-initial-topology.json`及current对照，不提交用户数据。
-- 下一安全动作：海军184的跨水域集结保留为地图初始状态/原生集结选点的残余，未证明应改引擎算法；
-  不把它当成“造船不足”或通过提高权重/改半径修掉。若要设计性改选可达海域，需另列政策并确认。
-  回到V01/A06的NPAE停机/EMP/恢复完整链；独立三组计数仍待用户政策确认，维持原生聚合，
-  先处理已确认的Reactivate/EMP到期顺序差异。同时保留F02/F03/F07–F09/F11/F12与V/AI其余项。
-  本轮仅诊断/工具，无玩法改动、新游戏版或PR；上一aa-combat玩家版继续有效。
+- `eb35eca1e`补齐Drive4AFD4B/Ship69F45B Move_To的正EMP门禁，复用当前计数和既有setter；
+  Foot先前NavCom/timer写入保留，Stop入口不加门禁；不改供电聚合、offline latch、恢复政策、RNG或保存布局。
+  新回归经正式NP命中→Unit目的地派发→普通对象AI倒计时；修复前在Drive接纳目的地处失败，修复后通过。
+  原夹具默认Teleport已显式改为Drive，装配失败未计作缺陷证据；另一个不能区分旧实现的弱测试已移除。
+- 本次NP EMP9项、navcom10项、TrackHost37项、PoweredUnit8项通过；navcom/TrackHost各1项slow未运行。
+  无NP navcom10项通过、1项slow未运行。一次独立只读critic复读原生后无确认或具体可疑缺陷。
+  Ship正EMP、已有head运动收尾、Walk/Hover和整体失联恢复不据此宣称通过。
+- 本次研究确认：Object受伤5F5505/B95100的EMEffect活跃分支到C2EFB7/B990DC，
+  移动对象清Nav/Target、写+504，不把EMP写进+1C8；Reactivate与expiry确需完整分离，不能只换恢复早退。
+  现有可玩时长/目标/队列政策尚未迁移，见[npatch-emp.md](npatch-emp.md)；仍未改三组计数政策。
+- 下一安全动作：继续补齐普通运动消费者（fresh-track、Walk、Hover），以真实EMP生产路径验证停机及到期恢复，
+  再整体迁移NPAE施加/恢复链。海军184跨水域选点保留初始地图/原生集结政策残余，不调权重或半径。
+  当前普通游戏测试版仍为aa-combat，本次代码提交尚需保留新构建；全PLAN其余F/V/AI项保持开放。
   F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
 
 ## 3. 功能缺口与适配进度

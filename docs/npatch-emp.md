@@ -51,6 +51,31 @@ manual offline latch. Construction yards update both Building and Defense slots.
 This is an explicit playable-compatibility policy shared with Ares, not a claim
 about NPAE's queue callbacks.
 
+## Movement admission and native lifecycle residuals
+
+Drive Move_To4AFD4B and Ship Move_To69F45B now consume the shared positive
+Techno70EFD0 EMP counter before paralysis, warp tests and destination stores,
+including null coordinates. Earlier Foot NavCom and timer writes still stand;
+Stop_Moving is a separate entry and remains callable. A production EMP hit,
+reissued Unit destination and ordinary object-AI expiry regression covers Drive.
+The Ship branch is supported by its original instructions and existing normal
+movement coverage, not a new positive-EMP Ship scenario.
+
+This does not finish NPAE174 EMP movement or recovery. Fresh-track admission
+(4B2746/6A1D96), Walk destination/paid-step gates and Hover consumers remain
+required work; existing heads can require their native movement tail rather than
+a blanket freeze. Unit746C90's independent death-frame override is unrepresented.
+
+The current shared Ares-style Deactivate/Reactivate and Hunt recovery remains an
+explicit compatibility policy, not the inspected NPAE lifecycle. NPAE's active
+Object damage hook5F5505/B95100 reads WH+154 and reaches C2EFB7/B990DC for mobile
+victims; that chain clears navigation/target and writes+504 without setting the
+provider offline byte+1C8. Reactivate70FBE0/C2BC8B resets orders first, skips
+Power_On while EMP is nonzero, and clears+1C8; expiryC2BC5D/C2BC6E separately
+preserves the offline latch. Migrating only one end would leave the current
+Ares-style application inconsistent. Keep the existing duration/target/queue
+policies until the application, movement consumers and expiry can move together.
+
 ## AYMod's Tesla projectile
 
 AYMod authors `TankBolt -> ElectricbounceT` (elite `TankBoltE -> ElectricbounceTE`)
