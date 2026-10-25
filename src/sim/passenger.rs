@@ -368,6 +368,13 @@ impl BuildingOccupants {
             self.ids.remove(index);
         }
     }
+    /// NPAE174 C2E7AC..C2E7B3 stores the captured tail index as the new
+    /// count after RecordKill/UnInit callbacks. Preserve +69C, even at zero;
+    /// truncation also avoids double-removing a placement-scope expiry.
+    #[cfg(feature = "npatch")]
+    fn finish_penetrated_tail(&mut self, prior_tail: usize) {
+        self.ids.truncate(prior_tail);
+    }
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn set_ids_for_test(&mut self, ids: Vec<u64>) {
         self.ids = ids;

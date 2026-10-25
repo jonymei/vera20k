@@ -6201,7 +6201,20 @@ fn garrison_fire_keeps_occupant_anim_and_sound_path() {
         ev.report_sound_id.map(|id| interner.resolve(id)),
         Some("GIAttack")
     );
-    assert!(sounds.is_empty());
+    // FireAt6FF38F submits Report through the shared sound owner before
+    // the muzzle; the event's Report field is not a second sound request.
+    let coord = crate::sim::anim_class::AnimWorldCoord {
+        x: ev.fire_coord.x,
+        y: ev.fire_coord.y,
+        z: ev.fire_coord.z,
+    };
+    let (rx, ry, sub_x, sub_y, _) = coord.to_cell_sub_z();
+    assert!(matches!(sounds.as_slice(), [SimSoundEvent::VocAt {
+        sound_id, audible_to: None, rx: actual_rx, ry: actual_ry,
+        sub_x: actual_x, sub_y: actual_y, world_z_leptons,
+    }] if sound_id == "GIAttack"
+        && (*actual_rx, *actual_ry, *actual_x, *actual_y, *world_z_leptons)
+            == (rx, ry, sub_x, sub_y, coord.z)));
 }
 
 #[test]

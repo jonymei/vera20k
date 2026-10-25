@@ -105,6 +105,60 @@ overflow beyond five continues to return a zero FLH. The separate
 `UseAlternateFLH` burst-index hook remains outside this passenger chain; the
 inspected AYMod BFRT does not enable that key.
 
+## NPAE garrison protection and penetration
+
+NPAE174 reads `BunkerProtectionLevel` into TechnoType's byte `+0x5A3`
+(`0x7138C7 -> 0xC2EF58..0xC2EF6C`) and `BunkerPenetrationLevel` into
+WarheadType's byte `+0x14C` (`0x75D5DE..0x75D5F2`). Both start at zero,
+retain the current byte as the per-pass ReadInt default, and truncate without
+clamping. The protection constructor is `0x710F8D -> 0xC2EF82`; the warhead
+constructor zeroes the byte at `0x75CF83`.
+
+The latter **replaces**, rather than accompanies, the stock `Fire` reader.
+With `npatch`, VERA follows the NPAE reader even in a mixed-capability build;
+`Fire=` does not overwrite that byte. The existing destroyable-cliff action
+(`0x70091A..0x700924`) still interprets the same byte as nonzero. Without
+`npatch`, the stock `Fire` bool reader and ordinary cliff action are unchanged.
+There is one retained byte, not independently mutable Fire and penetration flags.
+
+`BuildingClass::ReceiveDamage` calls the new hook at
+`0x442358 -> 0xC2E7C4`, after the disallowed-self-damage return and contact
+snapshot, before LaserFence, Immune, Health0 and the shared damage gates.
+It does not require positive damage, and it does not replace the building's
+ordinary damage. Only the building's garrison Occupants vector participates:
+
+- Nonnegative penetration strictly greater than protection removes one occupant.
+- Negative penetration negates its byte and, when strictly greater than
+  protection, removes all occupants. Both comparison operands are signed bytes;
+  `-128` wraps back to `-128` and never penetrates.
+- Equal levels do not penetrate. In AYMod, `1` cannot bypass protection `1`,
+  while `-2` clears it. Protection defaults to zero, not a retail tuning value.
+
+The helper `0xC2E751` always selects the last live Occupants entry. It plays
+the victim type's first `DieSound` at the building's raw Location (`0xC2BBBD`),
+then calls `Record_The_Kill @ 0x702D40` and `FootClass::UnInit @ 0x4DE5D0`,
+and finally reduces the captured vector tail. It writes no HP, spawns no
+InfDeath animation and does not reset the firing cursor. VERA reuses the
+existing sound boundary, kill accounting, UnInit and deferred-removal owners.
+There are no direct RNG draws, timer writes or new detach operations in the
+hook; nested sound/RecordKill/UnInit callbacks retain their existing semantics.
+Red-health ejection and empty-civilian-building ownership stay with their
+ordinary later owners, not an extra penetration-specific state machine.
+
+Bio Reactors' `InfantryAbsorb`/`UnitAbsorb` entry uses Cargo `+0x114`
+(`0x51A38A` / `0x73A2E4 -> 0x4733A0`), not Occupants `+0x684/+0x694`.
+Consequently AYMod's YAPOWR/YAPOWRAI protection entries do not make this hook
+kill absorber Cargo. Normal building damage/destruction can still affect it.
+Tank Bunkers keep their independent unit link and stock `PenetratesBunker` gate.
+
+Safety residuals: a missing warhead keeps the existing safe-drop policy rather
+than emulating a null-pointer crash. If a kill callback removes additional
+occupants, tail finalization never grows an already shortened vector to revive
+native stale references; arbitrary custom-trigger dangling-pointer behavior is
+not claimed equivalent. Ordinary positive/negative penetration, protected
+garrisons, kill credit, synchronous first-DieSound ordering, absorber separation
+and actual AYMod sniper/Boris-sortie paths have production regressions.
+
 ## AYMod reward and control policy
 
 With `npatch`, `TrainPassengers=yes` gives an open-topped shooter's kill XP to

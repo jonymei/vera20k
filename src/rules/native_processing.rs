@@ -1180,6 +1180,21 @@ impl ProcessedRulesLayers {
             .map(|member| (member.native_stored_id.as_str(), member.npatch_turret_rot))
     }
 
+    pub(crate) fn bunker_protection_states(&self) -> impl Iterator<Item = (&str, i8)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Building)
+            .into_iter()
+            .flatten()
+            .map(|member| {
+                (
+                    member.native_stored_id.as_str(),
+                    member.npatch_bunker_protection,
+                )
+            })
+    }
+
     /// UnitType+67C after the last admitted Rules body; an unread type keeps
     /// constructor -1. Missing sections and missing SpeedType keys differ.
     pub(crate) fn unit_speed_type_states(&self) -> impl Iterator<Item = (&str, SpeedType)> {
@@ -1722,6 +1737,7 @@ impl ProcessedRulesLayers {
             &str,
             bool,
             bool,
+            i8,
             &[String],
             &[String],
             &[NativeF64Bits; 11],
@@ -1739,6 +1755,7 @@ impl ProcessedRulesLayers {
                     &*member.native_stored_id,
                     member.warhead_anim.conventional,
                     member.warhead_anim.em_effect,
+                    member.npatch_bunker_penetration,
                     member.warhead_anim.anim_list.as_slice(),
                     member.warhead_anim.debris_types.as_slice(),
                     &member.warhead_verses,
@@ -3456,6 +3473,12 @@ struct ProcessedType {
     /// AYMod NPAE174 TechnoType ctor710F93 seeds FF; ReadINI713879..71388D
     /// passes the retained byte to ReadInt5276D0 and stores only AL.
     npatch_turret_rot: u8,
+    /// NPAE174 TechnoType ctor710F8D -> C2EF82 zeroes +5A3. Reader
+    /// C2EF58..C2EF6C retains and truncates its current-default integer.
+    npatch_bunker_protection: i8,
+    /// NPAE174 replaces stock Fire's +14C reader at75D5DE..75D5F2;
+    /// Warhead ctor75CF83 initializes this byte to zero.
+    npatch_bunker_penetration: i8,
     weapon_slots: WeaponSlots,
     techno_references: TechnoTypeReferences,
     weapon: WeaponReadState,
@@ -3903,6 +3926,8 @@ impl ProcessedType {
             // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
             ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
             npatch_turret_rot: u8::MAX,
+            npatch_bunker_protection: 0,
+            npatch_bunker_penetration: 0,
             weapon_slots: WeaponSlots::default(),
             weapon: WeaponReadState::default(),
             warhead_anim: WarheadAnimReadState::default(),
@@ -5575,6 +5600,12 @@ impl RulesPassProcessor {
                     // then byte truncation on every physical Rules pass.
                     member.npatch_turret_rot =
                         raw.read_int("TurretROT", i32::from(member.npatch_turret_rot)) as u8;
+                    // NPAE174 TechnoType7138C7 -> C2EF58, current byte
+                    // default and low-byte store, without a clamp.
+                    member.npatch_bunker_protection = raw.read_int(
+                        "BunkerProtectionLevel",
+                        i32::from(member.npatch_bunker_protection),
+                    ) as i8;
                     // NPAE174 ReadINI7138C7 -> C2EF3E retains the byte;
                     // NPSE359 reads AIPlanningCount at C2E223. Compatibility
                     // policy: the legacy spelling wins within the same pass.
@@ -6313,6 +6344,15 @@ impl RulesPassProcessor {
             if let Some((_id, raw, _effective)) =
                 self.begin_rules_member_read(RulesTypeFamily::Warhead, index, pass)
             {
+                if crate::rules::NPATCH_ENABLED {
+                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
+                    // AYMod NPAE174 ReadINI75D5DE..75D5F2 replaces Fire,
+                    // retaining +14C as the signed penetration byte.
+                    member.npatch_bunker_penetration = raw.read_int(
+                        "BunkerPenetrationLevel",
+                        i32::from(member.npatch_bunker_penetration),
+                    ) as i8;
+                }
                 let particle = self.resolve_scalar_from(
                     &raw,
                     "Particle",

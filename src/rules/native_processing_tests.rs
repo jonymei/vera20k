@@ -3,6 +3,59 @@
 use super::*;
 use crate::util::save_codec;
 
+#[test]
+fn npatch_bunker_bytes_keep_layers_fire_alias_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |penetration| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[BuildingTypes]\n0=B\n[Warheads]\n0=W\n\
+             [B]\nBunkerProtectionLevel=257\n\
+             [W]\nFire=yes\nBunkerPenetrationLevel={penetration}\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[B]\nBunkerProtectionLevel=255\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str(
+            "[B]\nBunkerProtectionLevel=\n[W]\nFire=no\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(254);
+    let second = continued(255);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_eq!(
+        first.object("B").unwrap().bunker_protection_level(),
+        if crate::rules::NPATCH_ENABLED { -1 } else { 0 }
+    );
+    assert_eq!(
+        first.warhead("W").unwrap().fire(),
+        crate::rules::NPATCH_ENABLED,
+        "NP reuses +14C for penetration; a later Fire=no cannot overwrite it"
+    );
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(first.warhead("W").unwrap().bunker_penetration_level(), -2);
+        assert_eq!(second.warhead("W").unwrap().bunker_penetration_level(), -1);
+        assert_ne!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    } else {
+        assert_eq!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    }
+}
+
 #[cfg(feature = "npatch")]
 #[test]
 fn npatch_turret_rot_survives_registry_save_and_hashes_retained_speed() {

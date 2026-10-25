@@ -930,6 +930,8 @@ pub struct ObjectType {
     /// NPAE174 TechnoType byte +5A5, projected by the ordered Rules reader.
     /// UnitCtor735584 -> C2DEB6 uses FF as the ROT fallback, not a speed.
     npatch_turret_rot: u8,
+    /// NPAE174 TechnoType +5A3; compared as a signed byte by C2E7E5.
+    npatch_bunker_protection: i8,
     /// Retained TechnoType recoil reader; shared by every voxel turret.
     pub recoil: crate::rules::recoil::RecoilConfig,
     /// Six retained settings copied when this Techno creates an Airstrike manager.
@@ -2280,6 +2282,14 @@ impl ObjectType {
         self.npatch_turret_rot = rot;
     }
 
+    pub(crate) fn bunker_protection_level(&self) -> i8 {
+        self.npatch_bunker_protection
+    }
+
+    pub(super) fn project_npatch_bunker_protection(&mut self, level: i8) {
+        self.npatch_bunker_protection = level;
+    }
+
     /// Native TechnoType `PitchSpeed` double used by the normal Fly draw gate.
     pub fn fly_pitch_speed(&self) -> f64 {
         f64::from_bits(self.pitch_speed.bits())
@@ -3366,6 +3376,7 @@ impl ObjectType {
             // but ROT= remains the parsed TechnoType +0x71C facing-rate field.
             turret_rot: section.read_int("ROT", 0),
             npatch_turret_rot: u8::MAX,
+            npatch_bunker_protection: 0,
             // Constructor values. Recoil, Airstrike and RadialFireSegments
             // are read only by the ordered Process owner (`native_processing`),
             // whose retained per-pass result `RuleSet` publishes.

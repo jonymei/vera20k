@@ -2043,6 +2043,188 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY sniper and MiG garrison penetration"]
+    fn aymod_sniper_respects_bunker_protection_and_boris_sortie_clears_it() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        // Battle setup uses the production garrison owner; ordinary Capture
+        // approach/admission is separately exercised by the storage regression.
+        fn occupy(scenario: &mut HeadlessScenario, building: u64) -> Vec<u64> {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let owner = sim.entities().get(building).unwrap().owner();
+            let at = sim.entities().get(building).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
+            let riders =
+                spawn_on_free_cells(sim, &runtime.resources.rules, owner, sites, &["E2"; 2]);
+            for &rider in &riders {
+                assert!(crate::sim::passenger::add_garrison_occupant(
+                    sim,
+                    &runtime.resources.rules,
+                    rider,
+                    building,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default()
+                ));
+            }
+            riders
+        }
+        let attack = |scenario: &mut HeadlessScenario, actor, target| {
+            let sim = &mut scenario.runtime.simulation;
+            let owner = sim.entities().get(actor).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            ));
+        };
+        let (mut scenario, sniper, city) = aymod_nearby_pair("SNIPE", "CAHSE01", false);
+        for (name, level) in [
+            ("AWPWH", 1),
+            ("Virus", 1),
+            ("VirusM", 1),
+            ("RadBeamWarhead", 1),
+            ("OCRadBeamWarhead", 1),
+            ("MIGWH", -2),
+        ] {
+            assert_eq!(
+                scenario
+                    .runtime
+                    .resources
+                    .rules
+                    .warhead(name)
+                    .unwrap()
+                    .bunker_penetration_level(),
+                level
+            );
+        }
+        let citizens = occupy(&mut scenario, city);
+        attack(&mut scenario, sniper, city);
+        for _ in 0..600 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(city)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .ids()
+                .len()
+                < 2
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(city)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .ids(),
+            &[citizens[0]]
+        );
+        let bunker = {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let enemy = house_of(sim, "Russians");
+            let at = sim.entities().get(city).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                &runtime.resources.rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["NABNKR"],
+            )[0]
+        };
+        let protected = occupy(&mut scenario, bunker);
+        let before = scenario
+            .sim()
+            .entities()
+            .get(bunker)
+            .unwrap()
+            .health
+            .current();
+        attack(&mut scenario, sniper, bunker);
+        for _ in 0..600 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(bunker)
+                .unwrap()
+                .health
+                .current()
+                < before
+            {
+                break;
+            }
+        }
+        let building = scenario.sim().entities().get(bunker).unwrap();
+        assert!(
+            building.health.current() < before,
+            "the actual sniper bullet must reach the protected building"
+        );
+        assert_eq!(
+            building.passenger_role.occupants().ids(),
+            protected.as_slice()
+        );
+        let boris = {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let owner = sim.entities().get(sniper).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Stop { entity_id: sniper },
+            ));
+            let at = sim.entities().get(bunker).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx())).abs() + (y - i32::from(at.ry())).abs() == 10
+                })
+                .collect::<Vec<_>>();
+            spawn_on_free_cells(sim, &runtime.resources.rules, owner, sites, &["BORIS"])[0]
+        };
+        attack(&mut scenario, boris, bunker);
+        for _ in 0..2400 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(bunker)
+                .is_none_or(|building| building.passenger_role.occupants().is_empty())
+            {
+                break;
+            }
+        }
+        let building = scenario
+            .sim()
+            .entities()
+            .get(bunker)
+            .expect("penetration must precede ordinary destruction");
+        assert!(building.health.current() > 0 && building.is_object_alive());
+        assert!(
+            building.passenger_role.occupants().is_empty(),
+            "the real Boris/Maverick3 sortie must clear the protected garrison"
+        );
+        assert!(protected.iter().all(|id| {
+            scenario
+                .sim()
+                .entities()
+                .get(*id)
+                .is_none_or(|actor| !actor.is_object_alive())
+        }));
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
         target_type: &str,

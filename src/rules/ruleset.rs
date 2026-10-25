@@ -4587,8 +4587,16 @@ impl RuleSet {
         rules.combat_damage.ammo_crate_damage = processed.ammo_crate_damage();
         rules.combat_damage.death_weapon =
             processed.combat_damage_death_weapon().map(str::to_owned);
-        for (name, conventional, em_effect, anim_list, debris_types, verses, ares_verses) in
-            processed.warhead_read_states()
+        for (
+            name,
+            conventional,
+            em_effect,
+            penetration,
+            anim_list,
+            debris_types,
+            verses,
+            ares_verses,
+        ) in processed.warhead_read_states()
         {
             if let Some(warhead) = rules
                 .warheads
@@ -4597,6 +4605,9 @@ impl RuleSet {
             {
                 warhead.conventional = conventional;
                 warhead.em_effect = em_effect;
+                if crate::rules::NPATCH_ENABLED {
+                    warhead.project_npatch_bunker_penetration(penetration);
+                }
                 warhead.anim_list = anim_list.to_vec();
                 warhead.debris_types = debris_types.to_vec();
                 warhead.verses_f64 = verses.map(|value| f64::from_bits(value.bits()));
@@ -4736,6 +4747,15 @@ impl RuleSet {
                 .find(|object| object.category == category && object.id == name)
             {
                 object.lepton_mind_control_offset = offset;
+            }
+        }
+        for (name, level) in processed.bunker_protection_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Building && object.id == name)
+            {
+                object.project_npatch_bunker_protection(level);
             }
         }
         for (name, rot) in processed.unit_turret_rot_states() {
@@ -6371,6 +6391,18 @@ impl RuleSet {
                 .filter(|object| object.category == ObjectCategory::Vehicle)
                 .map(|object| (&object.id, object.unit_turret_rot()))
                 .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            b"npatch-bunker-levels-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Building)
+                .map(|object| (&object.id, object.bunker_protection_level()))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            self.warheads
+                .values()
+                .map(|warhead| (&warhead.id, warhead.bunker_penetration_level()))
+                .collect::<BTreeMap<_, _>>()
                 .hash(&mut hasher);
         }
         // OverlayRead5FE8BE / InitTheater5FE620 retain typed history that a

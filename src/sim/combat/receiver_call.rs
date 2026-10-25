@@ -401,7 +401,8 @@ pub(super) fn resolve_receive_damage_with_input(
         return None;
     }
     // Residual: a null warhead (the empty name) finds no WarheadType, so the
-    // hit is dropped. Native passes it with IgnoreDefenses: Object 5F5390
+    // NPAE174 also reads +14C before the ordinary gates when occupants exist.
+    // hit is dropped. Retail passes it with IgnoreDefenses: Object 5F5390
     // skips 489180, Building 442230 reads the warhead only for its Sparky=
     // test in the NowYellow/NowRed loop, Unit 737C90 and Aircraft 4165C0 never read it, and Foot
     // 4D7330 and Techno 701BF6 test it, so the target dies; an Infantry death

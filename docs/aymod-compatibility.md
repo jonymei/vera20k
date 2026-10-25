@@ -99,6 +99,15 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - F13独立只读critic未发现本次引入的具体缺陷。无NPatch的40项cloak定向覆盖也通过；
   其5项ignored是未修改机制的Mirage专项，不冒称已运行。普通Windows游戏已用
   `--profile fast --no-default-features --features npatch`构建成功，未启动/安装替换。
+- F04：已从当前NPAE174指令确认并接通通用Building ReceiveDamage钩子。正/负穿透不是分摊HP，
+  而是保护等级比较成功后直接对尾部驻军RecordKill/UnInit；普通建筑伤害继续执行。
+  默认0、current-default逐层读取、i8截断/严格比较、NEG AL溢出、Fire槽别名均已保留。
+  核心新增三项回归：读层次/存读/hash；真实Capture入驻后的等级门、零/负伤害、首DieSound同步位置/顺序、
+  击杀只记一次与正常回收、Cargo隔离；实际AYMOD狙击手与鲍里斯完整攻击/空袭。
+  三项均已通过，优化运行/独立审查尚待完成，不能据此宣称全部MOD功能完成。
+- 扩大驻军相关作战覆盖时，发现一个早于本改动的旧断言：既有FireAt已经提交Report声音，
+  但garrison_fire测试仍要求声音为空。已沿未改变的producer/fixture及原生6FF38F查实，
+  将断言加强为在正确发射坐标恰好一条GIAttack，未压掉生产声音或跳过测试。
 - 没有运行Windows GUI、多AI长局或NPAE原生对照；不将局部通过称为整个MOD兼容。
 
 此前库存的 25,068 个物理 section/key 对、2,374 个不同键、207 个 accessor 查询，
@@ -114,7 +123,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
 | F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
 | F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
-| F04 / P1 | 驻军保护与穿透：狙击/病毒/辐射/MiG 对驻军和建筑的伤害分配无法按 NPAE 扩展兑现 | 建筑 NABNKR、YAPOWR、YAPOWRAI 的 `BunkerProtectionLevel`；AWPWH、Virus、VirusM、RadBeamWarhead、OCRadBeamWarhead、MIGWH 的 `BunkerPenetrationLevel`；`src/rules/warhead_type.rs:454` 的 PenetratesBunker 和 `src/sim/combat/damage/mod.rs:76` 的 stock 坦克掩体 gate 不是这两项 | 核正负等级语义，区分城市驻军、苏军碉堡、生化炉、坦克碉堡；覆盖受害者选择、伤亡、弹出/清空和回收，不只读取数值 |
+| F04 / P1 / 已实现，最终验收中 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化运行和critic完成后更新状态 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 | 飞机对空行为：ORCA 类型的扩展 `AACombat` 未接通，不能靠弹体 `AA` 替代 | **`[ORCA] AACombat` 是 AircraftType 键，不是 WeaponType**；`src/rules/object_type.rs`、飞机 attack/weapon-selection owner | 核 #174 飞机任务/追击/武器准入，先用 ORCA 完成对空与对地两条对照；不能以别的飞机描述推定其行为 |
 | F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |
@@ -125,7 +134,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F12 / P2 | 扩展遭遇战 UI：科技等级滑条与扩展颜色未按 NP 配置进入 UI | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 
-F04、F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定义尚未全部证明**，
+F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定义尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
 
 ## 4. 已有实现，仍需核对的功能链
@@ -213,7 +222,7 @@ A04 的特定残留：`src/sim/ai_unit_choice.rs:86` 只有一个车辆选择槽
    补齐正版零售 `ini/` 回归环境，不把本轮 asset 构建说成游戏已更新安装。
 2. **先做A01/A02/A09最小多AI验收**：一人对三阵营电脑，至少再加同阵营重复 House；
    先找实际发展/出击阻塞，再选一条有复现的链修复，避免凭清单批量改权重。
-3. **常见战斗机制**：F01步兵隐形、V01三组供电、F04驻军穿透、F05炮塔；
+3. **常见战斗机制**：F01/F04/F05已接入，继续V01三组供电和其他开放功能；
    每次一条普通兵种链，修必要前置和生命周期，保留其他独立机制为明确 residual。
 4. **箱子**：F02与F03分别完成；关闭箱子的对局暂不受这两项影响，不能删掉要求。
 5. **水陆/长局/超武**：A03–A07与A10；查到真正差异再实现，尤其不套用NPSE海军槽。
@@ -236,7 +245,8 @@ A04 的特定残留：`src/sim/ai_unit_choice.rs:86` 只有一个车辆选择槽
 
 ## 8. 已建立的原生证据
 
-以下保留此前读过的原生链；没有为本轮清单重新执行或扩展它们。
+以下保留初次交接已有的原生链；本轮F04的读取、伤害顺序与清理语义见
+[npatch.md](npatch.md)及对应Rust邻近注释，不提交静态反汇编包或原生运行日志。
 
 ### AIBasePlanningCount
 

@@ -1134,6 +1134,20 @@ pub(crate) fn commit_entities(
         } else {
             None
         };
+        // NPAE174 BuildingReceiveDamage442358 -> C2E7C4 runs after the
+        // contact snapshot but before the shared receiver gates, for any
+        // damage sign. Disallowed self damage already returned above.
+        #[cfg(feature = "npatch")]
+        if let Some(warhead) = rules.warhead(world.interner.resolve(event.warhead_ref)) {
+            crate::sim::passenger::garrison_eject::apply_bunker_penetration(
+                world,
+                target_id,
+                warhead.bunker_penetration_level(),
+                (attacker_id != RAD_NO_ATTACKER).then_some(attacker_id),
+                crate::sim::world::UninitContext::new(rules, overlay_registry)
+                    .with_effects(run.effects()),
+            );
+        }
         let prepared_event = super::receiver_call::prepare_infantry_receiver(
             event,
             &world.substrate.entities,

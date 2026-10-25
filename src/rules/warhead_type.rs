@@ -98,7 +98,9 @@ pub struct WarheadType {
     /// `0x00836f04`) over the constructor's 0 (`0x0075cf83`). Techno
     /// What_Action on a Cell keeps a Fire warhead off a destroyable cliff
     /// (`0x00700908..0x00700924`).
-    pub fire: bool,
+    /// The same native +14C byte is NPAE174 BunkerPenetrationLevel, not
+    /// a second flag. Its existing cliff consumer still tests nonzero.
+    fire_byte: i8,
     /// Whether this warhead reaches a target installed in a bunker. The active
     /// receiver has category-specific linked-building/occupant semantics.
     /// `WarheadTypeClass+0x146` (ReadINI `0x0075d53c`, key string
@@ -349,6 +351,18 @@ pub struct WarheadType {
 }
 
 impl WarheadType {
+    pub fn fire(&self) -> bool {
+        self.fire_byte != 0
+    }
+
+    pub(crate) fn bunker_penetration_level(&self) -> i8 {
+        self.fire_byte
+    }
+
+    pub(super) fn project_npatch_bunker_penetration(&mut self, level: i8) {
+        self.fire_byte = level;
+    }
+
     pub(crate) fn is_permanent_hijack(&self) -> bool {
         self.is_perma_controlled && self.mind_control && self.parasite
     }
@@ -450,7 +464,11 @@ impl WarheadType {
             delay_kill_at_max_f64,
             wall: section.read_bool("Wall", false),
             wood: section.read_bool("Wood", false),
-            fire: section.read_bool("Fire", false),
+            fire_byte: if crate::rules::NPATCH_ENABLED {
+                0
+            } else {
+                i8::from(section.read_bool("Fire", false))
+            },
             penetrates_bunker: section.read_bool("PenetratesBunker", false),
             affects_allies: section.read_bool("AffectsAllies", true),
             affects_owner: section
