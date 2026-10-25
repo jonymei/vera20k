@@ -61,7 +61,7 @@ fn suggest_new_object_matches_original_raw_factory_dispatch_table() {
             _ => panic!("unreviewed native jump target {entry:x}"),
         };
         assert_eq!(
-            suggest_new_object(&sim, &rules, owner, rtti).map(|object| object.id.as_str()),
+            suggest_new_object(&sim, &rules, owner, rtti, false).map(|object| object.id.as_str()),
             expected,
             "{row}"
         );

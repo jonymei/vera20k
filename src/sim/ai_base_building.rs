@@ -247,6 +247,12 @@ pub(crate) fn update_production_choices(
     let choose_units = |sim: &mut Simulation, kinds: &[UnitChoiceKind]| {
         for &kind in kinds {
             ai_unit_choice::choose(sim, rules, owner, kind);
+            // NPAE174 C2CEE9, called at4F90F2/4F9252: land then naval.
+            // Mode2's three stock empty/buildable tests remain below.
+            #[cfg(feature = "npatch")]
+            if kind == UnitChoiceKind::Unit {
+                ai_unit_choice::choose(sim, rules, owner, UnitChoiceKind::NavalUnit);
+            }
         }
     };
     const ALL: [UnitChoiceKind; 3] = [
@@ -988,12 +994,14 @@ fn carry_wall_tower_site(
 /// `HouseClass::Suggest_New_Object @ 0x004FBD80` for a factory that makes
 /// `factory_rtti`: the house's choice of that kind, unchecked: the building
 /// choice (`+0x564C`, `0x004FBDDC`) or a choice of `sim::ai_unit_choice`
-/// (`+0x5650`, `+0x5654`, `+0x5658`).
+/// (`+0x5650`, `+0x5654`, `+0x5658`). NPAE1744FBDAF -> C2CE9F
+/// uses the producer's Naval byte for the separate Unit choice +160F8.
 pub(crate) fn suggest_new_object<'r>(
     sim: &Simulation,
     rules: &'r RuleSet,
     owner: InternedId,
     factory_rtti: i32,
+    producer_naval: bool,
 ) -> Option<&'r ObjectType> {
     let house = sim.houses.get(&owner)?;
     let unit_choice = |kind: UnitChoiceKind| {
@@ -1004,7 +1012,7 @@ pub(crate) fn suggest_new_object<'r>(
     // FindFactory's exact class comparison. Other RTTIs return null.
     match FactoryType::for_production_rtti(factory_rtti)? {
         FactoryType::BuildingType => rules.building_type_at(house.ai_production().building_choice),
-        FactoryType::UnitType => unit_choice(UnitChoiceKind::Unit),
+        FactoryType::UnitType => unit_choice(UnitChoiceKind::unit(producer_naval)),
         FactoryType::InfantryType => unit_choice(UnitChoiceKind::Infantry),
         FactoryType::AircraftType => unit_choice(UnitChoiceKind::Aircraft),
     }

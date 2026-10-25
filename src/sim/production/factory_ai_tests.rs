@@ -497,3 +497,204 @@ fn the_gate_compares_an_airport_bound_aircraft_by_its_own_count() {
         "the gate compares the house's count of the type"
     );
 }
+
+/// One mixed TaskForce feeds both factories through the ordinary House
+/// chooser, rather than presetting a second production list for the test.
+fn land_and_naval_fixture(general: &str, tank: &str, ship: &str) -> (Fixture, u64, u64) {
+    let mut f = fixture_with(&format!(
+        "[General]\nAIAlternateProductionCreditCutoff=10\nAISlaveMinerNumber=0,0,0\n{general}\n\
+         [Countries]\n0=AIHouse\n[AIHouse]\nSide=GDI\n[Sides]\nGDI=AIHouse\n\
+         [VehicleTypes]\n0=TANK\n1=SHIP\n[BuildingTypes]\n0=YARD\n1=PLAIN\n2=WEAP\n3=DOCK\n\
+         [YARD]\nStrength=1000\nConstructionYard=yes\nFactory=BuildingType\n\
+         [PLAIN]\nStrength=1000\n[WEAP]\nStrength=1000\nFactory=UnitType\n\
+         [DOCK]\nStrength=1000\nFactory=UnitType\nNaval=yes\n\
+         [TANK]\nStrength=300\nSpeed=5\nCost=100\nTechLevel=1\nOwner=AIHouse\n{tank}\n\
+         Locomotor={{4A582741-9839-11d1-B709-00A024DDAFD1}}\n\
+         [SHIP]\nStrength=300\nSpeed=5\nCost=100\nTechLevel=1\nOwner=AIHouse\nNaval=yes\n{ship}\n\
+         Locomotor={{4A582741-9839-11d1-B709-00A024DDAFD1}}\n[Clear]\nBuildable=yes\n"
+    ));
+    let land = f
+        .sim
+        .spawn_object("WEAP", "AIHouse", 8, 8, 0, &f.rules)
+        .unwrap();
+    let naval = f
+        .sim
+        .spawn_object("DOCK", "AIHouse", 8, 12, 0, &f.rules)
+        .unwrap();
+    let registry = crate::rules::team_ai_ini::TeamAiIniRegistry::from_sources(
+        &IniFile::from_str(
+            "[TeamTypes]\n0=ATTACK\n[TaskForces]\n0=MIXED\n[ScriptTypes]\n0=SCRIPT\n\
+             [ATTACK]\nTaskForce=MIXED\nScript=SCRIPT\n[MIXED]\n0=2,TANK\n1=2,SHIP\n\
+             [SCRIPT]\n0=5,10\n",
+        ),
+        &IniFile::from_str(""),
+        true,
+    );
+    assert!(
+        f.sim
+            .install_team_ai_registry(&registry, &f.rules)
+            .unwrap()
+            .is_empty()
+    );
+    let team_type = f.sim.interner.get("ATTACK").unwrap();
+    f.sim
+        .create_team(team_type, Some(f.owner), &f.rules)
+        .unwrap();
+    (f, land, naval)
+}
+
+#[test]
+fn native_land_and_naval_demands_reach_independent_factories_only_with_npatch() {
+    use crate::sim::ai_unit_choice::UnitChoiceKind;
+    let (mut f, land, naval) = land_and_naval_fixture("", "", "");
+    crate::sim::ai_base_building::update_production_choices(&mut f.sim, &f.rules, f.owner, None);
+    ai_limit_visit(&mut f, land);
+    ai_limit_visit(&mut f, naval);
+    assert_eq!(
+        usize::from(ai_limit_holds(&f, land)) + usize::from(ai_limit_holds(&f, naval)),
+        if crate::rules::NPATCH_ENABLED { 2 } else { 1 },
+        "stock shares one vehicle choice; NPAE174 must feed both demands at once"
+    );
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(
+            f.sim.houses[&f.owner]
+                .ai_unit_choices()
+                .get(UnitChoiceKind::unit(false)),
+            0
+        );
+        assert_eq!(
+            f.sim.houses[&f.owner]
+                .ai_unit_choices()
+                .get(UnitChoiceKind::unit(true)),
+            1
+        );
+    }
+    let snapshot = crate::sim::snapshot::GameSnapshot::save(&f.sim, 0, 0, "dual queues", 0);
+    let restored = crate::sim::snapshot::GameSnapshot::load(&snapshot)
+        .unwrap()
+        .sim;
+    assert_eq!(
+        restored.houses[&f.owner].ai_unit_choices(),
+        f.sim.houses[&f.owner].ai_unit_choices()
+    );
+    #[cfg(feature = "npatch")]
+    {
+        let before = f.sim.state_hash();
+        f.sim
+            .houses
+            .get_mut(&f.owner)
+            .unwrap()
+            .ai_unit_choices_mut()
+            .clear(UnitChoiceKind::NavalUnit);
+        assert_ne!(
+            before,
+            f.sim.state_hash(),
+            "naval choice influences future factory starts"
+        );
+    }
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_naval_exit_limit_and_abandon_keep_the_native_slot_boundaries() {
+    use crate::sim::ai_unit_choice::UnitChoiceKind::{NavalUnit, Unit};
+    use crate::sim::production::factory::FactoryHolder;
+    use crate::sim::world::FrameEffects;
+    let (mut f, land, naval) =
+        land_and_naval_fixture("EnableAIBuildLimitation=yes", "", "BuildLimit=1");
+    crate::sim::ai_base_building::update_production_choices(&mut f.sim, &f.rules, f.owner, None);
+    ai_limit_visit(&mut f, land);
+    ai_limit_visit(&mut f, naval);
+    // A second ship factory at the cap clears only the naval standing choice.
+    let other = f
+        .sim
+        .spawn_object("DOCK", "AIHouse", 12, 8, 0, &f.rules)
+        .unwrap();
+    ai_limit_visit(&mut f, other);
+    assert!(!ai_limit_holds(&f, other));
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(Unit), 0);
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit), -1);
+    f.sim
+        .houses
+        .get_mut(&f.owner)
+        .unwrap()
+        .ai_unit_choices_mut()
+        .set(NavalUnit, 1);
+    // ExitObject's prelude clears naval even when placement must retry later.
+    let product = f
+        .sim
+        .production
+        .factories()
+        .building_factory(naval)
+        .unwrap()
+        .object()
+        .unwrap()
+        .entity_id
+        .unwrap();
+    let _ = crate::sim::production::production_queue::exit_produced_object(
+        &mut f.sim,
+        &f.rules,
+        naval,
+        product,
+        (0, 0),
+        None,
+        FrameEffects::default(),
+    );
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(Unit), 0);
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit), -1);
+
+    let (mut f, _, naval) = land_and_naval_fixture("", "", "");
+    crate::sim::ai_base_building::update_production_choices(&mut f.sim, &f.rules, f.owner, None);
+    ai_limit_visit(&mut f, naval);
+    crate::sim::production::factory_lifecycle::abandon_production(
+        &mut f.sim,
+        &f.rules,
+        FactoryHolder::Building(naval),
+        f.owner,
+        FrameEffects::default(),
+    );
+    // NPAE174 intentionally returns to stock4CA0B1: even naval abandon
+    // clears land, not naval. Queue restart4FE0A3 also leaves naval alone.
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(Unit), -1);
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit), 1);
+    f.sim
+        .houses
+        .get_mut(&f.owner)
+        .unwrap()
+        .ai_unit_choices_mut()
+        .clear_all();
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit), 1);
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_naval_harvester_mismatch_returns_without_filling_ship_demand() {
+    use crate::sim::ai_unit_choice::{
+        self,
+        UnitChoiceKind::{NavalUnit, Unit},
+    };
+    let (mut f, _, _) = land_and_naval_fixture(
+        "HarvesterUnit=TANK\nAISlaveMinerNumber=1,1,1\n[IQ]\nHarvester=0\n[General]",
+        "",
+        "",
+    );
+    ai_unit_choice::choose(&mut f.sim, &f.rules, f.owner, Unit);
+    ai_unit_choice::choose(&mut f.sim, &f.rules, f.owner, NavalUnit);
+    assert_eq!(f.sim.houses[&f.owner].ai_unit_choices().get(Unit), 0);
+    assert_eq!(
+        f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit),
+        -1,
+        "C2F028 refuses land harvester and returns, rather than selecting a ship"
+    );
+    f.sim
+        .houses
+        .get_mut(&f.owner)
+        .unwrap()
+        .set_harvester_no_ore_for_test(true);
+    ai_unit_choice::choose(&mut f.sim, &f.rules, f.owner, NavalUnit);
+    assert_eq!(
+        f.sim.houses[&f.owner].ai_unit_choices().get(NavalUnit),
+        1,
+        "the same ship demand is buildable once the harvester branch declines"
+    );
+}

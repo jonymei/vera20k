@@ -248,7 +248,9 @@ pub(in crate::sim) fn exit_produced_object(
             effects,
         );
     }
-    let Some(kind) = UnitChoiceKind::of(product_type.category) else {
+    // NPAE174 Unit Exit_Object444119 -> C2BE2A clears the type's Naval
+    // slot without invalidating the other factory's standing choice.
+    let Some(kind) = UnitChoiceKind::for_object(product_type) else {
         return BuildingExit::Failed;
     };
     let Some((owner_id, producer_type)) =

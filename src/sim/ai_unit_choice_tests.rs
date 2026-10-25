@@ -103,7 +103,7 @@ fn retail_infantry_choice_waits_for_the_retained_corpse_to_finish() {
     );
     let barracks_rtti = rules.object("GAPILE").unwrap().factory_rtti();
     assert!(
-        crate::sim::ai_base_building::suggest_new_object(&sim, &rules, owner, barracks_rtti)
+        crate::sim::ai_base_building::suggest_new_object(&sim, &rules, owner, barracks_rtti, false)
             .is_none()
     );
 
@@ -127,7 +127,8 @@ fn retail_infantry_choice_waits_for_the_retained_corpse_to_finish() {
                     &sim,
                     &rules,
                     owner,
-                    barracks_rtti
+                    barracks_rtti,
+                    false
                 )
                 .map(|object| object.id.as_str()),
                 Some("E1"),

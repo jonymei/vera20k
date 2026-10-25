@@ -34,6 +34,15 @@
 //! team creation, its `+0x77` (forced) from reinforcement creation
 //! (`0x0065DD64`), all in `sim::team_script_vm`.
 //!
+//! NPAE174 additionally has a separate naval Unit choice at House+160F8:
+//! C2CEE9 dispatches land then naval, C2CF04 filters each TaskForce need,
+//! and C2CE9F selects a factory's slot. Exit and abandon have deliberately
+//! different slot writes; see the production owners.
+//!
+//! RESIDUAL: NPAE174 C2B479..C2B481 resets its tied-need candidate list,
+//! while the shared picker retains stock strict-greater resets. This bounded
+//! tie-selection difference is separate from land/naval queue ownership.
+//!
 //! RESIDUAL: native tallies need in stack arrays of 100 entries: a class with
 //! more than 100 types, or more than 100 candidate types, writes past them.
 //! VERA sizes them by the class. Retail classes hold fewer than 100 types.
@@ -53,10 +62,12 @@ use crate::util::native_x87::{NativeF64Bits, X87Chop53};
 /// `0.01` (`[0x007E3808]`).
 const PERCENT_SCALE: NativeF64Bits = NativeF64Bits::from_bits(0x3F84_7AE1_47AE_147B);
 
-/// One of the three choices.
+/// One retained production choice (NPAE174 adds the naval Unit slot).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnitChoiceKind {
     Unit,
+    #[cfg(feature = "npatch")]
+    NavalUnit,
     Infantry,
     Aircraft,
 }
@@ -66,8 +77,35 @@ impl UnitChoiceKind {
     pub(crate) const fn category(self) -> ObjectCategory {
         match self {
             Self::Unit => ObjectCategory::Vehicle,
+            #[cfg(feature = "npatch")]
+            Self::NavalUnit => ObjectCategory::Vehicle,
             Self::Infantry => ObjectCategory::Infantry,
             Self::Aircraft => ObjectCategory::Aircraft,
+        }
+    }
+
+    /// NPAE174 Suggest_New_Object4FBDAF -> C2CE9F uses producer Naval.
+    pub(crate) const fn unit(naval: bool) -> Self {
+        #[cfg(feature = "npatch")]
+        if naval {
+            return Self::NavalUnit;
+        }
+        let _ = naval;
+        Self::Unit
+    }
+
+    const fn naval(self) -> bool {
+        match self {
+            #[cfg(feature = "npatch")]
+            Self::NavalUnit => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn for_object(object: &crate::rules::object_type::ObjectType) -> Option<Self> {
+        match object.category {
+            ObjectCategory::Vehicle => Some(Self::unit(object.naval)),
+            category => Self::of(category),
         }
     }
 
@@ -87,6 +125,9 @@ impl UnitChoiceKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HouseAiUnitChoices {
     unit: i32,
+    /// NPAE174 House+160F8; constructor4F5BD2 -> C2CDA9 sets -1.
+    #[cfg(feature = "npatch")]
+    naval: i32,
     infantry: i32,
     aircraft: i32,
 }
@@ -95,6 +136,8 @@ impl Default for HouseAiUnitChoices {
     fn default() -> Self {
         Self {
             unit: -1,
+            #[cfg(feature = "npatch")]
+            naval: -1,
             infantry: -1,
             aircraft: -1,
         }
@@ -105,6 +148,8 @@ impl HouseAiUnitChoices {
     pub(crate) const fn get(&self, kind: UnitChoiceKind) -> i32 {
         match kind {
             UnitChoiceKind::Unit => self.unit,
+            #[cfg(feature = "npatch")]
+            UnitChoiceKind::NavalUnit => self.naval,
             UnitChoiceKind::Infantry => self.infantry,
             UnitChoiceKind::Aircraft => self.aircraft,
         }
@@ -113,6 +158,8 @@ impl HouseAiUnitChoices {
     fn slot_mut(&mut self, kind: UnitChoiceKind) -> &mut i32 {
         match kind {
             UnitChoiceKind::Unit => &mut self.unit,
+            #[cfg(feature = "npatch")]
+            UnitChoiceKind::NavalUnit => &mut self.naval,
             UnitChoiceKind::Infantry => &mut self.infantry,
             UnitChoiceKind::Aircraft => &mut self.aircraft,
         }
@@ -120,7 +167,10 @@ impl HouseAiUnitChoices {
 
     /// `AI_Manage_Build_Queue`'s restart clears the three unit choices.
     pub(crate) fn clear_all(&mut self) {
-        *self = Self::default();
+        // NPAE174 retains stock reset4FE0A3..4FE0B5: no naval write.
+        self.unit = -1;
+        self.infantry = -1;
+        self.aircraft = -1;
     }
 
     /// An exit or abandon of `kind`'s object.
@@ -161,7 +211,7 @@ pub(crate) fn choose(
     }
     let fill_earliest_percent =
         house.difficulty_value(&rules.general.fill_earliest_team_probability);
-    let choice = match (kind == UnitChoiceKind::Unit)
+    let choice = match (kind.category() == ObjectCategory::Vehicle)
         .then(|| harvester_choice(sim, rules, owner))
         .flatten()
     {
@@ -173,6 +223,16 @@ pub(crate) fn choose(
             })
         }
     };
+    // Both NPAE174 calls still take the harvester arm. Its tail
+    // 4FEB08/4FEBC6 -> C2F028 refuses a Naval mismatch without falling
+    // through to teams; C2CF25 does the same for a team candidate.
+    let choice = choice.filter(|&index| {
+        !crate::rules::NPATCH_ENABLED
+            || kind.category() != ObjectCategory::Vehicle
+            || rules
+                .type_array_at(ObjectCategory::Vehicle, index)
+                .is_some_and(|object| object.naval == kind.naval())
+    });
     if let Some(index) = choice
         && let Some(house) = sim.houses.get_mut(&owner)
     {
@@ -318,6 +378,14 @@ fn candidates(
                 })
                 .into_iter()
                 .filter(|member_type| member_type.category == category)
+                // NPAE174 C2B348 -> C2CF04 filters before tallying need.
+                .filter(|member_type| {
+                    !crate::rules::NPATCH_ENABLED
+                        || category != ObjectCategory::Vehicle
+                        || rules
+                            .object_in_category(category, sim.interner.resolve(member_type.id))
+                            .is_some_and(|object| object.naval == kind.naval())
+                })
                 .filter_map(|member_type| type_index(member_type.id))
                 .collect();
             (team.created_frame(), needed)

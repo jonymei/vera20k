@@ -413,6 +413,8 @@ pub(super) fn settle_abandoned(
         && let Some(house) = sim.houses.get_mut(&owner_id)
         && !house.is_controlled_by_human(game_mode_nonzero)
     {
+        // NPAE174 AbandonProduction4CA004 -> C2BEED returns to stock:
+        // Unit4CA0B1 still clears land, even for a naval product.
         match UnitChoiceKind::of(category) {
             Some(kind) => house.ai_unit_choices_mut().clear(kind),
             None => house.ai_production_mut().clear_building_choice(),
