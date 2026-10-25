@@ -103,8 +103,15 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   而是保护等级比较成功后直接对尾部驻军RecordKill/UnInit；普通建筑伤害继续执行。
   默认0、current-default逐层读取、i8截断/严格比较、NEG AL溢出、Fire槽别名均已保留。
   核心新增三项回归：读层次/存读/hash；真实Capture入驻后的等级门、零/负伤害、首DieSound同步位置/顺序、
-  击杀只记一次与正常回收、Cargo隔离；实际AYMOD狙击手与鲍里斯完整攻击/空袭。
-  三项均已通过，优化运行/独立审查尚待完成，不能据此宣称全部MOD功能完成。
+  击杀只记一次与正常回收、Cargo隔离、穿透后红血仅弹出幸存者；实际AYMOD狙击手与鲍里斯完整攻击/空袭。
+  三项均已通过；实际AYMOD场景及红血弹出回归在debug与fast优化配置均通过，普通fast+npatch游戏构建通过。
+  独立只读critic未发现具体玩法缺陷。其后进一步按原生先后排列两个纯读取，并在最终候选重跑相关覆盖；
+  红血回归夹具补齐既有scheduler资源绑定，未关闭正常受损火焰来绕过前置。
+  新增字段保存布局自动改变，旧布局仍按既有政策拒绝。
+  NP定向覆盖为NativeProcessing93、Warhead9、BuildingOccupantStorage3、GarrisonEject14、
+  BunkerLink23、MoveCellInput14、Combat165；Combat的1项VoiceFeedback专项慢测不覆盖本链，未运行。
+  无NPatch的读层次/Fire别名1、原有BuildingOccupantStorage2和MoveCellInput14均通过。
+  这是F04功能链验收，不是全部MOD或所有异常触发回调/GUI表现认证。
 - 扩大驻军相关作战覆盖时，发现一个早于本改动的旧断言：既有FireAt已经提交Report声音，
   但garrison_fire测试仍要求声音为空。已沿未改变的producer/fixture及原生6FF38F查实，
   将断言加强为在正确发射坐标恰好一条GIAttack，未压掉生产声音或跳过测试。
@@ -123,7 +130,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
 | F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
 | F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
-| F04 / P1 / 已实现，最终验收中 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化运行和critic完成后更新状态 |
+| F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 | 飞机对空行为：ORCA 类型的扩展 `AACombat` 未接通，不能靠弹体 `AA` 替代 | **`[ORCA] AACombat` 是 AircraftType 键，不是 WeaponType**；`src/rules/object_type.rs`、飞机 attack/weapon-selection owner | 核 #174 飞机任务/追击/武器准入，先用 ORCA 完成对空与对地两条对照；不能以别的飞机描述推定其行为 |
 | F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |

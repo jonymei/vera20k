@@ -5,31 +5,37 @@
 
 ## 当前 Windows 接续检查点
 
-- 当前机器工作树：`D:/Workshop/vera20k-aymod-audit`，分支
-  `feature/aymod-integration-resume`。代码HEAD `24cbbd96d`，后续文档提交不改游戏行为。
-  原 `D:/Workshop/vera20k` 仍在main，其用户未提交的 `.gitignore` 未动。
-- 用户后续授权实现，顺序是**功能优先、UI随后**；不是只做研究。没有推送、PR、合并、
-  发布资源或改变MOD平衡/AI权重的授权。当前待办以[兼容性清单](aymod-compatibility.md)为准。
-- 已本地提交：F01步兵隐形 `8f4589337`；F05独立炮塔速度 `d8fa8266b`；
-  F13超五乘员端口循环 `24cbbd96d`。各自经过一次独立只读critic，未发现本次引入的具体缺陷。
-- F13已纠正首版假设：原生循环前五端口，第六名回绕第零槽；ART5/6仍不读，不能扩大数组。
-- 测试环境：`RA2_DIR` 为本机Steam正版目录，`VERA20K_AYMOD_DIR` 为本机AYMOD目录，
-  `VERA20K_REQUIRE_RETAIL_INI=1`。本工作树忽略的 `ini/` 由既有asset工具从正版资源提取。
-  每次Cargo仍经 `python -m tools.cargo_run --`，并使用VS C++开发环境。
-- 已通过的定向覆盖：NPatch cloak、6项sensor_lifecycle、7项combat_turret_facing、
-  92项NativeProcessing、46项ArtData、20项FireCoord；无NPatch时新增隔离回归、
-  原版负端口golden及40项cloak通过。与本链无关的ignored慢测未运行，未跑全仓库。
-- 新增实际AYMOD场景通过：`aymod_tanya_cloaks_and_fires_without_decloaking`、
-  `aymod_mtnk_keeps_independent_turret_speed_while_firing`（`--profile fast`）、
-  `aymod_sixth_fortress_passenger_reuses_first_firing_port`。既有BFRT乘员经验场景也通过。
-  这些是 `headless_scenario::retail_construction_tests::` 下带 `--ignored --exact` 的lib测试。
-- 普通游戏构建通过：`build --profile fast -p vera20k --bin vera20k --no-default-features --features npatch`。
-  当前工具解析的文件为 `D:/Workshop/vera20k/target/owned-worktrees/146dfaa91a3a669a/fast/vera20k.exe`；
-  启动工作目录应为本工作树。没有启动或安装替换普通游戏，后续仍以resolve结果为准。
-- F05新增保留Rules字段改变自动存档layout；旧layout按既有检查拒绝，不保证旧存档跨版本兼容。
-  未做GUI/GPU外观认证、下车重上动态场景、多人长局或NPAE原生运行对照。功能清单未全部关闭，UI未开始。
-- 没有遗留拥有的Cargo或合并操作。下一安全动作：先核F04狙击手对普通/保护驻军的原生链，
-  再沿既有驻军伤害owner适配；V01三类无人单位供电和F02/F03箱子仍开放，不能跳过直接宣布功能完成。
+- 当前工作树：`D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`。
+  代码HEAD `5ccd884b9`；后续文档提交不改变游戏行为。原main工作树与用户的 `.gitignore` 未动，
+  AYMOD配置仓库也未改。所有改动仅本地提交，没有推送、PR、合并或资源发布。
+- 总体授权仍为功能优先、UI随后；本次goal为F04驻军保护/穿透。该链已实现并通过功能验收。
+  总清单仍以[兼容性清单](aymod-compatibility.md)为准，未把全部MOD标成兼容。
+- 此前本地代码：F01步兵隐形 `8f4589337`，F05炮塔 `d8fa8266b`，F13端口循环 `24cbbd96d`。
+  当前F04：`044c23599`，读序/红血回归完善为`5ccd884b9`。F04核心实现经独立只读critic，
+  未发现具体玩法缺陷；完善后相关模块和优化场景已重跑，没有待修critic项。
+- F04按当前NPAE174：两个current-default byte逐物理层读整数后截断；有符号严格比较，
+  正等级尾序单杀、负等级尾序清空，NEG AL的-128溢出保留。WH穿透复用旧Fire/+14C字节，
+  cliff消费者仍读同一非零值，未保留两个权威flag。零/负伤害也触发，早于普通免疫/Health门。
+- 尾序叶函数复用首DieSound、RecordKill、UnInit及正常回收；无HP/InfDeath写入、不重置fire cursor。
+  生化炉的Cargo与坦克掩体链接不是此驻军vector，不新增错误的Cargo杀伤。普通建筑伤害继续。
+- 三个新增回归通过：保存的Rules层/byte/别名/hash；真实Capture入驻的等级/伤害符号/声音同步/记杀回收/
+  Cargo隔离/随后红血只弹出幸存者；实际AYMOD的SNIPE普通/保护驻军攻击与BORIS召唤BPLN/Maverick3清空保护驻军。
+  最后一个及红血弹出回归在debug及`--profile fast`均通过（带`--ignored --exact`的headless lib场景）。
+- NP定向通过：NativeProcessing93、Warhead9、BuildingOccupantStorage3、GarrisonEject14、
+  BunkerLink23、MoveCellInput14、Combat165；1项无关VoiceFeedback专项慢测未跑。
+  无NP：新reader/Fire隔离1、原BuildingOccupantStorage2、MoveCellInput14通过，未跑全仓库。
+- 顺带修正旧garrison_fire测试的空声音断言：未改的既有FireAt本就会提交GIAttack；已按原生6FF38F
+  加强为发射坐标恰好一次Report，未修改生产声音或跳过测试。不是本次穿透导致额外报告声。
+- 环境：`RA2_DIR`为本机Steam正版目录，`VERA20K_AYMOD_DIR`为本机AYMOD，
+  `VERA20K_REQUIRE_RETAIL_INI=1`；当前工作树忽略的`ini/`来自正版资源。使用VS C++开发环境，
+  Cargo一律经过`python -m tools.cargo_run --`。
+- 普通游戏已成功构建：`build --profile fast -p vera20k --bin vera20k --no-default-features --features npatch`。
+  当前resolve文件为`D:/Workshop/vera20k/target/owned-worktrees/146dfaa91a3a669a/fast/vera20k.exe`，
+  启动工作目录应为本工作树；未启动或替换安装。后续仍使用resolve，不假定路径永远不变。
+- 新保留Rules字段改变自动存档layout；旧layout照常拒绝。不仿真空WH或自定义回调复活stale slots的
+  原生非法引用，安全差异见[npatch.md](npatch.md)。未做GUI、全模式/地图、多AI长局或原生运行对照。
+- 没有遗留拥有的Cargo/合并操作。F04不再是待适配项；下一功能链可从V01三类无人单位供电或
+  F02/F03箱子继续。UI尚未开始，不因本次局部功能通过就跳过其他开放机制。
 
 下文1–7节保留此前macOS交接历史，不代表在Windows重新执行了全部旧验收。
 
@@ -144,15 +150,15 @@
 
 | 已有条目 | 已知边界与接手入口 |
 | --- | --- |
-| 驻军/掩体保护与穿透 | 尚未完成 NPAE 准入、受害者效果链；从现有 docking/bunker、combat/garrison owner 接入 |
-| `TurretROT` | 记录了 14 处 MOD 用法；独立炮塔速度入口未适配，现有旋转链使用 `ROT` |
+| 驻军/掩体保护与穿透 | 后续F04已接通并通过功能验收；见当前检查点和兼容清单。其目标是Occupants，不是Cargo或Tank Bunker链接 |
+| `TurretROT` | 后续F05已实现并通过实际MTNK攻击场景；行进/GUI边界仍见当前清单 |
 | `EBoltColor1/2/3` | 自定义颜色读取和最终绘制未接通；已有 `sim/combat/electric_bolt.rs` 与 `render/electric_bolt.rs` |
 | `AACombat` / `AntiNaval` / `AntiUnderwater` | 尚未建立匹配 NPAE 的武器级目标政策；已有 projectile AA/AG 不能直接算作支持 |
 | `IsFlatExplosion` / `DoesntAffectEnemies` | 原生语义与伤害消费者仍待核对；不能把 Ares 同类字段直接当等价 |
 | Psychic Dominator 独立光照 | `Lighting`、`LightRed/Green/Ambient/Ground/Level` 的启用、恢复和最终画面尚未闭环 |
 | 扩展 UI | `ShowTechLevelSlider`、`UseDropDownColors`、`MPC01..MPC16` 未完成配置到 UI 的验证 |
 | PoweredUnit/PowersUnit 三组关系 | ROBO/GAROBO、DRON/NARADR、CAOS/NAPSIS 需专门检查原生链、供电、失效和恢复；已有 `sim/powered_unit.rs` |
-| BFRT 第 5/6 座开火位置 | 固定 ART 中的 `AlternateFLH5/6` 已识别，索引与最终渲染未认证 |
+| BFRT 第 5/6 座开火位置 | 后续F13已按原生五端口循环实现；第六名复用第零槽，不启用ART5/6；画面边界见当前清单 |
 | 其他已有字段/无新键补丁 | Hospital、BurstDelay、cloak/sensor、建筑经验、箱子与作者所述继承修复仍需分类核对；不要仅因 MOD 使用就判缺失 |
 
 库存不是完整覆盖率：初次记录为 25,068 个物理 section/key 对、2,374 个不同键字符串，
