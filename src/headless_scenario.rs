@@ -1993,6 +1993,116 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Tanya ordinary/elite naval weapons on Return Dubai"]
+    fn aymod_tanya_uses_sapper_to_damage_mechanical_ships() {
+        use crate::sim::combat::{TargetKind, combat_weapon};
+        use crate::sim::command::{Command, CommandEnvelope};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "重返迪拜.yrm";
+        for (elite, expected) in [(false, "Sapper"), (true, "SapperE")] {
+            let mut launch = battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            );
+            launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
+            launch.options.unit_count = 0;
+            let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let site = {
+                let terrain = sim.resolved_terrain().unwrap();
+                terrain
+                    .cells()
+                    .iter()
+                    .find_map(|cell| {
+                        let x = cell.rx;
+                        let y = cell.ry;
+                        let next = terrain.cell(x.checked_add(1)?, y)?;
+                        ([cell, next].into_iter().all(|cell| {
+                            cell.land_type
+                                == crate::rules::terrain_rules::LandType::Water.as_index()
+                                && !cell.outside_playfield
+                                && !cell.bridge_facts.has_structural_bridge()
+                                && sim.occupancy().get(cell.rx, cell.ry).is_none()
+                        }) && cell.level == next.level)
+                            .then_some((x, y))
+                    })
+                    .expect("adjacent empty water cells in actual Return Dubai")
+            };
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            let actor = sim
+                .spawn_object("TANY", &owner_name, site.0, site.1, 0, rules)
+                .unwrap();
+            let ship = sim
+                .spawn_object("HYD", &enemy_name, site.0 + 1, site.1, 0, rules)
+                .unwrap();
+            if elite {
+                sim.substrate
+                    .entities
+                    .get_mut(actor)
+                    .unwrap()
+                    .veterancy
+                    .set_elite();
+            }
+            let tanya = sim.entities().get(actor).unwrap();
+            let kind = rules.object("TANY").unwrap();
+            assert_eq!(kind.naval_targeting, 4);
+            let target = TargetKind::Entity(ship);
+            let (_, selected) = combat_weapon::select_weapon_against_in_query(
+                rules,
+                tanya,
+                kind,
+                &combat_weapon::attacker_facts(tanya, kind),
+                Some(&target),
+                sim,
+                sim.interner(),
+                Some(&crate::map::resolved_terrain::NativeCellQuery::isolated(
+                    sim.resolved_terrain().unwrap(),
+                )),
+                Some(sim.house_alliances()),
+            )
+            .unwrap();
+            assert_eq!(selected.unwrap().weapon.id, expected);
+            let health = sim.entities().get(ship).unwrap().health.current();
+            let owner = tanya.owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: ship,
+                },
+            ));
+            let mut fired = false;
+            let hit = (0..300).any(|_| {
+                let output = tick_with_due_commands(&mut scenario);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == actor)
+                {
+                    assert_eq!(scenario.sim().interner.resolve(event.weapon_id), expected);
+                    assert_eq!(event.target, target);
+                    fired = true;
+                }
+                scenario
+                    .sim()
+                    .entities()
+                    .get(ship)
+                    .is_none_or(|e| e.health.current() < health)
+            });
+            assert!(
+                fired && hit,
+                "actual {expected} Attack must fire and damage its naval target"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY ORCA airborne and ground Attack damage"]
     fn aymod_orca_attacks_airborne_and_ground_targets() {
         use crate::sim::command::{Command, CommandEnvelope};

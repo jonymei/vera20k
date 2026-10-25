@@ -127,7 +127,9 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `--profile fast --no-default-features --features npatch`构建成功；固定保留，不受后续编译覆盖。
   本机启动入口：`D:/Workshop/vera20k/target/AYMOD-test-20261025.cmd`，
   使用主工作树配置和AYMOD资源；未自动启动。新保留字段改变存档布局，请新开对局。
-- 明确开放的F项为F02/F03/F07/F08/F09（功能）；F06已接通ORCA对空链，远距追击/GUI待验与F11/F12（视觉/UI）；F10已接通并通过GPU定向验收，玩家画面待验；
+- 明确功能缺口为F02/F03/F08/F09；F06已接通ORCA对空链，远距追击/GUI待验。
+  F07的Sapper普通/精英对机械水面舰船已有实际场景覆盖，两个疑似键改列C04，不虚构新开关；水下/GUI仍待验。
+  F11/F12（视觉/UI）开放；F10已接通并通过GPU定向验收，玩家画面待验；
   F01/F05/F13已有实现但还需画面/移动验收，F04已有定向功能验收。
   V01–V10以及AI专项仍是核对/验收项，不能计作全部缺失或全部通过。
 - V01已开始原生复读：当前AYMOD的Building operational-on调用点
@@ -241,38 +243,34 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：EMP保留路线与Walk消费者（2026-10-26）
+### 当前检查点：谭雅海军验证与F07纠正（2026-10-26）
 
-- 工作区`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`；本次代码`406c9f314`。
-  主工作区用户`.gitignore`、隔离历史分析工作区、旧构建和原存档保留；无推送/PR/合并授权。
-  完成范围仍以全面PLAN和本台账各F/V/AI行判断，不把EMP前置修复缩成整个目标。
-- `eb35eca1e`已有Drive/Ship Move_To门禁；本次在既有track_fresh owner补Drive4B2746/Ship6A1D96，
-  正EMP在warp/missile检查后、寻路/格子查询前返回。Unit+6D8死亡覆盖仍未表示。
-- Walk75ACBD在既有setter拒绝新目标；普通Process先保留<17-lepton完成，再按75BF87..75BFA6
-  清动画+36和Foot+68A，不清head/destination/IsMoving，不再付坐标步。无新实体/保存状态、RNG或timer。
-- 两项回归均经生产NP命中：保留路线与正常Drive对照证明Drive/Ship不进入格子/寻路查询；
-  CYB步兵证明目标拒绝、17处零位移/保留head/清动画及latch、16处正常完成、到期重新接纳目标。
-  保留路线是明确供给的前置状态，不说成生产first-hit清理后自然保留。
-  修复前fresh测试在实际查询出现处失败；Walk在目标接纳处失败，接通setter后又在XY3276/3264处失败；
-  最终两项均通过。最初未走保留reader的测试弹头未生效，装配失败不计为缺陷证据。
-- 定向覆盖：NP fresh-response4、navcom10、Walk-step3、PathBatch24、EMP10与真实AY Tesla攻击/到期1项通过；
-  无NP对应fresh3/navcom10/Walk3/batch24通过。navcom各1项slow未运行；未跑全仓库、玩家GUI或原引擎执行。
-  一次独立只读critic复读原生指令/消费者，未发现确认或具体可疑缺陷。
-- NPAE生命周期尚未迁移：Object受伤5F5505/B95100→C2EFB7/B990DC清Nav/Target、写+504不写+1C8；
-  Reactivate70FBE0/C2BC8B与到期C2BC5D/C2BC6E确需完整分离。现有时长/目标/队列、Ares式offline/Hunt
-  政策仍保留，详见[npatch-emp.md](npatch-emp.md)。三组独立供电计数仍待用户政策确认，不静默改动。
-- Hover下一步须单独核：Move_To514DAA..514DB1先存目的地，再在514DB9查paralysis，不能照抄Drive早退。
-  已读Move_To/ProcessMovement，514310起10496字节的直接+37C候选扫描为空；这不是无间接EMP消费者的证明。
-  活跃Drive/Ship paid-track收尾与Hover完整调用链仍开放；不要把离线火花或Power_Off一概等同于冻结运动。
-- AI已修的陆海双队列/Walk集结和F06 AACombat、F10 GPU电弧仍保留，不重复实现；玩家长局、多AI/GUI待验。
-  海军184的源/集结Water raw2/4在同历史版初始图tick0即分离，map/rules指纹与中盘一致，详见此前A04记录与
-  本机忽略`target/aymod-save-analysis/dubai-initial-topology.json`；不是读档才隔断，不改权重/集结半径。
-  水格恢复zone4→0已复读CellLoad483A21清+4C，Map+68另存，不擅自Recalc。
-- 最新玩家版`aymod-playtest-20261026-emp-motion`来自干净`3026d4e16`，普通fast+npatch构建成功；
-  manifest来源及固定标签二进制校验通过，入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-motion.cmd`。
-  含上一emp-move及此前修复，本次不新增保存字段；仍由正式布局/资源门禁判断存档兼容。
-  旧版保留，未自动启动；当前无未提交代码或进行中的Cargo。
-  下一安全动作：完成Hover/active-track调查后整体迁移施加/恢复链；F02/F03/F07–F09/F11/F12及其余V/AI继续开放。
+- 工作区`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`；本轮仅测试/文档，无玩法改动。
+  主工作区用户`.gitignore`、隔离历史分析工作区、旧构建与原存档保留；无推送/PR/合并/启动另一份游戏授权。
+  全面PLAN的F/V/AI/视觉/UI与多电脑长局目标不缩小为本轮核查项，仍未达到整体完成条件。
+- F07已纠正：独立只读调查完整追实际Weapon ReadINI772080..7729E2及两个扩展detour，固定键读取无
+  AntiNaval/AntiUnderwater，未见动态拼键或外部插件reader分支。ASCII/UTF16/根DLL无字面值仅补充，不代替控制流。
+  现不虚构两键的构造默认、保留字段或消费者；物理配置列C04。任意运行时注入不在已证范围。
+- 实际消费者是现有SelectNavalTargetingWeapon6F3820的mode4，6F38FC..6F3915对非Hover、非Organic选slot1。
+  实际AY TANY普通/精英副武器Sapper/SapperE通过生产reader确认，未改MOD、权重、伤害或新建选武器算法。
+- 新增真实Return Dubai、美国对苏联困难、零额外初始部队的定向场景：正式load_session后，在实际水格放置
+  已注册玩家House的谭雅和敌方HYD，普通/精英各自SelectWeapon与实际fire事件武器/发射者/目标吻合，
+  普通Attack确实造成舰船掉血；此test1项（含两个rank边界）通过。潜艇传感器/悬浮与有机例外/GUI仍待验。
+  初版夹具误用国家名作为House名，造成fear缺House；已改用既有house_of解析实际House，装配错误不算引擎缺陷。
+- Hover本轮读了Move_To514D90、Process514310、SpeedUpdate515ED0及其已选速度路径：Unit vt538→4DB1A0，
+  vt38C→70EFE0只读Type+678，70D0D0是等级能力；514442/514459是坐标转Cell/比较，不是House或EMP门禁。
+  IsPowered516C70是基础powered byte或高度>0。已读路径没有给出应照抄Drive的EMP早退；不基于有限扫描
+  声称不存在任何间接影响。当前paid Drive/Ship入口4B0F20/6A05F0按descriptor/turret/tube准入，
+  不能擅加fresh-selection的EMP全冻结。悬浮first-hit/恢复、下游回调及持续运行仍未整体认证。
+- V01/A06仍开放：NPAE实际EMEffect施加不写provider offline+1C8；Reactivate/expiry需完整分离。
+  当前时长/目标/队列及Ares式offline/Hunt政策保留；三组独立计数待用户政策确认，维持原生共享计数。
+  已补普通运动消费者406c9f314及Move_To eb35eca1e；对应定向/真实AY场景与独立critic结果见npatch-emp及提交。
+- AI已修陆海双队列/Walk集结；海军184在同版本同map/rules的初始图即跨Water raw2/4，非读档新隔断。
+  F06 AACombat、F10 GPU电弧及其他已交付链保持，不重复实现；多House持续发展/出击与全量作者补丁仍开放。
+- 最新玩家版仍`aymod-playtest-20261026-emp-motion`，来自干净3026d4e16，入口
+  `D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-motion.cmd`。本轮不产新游戏版、不改变保存布局。
+  下一安全动作：继续完整NP施加/恢复链，并按PLAN推进箱子、F08/F09/F11/F12及实际AI未验项；
+  不因F07重分类或一个场景通过宣称整个海军/NPatch/MOD完成。
 
 ## 3. 功能缺口与适配进度
 
@@ -286,7 +284,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK | 远距移动目标截击、精英武器对空、玩家GUI与持续AI战术尚未单独验；不将此链扩大为所有飞机行为通过 |
-| F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |
+| F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。仍需单验感知/未感知潜艇、Hover/Organic主武器例外与GUI，不扩大为所有海军行为通过 |
 | F08 / P2 | 爆炸政策：`IsFlatExplosion` 尚无匹配的 NP 输入/效果政策，具体损害仍待原生确认 | BlimpHE、KTSTLEXP、CRNUKEWH、CRTerrorBombWH、DemobombWH；`src/rules/warhead_type.rs`、combat 收伤/爆炸 owner | 必须先定原生语义，不能只凭名字假定为地形高度忽略或平面伤害 |
 | F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
@@ -350,6 +348,8 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C01 / P3 | TF `07C338DC-G` 含未知成员 SHD → Team `0610813C-G` → AITrigger `0616004C-G` / `07C330CC-G`；根 AIMD 两条触发的三个难度位物理值均0 | 当前固定触发不可达；不能写成“活跃碉堡队少造兵”。地图可重新启用，届时按未知成员忽略政策运行；不猜为 SHK/SCHD |
 | C02 / P3 | 已注册但缺定义的 TF `05FC0DEC-G` → Team `060F883C-G`（Yuri Armor - H3）；根 AIMD 固定 AITrigger 未引用该 Team | 保留身份，不能补抄原版编队；地图/脚本重开才会产生实际影响，若恢复战术需作明确维护设计 |
 | C03 / P2 | 短行 AITrigger `0C8C51BC-G` / `FFFFFF12-G` 的对象类型字段为空；顺序token读取跳过空字段，移读后multiplayer=false，当前遭遇战不具资格（FixedAimd的enabled仍为true） | 两条原配置战术尚未恢复，但不是enabled=false或新的加载回归；reader `src/rules/team_ai_ini.rs:625`、空项读取`src/rules/ini_value.rs:804`、拒绝入口`src/sim/ai_team_creation.rs:393`。先核作者意图与原生读取，不加占位值擅自启用 |
+
+| C04 / P3 | Sapper/SapperE物理配置含AntiNaval=yes、AntiUnderwater=yes；实际已检查NPAE174 Weapon reader不读取两键 | 已逐分支追772080..7729E2，以及772901→B937F8/B96950/B96AC8→772907和7729AA→B94D06..B94EB1→7729B0，固定key读入无这两项或外部reader调用；字节/根DLL字面值检查只是补充证据，不单凭搜不到作结论。谭雅对舰由现有NavalTargeting4解释且已实测，不添加无原生定义的默认值/字段。换目标补丁/有运行时注入证据时重审；不宣称排除了任意外部注入 |
 
 ## 6. 已交付机制和有意政策：不重复“修复”
 

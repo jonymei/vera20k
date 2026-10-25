@@ -105,6 +105,22 @@ overflow beyond five continues to return a zero FLH. The separate
 `UseAlternateFLH` burst-index hook remains outside this passenger chain; the
 inspected AYMod BFRT does not enable that key.
 
+## AYMod naval weapon configuration
+
+AYMod authors `AntiNaval=yes` and `AntiUnderwater=yes` on Sapper/SapperE.
+The inspected actual NPAE174 Weapon ReadINI772080..7729E2, including the
+772901/B937F8/B96950/B96AC8 and7729AA/B94D06..B94EB1 detours, does not read
+these keys. Do not invent default values, retained fields or a new naval policy
+from those names. This conclusion covers the inspected executable/reader chain,
+not arbitrary external runtime injection or another patch generation.
+
+TANY's real `NavalTargeting=4` already uses the shared stock
+SelectNavalTargetingWeapon6F3820 owner:6F38FC..6F3915 picks secondary for a
+non-Hover, non-Organic naval target; Hover/Organic follows primary. The ordinary
+and elite AY TANY Attack commands on Return Dubai fire Sapper/SapperE at HYD
+and damage it through the existing simulation. Underwater/cloak sensing and GUI
+admission remain separate validation; the two unused keys do not bypass them.
+
 ## NPAE aircraft AACombat
 
 `AACombat` belongs to AircraftType, not WeaponType. NPAE174's constructor
