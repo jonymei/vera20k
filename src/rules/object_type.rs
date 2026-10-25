@@ -1335,6 +1335,9 @@ pub struct ObjectType {
     pub airport_bound: bool,
     /// Fighter=yes — fighter aircraft classification (affects targeting).
     pub fighter: bool,
+    /// NPAE174 AircraftType+E4C: keep an airborne attack target in AI414D36.
+    /// Only the retained AircraftType reader projects this; other types stay false.
+    pub(crate) npatch_aa_combat: bool,
     /// FlyBy=yes — strafing fly-by attack pattern (continue forward after firing).
     pub fly_by: bool,
     /// FlyBack=yes — after fly-by, reverse course back over target.
@@ -3568,6 +3571,7 @@ impl ObjectType {
             deploy_to_land: section.read_bool("DeployToLand", false),
             airport_bound: section.read_bool("AirportBound", false),
             fighter: section.read_bool("Fighter", false),
+            npatch_aa_combat: false,
             fly_by: section.read_bool("FlyBy", false),
             fly_back: section.read_bool("FlyBack", false),
             landable: section.read_bool("Landable", false),

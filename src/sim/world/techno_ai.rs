@@ -1294,8 +1294,9 @@ fn self_heal_step(
 /// [`is_high_flying`](crate::sim::movement::air_movement::is_high_flying))
 /// is dropped every frame through `Assign_Target(NULL)` (vt+0x3C8), and the
 /// cloaked-target test below is skipped (`JMP 0x00414DA1`). Returns whether
-/// it dropped one. A Cell's slot (`0x00410530`) answers false, and so does a
-/// Terrain object on the ground.
+/// it dropped one. NPAE174 C27C60 skips the high-flight query for AACombat
+/// aircraft but continues the cloaked-target check. A Cell's slot (410530)
+/// answers false, and so does a Terrain object on the ground.
 fn drop_airborne_target_step(
     sim: &mut Simulation,
     id: u64,
@@ -1310,6 +1311,14 @@ fn drop_airborne_target_step(
     else {
         return false;
     };
+    // NPAE174 AircraftAI414D36 -> C27C60..C27C78 bypasses only this
+    // IsHighFlying query, not the following unsensed-cloak or weapon AA gates.
+    if sim.substrate.entities.get(id).is_some_and(|entity| {
+        sim.object_type(entity.type_ref(), rules)
+            .is_some_and(|kind| kind.npatch_aa_combat)
+    }) {
+        return false;
+    }
     if !sim.substrate.entities.get(target_id).is_some_and(|target| {
         crate::sim::movement::air_movement::is_high_flying(
             target,
@@ -4421,6 +4430,63 @@ mod tests {
         };
         assert_eq!(visited(208), None);
         assert_eq!(visited(207), Some(TargetKind::Entity(2)));
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_aa_combat_keeps_airborne_targets_but_not_unsensed_cloak() {
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[AircraftTypes]\n0=ORCA\n1=STOCK\n[ORCA]\nStrength=150\nAACombat=yes\nPrimary=G\n\
+             [STOCK]\nStrength=150\n[G]\nDamage=10\nProjectile=P\nWarhead=WH\n\
+             [P]\nAA=no\n[WH]\nVerses=100%\n",
+        ))
+        .unwrap();
+        let kept = |kind: &str, cloaked: bool| {
+            let mut sim = Simulation::with_seed(0x414D36);
+            let plane = sim
+                .spawn_object(kind, "Americans", 5, 5, 0, &rules)
+                .unwrap();
+            let target = sim
+                .spawn_object("STOCK", "Russians", 6, 5, 0, &rules)
+                .unwrap();
+            let entity = sim.substrate.entities.get_mut(target).unwrap();
+            entity.position.set_exact_z_leptons_for_test(Some(208));
+            if cloaked {
+                let mut cloak = crate::sim::cloak_disguise::CloakRuntime::new(0);
+                cloak.set_state_for_test(2);
+                entity.cloak = Some(cloak);
+            }
+            sim.substrate
+                .entities
+                .get_mut(plane)
+                .unwrap()
+                .attack_target
+                .set_for_test(Some(TargetKind::Entity(target)));
+            sim.session.set_binary_frame_for_test(1);
+            sim.object_ai_visit_one(plane, Some(&rules), ObjectAiCtx::default());
+            if kind == "ORCA" && !cloaked {
+                let firer = sim.substrate.entities.get(plane).unwrap();
+                let subject = crate::sim::combat::fire_error_world::FireSubject {
+                    world: &sim,
+                    rules: &rules,
+                    overlay_registry: None,
+                    fog: None,
+                    firer,
+                    obj: rules.object(kind).unwrap(),
+                    target: firer.attack_target.target(),
+                    weapon_index: 0,
+                };
+                assert_eq!(
+                    subject.fire_error(false),
+                    crate::sim::combat::fire_error::FireError::Illegal,
+                    "AACombat cannot override Projectile AA=no (GetFireError6FC705)"
+                );
+            }
+            target_of(&sim, plane)
+        };
+        assert!(kept("ORCA", false).is_some());
+        assert!(kept("STOCK", false).is_none());
+        assert!(kept("ORCA", true).is_none());
     }
 
     /// `AircraftClass::AI` keeps an unsensed cloaked Target only while its own

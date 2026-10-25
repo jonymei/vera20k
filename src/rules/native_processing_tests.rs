@@ -4,6 +4,46 @@ use super::*;
 use crate::util::save_codec;
 
 #[test]
+fn npatch_aa_combat_retains_aircraft_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |enabled| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[AircraftTypes]\n0=A\n1=B\n2=C\n[VehicleTypes]\n0=V\n\
+             [A]\nAACombat={enabled}\n[B]\nAACombat=yes\n[V]\nAACombat=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[B]\nAACombat=no\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[A]\nAACombat=\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued("yes");
+    let second = continued("no");
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_eq!(
+        first.object("A").unwrap().npatch_aa_combat,
+        crate::rules::NPATCH_ENABLED
+    );
+    for name in ["B", "C", "V"] {
+        assert!(!first.object(name).unwrap().npatch_aa_combat, "{name}");
+    }
+    assert!(!second.object("A").unwrap().npatch_aa_combat);
+    assert_eq!(
+        first.simulation_config_hash() != second.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED
+    );
+}
+
+#[test]
 fn npatch_bolt_colors_keep_disabled_reads_layers_and_saved_registry() {
     use crate::rules::ruleset::RuleSet;
     let continued = |red| {

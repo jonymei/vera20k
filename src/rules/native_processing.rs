@@ -1193,6 +1193,16 @@ impl ProcessedRulesLayers {
             .map(|member| (member.native_stored_id.as_str(), member.npatch_turret_rot))
     }
 
+    pub(crate) fn aircraft_aa_combat_states(&self) -> impl Iterator<Item = (&str, bool)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Aircraft)
+            .into_iter()
+            .flatten()
+            .map(|member| (member.native_stored_id.as_str(), member.npatch_aa_combat))
+    }
+
     pub(crate) fn bunker_protection_states(&self) -> impl Iterator<Item = (&str, i8)> {
         self.native_type_construction_trace
             .registry_state()
@@ -3487,6 +3497,9 @@ struct ProcessedType {
     /// AYMod NPAE174 TechnoType ctor710F93 seeds FF; ReadINI713879..71388D
     /// passes the retained byte to ReadInt5276D0 and stores only AL.
     npatch_turret_rot: u8,
+    /// NPAE174 AircraftType ctor41C8D0 clears E4C; ReadINI41CD68 ->
+    /// B95875..B95889 uses ReadBool5295F0 with the retained current default.
+    npatch_aa_combat: bool,
     /// NPAE174 TechnoType ctor710F8D -> C2EF82 zeroes +5A3. Reader
     /// C2EF58..C2EF6C retains and truncates its current-default integer.
     npatch_bunker_protection: i8,
@@ -3942,6 +3955,7 @@ impl ProcessedType {
             // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
             ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
             npatch_turret_rot: u8::MAX,
+            npatch_aa_combat: false,
             npatch_bunker_protection: 0,
             npatch_bunker_penetration: 0,
             weapon_slots: WeaponSlots::default(),
@@ -5812,6 +5826,14 @@ impl RulesPassProcessor {
                             "Trailer",
                             RulesTypeFamily::Animation,
                         );
+                        #[cfg(feature = "npatch")]
+                        {
+                            // Aircraft ReadINI41CD68 -> B95875..B95889,
+                            // after the base Techno reader and fixed ART Trailer.
+                            let member = &mut self.family_mut(family)[index];
+                            member.npatch_aa_combat =
+                                raw.read_bool("AACombat", member.npatch_aa_combat);
+                        }
                     }
                     RulesTypeFamily::Vehicle => {
                         let member = &mut self.families.get_mut(&family).unwrap()[index];

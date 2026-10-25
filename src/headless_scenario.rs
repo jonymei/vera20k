@@ -1993,6 +1993,86 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY ORCA airborne and ground Attack damage"]
+    fn aymod_orca_attacks_airborne_and_ground_targets() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::air_movement;
+        for target_kind in ["ZEP", "MTNK"] {
+            let (mut scenario, plane, target) = aymod_nearby_pair("ORCA", target_kind, false);
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("ORCA").unwrap();
+            assert!(kind.npatch_aa_combat);
+            let weapon = rules.weapon(kind.primary().unwrap()).unwrap();
+            assert!(
+                rules
+                    .projectile(weapon.projectile.as_deref().unwrap())
+                    .unwrap()
+                    .aa
+            );
+            let entity = sim.substrate.entities.get_mut(target).unwrap();
+            if target_kind == "ZEP" {
+                let ground = i32::from(entity.position.z()) * 104;
+                entity
+                    .position
+                    .set_exact_z_leptons_for_test(Some(ground + 500));
+            }
+            let health = entity.health.current();
+            assert_eq!(
+                air_movement::is_high_flying(
+                    entity,
+                    sim.resolved_terrain.as_ref(),
+                    Some((rules, &sim.interner))
+                ),
+                target_kind == "ZEP"
+            );
+            let owner = sim.substrate.entities.get(plane).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+            let mut fired = false;
+            let mut hit = false;
+            for _ in 0..900 {
+                tick_with_due_commands(&mut scenario);
+                let sim = scenario.sim();
+                fired |= sim
+                    .entities()
+                    .get(plane)
+                    .is_some_and(|e| e.ammo().is_some_and(|ammo| ammo.current() < ammo.max()));
+                hit = sim
+                    .entities()
+                    .get(target)
+                    .is_none_or(|e| e.health.current() < health);
+                if hit {
+                    if target_kind == "ZEP" {
+                        assert!(
+                            sim.entities().get(target).is_some_and(|entity| {
+                                air_movement::is_high_flying(
+                                    entity,
+                                    sim.resolved_terrain.as_ref(),
+                                    Some((&scenario.runtime.resources.rules, &sim.interner)),
+                                )
+                            }),
+                            "the hit must occur while the ZEP is still airborne"
+                        );
+                    }
+                    break;
+                }
+            }
+            assert!(
+                fired && hit,
+                "actual AY ORCA must fire and damage {target_kind}; fired={fired}, hit={hit}"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY MTNK independent turret speed"]
     fn aymod_mtnk_keeps_independent_turret_speed_while_firing() {
         use crate::sim::command::{Command, CommandEnvelope};

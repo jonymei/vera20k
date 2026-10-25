@@ -4769,6 +4769,15 @@ impl RuleSet {
                 object.project_npatch_turret_rot(rot);
             }
         }
+        for (name, enabled) in processed.aircraft_aa_combat_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Aircraft && object.id == name)
+            {
+                object.npatch_aa_combat = enabled;
+            }
+        }
         for (
             category,
             name,
@@ -6394,6 +6403,13 @@ impl RuleSet {
                 .iter()
                 .filter(|object| object.category == ObjectCategory::Vehicle)
                 .map(|object| (&object.id, object.unit_turret_rot()))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            b"npatch-aircraft-aa-combat-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Aircraft)
+                .map(|object| (&object.id, object.npatch_aa_combat))
                 .collect::<Vec<_>>()
                 .hash(&mut hasher);
             b"npatch-bunker-levels-v1".hash(&mut hasher);
