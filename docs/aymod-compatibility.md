@@ -241,7 +241,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：ORCA对空与海军续查（2026-10-26）
+### 当前检查点：海军集结水域诊断（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
   F06代码提交`84b7e5e2c`。无推送/PR/合并授权；主工作区的用户`.gitignore`修改、历史分析工作区、
@@ -259,6 +259,17 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   海军184保持formed/full、脚本cursor0；SUB11968始终109,55、Nav108,55且blocked，HYD30542
   始终占108,55且无导航。不是只由静态快照推定；尚未证实水路连通或Ship错误根因，不调集结半径/AI权重。
   报告仅在本机忽略目录`target/aymod-save-analysis/trace-navy184.json`，不提交用户数据。
+- A04水域证据已推进：正式冷加载同一中盘，指定三格均在playfield内、无结构桥。
+  SUB所在109,55与HYD所在108,55的Water/WaterBeach原生非桥raw ID均2；集结点99,149为4，
+  派生ground标签也分别2/4。不是仅凭派生标签推断；Normal的原生raw ID1投影为0，未混淆这两个值。
+  这说明当前保留拓扑把舰船与集结点分到不同水域，不能只按局部占格或发展不足解释。
+  尚未证明此隔断是天然地图、动态建筑/桥变化、拓扑维护还是恢复差异；未执行完整Foot准入或AStar搜索。
+  三格land_type为Water而保留zone_type为0，作为后续源状态/恢复消费者核对线索，不据此直接改分类。
+- 工具扩展`--observe-cell x,y`：最多32格，复用core telemetry观察owner的地形/occupancy、
+  ZoneMap派生标签和GetZoneID非桥raw查询；无新增模拟状态、原生查询副本、Dummy写入或保存布局字段。
+  当前/历史fast+npatch+telemetry工具均构建通过；历史真存档观察及cell-only/越界空结果通过，
+  原先inspect输出与基线逐字节一致；模式、负/溢出/多分量坐标、33格、301帧拒绝通过。
+  当前工具布局`0xf194d469`仍正确拒绝旧`0xd4be79fe`；所有报告仅保存在本机忽略目录，原文件未写回。
 - 已有AI修复仍保留：陆海选择槽竞争和Walk集结永久等待；旧存档300帧对照已证明14人队进入Attack。
   全局强度、长期补员、多AI与海军184不据此关闭。供电原生共享计数与三组独立供电预期的政策仍待确认。
 - 上一玩家版`aymod-playtest-20261026-gather-bolt`来自干净`4fef30555`，入口
@@ -268,7 +279,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 最新玩家版`aymod-playtest-20261026-aa-combat`已从干净`d3660b43c`构建普通fast+npatch游戏，
   manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-aa-combat.cmd`。
   包含上一版全部修复和F06；不覆盖旧构建，未自动启动。当前工作区无未提交代码或运行中的Cargo。
-- 下一安全动作：沿海军184的Float/Water连通与Ship阻挡/路线检查。
+- 下一安全动作：比较Return Dubai新局与存档的同一两点连通关系（不能跨局直接比较编号），
+  追动态船厂/桥/占格与保存恢复的拓扑来源，随后验证正式Foot准入/Ship路径结果。
+  NPAE174原始6EF93C..6EF98A仍是3x3/无required-zone/Normal的FNPC调用，尚无证据授权改集结算法。
+  本轮仅诊断/工具，无玩法改动，无新游戏版或PR；上一aa-combat玩家版继续有效。
   F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
 
 ## 3. 功能缺口与适配进度

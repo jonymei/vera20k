@@ -219,7 +219,16 @@ report. For example, in PowerShell:
 & $tool --trace-save $save --ra2-dir $assets --ticks 300 --observe-entity $entity_id --observe-team $team_id
 ```
 
-Repeat either observer flag for additional IDs (at most 32 entities and 32 teams).
+Repeat the ID observer flags for additional IDs (at most 32 entities and 32 teams).
+`--observe-cell x,y` adds a requested cell (at most 32 cells, unsigned 16-bit
+coordinates). A cell-only trace is allowed. It reports retained terrain fields,
+occupancy, the existing derived Normal/Water/WaterBeach connectivity labels
+on ground and bridge layers, and native non-bridge raw IDs through the existing
+GetZoneID owner. A raw native ID of 1 is distinct from derived invalid label 0.
+These observations are **not** a full Map56D100 admission result, dynamic
+cell-entry answer, or path search; missing terrain or a missing graph is `null`,
+and an invalid derived zone label is zero. Native IDs are omitted for absent
+terrain cells; no bridge walk or shared Dummy mutation is performed.
 At least one observer is required; missing/retired objects produce `null`, not
 invented state. Trace is limited to 300 ordinary frames and samples frame 0, 1,
 10, 120, 300 and the requested final frame. It prepares and commits saved resources

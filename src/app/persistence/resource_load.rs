@@ -491,16 +491,17 @@ pub fn trace_saved_game(
     ticks: u32,
     entity_ids: &[u64],
     team_ids: &[u64],
+    cell_coords: &[(u16, u16)],
 ) -> Result<serde_json::Value, String> {
     use serde_json::json;
     if ticks > 300 {
         return Err("save traces are bounded to 300 frames".into());
     }
-    if entity_ids.len() > 32 || team_ids.len() > 32 {
-        return Err("save traces accept at most 32 entities and 32 teams".into());
+    if entity_ids.len() > 32 || team_ids.len() > 32 || cell_coords.len() > 32 {
+        return Err("save traces accept at most 32 entities, 32 teams and 32 cells".into());
     }
-    if entity_ids.is_empty() && team_ids.is_empty() {
-        return Err("save traces require at least one entity or team observer".into());
+    if entity_ids.is_empty() && team_ids.is_empty() && cell_coords.is_empty() {
+        return Err("save traces require at least one entity, team or cell observer".into());
     }
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let header = GameSnapshot::read_header(&bytes).map_err(|error| error.to_string())?;
@@ -568,9 +569,13 @@ pub fn trace_saved_game(
                 .copied()
                 .map(|id| json!({"id": id, "state": sim.team_script_vm().team(id)}))
                 .collect();
+            let cells: Vec<_> = cell_coords
+                .iter()
+                .map(|&cell| sim.telemetry_cell_observation(cell))
+                .collect();
             observations.push(json!({"elapsed_frames": elapsed,
                 "tick": sim.session().tick(), "binary_frame": sim.session().binary_frame(),
-                "actors": actors, "teams": teams}));
+                "actors": actors, "teams": teams, "cells": cells}));
         }
         if elapsed < ticks {
             let due = runtime.simulation.take_due_commands();
@@ -590,6 +595,7 @@ pub fn trace_saved_game(
         "coverage": {
         "actors": "only explicitly requested entity IDs; missing actors are null",
         "teams": "only explicitly requested team IDs; missing teams are null",
+        "cells": "requested cell terrain, occupancy, derived labels and native non-bridge raw zone IDs; not Map56D100 admission, dynamic entry or a path search",
         "continuation": "300-frame maximum; normal due commands, no new player orders; BatchON",
         "rng": "normal cold-load MainRng seed0 and Scenario reset; not original live-process streams",
         "io": "input read only; no save writes, network server or GPU presentation",

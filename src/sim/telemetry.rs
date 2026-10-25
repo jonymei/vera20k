@@ -719,6 +719,37 @@ fn type_counts(
 }
 
 impl Simulation {
+    /// Observe existing cell/navigation owners without advancing or changing them.
+    /// The native ID is the non-bridge raw lookup (GetZoneID56D230), not a
+    /// CanReach56D100 decision. No Dummy walk, entry test or path search runs.
+    pub fn telemetry_cell_observation(&self, (x, y): (u16, u16)) -> serde_json::Value {
+        use crate::rules::locomotor_type::MovementZone;
+        use crate::sim::movement::locomotor::MovementLayer;
+        use serde_json::json;
+        let terrain = self.resolved_terrain().and_then(|grid| grid.cell(x, y));
+        let labels: Vec<_> = [
+            MovementZone::Normal,
+            MovementZone::Water,
+            MovementZone::WaterBeach,
+        ]
+        .into_iter()
+        .map(|zone| {
+            let grid = self.zone_grid();
+            let map = grid.and_then(|grid| grid.map_for(zone));
+            json!({"movement_zone": format!("{zone:?}"),
+                    "native_nonbridge": terrain.and_then(|_| grid.and_then(|grid|
+                        grid.get_zone_id_nonbridge_native((i32::from(x), i32::from(y)), zone))),
+                    "ground": map.map(|map| map.zone_at(x, y, MovementLayer::Ground)),
+                    "bridge": map.map(|map| map.zone_at(x, y, MovementLayer::Bridge))})
+        })
+        .collect();
+        json!({"cell": [x,y], "terrain": terrain.map(|cell| json!({
+            "land_type": cell.land_type, "zone_type": cell.zone_type,
+            "level": cell.level, "outside_playfield": cell.outside_playfield,
+            "structural_bridge": cell.bridge_facts.has_structural_bridge()})),
+            "zone_observations": labels, "occupancy": self.occupancy().get(x, y)})
+    }
+
     /// Capture the retained owners without changing simulation state. Rows and
     /// strings are bounded before wire allocation; totals include all entities.
     pub fn telemetry_snapshot(&self) -> TelemetrySnapshot {

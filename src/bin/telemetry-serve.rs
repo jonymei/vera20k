@@ -59,6 +59,7 @@ struct Args {
     ra2_dir: Option<PathBuf>,
     observe_entities: Vec<u64>,
     observe_teams: Vec<u64>,
+    observe_cells: Vec<(u16, u16)>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -73,10 +74,25 @@ fn parse_args() -> Result<Args, String> {
     let mut ra2_dir = None;
     let mut observe_entities = Vec::new();
     let mut observe_teams = Vec::new();
+    let mut observe_cells = Vec::new();
     let mut argv = std::env::args().skip(1);
     while let Some(flag) = argv.next() {
         let mut next = |what: &str| argv.next().ok_or(format!("{flag} needs {what}"));
         match flag.as_str() {
+            "--observe-cell" => {
+                let raw = next("x,y cell coordinates")?;
+                let (x, y) = raw.split_once(',').ok_or("--observe-cell takes x,y")?;
+                let x = x
+                    .parse::<u16>()
+                    .map_err(|_| "--observe-cell takes unsigned u16 x,y")?;
+                let y = y
+                    .parse::<u16>()
+                    .map_err(|_| "--observe-cell takes unsigned u16 x,y")?;
+                if observe_cells.len() == 32 {
+                    return Err("--observe-cell accepts at most 32 cells".into());
+                }
+                observe_cells.push((x, y));
+            }
             "--observe-entity" | "--observe-team" => {
                 let id = next("an unsigned stable ID")?
                     .parse::<u64>()
@@ -130,12 +146,12 @@ fn parse_args() -> Result<Args, String> {
                      [--units 120] [--structures 6] [--ticks 0] [--seed 0x5EED0001]\n\
                      or: telemetry-serve --inspect-save <path>\n\
                      or: telemetry-serve --trace-save <path> --ra2-dir <root> [--ticks 300]\n\
-                     (--observe-entity <id> | --observe-team <id>)...\n\
+                     (--observe-entity <id> | --observe-team <id> | --observe-cell <x,y>)...\n\
                      \n\
                      --inspect-save <path> prints a local read-only JSON report and exits.\n\
                      Inspection admits only compatible saves; no server or ticks are started.\n\
                      Trace instead cold-loads and advances at most 300 frames locally.\n\
-                     Trace requires observers (at most 32 entities and 32 teams).\n\
+                     Trace requires observers (at most 32 entities, 32 teams and 32 cells).\n\
                      Inspection reports contain complete retained owners; traces contain requested IDs.\n\
                      Runs the synthetic two-house simulation headlessly and serves the\n\
                      browser dashboard. --ticks 0 (the default) runs until interrupted."
@@ -157,6 +173,7 @@ fn parse_args() -> Result<Args, String> {
         ra2_dir,
         observe_entities,
         observe_teams,
+        observe_cells,
     })
 }
 
@@ -469,7 +486,9 @@ fn main() -> Result<(), String> {
         return Err("--trace-save and --inspect-save are mutually exclusive".into());
     }
     if args.trace_save.is_none()
-        && (!args.observe_entities.is_empty() || !args.observe_teams.is_empty())
+        && (!args.observe_entities.is_empty()
+            || !args.observe_teams.is_empty()
+            || !args.observe_cells.is_empty())
     {
         return Err("observer arguments require --trace-save".into());
     }
@@ -489,6 +508,7 @@ fn main() -> Result<(), String> {
             ticks,
             &args.observe_entities,
             &args.observe_teams,
+            &args.observe_cells,
         )?;
         serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
             .map_err(|error| error.to_string())?;
