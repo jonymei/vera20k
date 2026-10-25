@@ -14,7 +14,7 @@ this installation loads Ares, Syringe or Phobos; absence of a DLL alone is not a
 proof that injection is impossible.
 
 The local MOD baseline is commit `9f8ccbd`, including its four maintained AIMD
-corrections. The installed local candidate is `b18f633d4`, built with the optimized
+corrections. The installed clean local build is `f1d141c7a`, built with the optimized
 `fast` profile and `npatch`, with default/dev features disabled. Ares implementations can identify reusable
 owners, but enabling Ares is not a substitute for porting the NPAE input and
 behavior.
@@ -149,6 +149,8 @@ The windowed camera owner now stops edge/coast scrolling on pointer exit while
 retaining in-window coast and captured right-drag behavior. Its focused regression
 fails before the fix and the 26-test camera module passes. Earlier startup white
 screens have not recurred on subsequent normal launches; no startup fix is claimed.
+The clean build was reloaded through the normal save-game menu after removing
+all temporary input/render diagnostics; its original QA battle renders normally.
 
 These selected five delivery families do not close the other missing mechanisms
 in this ledger. Full balance, every mode/map combination and every visual effect
