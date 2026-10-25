@@ -78,16 +78,16 @@ absence from its executable or prove that a field belongs to NPatch.
 
 | Feature | AYMod use | Current engine boundary | Status |
 | --- | --- | --- | --- |
-| Alternative technology branches | Seven `Prerequisite2` entries | `d997311e6` reads both alternative lists through the native parser and retries complete AND groups as OR alternatives in the shared CanBuild owner, including early-failure routes. Mixed-extension policy is documented | Implemented locally; focused CanBuild/prerequisite and direct-consumer tests pass; integrated AYMod playtest pending |
-| Naval factory exclusion | Three `NegativePrerequisite` entries naming the respective shipyards | `d997311e6` checks the existing on-map House counters at the shared success/build-limit join, including override/skip-tech routes; preserves ordinary AI early success. Invalid generic negatives are safely ignored by explicit policy | Implemented locally; focused production/counter regressions pass; integrated AYMod playtest pending |
-| Repeated AI base candidates | Eight factories use `AIBasePlanningCount=2` | `d997311e6` reads the NPAE spelling/default into the existing signed-byte candidate-repeat owner. Same-pass NPAE-key precedence and later-pass replacement by either spelling are explicit compatibility policy | Implemented locally; focused reader/base-plan and AI chooser tests pass; integrated AYMod playtest pending |
-| Manual building power toggle | `[UISettings] UseTogglePower=yes` | `f2b8f5946..22d05aac1` connects frozen-root input, configurable default V, Power/NoPower cursor and own-building admission to existing Event01/02 and BuildingOnline owners. Fresh-world modes and outgoing held-mouse gestures are cleared; active EMP blocks On | Implemented locally; focused input/native-event/power/factory tests pass; combined EMP interaction and actual window/AYMod acceptance pending |
-| EMP weapons | `EMEffect=yes` warheads and referenced weapons/projectiles | `5bc1290c2..dcce945a7` connects actual detonations and AYMod's retained Tesla impact-child producer to the shared EMP/deactivation/operational owners. Duration, susceptibility and mixed Ares precedence are explicit playable policies, not asserted NPAE parity | Implemented locally; focused projectile/EMP, retained-loader and mixed Ares/NP regressions pass; integrated AYMod combat/balance acceptance pending |
-| Passenger experience | BFRT/APOC `TrainPassengers=yes` | Local reward candidate routes open-topped kill XP to a trainable passenger before elite, then falls back to the carrier; spawned-child awards and inheritance reuse existing kill/spawn owners. This is documented compatibility policy | Implemented in local candidate; focused production reward/spawn regressions pass; integration and real BFRT/APOC acceptance pending |
-| Controller experience | `MindControllerGainExperienceRatio=100%` | Local reward candidate shares conserved kill XP with a valid non-elite controller through the existing award owner; unavailable/elite controllers leave XP with the ordinary recipient. Ratio bounds are explicit policy | Implemented in local candidate; focused production reward regressions pass; integrated AYMod mind-control combat acceptance pending |
-| Hero bounty | `GetsBounty` and the bounty multiplier family | Local reward candidate uses pre-kill collector rank and victim cost/rank multipliers; hostile terminal kills pay once through existing KillRecord/Economy, with registered BountyAnim through AnimClass. Defaults/clamps are explicit policy | Implemented in local candidate; focused reward/statistics regressions pass, including non-NP gating; integrated AYMod payout/animation acceptance pending |
+| Alternative technology branches | Seven `Prerequisite2` entries | `d997311e6` reads both alternative lists through the native parser and retries complete AND groups as OR alternatives in the shared CanBuild owner, including early-failure routes. Mixed-extension policy is documented | Implemented; production CanBuild/direct consumers and maintained AYMod alternative-tech scenario pass |
+| Naval factory exclusion | Three `NegativePrerequisite` entries naming the respective shipyards | `d997311e6` checks the existing on-map House counters at the shared success/build-limit join, including override/skip-tech routes; preserves ordinary AI early success. Invalid generic negatives are safely ignored by explicit policy | Implemented; production counter regression and maintained AYMod shipyard Unlimbo/Limbo scenario pass |
+| Repeated AI base candidates | Eight factories use `AIBasePlanningCount=2` | `d997311e6` reads the NPAE spelling/default into the existing signed-byte candidate-repeat owner. Same-pass NPAE-key precedence and later-pass replacement by either spelling are explicit compatibility policy | Implemented; actual AYMod eight-factory count reader and existing candidate-repeat/AI chooser regressions pass |
+| Manual building power toggle | `[UISettings] UseTogglePower=yes` | `f2b8f5946..22d05aac1` connects frozen-root input, configurable default V, Power/NoPower cursor and own-building admission to existing Event01/02 and BuildingOnline owners. Fresh-world modes and outgoing held-mouse gestures are cleared; active EMP blocks On | Implemented; input/event/power regressions, real AYMod paid-factory EMP interaction, and GUI barracks Off/On transitions pass |
+| EMP weapons | `EMEffect=yes` warheads and referenced weapons/projectiles | `5bc1290c2..dcce945a7` connects actual detonations and AYMod's retained Tesla impact-child producer to the shared EMP/deactivation/operational owners. Duration, susceptibility and mixed Ares precedence are explicit playable policies, not asserted NPAE parity | Implemented; actual AYMod TTNK Attack/expiry and paid-factory recovery scenarios pass; native parity and balance are not certified |
+| Passenger experience | BFRT/APOC `TrainPassengers=yes` | Local reward candidate routes open-topped kill XP to a trainable passenger before elite, then falls back to the carrier; spawned-child awards and inheritance reuse existing kill/spawn owners. This is documented compatibility policy | Implemented; real AYMod BFRT Enter, passenger kill credit and elite-to-carrier fallback pass; spawned inheritance regressions pass |
+| Controller experience | `MindControllerGainExperienceRatio=100%` | Local reward candidate shares conserved kill XP with a valid non-elite controller through the existing award owner; unavailable/elite controllers leave XP with the ordinary recipient. Ratio bounds are explicit policy | Implemented; real AYMod Yuri Attack/control, authored XP share and elite-controller fallback pass |
+| Hero bounty | `GetsBounty` and the bounty multiplier family | Local reward candidate uses pre-kill collector rank and victim cost/rank multipliers; hostile terminal kills pay once through existing KillRecord/Economy, with registered BountyAnim through AnimClass. Defaults/clamps are explicit policy | Implemented; real AYMod Tanya kill pays spendable House credits; reward/dedup/non-NP regressions pass; animation appearance not separately certified |
 | Bunker protection/penetration | Protected bunker/power plants and sniper/radiation/MiG warheads | No matching NPAE admission and victim-effect chain established | Missing |
-| Permanent control | `IsPermaControlled` on control warheads | Local control candidate reads the NP warhead key and reuses permanent-capture ownership without a temporary manager link. SpyJack boarding consumes its spy on success and reuses parasite release on refusal/miss | Implemented in local candidate; focused capture and real weapon/parasite production regressions pass; integrated AYMod boarding/controller-death acceptance pending |
+| Permanent control | `IsPermaControlled` on control warheads | Local control candidate reads the NP warhead key and reuses permanent-capture ownership without a temporary manager link. SpyJack boarding consumes its spy on success and reuses parasite release on refusal/miss | Implemented; real AYMod Spy boarding/consumption and elite Yuri building capture persist after controller removal; focused refusal/miss regressions pass |
 | Independent turret speed | Fourteen `TurretROT` entries | Current ordinary turret rotation uses `ROT`; the stock-only no-key rationale does not cover this NPAE reader | Missing |
 | Electric bolt colors | Authored `EBoltColor1/2/3` overrides | No matching reader/render consumer established | Missing |
 | Weapon target restrictions | `AACombat`, `AntiNaval`, `AntiUnderwater` | Existing projectile AA/AG and naval rules do not implement these weapon-level entries | Missing; native semantics still to trace |
@@ -133,15 +133,27 @@ low-power recovery and saved EMP/manual-power intent. The production fix keeps
 physical factory lookup separate from online admission and notifies the existing
 queue owner on EMP transitions. No second hold state was added.
 
-These are headless production-path checks, not GUI or rendering certification.
-The combined candidate is installed with a verified ad-hoc signature and the
-prior application preserved separately. Computer Use exercised normal menus,
-skirmish launch, base deployment and power-plant/barracks construction. Manual
-power targeting still needs GUI acceptance. A subsequent launch displayed the
-normal menu without reproducing the earlier white screen; no rendering fix is
-claimed. Loading the saved QA battle currently fails while rebinding a saved
-terrain variant, so complete saved-world continuation remains open even though
-the focused EMP/manual-power snapshot regression passes.
+The seven scenarios above are headless production-path checks, not whole-mod
+rendering certification. Computer Use additionally exercised normal menus,
+skirmish launch, base deployment, power-plant/barracks construction and loading
+the original QA save. The saved terrain source-to-LAT variant restoration defect
+is repaired without rewriting the saved Cell fields or bypassing layout checks.
+Actual GUI V/click targeting produced Barracks Off and then On commands; the
+next click observed the prior command's committed online latch, not merely an
+input receipt.
+
+The apparent black field was reproduced from an actual camera that had scrolled
+outside the explored area. Re-centering with the pointer inside the tactical
+view restores the base; no shroud bypass or speculative palette fix was made.
+The windowed camera owner now stops edge/coast scrolling on pointer exit while
+retaining in-window coast and captured right-drag behavior. Its focused regression
+fails before the fix and the 26-test camera module passes. Earlier startup white
+screens have not recurred on subsequent normal launches; no startup fix is claimed.
+
+These selected five delivery families do not close the other missing mechanisms
+in this ledger. Full balance, every mode/map combination and every visual effect
+are not certified. Documented player-friendly NPatch policies remain intentional
+rather than being presented as exact NPAE arithmetic.
 
 ## Initial data families
 
@@ -161,7 +173,7 @@ on GATECH and BFRT's two added ART firing origins.
 | Garrison penetration | 9 | Six warhead levels and three building protection levels |
 | Bounty | 22 | Recipient/rank flags, values, multipliers and animation |
 | Other warhead effects | 6 | Flat explosion and house filtering |
-| Permanent control | 2 | Spy hijack and elite Yuri control producers |
+| Permanent control | 2 | Implemented; real AYMod Spy boarding/consumption and elite Yuri building capture persist after controller removal; focused refusal/miss regressions pass |
 | Hospitals | 2 | GAROBO/NARADR entry, treatment and departure |
 | Country/UI | 4 | Country range, power toggle, tech slider and colors |
 | Weapon targeting | 5 | Air/naval/underwater weapon policies |
