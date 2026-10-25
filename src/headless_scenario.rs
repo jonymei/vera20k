@@ -1959,6 +1959,90 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY sixth passenger fire coordinate"]
+    fn aymod_sixth_fortress_passenger_reuses_first_firing_port() {
+        use crate::sim::combat::fire_coord::{FireSource, fire_coordinate};
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, carrier, first) = aymod_nearby_pair("BFRT", "E1", true);
+        let mut riders = vec![first];
+        {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let owner = sim.entities().get(carrier).unwrap().owner();
+            let at = sim.entities().get(carrier).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
+            riders.extend(spawn_on_free_cells(
+                sim,
+                &runtime.resources.rules,
+                owner,
+                sites,
+                &["E1"; 5],
+            ));
+            for &rider in &riders {
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::clicked_mission(
+                        rider,
+                        crate::sim::mission::MissionType::Enter,
+                        crate::sim::combat::TargetKind::Entity(carrier),
+                    ),
+                ));
+            }
+        }
+        for _ in 0..600 {
+            tick_with_due_commands(&mut scenario);
+            if riders.iter().all(|id| {
+                scenario
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .unwrap()
+                    .passenger_role
+                    .open_transport_id()
+                    == Some(carrier)
+            }) {
+                break;
+            }
+        }
+        let sim = scenario.sim();
+        let cargo = sim
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .passenger_role
+            .cargo()
+            .unwrap()
+            .passengers();
+        assert_eq!(cargo.len(), 6, "all six actual Enter missions must board");
+        let coord = |id| {
+            let entity = sim.entities().get(id).unwrap();
+            fire_coordinate(
+                sim,
+                &scenario.runtime.resources.rules,
+                &FireSource::of_entity(entity),
+                sim.object_type(entity.type_ref(), &scenario.runtime.resources.rules)
+                    .unwrap(),
+                0,
+                0,
+                Default::default(),
+            )
+            .coord
+        };
+        assert_eq!(
+            coord(cargo[5]),
+            coord(cargo[0]),
+            "NPAE174 cycles five ports; ART5/6 are not enabled"
+        );
+        assert_ne!(
+            coord(cargo[4]),
+            coord(cargo[0]),
+            "the fifth port must not be collapsed too"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
         target_type: &str,

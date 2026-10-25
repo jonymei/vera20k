@@ -82,6 +82,29 @@ the existing Scenario RNG and assignment order. The value is not clamped to rost
 unallocated or unrepresentable results are refused instead of remapped. Cooperative
 selection and the stock mode-null fallback retain their separate behavior.
 
+## AYMod facing and passenger firing ports
+
+NPAE174 `TurretROT=` is a retained byte, initially 255 (TechnoType constructor
+`0x710F93`). Each physical Rules pass reads the exact key using the current
+byte as the ReadInt default, then stores the low eight bits
+(`0x713879..0x71388D`). Unit construction selects this value for the turret,
+with byte 255 falling back to ordinary `ROT` (`0x735584 -> 0xC2DEB6`).
+Body, Aircraft and Building rotation keep their existing `ROT` behavior.
+The ordinary FacingClass owner still applies its numeric limits and timing;
+ongoing Unit aiming uses the same selected turret speed as construction.
+
+NPAE174 also cycles the five `AlternateFLH0..4` ports for additional passengers:
+`TechnoClass::GetFLH @ 0x6F3AFB -> 0xC2E196` maps the one-based cargo index
+`k` to zero-based `(k - 1) % 5`. Thus AYMod's sixth BFRT passenger reuses port
+zero. The native ART reader still stops after five entries
+(`0x715FA4..0x716005`); authored `AlternateFLH5/6` do not enable extra slots.
+Both ordinary negative weapon indices and open-topped passenger shots use the
+existing shared FLH owner. This is the `npatch` capability's NPAE174 policy;
+other NPatch generations are not certified by it. Without `npatch`, stock
+overflow beyond five continues to return a zero FLH. The separate
+`UseAlternateFLH` burst-index hook remains outside this passenger chain; the
+inspected AYMod BFRT does not enable that key.
+
 ## AYMod reward and control policy
 
 With `npatch`, `TrainPassengers=yes` gives an open-topped shooter's kill XP to
