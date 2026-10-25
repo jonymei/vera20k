@@ -717,7 +717,15 @@ impl ResolvedTerrainGrid {
             {
                 continue;
             }
-            let (tile, fallback) = catalog.presentation_tile(cell, self.clear_tile_id);
+            // Fresh build's absent-authored-cell branch selects ClearTile
+            // presentation, even with a valid retained final tile. Rebinding
+            // the baseline must keep that owner; the live loaded-cell scan
+            // independently selects by its restored Cell body at546DA0.
+            let (tile, fallback) = if cell.filled_clear {
+                (self.clear_tile_id, true)
+            } else {
+                catalog.presentation_tile(cell, self.clear_tile_id)
+            };
             let metadata = catalog.presentation_for_variant(
                 tile,
                 cell.final_sub_tile,
