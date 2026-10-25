@@ -411,10 +411,9 @@ pub(crate) fn set_walk_destination_coord(
     coord: DriveCoord,
     terrain: Option<&ResolvedTerrainGrid>,
 ) {
-    // Walk75ACBD/75ACD0/75ACE3 checks EMP and both owner warp bytes.
-    // The teleport owner represents the latter; the native EMP timer still
-    // lacks its production writer. There is deliberately no power gate here.
-    if super::locomotor_owner::owner_is_warping(entity) {
+    // Walk75ACBD reads Techno70EFD0's positive EMP counter before the
+    // owner warp bytes75ACD0/75ACE3. There is deliberately no power gate.
+    if entity.emp_remaining() > 0 || super::locomotor_owner::owner_is_warping(entity) {
         return;
     }
     let Some(loco) = entity

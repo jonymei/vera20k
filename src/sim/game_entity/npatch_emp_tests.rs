@@ -12,11 +12,12 @@ fn scene() -> (Simulation, RuleSet, u64, u64) {
     let ini = arena_fixture::clear_ground_ini(
         "[Countries]\n0=Americans\n1=Russians\n\
          [VehicleTypes]\n0=TTNK\n1=TANK\n2=ORGANIC\n\
-         [InfantryTypes]\n0=PERSON\n[BuildingTypes]\n0=TOWER\n1=POWER\n2=FACTORY\n\
+         [InfantryTypes]\n0=PERSON\n1=CYB\n[BuildingTypes]\n0=TOWER\n1=POWER\n2=FACTORY\n\
          [TTNK]\nStrength=300\nPrimary=TankBolt\nSpeed=5\n\
          [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\nLocomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\nCost=700\nTechLevel=1\nOwner=Americans,Russians\n\
          [ORGANIC]\nStrength=100\nOrganic=yes\nSpeed=5\n\
          [PERSON]\nStrength=100\nSpeed=5\n\
+         [CYB]\nStrength=300\nSpeed=5\nSpeedType=Foot\nCyborg=yes\nLocomotor={4A582744-9839-11D1-B709-00A024DDAFD1}\n\
          [TOWER]\nStrength=500\nArmor=concrete\nPowered=yes\nPower=-10\nPrimary=TankBolt\n\
          [POWER]\nStrength=500\nPower=200\n\
          [FACTORY]\nStrength=1000\nPowered=yes\nPower=-10\nFactory=UnitType\nOwner=Americans,Russians\n\
@@ -292,6 +293,92 @@ fn emp_refuses_drive_destination_until_expiry_without_erasing_foot_orders() {
             .unwrap()
             .track_destination(TrackFamily::Drive)
             .is_some()
+    );
+}
+
+#[test]
+fn emp_walk_preserves_head_but_stops_paid_motion_until_expiry() {
+    use crate::sim::{
+        components::DriveCoord,
+        movement::{ground_pose, set_walk_destination_coord},
+    };
+    let (mut sim, rules, source, _) = scene();
+    let target = sim
+        .spawn_object("CYB", "Russians", 12, 20, 0, &rules)
+        .unwrap();
+    hit(&mut sim, &rules, source, target, 3);
+    assert_eq!(sim.entities().get(target).unwrap().emp_remaining(), 3);
+    let entity = sim.substrate.entities.get_mut(target).unwrap();
+    let start = ground_pose::position_world_coord(&entity.position);
+    let goal = DriveCoord {
+        x: start.x + 256,
+        ..start
+    };
+    set_walk_destination_coord(entity, goal, None);
+    assert!(
+        entity
+            .locomotor
+            .as_ref()
+            .unwrap()
+            .walk_destination()
+            .is_none(),
+        "Walk75ACBD must refuse a new destination while under EMP"
+    );
+    // Supply a retained head separately from Move_To; test the paid Process
+    // gate, not first-hit Deactivate's command cleanup.
+    let head = DriveCoord {
+        x: start.x + 17,
+        ..start
+    };
+    let loco = entity.locomotor.as_mut().unwrap();
+    loco.set_walk_destination(Some(goal));
+    loco.set_step_head(Some(head));
+    loco.begin_walk_motion();
+    entity
+        .navigation
+        .path_runtime_mut()
+        .set_scold_latch_for_test(1);
+    sim.process_ground_locomotor_stats_for_test(target, Some(&rules), None)
+        .unwrap();
+    let entity = sim.substrate.entities.get_mut(target).unwrap();
+    assert_eq!(ground_pose::position_world_coord(&entity.position), start);
+    assert_eq!(entity.locomotor.as_ref().unwrap().step_head(), Some(head));
+    assert_eq!(
+        entity.locomotor.as_ref().unwrap().walk_animation_moving(),
+        Some(false)
+    );
+    assert_eq!(entity.navigation.path_runtime().scold_latch_raw(), 0);
+    // The existing <17-lepton completion branch precedes the EMP query.
+    entity
+        .locomotor
+        .as_mut()
+        .unwrap()
+        .set_step_head(Some(DriveCoord {
+            x: start.x + 16,
+            ..start
+        }));
+    sim.process_ground_locomotor_stats_for_test(target, Some(&rules), None)
+        .unwrap();
+    assert!(
+        sim.entities()
+            .get(target)
+            .unwrap()
+            .locomotor
+            .as_ref()
+            .unwrap()
+            .step_head()
+            .is_none()
+    );
+    for frame in 1..=3 {
+        sim.session.set_binary_frame_for_test(frame);
+        sim.object_ai_visit_one(target, Some(&rules), Default::default());
+    }
+    assert_eq!(sim.entities().get(target).unwrap().emp_remaining(), 0);
+    let entity = sim.substrate.entities.get_mut(target).unwrap();
+    set_walk_destination_coord(entity, goal, None);
+    assert_eq!(
+        entity.locomotor.as_ref().unwrap().walk_destination(),
+        Some(goal)
     );
 }
 

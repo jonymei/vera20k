@@ -519,6 +519,16 @@ fn advance_ordinary_mover(
         *walk_per_cell = Some((entity_id, head));
         return;
     }
+    // Walk75BF87..75BFA6 queries Techno70EFD0 only after the <17-lepton
+    // completion branch. Keep its retained head/destination and IsMoving,
+    // but clear animation+36 and the Foot+68A latch before any paid step.
+    if entity.emp_remaining() > 0 {
+        if let Some(loco) = entity.locomotor.as_mut() {
+            loco.stop_movement_animation();
+        }
+        entity.navigation.path_runtime_mut().clear_scold_latch();
+        return;
+    }
     let object = interner.object_type(entity.type_ref(), rules);
     let adjusted_speed =
         super::foot_speed::adjusted_speed(entity, object, rules.general.veteran_speed, houses);
