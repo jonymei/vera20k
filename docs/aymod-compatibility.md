@@ -267,8 +267,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   原补丁确实可出现该症状；不把EMP修复或“没读powerbyte”当成已修蜘蛛行动。
   作者完整说明却明确说三组指定建筑支持、失去支持则瘫痪，故属原生/设计冲突，不是静态移植遗漏。
   三组独立供电与失联无人单位移动限制仍待明确兼容策略决定，不静默调整MOD平衡或加全局冻结。
-- 现有最新已交付入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-delay-kill.cmd`，
-  不含本轮新Drive链；新普通fast+npatch构建待单独保存。当前无待完成Cargo。
+- 已从干净5ae94e921保存普通fast+npatch构建 `aymod-playtest-20261026-np-drive-emp`，
+  manifest已读、固定标签解析通过。最新入口 `D:/Workshop/vera20k/target/AYMOD-test-20261026-np-drive-emp.cmd`，
+  含本轮Drive链及此前F08/F02/AI/颜色/电弧等修复。旧版保留，未启动或替换正在运行的游戏。
+  新策略字段改变保存布局，须新局；原始保存未修改、不强读。当前无待完成Cargo或未提交代码。
 - 下一安全动作：保存此批测试版并交接策略差异；继续PLAN的F02实际场景、F03/F09/F11/F12及多AI/长局，
   不把全面目标缩小为本轮EMP。AI权重/兵种数值/MOD配置未改，供电设计偏差仍不能标已兼容。
 
