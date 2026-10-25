@@ -284,7 +284,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `D:/Workshop/vera20k/target/AYMOD-test-20261026-gather-bolt.cmd`；包含声波防崩、陆海队列/颜色、
   Walk集结与GPU覆盖的自定义电弧，不包含F06。F06新增保留字段会再次改变保存布局；新构建须新开局。
   不伪造旧存档头部；两份`0xd4be79fe`继续用隔离历史版本分析。
-- 最新玩家版`aymod-playtest-20261026-aa-combat`已从干净`d3660b43c`构建普通fast+npatch游戏，
+- 上一玩家版`aymod-playtest-20261026-aa-combat`从干净`d3660b43c`构建普通fast+npatch游戏，
   manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-aa-combat.cmd`。
   包含上一版全部修复和F06；不覆盖旧构建，未自动启动。当前工作区无未提交代码或运行中的Cargo。
 - 新模式验证：当前/历史fast+npatch+telemetry构建通过；真实地图三格观察通过；缺根目录/缺格子、
@@ -302,7 +302,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   现有可玩时长/目标/队列政策尚未迁移，见[npatch-emp.md](npatch-emp.md)；仍未改三组计数政策。
 - 下一安全动作：继续补齐普通运动消费者（fresh-track、Walk、Hover），以真实EMP生产路径验证停机及到期恢复，
   再整体迁移NPAE施加/恢复链。海军184跨水域选点保留初始地图/原生集结政策残余，不调权重或半径。
-  当前普通游戏测试版仍为aa-combat，本次代码提交尚需保留新构建；全PLAN其余F/V/AI项保持开放。
+- 最新玩家版`aymod-playtest-20261026-emp-move`已从干净`0ca67d84b`构建普通fast+npatch游戏，
+  manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-move.cmd`。
+  包含aa-combat及此前修复；本次只补Move_To门禁，不新增保存字段，不因此承诺跨旧布局兼容。
+  旧版保留，未自动启动；工作区无未提交代码或运行中的Cargo。全PLAN其余F/V/AI项保持开放。
   F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
 
 ## 3. 功能缺口与适配进度
