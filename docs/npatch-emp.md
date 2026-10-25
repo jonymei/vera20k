@@ -61,10 +61,18 @@ reissued Unit destination and ordinary object-AI expiry regression covers Drive.
 The Ship branch is supported by its original instructions and existing normal
 movement coverage, not a new positive-EMP Ship scenario.
 
-This does not finish NPAE174 EMP movement or recovery. Fresh-track admission
-(4B2746/6A1D96), Walk destination/paid-step gates and Hover consumers remain
-required work; existing heads can require their native movement tail rather than
-a blanket freeze. Unit746C90's independent death-frame override is unrepresented.
+Fresh-track admission now consumes the same positive counter at
+Drive4B2746/Ship6A1D96, after warp/missile checks and before path/cell work.
+An explicitly retained-route prestate plus a real NPatch hit proves these
+consumers reject both locomotors; this is not first-hit route survival evidence.
+Walk Move_To75ACBD also refuses the counter. Its ordinary Process keeps the
+existing <17-lepton completion first, then75BF87..75BFA6 clears motion animation
+and the scold latch without clearing the head/destination or IsMoving, before
+any paid displacement. A real cyborg hit covers the16/17 boundary and expiry.
+
+This does not finish NPAE174 EMP movement or recovery. Hover consumers and
+existing active Drive/Ship track tails still need their own evidence, rather
+than a blanket freeze. Unit746C90's death-frame override remains unrepresented.
 
 The current shared Ares-style Deactivate/Reactivate and Hunt recovery remains an
 explicit compatibility policy, not the inspected NPAE lifecycle. NPAE's active

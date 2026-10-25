@@ -241,72 +241,36 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：EMP运动准入前置修复（2026-10-26）
+### 当前检查点：EMP保留路线与Walk消费者（2026-10-26）
 
-- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
-  F06代码提交`84b7e5e2c`。无推送/PR/合并授权；主工作区的用户`.gitignore`修改、历史分析工作区、
-  旧测试构建与两份原存档均保留。整体PLAN及V01–V10/AI/其他F项仍开放。
-- F06：NPAE174 ctor41C8D0清零AircraftType+E4C；ReadINI41CD68/B95875以当前值读AACombat；
-  AircraftAI414D36/C27C60仅跳过高空目标清除，继续原隐形感知，武器AA和目的地准入不变。
-  读取状态仍由正式registry保留，ObjectType只投影，无第二套实体状态、RNG抽样、timer或Detach。
-- 新增三项回归：保留层次/默认/非Aircraft隔离/保存/hash；普通object-AI访问下保留空中目标、
-  未感知隐形仍丢失、AA=no投射物仍Illegal；实际AY ORCA攻击仍在高空的ZEP和地面MTNK，
-  同时验证耗弹与真实掉血。目标保留回归在修复前先失败，修复后通过。
-- 定向覆盖：NP NativeProcessing与TechnoAI模块全部非ignored回归通过；Aircraft52项通过、5项未运行；
-  实际AYMOD场景通过。无NP NativeProcessing模块及原版飞机高空/隐形丢目标两项通过。
-  独立只读critic复读原生调用/读取后无确认或具体可疑缺陷。未跑全仓库测试或玩家GUI。
-- A04新增动态证据：隔离历史版本按正式资源/保存门禁冷加载中盘，开batch、无新增玩家指令续300帧。
-  海军184保持formed/full、脚本cursor0；SUB11968始终109,55、Nav108,55且blocked，HYD30542
-  始终占108,55且无导航。不是只由静态快照推定；尚未证实水路连通或Ship错误根因，不调集结半径/AI权重。
-  报告仅在本机忽略目录`target/aymod-save-analysis/trace-navy184.json`，不提交用户数据。
-- A04水域证据已推进：正式冷加载同一中盘，指定三格均在playfield内、无结构桥。
-  SUB所在109,55与HYD所在108,55的Water/WaterBeach原生非桥raw ID均2；集结点99,149为4，
-  派生ground标签也分别2/4。不是仅凭派生标签推断；Normal的原生raw ID1投影为0，未混淆这两个值。
-  这说明当前保留拓扑把舰船与集结点分到不同水域，不能只按局部占格或发展不足解释。
-  初始地图对照已补齐：同历史版本、同正式map/rules指纹，tick0的两端也不连通，见下段。
-  尚未执行完整Foot准入/AStar或原版运行对照，不能把所有海军停滞归为地图问题。
-- 初始图核对：扩展同一工具的`--inspect-map`，复用正式headless初始Battle local-only加载，
-  不推进、不发指令、不写保存。历史版map hash=`0x24d10eb47ae8d866`、rules hash=`0x87edbd7f9e0e5513`
-  与玩家中盘完全一致；tick0三格Water/WaterBeach仍是2、2、4，均无占格、在playfield且无结构桥。
-  当前版同一地图的两端也分离。由此排除此处隔断仅由中盘造建筑/战斗或本次保存恢复才产生；
-  证明的是VERA正式初始构造中的分离，不冒称已做原引擎地图拓扑对照或整个AI强度验收。
-- 水格zone_type由初始4变成恢复0的线索已解释：`CellLoad4839F0`在`483A21`明确清零+4C；
-  正式`restore_user_loaded_land`匹配此语义，Map+68保留classes/IDs/rows是另一owner。
-  目标NPAE静态指令已复读，不为消除表面差异擅自Recalc或重建保存拓扑。
-- 工具扩展`--observe-cell x,y`：最多32格，复用core telemetry观察owner的地形/occupancy、
-  ZoneMap派生标签和GetZoneID非桥raw查询；无新增模拟状态、原生查询副本、Dummy写入或保存布局字段。
-  当前/历史fast+npatch+telemetry工具均构建通过；历史真存档观察及cell-only/越界空结果通过，
-  原先inspect输出与基线逐字节一致；模式、负/溢出/多分量坐标、33格、301帧拒绝通过。
-  当前工具布局`0xf194d469`仍正确拒绝旧`0xd4be79fe`；所有报告仅保存在本机忽略目录，原文件未写回。
-- 已有AI修复仍保留：陆海选择槽竞争和Walk集结永久等待；旧存档300帧对照已证明14人队进入Attack。
-  全局强度、长期补员、多AI与海军184不据此关闭。供电原生共享计数与三组独立供电预期的政策仍待确认。
-- 上一玩家版`aymod-playtest-20261026-gather-bolt`来自干净`4fef30555`，入口
-  `D:/Workshop/vera20k/target/AYMOD-test-20261026-gather-bolt.cmd`；包含声波防崩、陆海队列/颜色、
-  Walk集结与GPU覆盖的自定义电弧，不包含F06。F06新增保留字段会再次改变保存布局；新构建须新开局。
-  不伪造旧存档头部；两份`0xd4be79fe`继续用隔离历史版本分析。
-- 上一玩家版`aymod-playtest-20261026-aa-combat`从干净`d3660b43c`构建普通fast+npatch游戏，
-  manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-aa-combat.cmd`。
-  包含上一版全部修复和F06；不覆盖旧构建，未自动启动。当前工作区无未提交代码或运行中的Cargo。
-- 新模式验证：当前/历史fast+npatch+telemetry构建通过；真实地图三格观察通过；缺根目录/缺格子、
-  非零ticks、entity/team观察者、与两种保存模式混用均在加载前拒绝。历史inspect输出仍与原基线逐字节一致。
-  报告仅留本机忽略目录`target/aymod-save-analysis/dubai-initial-topology.json`及current对照，不提交用户数据。
-- `eb35eca1e`补齐Drive4AFD4B/Ship69F45B Move_To的正EMP门禁，复用当前计数和既有setter；
-  Foot先前NavCom/timer写入保留，Stop入口不加门禁；不改供电聚合、offline latch、恢复政策、RNG或保存布局。
-  新回归经正式NP命中→Unit目的地派发→普通对象AI倒计时；修复前在Drive接纳目的地处失败，修复后通过。
-  原夹具默认Teleport已显式改为Drive，装配失败未计作缺陷证据；另一个不能区分旧实现的弱测试已移除。
-- 本次NP EMP9项、navcom10项、TrackHost37项、PoweredUnit8项通过；navcom/TrackHost各1项slow未运行。
-  无NP navcom10项通过、1项slow未运行。一次独立只读critic复读原生后无确认或具体可疑缺陷。
-  Ship正EMP、已有head运动收尾、Walk/Hover和整体失联恢复不据此宣称通过。
-- 本次研究确认：Object受伤5F5505/B95100的EMEffect活跃分支到C2EFB7/B990DC，
-  移动对象清Nav/Target、写+504，不把EMP写进+1C8；Reactivate与expiry确需完整分离，不能只换恢复早退。
-  现有可玩时长/目标/队列政策尚未迁移，见[npatch-emp.md](npatch-emp.md)；仍未改三组计数政策。
-- 下一安全动作：继续补齐普通运动消费者（fresh-track、Walk、Hover），以真实EMP生产路径验证停机及到期恢复，
-  再整体迁移NPAE施加/恢复链。海军184跨水域选点保留初始地图/原生集结政策残余，不调权重或半径。
-- 最新玩家版`aymod-playtest-20261026-emp-move`已从干净`0ca67d84b`构建普通fast+npatch游戏，
-  manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-move.cmd`。
-  包含aa-combat及此前修复；本次只补Move_To门禁，不新增保存字段，不因此承诺跨旧布局兼容。
-  旧版保留，未自动启动；工作区无未提交代码或运行中的Cargo。全PLAN其余F/V/AI项保持开放。
-  F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
+- 工作区`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`；本次代码`406c9f314`。
+  主工作区用户`.gitignore`、隔离历史分析工作区、旧构建和原存档保留；无推送/PR/合并授权。
+  完成范围仍以全面PLAN和本台账各F/V/AI行判断，不把EMP前置修复缩成整个目标。
+- `eb35eca1e`已有Drive/Ship Move_To门禁；本次在既有track_fresh owner补Drive4B2746/Ship6A1D96，
+  正EMP在warp/missile检查后、寻路/格子查询前返回。Unit+6D8死亡覆盖仍未表示。
+- Walk75ACBD在既有setter拒绝新目标；普通Process先保留<17-lepton完成，再按75BF87..75BFA6
+  清动画+36和Foot+68A，不清head/destination/IsMoving，不再付坐标步。无新实体/保存状态、RNG或timer。
+- 两项回归均经生产NP命中：保留路线与正常Drive对照证明Drive/Ship不进入格子/寻路查询；
+  CYB步兵证明目标拒绝、17处零位移/保留head/清动画及latch、16处正常完成、到期重新接纳目标。
+  保留路线是明确供给的前置状态，不说成生产first-hit清理后自然保留。
+  修复前fresh测试在实际查询出现处失败；Walk在目标接纳处失败，接通setter后又在XY3276/3264处失败；
+  最终两项均通过。最初未走保留reader的测试弹头未生效，装配失败不计为缺陷证据。
+- 定向覆盖：NP fresh-response4、navcom10、Walk-step3、PathBatch24、EMP10与真实AY Tesla攻击/到期1项通过；
+  无NP对应fresh3/navcom10/Walk3/batch24通过。navcom各1项slow未运行；未跑全仓库、玩家GUI或原引擎执行。
+  一次独立只读critic复读原生指令/消费者，未发现确认或具体可疑缺陷。
+- NPAE生命周期尚未迁移：Object受伤5F5505/B95100→C2EFB7/B990DC清Nav/Target、写+504不写+1C8；
+  Reactivate70FBE0/C2BC8B与到期C2BC5D/C2BC6E确需完整分离。现有时长/目标/队列、Ares式offline/Hunt
+  政策仍保留，详见[npatch-emp.md](npatch-emp.md)。三组独立供电计数仍待用户政策确认，不静默改动。
+- Hover下一步须单独核：Move_To514DAA..514DB1先存目的地，再在514DB9查paralysis，不能照抄Drive早退。
+  已读Move_To/ProcessMovement，514310起10496字节的直接+37C候选扫描为空；这不是无间接EMP消费者的证明。
+  活跃Drive/Ship paid-track收尾与Hover完整调用链仍开放；不要把离线火花或Power_Off一概等同于冻结运动。
+- AI已修的陆海双队列/Walk集结和F06 AACombat、F10 GPU电弧仍保留，不重复实现；玩家长局、多AI/GUI待验。
+  海军184的源/集结Water raw2/4在同历史版初始图tick0即分离，map/rules指纹与中盘一致，详见此前A04记录与
+  本机忽略`target/aymod-save-analysis/dubai-initial-topology.json`；不是读档才隔断，不改权重/集结半径。
+  水格恢复zone4→0已复读CellLoad483A21清+4C，Map+68另存，不擅自Recalc。
+- 当前上一玩家版`aymod-playtest-20261026-emp-move`来自干净`0ca67d84b`；
+  入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-move.cmd`；本次待保留新普通fast+npatch构建。
+  下一安全动作：完成Hover/active-track调查后整体迁移施加/恢复链；F02/F03/F07–F09/F11/F12及其余V/AI继续开放。
 
 ## 3. 功能缺口与适配进度
 
