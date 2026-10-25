@@ -1,13 +1,37 @@
 # AYMod Windows 开发交接
 
-截至 2026-10-25。本文件交接已经做过的工作，不是新一轮兼容性审计。
-未完成项沿用现有记录，没有为本次交接重新探索。后续以 Windows 实机结果为准。
+截至 2026-10-25。开头检查点是当前Windows接续状态；第1–7节保留此前交接历史，
+不代表本轮重新执行全部旧验收。当前兼容性结论以分类清单和Windows实际结果为准。
 
-2026-10-25 接续：已从本交接分支建立 Windows 分类审计，当前待办以
-[AYMOD 兼容性清单](aymod-compatibility.md) 的 F/A/V/C 编号为准，优先覆盖多电脑遭遇战。
-下文仍保留交接当时的历史边界，不代表本轮重新跑过其验收。
-本轮额外确认步兵隐形、隐形/爆炸箱和 BFRT 第六乘员 FLH 的生产路径缺口；
-仅更新清单并构建只读查询工具，没有更新安装的普通游戏或宣称 Windows 对战通过。
+## 当前 Windows 接续检查点
+
+- 当前机器工作树：`D:/Workshop/vera20k-aymod-audit`，分支
+  `feature/aymod-integration-resume`。代码HEAD `24cbbd96d`，后续文档提交不改游戏行为。
+  原 `D:/Workshop/vera20k` 仍在main，其用户未提交的 `.gitignore` 未动。
+- 用户后续授权实现，顺序是**功能优先、UI随后**；不是只做研究。没有推送、PR、合并、
+  发布资源或改变MOD平衡/AI权重的授权。当前待办以[兼容性清单](aymod-compatibility.md)为准。
+- 已本地提交：F01步兵隐形 `8f4589337`；F05独立炮塔速度 `d8fa8266b`；
+  F13超五乘员端口循环 `24cbbd96d`。各自经过一次独立只读critic，未发现本次引入的具体缺陷。
+- F13已纠正首版假设：原生循环前五端口，第六名回绕第零槽；ART5/6仍不读，不能扩大数组。
+- 测试环境：`RA2_DIR` 为本机Steam正版目录，`VERA20K_AYMOD_DIR` 为本机AYMOD目录，
+  `VERA20K_REQUIRE_RETAIL_INI=1`。本工作树忽略的 `ini/` 由既有asset工具从正版资源提取。
+  每次Cargo仍经 `python -m tools.cargo_run --`，并使用VS C++开发环境。
+- 已通过的定向覆盖：NPatch cloak、6项sensor_lifecycle、7项combat_turret_facing、
+  92项NativeProcessing、46项ArtData、20项FireCoord；无NPatch时新增隔离回归、
+  原版负端口golden及40项cloak通过。与本链无关的ignored慢测未运行，未跑全仓库。
+- 新增实际AYMOD场景通过：`aymod_tanya_cloaks_and_fires_without_decloaking`、
+  `aymod_mtnk_keeps_independent_turret_speed_while_firing`（`--profile fast`）、
+  `aymod_sixth_fortress_passenger_reuses_first_firing_port`。既有BFRT乘员经验场景也通过。
+  这些是 `headless_scenario::retail_construction_tests::` 下带 `--ignored --exact` 的lib测试。
+- 普通游戏构建通过：`build --profile fast -p vera20k --bin vera20k --no-default-features --features npatch`。
+  当前工具解析的文件为 `D:/Workshop/vera20k/target/owned-worktrees/146dfaa91a3a669a/fast/vera20k.exe`；
+  启动工作目录应为本工作树。没有启动或安装替换普通游戏，后续仍以resolve结果为准。
+- F05新增保留Rules字段改变自动存档layout；旧layout按既有检查拒绝，不保证旧存档跨版本兼容。
+  未做GUI/GPU外观认证、下车重上动态场景、多人长局或NPAE原生运行对照。功能清单未全部关闭，UI未开始。
+- 没有遗留拥有的Cargo或合并操作。下一安全动作：先核F04狙击手对普通/保护驻军的原生链，
+  再沿既有驻军伤害owner适配；V01三类无人单位供电和F02/F03箱子仍开放，不能跳过直接宣布功能完成。
+
+下文1–7节保留此前macOS交接历史，不代表在Windows重新执行了全部旧验收。
 
 ## 1. 从哪里继续
 

@@ -96,6 +96,9 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   旧实现先失败的第六端口回归已通过；真实AYMOD六人实际Enter登车后，当前cargo第六/第一名
   的生产发射坐标相同、第五/第一名不同。ArtData46项、FireCoord20项以及无npatch原版越界
   回归通过；既有实际BFRT乘员经验场景仍通过。Sidebar cameo的慢测不覆盖此链，未运行。
+- F13独立只读critic未发现本次引入的具体缺陷。无NPatch的40项cloak定向覆盖也通过；
+  其5项ignored是未修改机制的Mirage专项，不冒称已运行。普通Windows游戏已用
+  `--profile fast --no-default-features --features npatch`构建成功，未启动/安装替换。
 - 没有运行Windows GUI、多AI长局或NPAE原生对照；不将局部通过称为整个MOD兼容。
 
 此前库存的 25,068 个物理 section/key 对、2,374 个不同键、207 个 accessor 查询，
