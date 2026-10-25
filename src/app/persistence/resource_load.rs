@@ -411,7 +411,7 @@ impl PreparedSavedGame {
     ) -> CommittedSavedGame {
         let PreparedSavedResources {
             world,
-            mut resources,
+            resources,
             processed_rules,
             map,
             local_view,
@@ -422,27 +422,15 @@ impl PreparedSavedGame {
             elapsed_clock,
             ..
         } = self.candidate;
-        let dummy = process.shared_cell_dummy.clone();
-        let (owner, cache, _) = process.native_rules_mut_with_tile_cache();
-        cache
-            .adopt_prepared(tile_cache)
-            .expect("synchronous saved-load selector adoption");
-        owner
-            .expect("prepared process Rules owner")
-            .install_saved_scenario_rules(processed_rules);
-        let selector = cache.selector();
-        let (mut simulation, details) = world.into_committed(dummy.clone(), process_main);
-        simulation.bind_tile_variant_selector(selector.clone());
-        let template = resources
-            .terrain_template
-            .as_mut()
-            .expect("prepared saved terrain");
-        template.bind_shared_cell_dummy(dummy);
-        template.bind_tile_variant_selector(selector);
-        *runtime = Some(SimRuntime {
-            simulation,
+        let (incoming, details) = commit_saved_runtime(
+            world,
             resources,
-        });
+            processed_rules,
+            tile_cache,
+            process,
+            process_main,
+        );
+        *runtime = Some(incoming);
         CommittedSavedGame {
             map,
             presentation: self.presentation,
@@ -457,6 +445,154 @@ impl PreparedSavedGame {
     }
 }
 
+fn commit_saved_runtime(
+    world: PreparedLoad,
+    mut resources: SimResources,
+    processed_rules: ProcessedRulesLayers,
+    tile_cache: TileVariantSelectorCache,
+    process: &mut ProcessAssets,
+    process_main: &MainRng,
+) -> (SimRuntime, CommittedLoadPresentation) {
+    let dummy = process.shared_cell_dummy.clone();
+    let (owner, cache, _) = process.native_rules_mut_with_tile_cache();
+    cache
+        .adopt_prepared(tile_cache)
+        .expect("synchronous saved-load selector adoption");
+    owner
+        .expect("prepared process Rules owner")
+        .install_saved_scenario_rules(processed_rules);
+    let selector = cache.selector();
+    let (mut simulation, details) = world.into_committed(dummy.clone(), process_main);
+    simulation.bind_tile_variant_selector(selector.clone());
+    let template = resources
+        .terrain_template
+        .as_mut()
+        .expect("prepared saved terrain");
+    template.bind_shared_cell_dummy(dummy);
+    template.bind_tile_variant_selector(selector);
+    let runtime = SimRuntime {
+        simulation,
+        resources,
+    };
+    (runtime, details)
+}
+
 #[cfg(test)]
 #[path = "resource_load_tests.rs"]
 mod tests;
+
+/// Explicit local diagnostic continuation; unlike inspection this advances a
+/// cold-loaded match. It uses production preparation and the same runtime
+/// commit owner as the interactive saved-game load, without GPU presentation.
+#[cfg(feature = "telemetry-dashboard")]
+pub fn trace_saved_game(
+    path: &std::path::Path,
+    root: &std::path::Path,
+    ticks: u32,
+    entity_ids: &[u64],
+    team_ids: &[u64],
+) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    if ticks > 300 {
+        return Err("save traces are bounded to 300 frames".into());
+    }
+    if entity_ids.len() > 32 || team_ids.len() > 32 {
+        return Err("save traces accept at most 32 entities and 32 teams".into());
+    }
+    if entity_ids.is_empty() && team_ids.is_empty() {
+        return Err("save traces require at least one entity or team observer".into());
+    }
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let header = GameSnapshot::read_header(&bytes).map_err(|error| error.to_string())?;
+    let media = crate::assets::asset_manager::MediaArchiveMode::STOCK_DIGITAL;
+    let mut process = ProcessAssets::new(media, true);
+    let mut assets = process
+        .reconstruct_manager(root)
+        .map_err(|error| error.to_string())?;
+    process.initialize_sources_if_needed(&assets)?;
+    assets
+        .register_neutral_archives()
+        .map_err(|error| error.to_string())?;
+    let frontend = MainRng::new(0);
+    let repository = SaveRepository::at(path.parent().unwrap_or(root).to_path_buf());
+    let lighting = crate::app::presentation::lighting::MatchLighting::default();
+    let clock = || 0;
+    let view = SavedGamePreparationView {
+        repository: &repository,
+        current_simulation: None,
+        frontend_main: &frontend,
+        rules_owner: process
+            .native_rules()
+            .ok_or("missing process Rules owner")?,
+        tile_cache: &process.tile_variant_selector_cache,
+        lighting: &lighting,
+        load_clock: &clock,
+    };
+    let prepared = assets
+        .prepare_saved_load(|assets| PreparedSavedGame::prepare_resources(&bytes, &view, assets))
+        .map_err(|error| error.to_string())?;
+    let PreparedSavedResources {
+        world,
+        resources,
+        processed_rules,
+        tile_cache,
+        ..
+    } = prepared;
+    let (mut runtime, _) = commit_saved_runtime(
+        world,
+        resources,
+        processed_rules,
+        tile_cache,
+        &mut process,
+        &frontend,
+    );
+    runtime.simulation.batch_path_searches();
+    let mut observations = Vec::new();
+    for elapsed in 0..=ticks {
+        if [0, 1, 10, 120, 300].contains(&elapsed) || elapsed == ticks {
+            let sim = &runtime.simulation;
+            let actors: Vec<_> = entity_ids
+                .iter()
+                .copied()
+                .map(|id| {
+                    json!({"id": id,
+                    "state": sim.entities().get(id).map(|e| json!({
+                        "type": sim.interner().resolve(e.type_ref()), "position": e.position,
+                        "navigation": e.navigation, "locomotor": e.locomotor,
+                        "mission": e.mission,
+                    }))})
+                })
+                .collect();
+            let teams: Vec<_> = team_ids
+                .iter()
+                .copied()
+                .map(|id| json!({"id": id, "state": sim.team_script_vm().team(id)}))
+                .collect();
+            observations.push(json!({"elapsed_frames": elapsed,
+                "tick": sim.session().tick(), "binary_frame": sim.session().binary_frame(),
+                "actors": actors, "teams": teams}));
+        }
+        if elapsed < ticks {
+            let due = runtime.simulation.take_due_commands();
+            runtime
+                .advance_frame_for_tooling(&due, crate::headless_scenario::SIM_TICK_MS)
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    if std::fs::read(path).map_err(|error| error.to_string())? != bytes {
+        return Err("input save changed during trace".into());
+    }
+    Ok(json!({"trace_schema": 1,
+        "metadata": {"envelope_version": header.envelope_version,
+            "layout": format!("{:#010x}", header.layout), "initial_tick": header.tick,
+            "map_hash": format!("{:#018x}", header.map_hash),
+            "rules_hash": format!("{:#018x}", header.rules_hash)},
+        "coverage": {
+        "actors": "only explicitly requested entity IDs; missing actors are null",
+        "teams": "only explicitly requested team IDs; missing teams are null",
+        "continuation": "300-frame maximum; normal due commands, no new player orders; BatchON",
+        "rng": "normal cold-load MainRng seed0 and Scenario reset; not original live-process streams",
+        "io": "input read only; no save writes, network server or GPU presentation",
+        "interpretation": "short diagnostic continuation, not whole-match AI acceptance"},
+        "observations": observations}))
+}

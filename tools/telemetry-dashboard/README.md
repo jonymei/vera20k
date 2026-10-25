@@ -207,3 +207,29 @@ rebound. It is a point-in-time observation, not proof of progress or strength, a
 does not recompute provider availability. Reports can contain player names and
 all match positions: keep them local (for example under ignored `target/`) unless
 the player explicitly authorizes sharing. Do not commit user saves or reports.
+
+## Trace selected saved objects locally
+
+`--trace-save` is a separate, explicit continuation mode, not read-only inspection.
+Using the same `telemetry-serve` build, set the following variables to the resolved
+executable, a compatible save, its game-data root and IDs from the inspection
+report. For example, in PowerShell:
+
+```powershell
+& $tool --trace-save $save --ra2-dir $assets --ticks 300 --observe-entity $entity_id --observe-team $team_id
+```
+
+Repeat either observer flag for additional IDs (at most 32 entities and 32 teams).
+At least one observer is required; missing/retired objects produce `null`, not
+invented state. Trace is limited to 300 ordinary frames and samples frame 0, 1,
+10, 120, 300 and the requested final frame. It prepares and commits saved resources
+through the same owner as the interactive loader, enables normal batched paths,
+consumes due saved commands and issues no new player orders. It opens no window
+or server and never writes the input save.
+
+The continuation uses normal cold-load Main RNG seed zero and Scenario RNG reset,
+not the original running process's streams. It is a short diagnostic continuation,
+not an exact original-session replay, native comparison or whole-match AI verdict.
+The JSON labels this scope and records the admitted envelope/layout and content
+hashes. Keep reports local under ignored `target/`; selected object states can
+reveal private match positions. Layout and resource checks are not optional.

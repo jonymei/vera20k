@@ -12,6 +12,8 @@ pub(crate) mod profile_file;
 mod resource_load;
 pub(crate) mod rules_profile;
 pub(crate) mod wol_profile;
+#[cfg(feature = "telemetry-dashboard")]
+pub use resource_load::trace_saved_game;
 pub(crate) use resource_load::{PreparedSavedGame, SavedGamePreparationView};
 
 use std::path::{Path, PathBuf};
