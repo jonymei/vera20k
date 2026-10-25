@@ -261,8 +261,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 仍缺实际AYMOD正式加载的箱子场景与GUI/原生并排验收。建筑和落地飞机目前测试仅证明授予能力；
   不把它说成四类完整视觉/生命周期通过，现有建筑visual-character不自动等于车辆全透明。
   保存布局随CloakRuntime新字段改变，旧布局仍拒绝，不放宽门禁。此批不能据此关闭F02整体验收。
-- 既有玩家入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-motion.cmd`，不含F02；
-  它包含已修陆海生产槽、Walk集结、颜色映射、海豚防崩及电弧等。新F02构建待保存后单独记录。
+- 已从干净 `9f198cee9` 保存普通fast+npatch构建 `aymod-playtest-20261026-cloak-crate`，
+  manifest已读且固定标签解析通过。新入口 `D:/Workshop/vera20k/target/AYMOD-test-20261026-cloak-crate.cmd`；
+  含F02及此前陆海生产槽、Walk集结、颜色映射、海豚防崩、电弧等。旧入口/构建保留，未启动游戏。
+  本版须新局；旧布局存档未迁移，不能强读。正式AY箱子场景和玩家画面仍待验。
 - 下一功能链F08已用实际指令再核：C2EF94..C2EFA8读取IsFlatExplosion到WH+130，
   75D42F..75D443随后读取CausesDelayKill到同一字节，701E92参与已有建筑PostMortem门禁。
   必须在有序规则处理器逐物理层保留，而不是合并INI后让旧别名覆盖新层；不另造平面伤害或死亡计时器。
