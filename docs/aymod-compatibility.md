@@ -268,8 +268,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   海军184的源/集结Water raw2/4在同历史版初始图tick0即分离，map/rules指纹与中盘一致，详见此前A04记录与
   本机忽略`target/aymod-save-analysis/dubai-initial-topology.json`；不是读档才隔断，不改权重/集结半径。
   水格恢复zone4→0已复读CellLoad483A21清+4C，Map+68另存，不擅自Recalc。
-- 当前上一玩家版`aymod-playtest-20261026-emp-move`来自干净`0ca67d84b`；
-  入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-move.cmd`；本次待保留新普通fast+npatch构建。
+- 最新玩家版`aymod-playtest-20261026-emp-motion`来自干净`3026d4e16`，普通fast+npatch构建成功；
+  manifest来源及固定标签二进制校验通过，入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-motion.cmd`。
+  含上一emp-move及此前修复，本次不新增保存字段；仍由正式布局/资源门禁判断存档兼容。
+  旧版保留，未自动启动；当前无未提交代码或进行中的Cargo。
   下一安全动作：完成Hover/active-track调查后整体迁移施加/恢复链；F02/F03/F07–F09/F11/F12及其余V/AI继续开放。
 
 ## 3. 功能缺口与适配进度
