@@ -168,6 +168,29 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 修正版已保留：`aymod-playtest-20261025-sonic-fix`，干净`e18a67f21`，fast+npatch普通游戏构建成功。
   本机新入口`D:/Workshop/vera20k/target/AYMOD-test-20261025-sonic-fix.cmd`；旧测试版仍保留。
   AI攻势弱的复现条件补充为上述地图/1v1/困难，尚无足够证据定位具体AI链。
+### Return Dubai 困难 1v1：生产瓶颈与颜色错配
+
+- 按用户要求先分段定位，不修改AIMD权重、兵种数值或MOD配置。旧实战日志已显示雷达、作战实验室和工业工厂；
+  不是完全卡在发展。使用真实AYMOD、Return Dubai、美国对苏联困难、固定0/3出生点、默认选项和固定seed，
+  通过生产load_session诊断至9000帧：AI资金410000→446621，两重工两船厂，多个团队补齐并推进到出击动作。
+  人类在该诊断中不操作，因此不是恢复玩家原局，也不能据此认证攻势强度。
+- 7500帧可见陆军工厂生产而海军队伍缺HYD/SQD/SUB；9000帧仅船厂生产SUB，陆军工厂等待。
+  实际NPAE174指令确认独立陆/海选择槽，原实现却共享；这是可达的生产/补员瓶颈，不是AI完全不出击。
+  `8e944009f`已在既有HouseAiUnitChoices与工厂owner分离槽位，并覆盖需求过滤、出厂、限额、取消和保存/hash。
+  保留原生矿车优先及取消/重启的不对称清空，不另建编队或生产计数。
+- 新增3项生产回归通过；NP FactoryAI13、Chooser4、BaseBuilding及直接生产生命周期/队列覆盖通过。
+  无NP FactoryAI8、Chooser4、BaseBuilding12及颜色解析隔离通过。独立只读critic未发现本链具体缺陷。
+  双调用增加的Scenario RNG抽样沿原owner按陆→海顺序；未新增计时器、Detach或线程相关状态。
+  存档布局随新增保留字段改变，旧布局照常拒绝。
+- 仍开放：实际多AI/长局攻势验收；NPAE同需求数量时的候选清空与stock picker差异；
+  可选DisableAIParallelProduction机制。生产查询确认实际根/模式/地图均未设置该键，原生默认false，
+  本轮不声称支持开启后的计数政策。没有把一处双队列修复标成整个AI完成。
+- `372af3d64`已修“美国选蓝色进图暗红”：AY根UseDropDownColors=yes，但大厅和开局仍用stock序号表。
+  现共用按MPC名称解析的NPAE映射，大厅、House配色、加载标记和聊天一起迁移；不是地图强制改色。
+  AY当前第3色是白色MPC03，第5色是蓝色MPC05；旧蓝色选择应在新大厅重新按显示色块选择。
+  根开关层次/保存回归与真实AY蓝色映射、白/蓝色块两项回归通过，相关前端/加载/消息覆盖通过。
+  现有真实AY地图加载与MTNK攻击场景也通过；尚未做本轮GUI画面验收。
+  科技等级滑条与完整16色界面仍开放，其他WOL/合作界面不冒称全部支持NP扩展色。
 ## 3. 功能缺口与适配进度
 
 每一行是一条可独立收口的玩法链，不要求合并成一个大改动。
@@ -185,7 +208,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
 | F10 / P2 | 电弧自定义配色：武器自定义三色没有传到最终绘制 | TankBolt、TankBoltE、TeslaFragmentT 的 `EBoltColor1/2/3`；`src/sim/combat/electric_bolt.rs:18` 只传 alternate_color 等字段；`src/render/electric_bolt.rs:25` 仍从 palette 10/5/15 取色 | reader → effect birth → renderer，全程使用既有电弧 owner；实际 TTNK 普通/精英攻击画面验证，不调截图拟合 |
 | F11 / P2 | 心灵终结器独立光照：超武 section 的 NP 光照覆盖未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
-| F12 / P2 | 扩展遭遇战 UI：科技等级滑条与扩展颜色未按 NP 配置进入 UI | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
+| F12 / P2 | 扩展遭遇战 UI：8色大厅/战场错配本轮已修；科技等级滑条与完整16色界面仍开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 
 F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定义尚未全部证明**，
@@ -235,10 +258,8 @@ V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开�
 | A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 两架 SCHP 执行 `54 → 5 → 9 → 0...`，移动、落地部署、开火和再次移动；不是只加载成功。现有 TickTank DeployToFire/DeploysInto 注释残留不能直接归罪 SCHP |
 | A10 / P1 / 待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 盟军AI实际建巨炮/裂缝，实际使用超级裂缝相关单位/能力；核当前生效配置和消费者，不把旧作者 bug 当当前引擎必然存在 |
 
-A04 的特定残留：`src/sim/ai_unit_choice.rs:86` 只有一个车辆选择槽，
-`src/sim/production/factory_ai.rs:355` 记录了独立 naval slot 未完成。
-现有说明引用 **NPSE #359/ext173**，尚未证明 #174 也需要双槽；
-不能直接移植另一版本或写成“AYMOD海军必然不能生产”。先原生核对和实际竞争场景复现。
+A04 双队列已按实际NPAE174指令适配，见本轮定位与
+patch.md；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
 
 ### 固定 AIMD 的配置残留：单独管理，不猜修复
 

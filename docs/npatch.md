@@ -222,6 +222,36 @@ and the transient targeting mode is intentionally cleared, not restored, on save
 Hover, release and the writers share the core admission query. Active EMP refuses
 going online; switching off remains allowed and never clears the EMP counter.
 
+## Independent AI land/naval choices
+
+AYMOD's actual NPAE174 calls `C2CEE9` from House update `4F90F2/4F9252`: land then naval.
+`4FEA70 -> C2BFE0` selects House+5650 or +160F8; `C2CF04` filters TaskForce need by Naval,
+and `4FBDAF -> C2CE9F` selects that slot for the producing building. The existing private
+HouseAiUnitChoices owns both retained indices under npatch; stock builds retain one vehicle slot.
+Both passes take the original harvester arm; `C2F028` rejects a Naval mismatch and returns,
+without falling through to team demand. Exit `C2BE2A` and limit `C2D039` clear the matching slot.
+Abandon `4CA0B1` still clears land even for a ship, and `4FE0A3` reset and mode2's empty/buildable
+checks still cover only the original three choices. These native asymmetries are intentional.
+The same Scenario stream supplies the extra naval chooser's draws, in native land/naval order;
+no new timer or Detach policy is introduced. Save/hash follow the existing House state owner.
+
+Residuals: the NPAE tied-need candidate reset at C2B479..C2B481 is not yet ported, so the stock
+picker's candidate set/random range can differ. DisableAIParallelProduction's optional counters
+are separate; the target Return Dubai Battle layers leave that key absent and native default is false.
+The dual-slot regression is not a claim that the full AI or its attack strength is now equivalent.
+
+## Multiplayer dropdown colors
+
+Startup `52D144 -> B98800 -> C2ADE9` reads root RULESMD[UISettings] UseDropDownColors with
+ReadBool/defaultfalse. The processed root retains it; scenario overrides do not change this global.
+When enabled, `C2AE00..C2AE52` builds lobby swatches from MPC01..16 HSV. Session conversion
+`69A310 -> C2AEF0` resolves MPC(priority+1), with -2 selecting MPC17, and falls back to the
+stock table if the name is missing. All match/lobby/loading/chat consumers share that resolver.
+Without npatch or with the switch off, stock mapping and swatches remain unchanged.
+
+Current scope is the existing eight Skirmish choices, not the full 16-color UI: in AYMOD,
+MPC03 is white and MPC05 is blue. WOL/cooperative stock-only screens and the tech slider remain
+separate UI work. Rules/launch/tint regressions do not replace the pending player GUI acceptance.
 ## Cross-extension compatibility
 
 The three capabilities — `ares`, `phobos`, `npatch` — are orthogonal and mixable:
