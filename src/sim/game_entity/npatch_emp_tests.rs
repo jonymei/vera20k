@@ -14,7 +14,7 @@ fn scene() -> (Simulation, RuleSet, u64, u64) {
          [VehicleTypes]\n0=TTNK\n1=TANK\n2=ORGANIC\n\
          [InfantryTypes]\n0=PERSON\n[BuildingTypes]\n0=TOWER\n1=POWER\n2=FACTORY\n\
          [TTNK]\nStrength=300\nPrimary=TankBolt\nSpeed=5\n\
-         [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\nCost=700\nTechLevel=1\nOwner=Americans,Russians\n\
+         [TANK]\nStrength=1000\nArmor=heavy\nSpeed=5\nLocomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\nCost=700\nTechLevel=1\nOwner=Americans,Russians\n\
          [ORGANIC]\nStrength=100\nOrganic=yes\nSpeed=5\n\
          [PERSON]\nStrength=100\nSpeed=5\n\
          [TOWER]\nStrength=500\nArmor=concrete\nPowered=yes\nPower=-10\nPrimary=TankBolt\n\
@@ -235,6 +235,63 @@ fn hit(sim: &mut Simulation, rules: &RuleSet, source: u64, target: u64, duration
         rules.warhead("EMPulsWH").unwrap(),
         rules,
         FrameEffects::default(),
+    );
+}
+
+#[test]
+fn emp_refuses_drive_destination_until_expiry_without_erasing_foot_orders() {
+    use crate::sim::components::NavTargetRef;
+    use crate::sim::movement::track_process::TrackFamily;
+    let (mut sim, rules, source, target) = scene();
+    assert_eq!(
+        sim.entities()
+            .get(target)
+            .unwrap()
+            .locomotor
+            .as_ref()
+            .unwrap()
+            .active_kind(),
+        crate::rules::locomotor_type::LocomotorKind::Drive
+    );
+    hit(&mut sim, &rules, source, target, 3);
+    let requested = NavTargetRef::cell(16, 20);
+    sim.set_unit_destination(target, requested, &rules, true, FrameEffects::default());
+    let entity = sim.entities().get(target).unwrap();
+    assert_eq!(
+        entity.navigation.nav_com(),
+        Some(requested),
+        "Foot4D9510 publishes before Drive Move_To can refuse"
+    );
+    assert!(
+        entity
+            .locomotor
+            .as_ref()
+            .unwrap()
+            .track_destination(TrackFamily::Drive)
+            .is_none(),
+        "Drive4AFD4B must refuse Move_To while EMP is positive"
+    );
+    for frame in 1..=3 {
+        sim.session.set_binary_frame_for_test(frame);
+        sim.object_ai_visit_one(target, Some(&rules), Default::default());
+    }
+    assert_eq!(sim.entities().get(target).unwrap().emp_remaining(), 0);
+    sim.set_unit_destination(
+        target,
+        NavTargetRef::cell(17, 20),
+        &rules,
+        true,
+        FrameEffects::default(),
+    );
+    assert!(
+        sim.entities()
+            .get(target)
+            .unwrap()
+            .locomotor
+            .as_ref()
+            .unwrap()
+            .track_destination(TrackFamily::Drive)
+            .is_some()
     );
 }
 
