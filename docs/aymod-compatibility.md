@@ -241,7 +241,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：海军集结水域诊断（2026-10-26）
+### 当前检查点：海军初始地图对照（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
   F06代码提交`84b7e5e2c`。无推送/PR/合并授权；主工作区的用户`.gitignore`修改、历史分析工作区、
@@ -263,8 +263,16 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   SUB所在109,55与HYD所在108,55的Water/WaterBeach原生非桥raw ID均2；集结点99,149为4，
   派生ground标签也分别2/4。不是仅凭派生标签推断；Normal的原生raw ID1投影为0，未混淆这两个值。
   这说明当前保留拓扑把舰船与集结点分到不同水域，不能只按局部占格或发展不足解释。
-  尚未证明此隔断是天然地图、动态建筑/桥变化、拓扑维护还是恢复差异；未执行完整Foot准入或AStar搜索。
-  三格land_type为Water而保留zone_type为0，作为后续源状态/恢复消费者核对线索，不据此直接改分类。
+  初始地图对照已补齐：同历史版本、同正式map/rules指纹，tick0的两端也不连通，见下段。
+  尚未执行完整Foot准入/AStar或原版运行对照，不能把所有海军停滞归为地图问题。
+- 初始图核对：扩展同一工具的`--inspect-map`，复用正式headless初始Battle local-only加载，
+  不推进、不发指令、不写保存。历史版map hash=`0x24d10eb47ae8d866`、rules hash=`0x87edbd7f9e0e5513`
+  与玩家中盘完全一致；tick0三格Water/WaterBeach仍是2、2、4，均无占格、在playfield且无结构桥。
+  当前版同一地图的两端也分离。由此排除此处隔断仅由中盘造建筑/战斗或本次保存恢复才产生；
+  证明的是VERA正式初始构造中的分离，不冒称已做原引擎地图拓扑对照或整个AI强度验收。
+- 水格zone_type由初始4变成恢复0的线索已解释：`CellLoad4839F0`在`483A21`明确清零+4C；
+  正式`restore_user_loaded_land`匹配此语义，Map+68保留classes/IDs/rows是另一owner。
+  目标NPAE静态指令已复读，不为消除表面差异擅自Recalc或重建保存拓扑。
 - 工具扩展`--observe-cell x,y`：最多32格，复用core telemetry观察owner的地形/occupancy、
   ZoneMap派生标签和GetZoneID非桥raw查询；无新增模拟状态、原生查询副本、Dummy写入或保存布局字段。
   当前/历史fast+npatch+telemetry工具均构建通过；历史真存档观察及cell-only/越界空结果通过，
@@ -279,10 +287,14 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 最新玩家版`aymod-playtest-20261026-aa-combat`已从干净`d3660b43c`构建普通fast+npatch游戏，
   manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-aa-combat.cmd`。
   包含上一版全部修复和F06；不覆盖旧构建，未自动启动。当前工作区无未提交代码或运行中的Cargo。
-- 下一安全动作：比较Return Dubai新局与存档的同一两点连通关系（不能跨局直接比较编号），
-  追动态船厂/桥/占格与保存恢复的拓扑来源，随后验证正式Foot准入/Ship路径结果。
-  NPAE174原始6EF93C..6EF98A仍是3x3/无required-zone/Normal的FNPC调用，尚无证据授权改集结算法。
-  本轮仅诊断/工具，无玩法改动，无新游戏版或PR；上一aa-combat玩家版继续有效。
+- 新模式验证：当前/历史fast+npatch+telemetry构建通过；真实地图三格观察通过；缺根目录/缺格子、
+  非零ticks、entity/team观察者、与两种保存模式混用均在加载前拒绝。历史inspect输出仍与原基线逐字节一致。
+  报告仅留本机忽略目录`target/aymod-save-analysis/dubai-initial-topology.json`及current对照，不提交用户数据。
+- 下一安全动作：海军184的跨水域集结保留为地图初始状态/原生集结选点的残余，未证明应改引擎算法；
+  不把它当成“造船不足”或通过提高权重/改半径修掉。若要设计性改选可达海域，需另列政策并确认。
+  回到V01/A06的NPAE停机/EMP/恢复完整链；独立三组计数仍待用户政策确认，维持原生聚合，
+  先处理已确认的Reactivate/EMP到期顺序差异。同时保留F02/F03/F07–F09/F11/F12与V/AI其余项。
+  本轮仅诊断/工具，无玩法改动、新游戏版或PR；上一aa-combat玩家版继续有效。
   F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
 
 ## 3. 功能缺口与适配进度

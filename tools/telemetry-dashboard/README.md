@@ -242,3 +242,19 @@ not an exact original-session replay, native comparison or whole-match AI verdic
 The JSON labels this scope and records the admitted envelope/layout and content
 hashes. Keep reports local under ignored `target/`; selected object states can
 reveal private match positions. Layout and resource checks are not optional.
+
+## Inspect initial map cells locally
+
+```powershell
+& $tool --inspect-map $map --ra2-dir $assets --observe-cell $cell_xy
+```
+
+This uses the production headless initial Battle local-only loader and the same
+cell observation owner, then exits without advancing frames, starting a server,
+or writing saves. It is not the player's 1v1 roster, native execution or a match
+replay. Only cell observers are allowed (at most 32); entity/team observers,
+nonzero ticks, missing cells, and combinations with save modes are refused.
+The JSON records the selected map, normal parsed-INI map content hash, effective
+rules hash, seed, dimensions and tick0. When comparing with a save, first check
+map/rules identity and compare whether endpoints share a zone within each run;
+zone numbers alone need not stay identical across sessions or graph changes.

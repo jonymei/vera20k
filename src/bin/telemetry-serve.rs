@@ -1,8 +1,10 @@
-//! Local save inspection and headless telemetry demo.
+//! Local save/map inspection and headless telemetry demo.
 //!
 //! `--inspect-save` reads a layout-compatible save through production admission
 //! and prints retained owners locally without running the simulation. The
 //! explicit `--trace-save` mode cold-loads and advances selected observers.
+//! `--inspect-map` instead observes selected cells after initial map construction,
+//! without advancing frames.
 //! Otherwise, this runs a live synthetic simulation with the browser dashboard,
 //! no retail assets required.
 //!
@@ -55,6 +57,7 @@ struct Args {
     ticks: u64,
     seed: u32,
     inspect_save: Option<PathBuf>,
+    inspect_map: Option<String>,
     trace_save: Option<PathBuf>,
     ra2_dir: Option<PathBuf>,
     observe_entities: Vec<u64>,
@@ -70,6 +73,7 @@ fn parse_args() -> Result<Args, String> {
     let mut ticks = 0u64;
     let mut seed = 0x5EED_0001u32;
     let mut inspect_save = None;
+    let mut inspect_map = None;
     let mut trace_save = None;
     let mut ra2_dir = None;
     let mut observe_entities = Vec::new();
@@ -110,6 +114,7 @@ fn parse_args() -> Result<Args, String> {
             "--trace-save" => trace_save = Some(PathBuf::from(next("a save path")?)),
             "--ra2-dir" => ra2_dir = Some(PathBuf::from(next("an asset root")?)),
             "--inspect-save" => inspect_save = Some(PathBuf::from(next("a save path")?)),
+            "--inspect-map" => inspect_map = Some(next("a map file name")?),
             "--addr" => {
                 let raw = next("an address")?;
                 addr = raw
@@ -144,6 +149,7 @@ fn parse_args() -> Result<Args, String> {
                 println!(
                     "usage: telemetry-serve [--addr 127.0.0.1:9741] [--web tools/telemetry-dashboard] \
                      [--units 120] [--structures 6] [--ticks 0] [--seed 0x5EED0001]\n\
+                     or: telemetry-serve --inspect-map <file> --ra2-dir <root> --observe-cell <x,y>...\n\
                      or: telemetry-serve --inspect-save <path>\n\
                      or: telemetry-serve --trace-save <path> --ra2-dir <root> [--ticks 300]\n\
                      (--observe-entity <id> | --observe-team <id> | --observe-cell <x,y>)...\n\
@@ -169,6 +175,7 @@ fn parse_args() -> Result<Args, String> {
         ticks,
         seed,
         inspect_save,
+        inspect_map,
         trace_save,
         ra2_dir,
         observe_entities,
@@ -482,8 +489,51 @@ fn main() -> Result<(), String> {
             std::process::exit(2);
         }
     };
-    if args.trace_save.is_some() && args.inspect_save.is_some() {
-        return Err("--trace-save and --inspect-save are mutually exclusive".into());
+    if [
+        args.trace_save.is_some(),
+        args.inspect_save.is_some(),
+        args.inspect_map.is_some(),
+    ]
+    .into_iter()
+    .filter(|selected| *selected)
+    .count()
+        > 1
+    {
+        return Err(
+            "save tracing, save inspection and map inspection are mutually exclusive".into(),
+        );
+    }
+    if let Some(map) = &args.inspect_map {
+        if args.ticks != 0
+            || !args.observe_entities.is_empty()
+            || !args.observe_teams.is_empty()
+            || args.observe_cells.is_empty()
+        {
+            return Err("--inspect-map requires cells only and no advancing ticks".into());
+        }
+        let root = args
+            .ra2_dir
+            .as_deref()
+            .ok_or("--inspect-map requires --ra2-dir")?;
+        let scenario = vera20k_core::headless_scenario::load(root, map, args.seed)?;
+        let sim = scenario.sim();
+        let cells: Vec<_> = args
+            .observe_cells
+            .iter()
+            .map(|&cell| sim.telemetry_cell_observation(cell))
+            .collect();
+        let report = serde_json::json!({"map_inspection_schema": 1,
+            "metadata": {"map": map, "seed": args.seed,
+                "dimensions": [sim.session().map_width(), sim.session().map_height()],
+                "theater": scenario.map.header.theater, "tick": sim.session().tick(),
+                "map_hash": format!("{:#018x}", scenario.map.ini.content_hash()),
+                "rules_hash": format!("{:#018x}", scenario.runtime.resources.rules.simulation_config_hash())},
+            "coverage": "production headless initial Battle local-only load; no frames, new orders, save writes or server; not the played 1v1 or native execution; compare connectivity, not zone-number identity across sessions",
+            "cells": cells});
+        serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
+            .map_err(|error| error.to_string())?;
+        println!();
+        return Ok(());
     }
     if args.trace_save.is_none()
         && (!args.observe_entities.is_empty()
