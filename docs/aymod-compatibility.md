@@ -243,7 +243,31 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：谭雅海军验证与F07纠正（2026-10-26）
+### 当前检查点：F02隐形箱已接入，原生场景/画面待验（2026-10-26）
+
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
+  本地玩法提交 `958963e4f`、审查修正 `f288fe425`。无推送/PR/合并/启动另一份游戏授权。
+  主工作区用户 `.gitignore`、旧存档、历史分析工作区与已有游戏构建均保留。
+- F02：CellPickup48294F的实例能力由既有CloakRuntime持有，半径内任意House的marked地面Techno接收；
+  重复MP拾取转Money、现有隐形AI、hash及保存已接通。原类型不变，不以rank冒充实例能力。
+  只授予能力，不直接执行隐形、不额外抽RNG、不改计时器、不Detach；后续转换沿既有owner。
+- 同实例Unlimbo现保留隐形状态/计时器/实例能力；Unit737BEB场外例外仅写state2，Infantry不套此特例。
+  独立只读critic发现未占格对象误收能力，已先复现失败再修正。共享范围收集器显式区分准入：
+  Cloak482887/Veteran4829B9要求Object+74，Armor482D9A/Firepower48316B没有该前置，未一刀切改变其他箱子。
+- 三项新增回归覆盖半径/敌我/未标记对象、正常移动单位隐形、重复/存读/hash、换主及同实例入场。
+  最终NP箱子82 passed、隐形44 passed/6 ignored；无NP箱子82 passed、此前无NP隐形43 passed/5 ignored；
+  正确的object_entry::unit_entry_tests为6 passed/2 ignored。早期错误筛选的0项不计覆盖。
+  未跑全仓库；忽略项未因本次改动触及其数值内核，不额外执行。
+- 仍缺实际AYMOD正式加载的箱子场景与GUI/原生并排验收。建筑和落地飞机目前测试仅证明授予能力；
+  不把它说成四类完整视觉/生命周期通过，现有建筑visual-character不自动等于车辆全透明。
+  保存布局随CloakRuntime新字段改变，旧布局仍拒绝，不放宽门禁。此批不能据此关闭F02整体验收。
+- 既有玩家入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-emp-motion.cmd`，不含F02；
+  它包含已修陆海生产槽、Walk集结、颜色映射、海豚防崩及电弧等。新F02构建待保存后单独记录。
+- 下一功能链F08已用实际指令再核：C2EF94..C2EFA8读取IsFlatExplosion到WH+130，
+  75D42F..75D443随后读取CausesDelayKill到同一字节，701E92参与已有建筑PostMortem门禁。
+  必须在有序规则处理器逐物理层保留，而不是合并INI后让旧别名覆盖新层；不另造平面伤害或死亡计时器。
+  F03/F08/F09/F11/F12、V01/A06及多House/长局AI仍开放，原生聚合供电不擅改为独立类型设计。
+### 已完成批次：谭雅海军验证与F07纠正（2026-10-26）
 
 - 工作区`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`；本轮仅测试/文档，无玩法改动。
   主工作区用户`.gitignore`、隔离历史分析工作区、旧构建与原存档保留；无推送/PR/合并/启动另一份游戏授权。
@@ -279,7 +303,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
-| F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
+| F02 / P1 / 已接入，场景与画面待验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY正式加载箱子与GUI待验；建筑/落地飞机仅能力接收已测，不冒称完整生命周期/画面等价；新字段改变保存布局 |
 | F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
