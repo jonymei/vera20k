@@ -1773,6 +1773,119 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY fixed Explosion crate through ordinary Drive movement"]
+    fn aymod_explosion_crate_uses_actual_rules_and_finishes_after_picker_damage() {
+        use crate::sim::{
+            combat::CombatLightRequest,
+            command::{Command, CommandEnvelope},
+        };
+        let mut scenario = aymod_battle(0);
+        let (actor, cell, before, c4) = {
+            let runtime = &mut scenario.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            assert_eq!(rules.powerups.weights[4], 15);
+            assert_eq!(f64::from_bits(rules.powerups.magnitudes[4].bits()), 500.0);
+            let owner = house_of(sim, "Americans");
+            let sites = cells_nearest(aymod_anchor(sim, owner));
+            let actor = spawn_on_free_cells(sim, rules, owner, sites, &["MTNK"])[0];
+            let at = sim.entities().get(actor).unwrap().position;
+            let sites: Vec<_> = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 2
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| {
+                                sim.terrain_cell_level(x, y) == Some(at.z())
+                                    && sim
+                                        .overlay_grid
+                                        .as_ref()
+                                        .is_some_and(|grid| grid.cell(x, y).overlay_id.is_none())
+                                    && sim
+                                        .path_grid()
+                                        .is_some_and(|grid| grid.is_walkable_for_infantry(x, y))
+                            })
+                })
+                .collect();
+            let slot = sim
+                .crate_authority
+                .slots()
+                .iter()
+                .position(|slot| slot.is_empty())
+                .unwrap();
+            let (x, y) = sites[0];
+            assert!(crate::sim::crates::place_crate(
+                sim,
+                rules,
+                &resources.overlay_registry,
+                (x as i16, y as i16),
+                Some(4)
+            ));
+            let placed = sim.crate_authority.slots()[slot];
+            let cell = (placed.cell_x as u16, placed.cell_y as u16);
+            let overlay = sim
+                .overlay_grid
+                .as_ref()
+                .unwrap()
+                .cell(cell.0, cell.1)
+                .overlay_id
+                .unwrap();
+            assert!(
+                resources
+                    .overlay_registry
+                    .flags(overlay)
+                    .unwrap()
+                    .crate_type
+            );
+            let before = sim.entities().get(actor).unwrap().health.current();
+            let c4 = sim.interner.intern(&rules.bridge_warheads.c4_name);
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            (actor, cell, before, c4)
+        };
+        for _ in 0..600 {
+            let output = tick_with_due_commands(&mut scenario);
+            let sim = scenario.sim();
+            if sim
+                .overlay_grid
+                .as_ref()
+                .unwrap()
+                .cell(cell.0, cell.1)
+                .overlay_id
+                .is_some()
+            {
+                continue;
+            }
+            assert!(
+                sim.entities()
+                    .get(actor)
+                    .is_none_or(|unit| unit.health.current() < before)
+            );
+            let bursts=output.combat_lights.iter().filter(|request|matches!(request,
+                CombatLightRequest::Impact{target_id:None,damage:500,warhead_ref,force_create:false,flags:0,..} if *warhead_ref==c4)).count();
+            assert_eq!(
+                bursts, 5,
+                "actual pickup finishes all five sourceless bursts"
+            );
+            return;
+        }
+        panic!("actual AY Drive never reached its fixed Explosion crate");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Kirov warhead and barrel delayed death"]
     fn aymod_flat_explosion_blimp_warhead_arms_and_expires_barrel_fuse() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};

@@ -2,7 +2,7 @@
 //! Speed ([`super::speed`]): the radius multipliers (Armor `0x00482D56`,
 //! Firepower `0x00483125`), Veteran `0x00482972`, HealBase `0x00482B8F`,
 //! Money `0x00482463`, Reveal `0x00481F9D`, Darkness `0x00481F6D` and the
-//! free Unit `0x00482041`. [`super::pickup`] selects the arm and plays the
+//! free Unit `0x00482041` and Explosion `0x00482565`. [`super::pickup`] selects the arm and plays the
 //! arm's sound; each arm here reproduces the gameplay writes.
 //!
 //! The radius arms walk the Ground display layer (`0x008A0394`, the vector
@@ -143,6 +143,89 @@ fn ground_members_in_radius(
             })
         })
         .collect()
+}
+
+/// CellPickup482565..482719: direct C4, then five radius/angle scatters.
+/// Each area receiver completes before its anim/light and the next RNG draw.
+/// The mutable direct packet never replaces the saved integer magnitude;
+/// picker death does not stop the loop or the caller's generic anim tail.
+pub(super) fn apply_explosion_crate(
+    sim: &mut Simulation,
+    rules: &RuleSet,
+    registry: &crate::rules::overlay_types::OverlayTypeRegistry,
+    actor: u64,
+    cell: (i16, i16),
+    receiver: Option<crate::map::cell_index::NativeCellIdentity>,
+    magnitude: NativeF64Bits,
+    frame_effects: FrameEffects<'_>,
+) {
+    use crate::sim::combat::{
+        CombatLightRequest, EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, detonation_anim,
+        inviso_scatter, world_receiver,
+    };
+    let amount =
+        crate::util::native_x87::X87Chop53::ftol_f64_low_masked(f64::from_bits(magnitude.bits()));
+    let name = &rules.bridge_warheads.c4_name;
+    let warhead_id = sim.interner.intern(name);
+    let Some(warhead) = rules.warhead(name) else {
+        return;
+    };
+    sim.commit_direct_damage_receiver(
+        rules,
+        Some(registry),
+        EntityDamageEvent::direct_receiver(
+            actor,
+            amount,
+            0,
+            RAD_NO_ATTACKER,
+            None,
+            warhead_id,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        frame_effects,
+    );
+    for _ in 0..5 {
+        let radius = sim.scenario_rng.next_range_i32_inclusive(0, 0x200);
+        // 4825D7 rereads retained ESI after the draw, on every iteration.
+        // Earlier synchronous effects may have restamped the shared Dummy.
+        let center = super::pickup::crate_center(sim, cell, receiver);
+        let (x, y) = inviso_scatter::random_direction_coord(
+            &mut sim.scenario_rng,
+            center.x,
+            center.y,
+            radius,
+            inviso_scatter::RandomDirectionSnap::Preserve,
+        );
+        let impact = crate::sim::projectile::ProjectileCoord::new(x, y, center.z);
+        world_receiver::apply_area_damage(
+            sim,
+            rules,
+            Some(registry),
+            impact,
+            amount,
+            warhead,
+            (RAD_NO_ATTACKER, None, warhead_id),
+            frame_effects,
+        );
+        // 482672 passes literal land0, not the sampled cell's land type.
+        if let Some(effect) =
+            detonation_anim::effect(sim, rules, warhead, amount, 0, impact, impact)
+        {
+            crate::sim::world::damage_consequences::admit_explosion_effect(sim, rules, effect);
+        }
+        // CombatLight48A620 runs even when animation construction failed.
+        sim.combat_light_requests.emit(CombatLightRequest::Impact {
+            target_id: None,
+            damage: amount,
+            warhead_ref: warhead_id,
+            coord: impact,
+            force_create: false,
+            flags: 0,
+        });
+    }
 }
 
 /// CellPickup482840..48296D: marked ground Technos, any house, strictly

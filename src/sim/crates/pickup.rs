@@ -59,6 +59,7 @@ use crate::util::native_x87::NativeF64Bits;
 /// `[Powerups]` slots the eligibility switch and dispatcher name beyond the
 /// shared constants: the table order is the binary's (`0x007E523C`).
 const POWERUP_CLOAK: usize = 3;
+const POWERUP_EXPLOSION: usize = 4;
 const POWERUP_DARKNESS: usize = 7;
 /// The last slot the jump table at `0x004833C4` covers (`CMP EBX,0x11`).
 const LAST_DISPATCHED_SLOT: usize = 0x11;
@@ -142,7 +143,7 @@ pub(super) fn select_pickup_outcome(
 /// The existing Cell486840/480A30 kernel owns that same arithmetic. This
 /// caller adapter preserves the receiver instead of doing another Map578080
 /// lookup from the original requested words.
-fn crate_center(
+pub(super) fn crate_center(
     sim: &Simulation,
     cell: (i16, i16),
     receiver: Option<NativeCellIdentity>,
@@ -607,6 +608,18 @@ pub(crate) fn pickup_crate(
                     center,
                 );
             }
+            POWERUP_EXPLOSION => {
+                effects::apply_explosion_crate(
+                    sim,
+                    rules,
+                    registry,
+                    actor_id,
+                    cell,
+                    receiver,
+                    magnitude,
+                    frame_effects,
+                );
+            }
             POWERUP_CLOAK => {
                 effects::apply_cloak_crate(
                     &mut sim.substrate,
@@ -634,15 +647,14 @@ pub(crate) fn pickup_crate(
             }
             // RESIDUAL arms, each a zero weight in retail `[Powerups]` so no
             // random pickup reaches them (a map's stored selection or a mod
-            // can): Explosion (4, `0x00482565`: C4 damage on the actor and five
-            // random-offset blasts with two draws each), Napalm (5,
+            // can): Napalm (5,
             // `0x0048271E`: a fire anim and warhead damage), ICBM (12,
             // `0x00482CA1`: grant the first ICBM super), Gas (16,
             // `0x00481DE7`: poison gas particle systems on the nine cells)
             // and Tiberium (17, `0x00481E99`: a random ore type and 10..20
             // random placements, two draws each). Effect when reached: the
             // crate is consumed with its anim and no effect, and the
-            // Explosion/Tiberium draws are not spent. Invulnerability (13),
+            // Tiberium draws are not spent. Invulnerability (13),
             // IonStorm (15) and Pod (18) have no native effect arm either.
             _ => {}
         }

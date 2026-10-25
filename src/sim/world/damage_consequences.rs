@@ -224,6 +224,11 @@ impl DamageConsequences {
         if ordinary {
             Simulation::flush_smudge_dirty(&mut world.smudge_grid, &mut world.dirty_cells);
         }
+        // A native caller returning only AL (for example crate pickup inside
+        // movement) cannot forward this receipt. Retain frame invalidations
+        // here, alongside their already-published synchronous gameplay effects.
+        world.damage_destroyed_structure_since_output |= effects.structure_destroyed;
+        world.damage_bridge_changed_since_output |= bridge_state_changed;
         DamageCommitReceipt {
             area_result: None,
             structure_destroyed: effects.structure_destroyed,

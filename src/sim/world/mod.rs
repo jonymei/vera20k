@@ -1369,6 +1369,13 @@ pub struct Simulation {
     /// The restored match rebuilds its atlases; this is not saved or hashed.
     #[serde(skip)]
     ownership_changed_since_output: bool,
+    /// Immediate damage can originate inside movement or nested callbacks
+    /// without a return channel for its receipt. These presentation notices
+    /// drain at frame output; restoration rebuilds atlases. Not saved/hashed.
+    #[serde(skip)]
+    damage_destroyed_structure_since_output: bool,
+    #[serde(skip)]
+    damage_bridge_changed_since_output: bool,
     /// Ordered occupied-cell identities finalized at the authoritative frame
     /// boundary. The app drains these into its render-only overlay list.
     #[serde(skip)]
@@ -4362,6 +4369,8 @@ impl Simulation {
             unit_voice_visit_interest: Default::default(),
             mission_spawned_entities: false,
             ownership_changed_since_output: false,
+            damage_destroyed_structure_since_output: false,
+            damage_bridge_changed_since_output: false,
             frame_overlay_updates: Vec::new(),
             frame_overlay_removals: Vec::new(),
             terminal_score_snapshot: Default::default(),
@@ -8295,6 +8304,8 @@ impl Simulation {
         let object_pass = self.advance_live_object_pass(rules, overlay_registry, effects)?;
         let ownership_changed = object_pass.ownership_changed();
         spawned_entities |= std::mem::take(&mut self.mission_spawned_entities);
+        destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         destroyed_structure |= object_pass.destroyed_structure;
         bridge_state_changed |= object_pass.bridge_state_changed;
         profile_phase!(OBJECTS);
@@ -8441,6 +8452,8 @@ impl Simulation {
         // A MindControl shot changes an existing SHP's house-colour key.
         // Publish the atlas invalidation before the next draw, even with no spawn.
         frame.ownership_changed |= std::mem::take(&mut self.ownership_changed_since_output);
+        frame.destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        frame.bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         let frame_committed = if let FrameTailResult::Complete(committed) = result { committed } else {
             let tick = TickResult {
                 tick: self.session.tick(), frame_committed: false,
@@ -8487,7 +8500,7 @@ impl Simulation {
         #[cfg(feature = "telemetry")] mut frame_clock: Option<crate::sim::frame_profile::FrameClock>,
     ) -> MasterFrameOutput {
         let FrameCompletion { commands, execute_tick: _, executed_commands,
-            mut spawned_entities, destroyed_structure, mut ownership_changed, mut bridge_state_changed } = frame;
+            mut spawned_entities, mut destroyed_structure, mut ownership_changed, mut bridge_state_changed } = frame;
         macro_rules! profile_phase {
             ($phase:ident) => {
                 #[cfg(feature = "telemetry")]
@@ -8570,6 +8583,8 @@ impl Simulation {
         }
         // Resuming a suspended frame can transfer ownership in its remaining tail.
         ownership_changed |= std::mem::take(&mut self.ownership_changed_since_output);
+        destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         MasterFrameOutput {
             network_failure: None,
             network_waiting: false,
