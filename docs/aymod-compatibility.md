@@ -14,8 +14,8 @@ this installation loads Ares, Syringe or Phobos; absence of a DLL alone is not a
 proof that injection is impossible.
 
 The local MOD baseline is commit `9f8ccbd`, including its four maintained AIMD
-corrections. The inspected engine implementation is `82594335b`; its installed
-build enables `npatch`, not `ares`. Ares implementations can identify reusable
+corrections. The installed local candidate is `b18f633d4`, built with the optimized
+`fast` profile and `npatch`, with default/dev features disabled. Ares implementations can identify reusable
 owners, but enabling Ares is not a substitute for porting the NPAE input and
 behavior.
 
@@ -102,8 +102,8 @@ These are initial findings, not the complete feature list. Ordinary `Hospital`,
 own classification and affected-path evidence; they must not be marked missing
 merely because the MOD uses them differently from retail data.
 
-The implemented rows describe local delivery candidates, not the installed
-`82594335b` build identified above. Reward/control is committed as `dd3756a77`;
+The implemented rows describe local delivery candidates, not whole-mod certification.
+Reward/control is committed as `dd3756a77`;
 the technology, power and EMP commits are now combined on the local integration
 branch. Some individual mixed-feature paths have
 focused coverage, but combined-delivery feature combinations, save/load and real
@@ -134,7 +134,14 @@ physical factory lookup separate from online admission and notifies the existing
 queue owner on EMP transitions. No second hold state was added.
 
 These are headless production-path checks, not GUI or rendering certification.
-Normal-window acceptance and installation of the combined build remain pending.
+The combined candidate is installed with a verified ad-hoc signature and the
+prior application preserved separately. Computer Use exercised normal menus,
+skirmish launch, base deployment and power-plant/barracks construction. Manual
+power targeting still needs GUI acceptance. A subsequent launch displayed the
+normal menu without reproducing the earlier white screen; no rendering fix is
+claimed. Loading the saved QA battle currently fails while rebinding a saved
+terrain variant, so complete saved-world continuation remains open even though
+the focused EMP/manual-power snapshot regression passes.
 
 ## Initial data families
 
