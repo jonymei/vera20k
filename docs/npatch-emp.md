@@ -28,19 +28,27 @@ selling/unloading transitions and war-factory contacts are not interrupted.
 Team membership, harvesters, mind control and transport managers do not silently
 make ordinary mechanical targets immune.
 
-The private `EmpState` remains the single counter/held-animation owner shared
-with Ares. Existing Techno AI tails decrement it, the existing Deactivate and
-Reactivate owners stop/resume locomotion, control, firing and deploy admission,
-and the existing building operational edges handle powered defenses/providers.
-Ownership changes and power-center recovery cannot bypass a live counter. On
-expiry the owner reactivates only where power allows, retires the held sparkle
-and returns computer-controlled ground victims to the existing Hunt mission.
-If EMP expires during low power, a later operational recovery also enables the
-existing building Stuff owner, restoring lights and powered animations. This is
-an intentional player-friendly correction to Ares's delayed recovery, which
-reactivates but leaves Stuff disabled. It does not change the manual online latch.
-Lifecycle pointer-expiry/destruction already retires the same held Anim; no new
-timer, dead-object sweep or duplicate power state is introduced.
+The private `EmpState` remains the single counter/lifecycle owner. In pure
+NPatch builds, a first accepted ordinary ground Drive hit selects the native
+lifecycle below; that policy is retained for the whole positive counter lifetime.
+This is a compatibility boundary while positive-height/special locomotor and
+building paths remain separate. Reclassifying an already-live legacy EMP on
+landing would mistake its synthetic offline flag for permanent provider loss.
+A boundary regression reproduced that failure before this policy fix.
+
+The selected Drive path does not acquire the provider offline latch, deselect,
+save or replace the mission, or PowerOff a ground vehicle. It clears the base
+Foot destination, clears non-permanent disguise, stores the counter, invokes
+existing Capture/Spawn callbacks and clears the class target in native order.
+Control/fire/movement gates consume EMP independently. At expiry, the provider
+latch gates sound and PowerOn; no Reactivate/Guard/Hunt recovery is inserted.
+The Anim store owns every attached sparkle: each admitted hit creates one,
+and expiry ends all matching owner/type loops. No NP retained-ID list is added.
+
+Other locomotors, buildings and Ares/mixed builds retain their explicitly bounded
+legacy lifecycle. Buildings keep paid-head pause/resume, manual online intent
+and later operational recovery, including the existing player-friendly Stuff
+restoration policy. These mechanisms are not newly certified as NPAE equivalents.
 
 EMP transitions also notify the existing House factory-queue owner. An affected
 factory remains physically present, so its paid product and FIFO survive; only
@@ -74,50 +82,70 @@ This does not finish NPAE174 EMP movement or recovery. Hover consumers and
 existing active Drive/Ship track tails still need their own evidence, rather
 than a blanket freeze. Unit746C90's death-frame override remains unrepresented.
 
-The current shared Ares-style Deactivate/Reactivate and Hunt recovery remains an
-explicit compatibility policy, not the inspected NPAE lifecycle. NPAE's active
-Object damage hook5F5505/B95100 reads WH+154 and reaches C2EFB7/B990DC for mobile
-victims; that chain clears navigation/target and writes+504 without setting the
-provider offline byte+1C8. Reactivate70FBE0/C2BC8B resets orders first, skips
-Power_On while EMP is nonzero, and clears+1C8; expiryC2BC5D/C2BC6E separately
-preserves the offline latch. Migrating only one end would leave the current
-Ares-style application inconsistent. Keep the existing duration/target/queue
-policies until the application, movement consumers and expiry can move together.
+## Ground Drive provider/EMP lifecycle: implemented boundary
 
-## Native Drive provider/EMP overlap: next migration boundary
+Actual NPAE174 instructions establish independent provider latch `Techno+1C8`
+and EMP countdown `+504`. Pure NP ordinary ground Drive now uses:
 
-Static reads of actual NPAE174 establish separate provider latch `Techno+1C8`
-and EMP countdown `+504` for an ordinary live, unattached Drive DRON:
+- `B9517D`: reject only an existing stronger timer. Equal admitted hits repeat
+  side effects; the upstream 90/default/clamp/target policy above is unchanged
+  and is NOT native receiver arithmetic. Weaker hits do not allocate or draw.
+- `C2EFB7`: a new attached EMP Anim per admitted hit, one Scenario `[0,25]`
+  constructor-delay draw, loop1/flags600, existing GetCoords/Anim constructor
+  and SetOwnerObject owners. Constructor-owned draws stay with those owners.
+- `B990DC..B991DF`: direct base Foot4D94B0 null destination (not Unit override
+  or ResetOrders), non-permanent Unit746720 disguise clear, combined-disabled
+  first sound, incoming counter store, Capture FreeAll472140 then Spawn
+  KillAll6B7100, class target clear. Ground Unit height<=0 bypasses PowerOff.
+  No direct selection/mission/Archive/provider-latch write or detach is added;
+  existing setters/managers own their timer changes and transitive detach.
+- Provider loss still uses Deactivate70FC90: reset/deselect, Foot PowerOff and
+  provider latch set. NP Reactivate70FBE8 always resets orders; C2BC8B skips only
+  PowerOn/sound during nonzero EMP, while70FC5A still clears the provider latch.
+  Ares/mixed admission is isolated and unchanged.
+- TechnoAI6FAF0D/C2BB3E decrements a positive counter, storing only for HP!=0.
+  Expiry tests the computed result even when HP0 skipped the store. C2BC5D/6E
+  checks provider latch for activation sound/PowerOn, without Hunt/order reset.
+  6FAFB9..6FAFFB sets loop remaining0 on ALL matching attached EMP anims; normal
+  animation boundary lifecycle, not immediate UnInit, ends them.
+- UnitAI7360C9 calls Techno70FBD0, whose NPAE7E0F9D disjunct is provider-offline
+  OR nonzero EMP. The shared query now feeds both first-hit sound and disabled
+  Unit sparks. Keeping only the provider flag here would drop the existing
+  two Scenario `[-100,100]` draws on spark frames after separating the states.
+  The regression reuses an existing executed robot_offline_oracle spark vector.
 
-- Building4549B0 clears/sets counted+662 before House50E0E0/50E010's
-  last/first-center reverse Techno walk calls Deactivate70FC90/Reactivate70FBE0.
-  This caller does not veto EMP or rescan per-type providers.
-- Deactivate70FCD4 resets orders, deselects, then powers off the Foot and sets
-  +1C8 (70FD50), even during EMP. It does not write+504. Existing tether/same-cell
-  building exemptions precede this body.
-- Reactivate70FBE8 always resets orders. C2BC8B skips only PowerOn/sound during
-  EMP;70FC5A still clears+1C8. A blanket Ares-style early return is not equivalent.
-- TechnoAI6FAF0D decrements a positive+504; C2BB3E retains the HP-nonzero store
-  condition. At zero, C2BC5D/C2BC6E gate activation sound/Foot PowerOn on+1C8.
-  No Reactivate, order reset, provider rescan or Hunt is issued by this expiry.
-  6FAFB9..6FAFFB retires the attached matching EMP sparkle through anim+195.
-- Base Drive PowerOff55A910/PowerOn55A8F0 writes interface+C and queries
-  IsPowered. Neither clears navigation or stops movement by itself. Preserve
-  shared ResetOrdersToGuard70F850 instead of inventing a universal offline freeze.
+Three new production tests cover accepted/equal/weaker hits, one sparkle-delay
+RNG draw, multi-Anim expiry, preserved selection/mission/power, provider return
+during EMP, overlap save/load, no-provider expiry and legacy-to-ground rehit
+policy stability. Two primary tests and both later boundary controls failed
+before their respective fixes. The actual AY TTNK→APOC battle/ordinary expiry
+scenario also passes; this is not the actual DRON provider-overlap scenario.
 
-No direct RNG or detach call occurs in those selected control bodies. Existing
-order/mission timers and separate offline-spark Scenario RNG stay in their owners.
-NP application must stop acquiring the provider latch through enable_ares_emp;
-Reactivate, application and tick/expiry need to migrate together inside their
-current owners, without a second EMP sweep. Ares behavior must remain separate.
-Current implementation is unchanged by this research. Required tests are final
-provider loss while moving, provider return during EMP, and expiry with/without
-provider (including overlap save/restore and sparkle retirement).
+Residuals: duration/target/receiver preprocessing remains compatibility policy;
+positive-height/lift/locomotor changes during a live timer keep its initial
+policy, not complete airborne semantics. Walk/Ship/Hover/buildings, all manager
+reentrancy combinations and parasite/tether cases need their own closure.
+Nonempty Rules ActivateSound/DeactivateSound fallbacks remain unresolved; AY's
+root globals are empty and the three drone types supply their type sounds.
+Do not mark V01/A06 or the entire NPatch EMP complete from this Drive chain.
 
-This is not closure for Hover/Fly, Buildings, parasite/tethered DRON or linked
-Capture/Spawn managers. B99154..B9916D application callbacks and special airborne
-first-hit paths need their own necessary dependencies before a broader migration.
-Do not close V01/A06 from this ordinary Drive trace.
+## Provider-only Drive motion: native/design conflict
+
+The original NPAE also admits a fresh AI Move for an ordinary ground, unattached
+DRON with provider latch1 and EMP0: Team6EBE0D..56 dispatches Unit741970,
+its ordinary path reaches Foot4D94B0 then Drive4AFD4B. Unit746C90/70EFD0 asks
+EMP/death-frame, not provider. Unit7360C9's spark arm rejoins7361A9; Foot4DA86E
+still processes locomotion. Fresh-track4B2746 and speed70EFE0 likewise do not
+add a provider veto. This is a bounded positive call-chain trace, not a native
+playback or proof of legal offline attack/parasite admission.
+
+AY's `完整说明.txt` says each unmanned unit needs its designated building and
+power, otherwise it is paralyzed; it specifically says DRON needs Radar to act.
+That intended design differs from both the original shared House center count
+and its provider-only Drive motion admission. The reported symptom is not closed
+by the EMP fix. Independent three-pair supply and no offline drone movement
+would be explicit compatibility corrections, not claimed native behavior;
+retain the pending policy decision instead of silently applying a global freeze.
 
 ## AYMod's Tesla projectile
 

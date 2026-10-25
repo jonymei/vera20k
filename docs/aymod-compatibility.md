@@ -243,32 +243,34 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：F08弹头别名接入与供电/EMP后续（2026-10-26）
+### 当前检查点：普通地面Drive的NP供电/EMP分离（2026-10-26）
 
-- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
-  本地玩法提交 `01d66dc97`，独立只读critic未发现具体缺陷。无推送/PR/合并或启动游戏授权。
-- F08的IsFlatExplosion并不是新平面伤害参数。实际NPAE读C2EF94..C2EFA8，接回75D410，
-  随后75D42F..75D443读CausesDelayKill，两个键顺序写同一WH+130。constructor75CF31=false。
-  有序规则处理器现在逐原始层保留此字节，NP别名先、stock键后；运行时发布、保存的registry及配置hash连通。
-  未新增死亡状态/计时器或复制伤害逻辑；直接接回701E92和已有PostMortem/C4Detonation owner。
-- 3项新回归：层次/同层覆盖/大小写/default/保存/hash；致死的eligible/ineligible与5帧引爆边界；
-  实际AY正式加载ZEP primary→BlimpHE，直接receiver命中CAMISC02并由普通对象更新完成死亡。
-  第1项修复前false/true断言失败，修复后通过。合成夹具遗漏resolve_type_handles和C4Warhead已补齐，
-  这两个装配失败不算引擎bug。实际场景通过debug及fast两种profile各1项。
-- 最终NP有序规则96 passed、PostMortem4 passed、弹头reader9 passed，flat_explosion为2 passed/1 ignored；
-  ignored实际AY项已单独执行通过。无NP别名隔离1 passed、PostMortem4 passed。未跑全仓库。
-  实际场景是伤害入口/正常引爆，不是完整基洛夫飞行→投弹→碰撞或GUI验收，也不重新认证全部死亡算术。
-- 新保留字段改变保存registry布局及规则hash；旧保存仍按正常门禁拒绝，不强读或改写用户原文件。
-  已从干净c7cdf572c保存普通fast+npatch构建 `aymod-playtest-20261026-delay-kill`，manifest及固定标签解析通过。
-  最新入口 `D:/Workshop/vera20k/target/AYMOD-test-20261026-delay-kill.cmd`；包含本轮F08、F02及此前修复。
-  旧入口/构建保留，未自动启动或替换进行中的游戏。新构建须新局；无本任务构建待完成。
-- V01/A06只读追踪取得下一整链依据：provider返回时Reactivate即使EMP非零也必须先ResetOrders并清provider latch，
-  只跳过PowerOn/激活声音；EMP到期直接检查该latch后恢复供电，不经Reactivate且不下Hunt。
-  当前NP借用Ares的提前return/Deactivate/到期Hunt会混淆+1C8与+504。详见npatch-emp的Drive边界；尚未改代码。
-  下一优先链：普通未附着Drive DRON失provider→EMP重叠→provider返回→EMP到期的施加/恢复共同迁移，
-  仍须补完必要manager/动画消费者，不能只改Reactivate一端。聚合中心计数不擅改为独立类型政策。
-- F02正式AY箱子/画面、F03/F09/F11/F12、其他V项、海军184、多House/长局AI仍开放；
-  全面PLAN继续有效，不将目标缩小为本次弹头读取。当前没有待完成的本任务Cargo。
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；本地玩法
+  `ff92b57a6`、审查/消费者修正 `1acc9fb11`。无推送/PR/合并或启动另一份游戏授权。
+  用户原始存档、历史分析工作区、主工作区`.gitignore`及旧游戏构建保留。
+- 纯NP普通地面Drive现在按B990DC/B9914C处理命中：清基础Foot导航、目标，保留选择/任务/供电位和地面动力。
+  同等命中重复效果/新火花，较弱命中跳过；现有manager释放回调按原次序调用，不复制owner。
+  EMP到期直接按provider位恢复声音/动力、结束全部匹配火花，不再由Ares恢复链下Hunt。
+  NP Reactivate在EMP期间仍ResetOrders/清provider位，只跳过动力和声音；Ares/mixed维持原策略。
+- 一次独立critic提出策略切换风险；随后用正高度legacy命中→落地→重击边界复现永久离线并修复：
+  正计时器整个生命周期保持首次策略，未把特殊路径当作已完整原生化。还补齐70FBD0/7E0F9D的组合失能查询，
+  保留EMP独立火花及原有Scenario随机副作用；使用现有原生spark向量，不新增手算golden或执行包。
+- 三项新生产回归包括RNG/同等与弱命中、选择/任务/动力、全部火花清理、provider返回/未返回、
+  overlap保存/恢复、无Hunt和legacy策略稳定。原有“EMP等于provider离线”的Drive断言同步纠正。
+  最终NP EMP13 passed、供电8 passed，实际AY TTNK→APOC普通战斗/到期1 passed；
+  Ares EMP19 passed、mixed EMP29 passed、无NP供电8 passed。直接manager覆盖Capture29、Spawn36/1 ignored先前通过。
+  未跑全仓库，未作实际DRON完整控制中心重叠或GUI验收；保存布局增加策略字段，旧保存仍正常拒绝。
+- 本轮不宣称时长/目标mask/receiver预处理或Walk/Ship/Hover/建筑/空中/复杂manager全部符合#174。
+  动态换运动器/升降仍保留首次兼容策略；全局非空激活声音fallback尚缺。详见npatch-emp当前owner文档。
+- 蜘蛛失联移动已另有原生正向链证据：Team6EBE0D→Unit741970→Foot4D94B0→Drive4AFD4B、
+  UnitAI7360C9火花后继续FootAI，fresh4B2746和speed70EFE0均不因provider位阻止普通Move。
+  原补丁确实可出现该症状；不把EMP修复或“没读powerbyte”当成已修蜘蛛行动。
+  作者完整说明却明确说三组指定建筑支持、失去支持则瘫痪，故属原生/设计冲突，不是静态移植遗漏。
+  三组独立供电与失联无人单位移动限制仍待明确兼容策略决定，不静默调整MOD平衡或加全局冻结。
+- 现有最新已交付入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-delay-kill.cmd`，
+  不含本轮新Drive链；新普通fast+npatch构建待单独保存。当前无待完成Cargo。
+- 下一安全动作：保存此批测试版并交接策略差异；继续PLAN的F02实际场景、F03/F09/F11/F12及多AI/长局，
+  不把全面目标缩小为本轮EMP。AI权重/兵种数值/MOD配置未改，供电设计偏差仍不能标已兼容。
 
 ### 已完成批次：F02隐形箱接入，场景/画面待验（2026-10-26）
 
@@ -352,7 +354,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 
 | ID / 优先级 | 类别与当前边界 | 下一次验收 |
 | --- | --- | --- |
-| V01 / P1 | 三组供电：ROBO/GAROBO、DRON/NARADR、CAOS/NAPSIS。已有 `src/sim/powered_unit.rs`、共享 House 计数和 provider/EMP 查询；不是“PoweredUnit 未实现” | 每组失去最后供电建筑、低电、手动断电、EMP、恢复、换主；同 House 混有另外两组和同阵营另一家 AI 时不得误供电/串状态。先核 #174 的按类型与全局计数关系 |
+| V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 | 医疗建筑：GAROBO、NARADR 的 `Hospital`。已有 `src/sim/docking/hospital.rs:18` 的进驻/治疗/退出owner及radio/app准入；不是Hospital未实现 | 受伤步兵 Enter、排队/满员、治疗、离开、失电/毁楼、换主；与驻军 F04 区分 |
 | V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM建筑四项BurstDelay物理值均9，但是否为#174建筑扩展或无效配置待核。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
@@ -386,7 +388,7 @@ V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开�
 | A03 / P1 / 待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 人类对多家结盟 AI、自由混战分别验；不把盟友错误选为敌对目标，范围友伤按武器政策验；目标灭亡后重选，视野/外交符合 #174，不借 retail 注释断言补丁行为 |
 | A04 / P1 / 待核+待验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
 | A05 / P1 / 待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 多家独立充能和发射，不跨House消费超武；敌对超武不错误选盟友，铁幕/超时空允许的己方或盟军目标按#174政策验，投送后继续作战；光照另见 F11 |
-| A06 / P1 / 待验 | EMP、断电、捕获后队伍与工厂生命周期：既有 EMP/生产/capture owner | AI付款头暂停后恢复、其他同阵营House不受影响；被控制/死亡后原队成员/需求/计数正确更新，仅符合Reinforce/组建状态政策的队伍补员（`src/sim/team_script_vm.rs:735`），不产生跨House需求；无人单位失provider后可恢复 |
+| A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
 | A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 两架 SCHP 执行 `54 → 5 → 9 → 0...`，移动、落地部署、开火和再次移动；不是只加载成功。现有 TickTank DeployToFire/DeploysInto 注释残留不能直接归罪 SCHP |
