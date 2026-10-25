@@ -243,7 +243,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 ### 当前检查点：集结修复与配色交付（2026-10-26）
 
-- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；F10提交`4fef30555`；
   无推送/PR/合并授权，历史存档分析工作区与旧测试构建保留，原存档未修改。
 - AI当前结论：发展与满员不是唯一阻塞；陆海选择槽竞争和Walk集结永久等待已有修复。
   同一旧存档300帧对照已证明14人队进入Attack；全局强度、长局、多AI与海军184仍开放。
@@ -259,7 +259,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   TeslaFragmentT未配置IsElectricBolt，不为配色强开。玩家新局画面仍待验。
 - 新保存布局为`0x8c6ede71`；旧两份`0xd4be79fe`与此前`0x91e21ca0`不强制兼容。
   请新开局；旧文件继续通过隔离历史版本分析，不能伪造头部绕过门禁。
-- 下一安全动作：交付新普通fast+npatch构建；继续海军184的Float/Water连通与Ship阻挡/路线检查，
+- 新玩家版`aymod-playtest-20261026-gather-bolt`已从干净`4fef30555`构建普通fast+npatch游戏，
+  manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-gather-bolt.cmd`。
+  包含此前声波防崩、陆海队列/颜色一致性、本次Walk集结与自定义电弧；旧版保留，未自动启动。
+- 下一安全动作：继续海军184的Float/Water连通与Ship阻挡/路线检查，
   再查长期补员/接敌。三组独立供电属于与目标原生共享计数不同的政策，尚未得到用户确认，不静默改动。
 
 ## 3. 功能缺口与适配进度
