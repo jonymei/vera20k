@@ -205,25 +205,36 @@ impl BridgeRecalcCatalog {
         clear_fallback: bool,
         variant: u8,
     ) -> Result<BridgePresentation, BridgeRecalcCatalogError> {
-        let pristine = self.file(tile, 0)?;
-        let damaged = !clear_fallback && pristine.tactical(retained_sub).has_damaged_data;
-        let count = self.files[&tile].len();
+        let damaged =
+            !clear_fallback && self.file(tile, 0)?.tactical(retained_sub).has_damaged_data;
         let selected = self.file(tile, variant)?;
         let tactical = self.tactical_metadata(tile, draw_sub, variant)?;
         Ok(BridgePresentation {
             radar: selected.radar(tile, retained_sub)?,
-            damaged_radar: if damaged && count > 1 {
-                Some(
-                    self.file(tile, 1)
-                        .and_then(|file| file.radar(tile, retained_sub)),
-                )
-            } else {
-                None
-            },
+            damaged_radar: self.damaged_radar(tile, retained_sub, clear_fallback)?,
             offset: [tactical.render_offset_x, tactical.render_offset_y],
             has_damaged_data: damaged,
             variant,
         })
+    }
+
+    fn damaged_radar(
+        &self,
+        tile: u16,
+        retained_sub: u8,
+        clear_fallback: bool,
+    ) -> Result<
+        Option<Result<RadarColorMetadata, BridgeRecalcCatalogError>>,
+        BridgeRecalcCatalogError,
+    > {
+        let pristine = self.file(tile, 0)?;
+        Ok((!clear_fallback
+            && pristine.tactical(retained_sub).has_damaged_data
+            && self.files[&tile].len() > 1)
+            .then(|| {
+                self.file(tile, 1)
+                    .and_then(|file| file.radar(tile, retained_sub))
+            }))
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -726,14 +737,12 @@ impl ResolvedTerrainGrid {
             } else {
                 catalog.presentation_tile(cell, self.clear_tile_id)
             };
-            let metadata = catalog.presentation_for_variant(
-                tile,
-                cell.final_sub_tile,
-                if fallback { 0 } else { cell.final_sub_tile },
-                fallback,
-                cell.variant,
-            )?;
-            self.damaged_radar_metadata[index] = metadata.damaged_radar;
+            // Baseline presentation can retain a source TMP's variant after
+            // LAT changes the final tile. Only the damaged sibling plane is
+            // missing here: selected radar/offsets already belong to the saved
+            // baseline and must not be revalidated as a different TMP owner.
+            self.damaged_radar_metadata[index] =
+                catalog.damaged_radar(tile, cell.final_sub_tile, fallback)?;
         }
         Ok(())
     }

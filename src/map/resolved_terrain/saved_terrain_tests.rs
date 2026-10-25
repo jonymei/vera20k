@@ -396,7 +396,7 @@ fn saved_terrain_cold_load_then_runtime_selection_shares_process_authority() {
     );
 }
 #[test]
-fn saved_terrain_baseline_clear_fallback_retains_its_selected_tmp_owner() {
+fn saved_terrain_baseline_rebinds_only_missing_planes_after_presentation_tile_changes() {
     let bytes = gsi_04_02_last_tiles_tmp_bytes(0, [1, 2, 3], [4, 5, 6]);
     let names: Vec<_> = std::iter::once("tile01.tem".to_string())
         .chain(std::iter::once("tile02.tem".to_string()))
@@ -412,52 +412,54 @@ fn saved_terrain_baseline_clear_fallback_retains_its_selected_tmp_owner() {
     theater.rmg_tiles.clear_tile = Some(1);
     crate::map::theater::resolve_contiguous_variant_chains_for_test(&mut theater.lookup, &assets);
     let rules = TerrainRules::from_ini(&IniFile::from_str("[Clear]\nWheel=100%\n"));
-    let mut grid = test_flat_ground_grid(3);
-    grid.native_allocated = Some(vec![false; 9]);
-    grid.native_allocated.as_mut().unwrap()[7] = true;
-    // Fresh build uses ClearTile presentation when no authored raw Cell exists,
-    // even if Fill left a valid retained tile index. This is baseline, not a
-    // loaded live Cell that546DA0 should select again.
-    grid.cells[7].final_tile_index = 0;
-    grid.cells[7].source_tile_index = -1;
-    grid.cells[7].filled_clear = true;
-    grid.cells[7].variant = 5;
-    let saved = grid.capture_saved_template().unwrap();
-    let before = serde_json::to_value(&saved).unwrap();
-    let mut restored = saved.restore_values(SharedCellDummy::fresh()).unwrap();
-    restored
-        .bind_saved_template_assets(
-            &theater,
-            &assets,
-            &rules,
-            &OverlayTypeRegistry::empty(),
-            false,
-            0,
-            Default::default(),
-        )
-        .expect("baseline fallback variant belongs to ClearTile, not retained tile0");
-    assert_eq!(
-        serde_json::to_value(restored.capture_saved_template().unwrap()).unwrap(),
-        before
-    );
-    // The loaded live Cell has a different authority: its retained tile0 has
-    // one file, so546DA0 must select0 rather than inheriting baseline variant5.
-    let mut process = crate::map::tile_variant_selector::TileVariantSelectorCache::default();
-    let mut forbidden_draw = || panic!("single-file live Cell must not initialize Main table");
-    let mut selector = process.begin_load(&mut forbidden_draw);
-    restored
-        .finish_loaded_assets(
-            &theater,
-            &assets,
-            &rules,
-            &OverlayTypeRegistry::empty(),
-            false,
-            0,
-            2,
-            &mut selector,
-        )
-        .unwrap();
-    assert_eq!(restored.cells[7].final_tile_index, 0);
-    assert_eq!(restored.cells[7].variant, 0);
-    assert!(!restored.cells[7].filled_clear);
+    for filled_clear in [true, false] {
+        let mut grid = test_flat_ground_grid(3);
+        grid.native_allocated = Some(vec![false; 9]);
+        grid.native_allocated.as_mut().unwrap()[7] = true;
+        // Both ClearTile fallback and a source-to-LAT tile transition can retain
+        // presentation selected from another TMP. Binding only the damaged plane
+        // must not reinterpret those saved selected pixels as a final-tile variant.
+        grid.cells[7].final_tile_index = 0;
+        grid.cells[7].source_tile_index = if filled_clear { -1 } else { 1 };
+        grid.cells[7].filled_clear = filled_clear;
+        grid.cells[7].variant = 5;
+        let saved = grid.capture_saved_template().unwrap();
+        let before = serde_json::to_value(&saved).unwrap();
+        let mut restored = saved.restore_values(SharedCellDummy::fresh()).unwrap();
+        restored
+            .bind_saved_template_assets(
+                &theater,
+                &assets,
+                &rules,
+                &OverlayTypeRegistry::empty(),
+                false,
+                0,
+                Default::default(),
+            )
+            .expect("baseline selected presentation must survive resident-plane rebinding");
+        assert_eq!(
+            serde_json::to_value(restored.capture_saved_template().unwrap()).unwrap(),
+            before
+        );
+        // The loaded live Cell has a different authority: its retained tile0 has
+        // one file, so546DA0 must select0 rather than inheriting baseline variant5.
+        let mut process = crate::map::tile_variant_selector::TileVariantSelectorCache::default();
+        let mut forbidden_draw = || panic!("single-file live Cell must not initialize Main table");
+        let mut selector = process.begin_load(&mut forbidden_draw);
+        restored
+            .finish_loaded_assets(
+                &theater,
+                &assets,
+                &rules,
+                &OverlayTypeRegistry::empty(),
+                false,
+                0,
+                2,
+                &mut selector,
+            )
+            .unwrap();
+        assert_eq!(restored.cells[7].final_tile_index, 0);
+        assert_eq!(restored.cells[7].variant, 0);
+        assert!(!restored.cells[7].filled_clear);
+    }
 }
