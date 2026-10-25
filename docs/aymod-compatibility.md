@@ -1,203 +1,211 @@
-# AYMod extension compatibility
+# AYMOD 兼容性清单
 
-This is the current compatibility ledger, not a whole-mod certification.
-Unfinished rows remain requirements; parsing a key or loading a match does not
-close them.
+更新：2026-10-25。面向“人类玩家与多个电脑对战”的分批适配工作清单。
+这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
+不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
-## Target and scope
+## 1. 基线、状态和优先级
 
-The inspected AYMod executable identifies itself as **NPAE #0011 Ext #174 by
-LH**, or **NPatch Autumn Edition Extended #174**. Its version resource, referenced
-version strings and installed jumps establish that identity. NPSE 2.0 #359 is not
-an interchangeable reference for its readers. There is no positive evidence that
-this installation loads Ares, Syringe or Phobos; absence of a DLL alone is not a
-proof that injection is impossible.
+- 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
+  `main` 缺少交接中的 AI、科技树、EMP、切电、经验和永久控制适配。
+- MOD 基线：配置仓库 `13f3c25`，根目录正式生效的 `rulesmd.ini` / `aimd.ini` /
+  `Uimd.ini` / `mpmodesmd.ini`；原始 AIMD 快照不覆盖维护后的根文件。
+- 目标补丁：**NPAE #0011 Extended #174**。NPSE #359、NPExt #173、Ares 的相似功能
+  仅能提供线索，不能直接证明 #174 的读取和玩法。没有正面证据要求启用 Ares。
+- 要求 `npatch` 构建。此前 Windows 在 `main` 上未带此能力的启动结果，不覆盖本分支。
+  本轮只构建了该分支的只读 `asset` 工具，没有替换普通游戏、安装程序或运行中的游戏。
+- 原始作者说明以 170507 为背景、170601 更新为后续修订；例如尤里收入奖励已被后者取消，
+  不能将旧说明的全部描述当当前规则。战役不在本轮目标内，作者也提示其配置冲突。
 
-The local MOD baseline is commit `9f8ccbd`, including its four maintained AIMD
-corrections. The installed clean local build is `f1d141c7a`, built with the optimized
-`fast` profile and `npatch`, with default/dev features disabled. Ares implementations can identify reusable
-owners, but enabling Ares is not a substitute for porting the NPAE input and
-behavior.
+| 状态 | 含义 |
+| --- | --- |
+| 缺失 | 找到当前生产路径缺口，且 MOD 有对应使用；仍须在修复时确认原生细节 |
+| 待核 | 有用法或作者描述，但 #174 语义、消费者或实际可达性尚未闭环，不等于未实现 |
+| 待验 | 已有生产实现，缺本轮所需的 Windows / 实际 MOD 场景验收 |
+| 政策差异 | 已知为可玩性选择的兼容政策，不声称原生逐项等价 |
+| 配置残留 | MOD 数据自身的异常或闲置引用；不自动归咎于引擎 |
+| 已有覆盖 | 交接记载的定向回归/实际场景已通过；覆盖边界必须保留 |
 
-The main inventory is `rulesmd.ini`, followed through its registered types,
-weapons, projectiles, warheads and referenced assets. ART, AI, sounds, EVA, UI,
-themes, mode overrides and scenario layers are also in scope where they affect
-these features. Ordinary retail keys must be distinguished from extension keys,
-changed retail behavior, and always-active binary patches with no enabling key.
+P0：运行了错误基线/构建，或无法进入所需对局。
+P1：常见作战机制、电脑发展和出击、单位生存/选敌、经济、确定性。
+P2：较窄兵种/模式链、视觉/UI 与原生细节。P3：当前固定触发不可达的残留。
+优先级不证明原生等价，低优先级也不是永久豁免。
 
-## Completion criteria
+## 2. 本轮证据与范围
 
-A used feature closes only when all applicable stages have evidence:
+本轮读取交接分支、根配置和作者说明，并在 Windows 成功构建：
 
-1. Its actual selected source, section, exact key and effective value are known.
-2. The matching NPAE reader, constructor/default, layer order and post-pass are
-   established, rather than borrowed from a similar Ares or NPSE feature.
-3. Its caller and state chain is traced through admission, effects, consumers,
-   updates and cleanup. Player, AI and bypass routes stay distinct where native
-   behavior distinguishes them.
-4. The existing authoritative Rust owners implement and connect that chain.
-5. Focused production-path regression tests protect the repaired behavior.
-6. An affected real MOD scenario demonstrates the player-visible outcome.
+```powershell
+python -m tools.cargo_run -- build --profile fast -p vera20k --bin asset --no-default-features --features npatch
+```
 
-The target is all used extension mechanisms and their necessary dependencies.
-Neither a percentage of source lines nor a fixed list of guessed extension
-names is the coverage denominator. Discovery remains open until the full key
-inventory, referenced data and author-described no-key patches are reconciled.
+配置查询复用生产源选择和 INI reader，不另写有效值解析器：
 
-## Selected sources and inventory boundary
+```powershell
+# $asset 是 cargo_run --resolve asset --profile fast 返回的实际路径。
+& $asset ini-get Powerups Cloak --domain rules --reader raw --map XMP03T4.MAP --mode-id 1 --ra2-dir D:/Workshop/CnC2Yuri-AYMOD
+& $asset ini-get BFRT AlternateFLH6 --domain art --reader raw --ra2-dir D:/Workshop/CnC2Yuri-AYMOD
+```
 
-| Data | Current selected source | Inspection boundary |
-| --- | --- | --- |
-| RULESMD | Maintained loose `rulesmd.ini` | Primary inventory and production accessor queries |
-| ARTMD | `expandmd99.mix` | Fixed ART; BFRT passenger FLH differences identified |
-| AIMD | Maintained loose `aimd.ini` | Four recorded corrections; original snapshot remains separate |
-| LANGRULE | Absent | No layer in the inspected installation |
-| SoundMD | `expandmd01.mix` | Bytes match the supplied Steam selected source |
-| EVAMD | `ra2md.mix -> localmd.mix` | Bytes match the supplied Steam selected source |
-| UIMD | Maintained loose `Uimd.ini` | Advanced command button lists; not a toggle-power implementation |
-| MPModesMD | Maintained loose `mpmodesmd.ini` | Nine distinct referenced override files extracted |
-| Mode overrides | Existing selected archives | Those nine files match the supplied Steam files; this is not nine-mode runtime validation |
-| ThemeMD | `expandmd99.mix` | Selected source identified; not music playback certification |
-| Scenario | `XMP03T4.MAP` from `multimd.mix` | Battle mode 1 production queries and earlier runtime smoke only |
+本轮查询选择普通 Battle（ID 1）、`XMP03T4.MAP`。RULESMD 来自维护后的 loose 文件；
+LANGRULE 缺省；模式来自 `ra2md.mix -> localmd.mix / MPBattleMD.ini`；地图来自
+`multimd.mix`；固定 ART 来自 `expandmd99.mix`；Sound 来自 `expandmd01.mix`。
+`raw` 结果是经过生产解析/层次选择后的 accessor 文本，**不是最终类型字段或行为证明**。
+表内其他未查询的配置例子是物理用法定位；修复时仍需查询对应场景并追踪 typed reader。
+AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact AIMD 运行。
 
-The first main-rules pass found 25,068 physical section/key pairs and 2,374
-distinct key strings. These include registry indices and dynamic color names,
-not 2,374 extension fields. The initial production query set contains 207
-section/key queries across 81 key names and 112 sections. It is an accessor
-inventory, not 207 validated gameplay mechanisms. Other scenarios, modes,
-constructor-driven behavior and same-name patched retail keys remain outside
-that query set's proof.
+本轮38项生产查询全部成功（36项Rules、2项固定ART），代表结果如下；这些值不是手写INI解析结果：
 
-The full key-string difference from the supplied Steam RULESMD contains 67
-strings: 20 registry/color data names and 47 field candidates. All 47 were kept
-in the inventory, including unclassified names, instead of filtering to a
-preselected extension whitelist. Absence from Steam data does not establish
-absence from its executable or prove that a field belongs to NPatch.
+| 生产 accessor 查询 | 返回文本 |
+| --- | --- |
+| `[Powerups] Cloak / Explosion` | `10,CLOAK,yes` / `15,<none>,yes,500`，权重不是百分比；作者所说9%/14%不能直接硬编码 |
+| `[TANY]` / `[SNIPE] Cloakable` | 均为 `yes`；VIRUS的VeteranAbilities含CLOAK，IVAN的VeteranAbilities不含CLOAK、EliteAbilities含CLOAK |
+| `[ORCA] AACombat`、Sapper/SapperE两项反海军键 | 均为 `yes` |
+| `[MTNK] TurretROT` | `9` |
+| NABNKR保护、AWPWH穿透、MIGWH穿透 | 分别为 `1`、`1`、`-2` |
+| `[PsychicDominatorSpecial] Lighting / LightBlue` | `yes` / `70` |
+| ROBO/DRON/CAOS的PoweredUnit及三个建筑的PowersUnit | `yes`；对应 `ROBO` / `DRON` / `CAOS` |
+| 固定ART `[BFRT] AlternateFLH5 / AlternateFLH6` | `100,100,160` / `100,-100,160` |
 
-## Confirmed gaps
+没有运行 Windows 新局、多 AI 长局、NPAE 原生比较或本分支七项 gameplay 场景；
+没有执行全仓测试。`prepare_checkout` 已建立本地配置，但零售 `ini/` 尚缺，
+不能用 MOD INI 冒充零售回归基线。本轮没有玩法修改、RNG/计时器/Detach 行为变更。
 
-| Feature | AYMod use | Current engine boundary | Status |
+此前库存的 25,068 个物理 section/key 对、2,374 个不同键、207 个 accessor 查询，
+以及相对 Steam 的 47 个字段候选，都不是已兼容机制数量。本轮没有重新认证这些计数。
+下面是已定位机制及验证缺口的首版分类；全量键、各地图/模式和无键补丁的发现仍开放。
+
+## 3. 已确认功能缺口
+
+每一行是一条可独立收口的玩法链，不要求合并成一个大改动。
+
+| ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
-| Alternative technology branches | Seven `Prerequisite2` entries | `d997311e6` reads both alternative lists through the native parser and retries complete AND groups as OR alternatives in the shared CanBuild owner, including early-failure routes. Mixed-extension policy is documented | Implemented; production CanBuild/direct consumers and maintained AYMod alternative-tech scenario pass |
-| Naval factory exclusion | Three `NegativePrerequisite` entries naming the respective shipyards | `d997311e6` checks the existing on-map House counters at the shared success/build-limit join, including override/skip-tech routes; preserves ordinary AI early success. Invalid generic negatives are safely ignored by explicit policy | Implemented; production counter regression and maintained AYMod shipyard Unlimbo/Limbo scenario pass |
-| Repeated AI base candidates | Eight factories use `AIBasePlanningCount=2` | `d997311e6` reads the NPAE spelling/default into the existing signed-byte candidate-repeat owner. Same-pass NPAE-key precedence and later-pass replacement by either spelling are explicit compatibility policy | Implemented; actual AYMod eight-factory count reader and existing candidate-repeat/AI chooser regressions pass |
-| Manual building power toggle | `[UISettings] UseTogglePower=yes` | `f2b8f5946..22d05aac1` connects frozen-root input, configurable default V, Power/NoPower cursor and own-building admission to existing Event01/02 and BuildingOnline owners. Fresh-world modes and outgoing held-mouse gestures are cleared; active EMP blocks On | Implemented; input/event/power regressions, real AYMod paid-factory EMP interaction, and GUI barracks Off/On transitions pass |
-| EMP weapons | `EMEffect=yes` warheads and referenced weapons/projectiles | `5bc1290c2..dcce945a7` connects actual detonations and AYMod's retained Tesla impact-child producer to the shared EMP/deactivation/operational owners. Duration, susceptibility and mixed Ares precedence are explicit playable policies, not asserted NPAE parity | Implemented; actual AYMod TTNK Attack/expiry and paid-factory recovery scenarios pass; native parity and balance are not certified |
-| Passenger experience | BFRT/APOC `TrainPassengers=yes` | Local reward candidate routes open-topped kill XP to a trainable passenger before elite, then falls back to the carrier; spawned-child awards and inheritance reuse existing kill/spawn owners. This is documented compatibility policy | Implemented; real AYMod BFRT Enter, passenger kill credit and elite-to-carrier fallback pass; spawned inheritance regressions pass |
-| Controller experience | `MindControllerGainExperienceRatio=100%` | Local reward candidate shares conserved kill XP with a valid non-elite controller through the existing award owner; unavailable/elite controllers leave XP with the ordinary recipient. Ratio bounds are explicit policy | Implemented; real AYMod Yuri Attack/control, authored XP share and elite-controller fallback pass |
-| Hero bounty | `GetsBounty` and the bounty multiplier family | Local reward candidate uses pre-kill collector rank and victim cost/rank multipliers; hostile terminal kills pay once through existing KillRecord/Economy, with registered BountyAnim through AnimClass. Defaults/clamps are explicit policy | Implemented; real AYMod Tanya kill pays spendable House credits; reward/dedup/non-NP regressions pass; animation appearance not separately certified |
-| Bunker protection/penetration | Protected bunker/power plants and sniper/radiation/MiG warheads | No matching NPAE admission and victim-effect chain established | Missing |
-| Permanent control | `IsPermaControlled` on control warheads | Local control candidate reads the NP warhead key and reuses permanent-capture ownership without a temporary manager link. SpyJack boarding consumes its spy on success and reuses parasite release on refusal/miss | Implemented; real AYMod Spy boarding/consumption and elite Yuri building capture persist after controller removal; focused refusal/miss regressions pass |
-| Independent turret speed | Fourteen `TurretROT` entries | Current ordinary turret rotation uses `ROT`; the stock-only no-key rationale does not cover this NPAE reader | Missing |
-| Electric bolt colors | Authored `EBoltColor1/2/3` overrides | No matching reader/render consumer established | Missing |
-| Weapon target restrictions | `AACombat`, `AntiNaval`, `AntiUnderwater` | Existing projectile AA/AG and naval rules do not implement these weapon-level entries | Missing; native semantics still to trace |
-| Other warhead policies | `IsFlatExplosion`, `DoesntAffectEnemies` | No corresponding NP input/effect policy established; Ares house filters are not the same input | Missing; native semantics still to trace |
-| Per-superweapon lighting | Psychic Dominator `Lighting` and `LightRed/Green/Ambient/Ground/Level` | Ordinary map/SW lighting does not establish these NP overrides | Missing; native and rendered results still to trace |
-| Extension shell controls | `ShowTechLevelSlider`, `UseDropDownColors`, `MPC01..MPC16` color data | No configuration-to-UI chain established for the NP fields; dynamic color names are data, not separate rule fields | Missing/unverified |
-| Power-dependent drones | ROBO/DRON/CAOS `PoweredUnit` and GAROBO/NARADR/NAPSIS `PowersUnit` | Existing retail robot behavior does not certify all three MOD type/provider pairs | Dedicated native/wiring/runtime audit pending |
-| Six-seat firing origins | BFRT `AlternateFLH5/6` in fixed ART | Authored origins confirmed; indexing and final rendered firing origins not certified | Dedicated consumer/runtime audit pending |
+| F01 / P1 | 步兵自主隐形：谭雅、狙击手等常见单位不能进入当前自主隐形更新；影响生存、AI 选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs:31`、`:681` 将事实采集和更新限定为 Unit，排除 Infantry | 先核 #174 的步兵准入，再扩展已有 cloak owner；静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
+| F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
+| F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
+| F04 / P1 | 驻军保护与穿透：狙击/病毒/辐射/MiG 对驻军和建筑的伤害分配无法按 NPAE 扩展兑现 | 建筑 NABNKR、YAPOWR、YAPOWRAI 的 `BunkerProtectionLevel`；AWPWH、Virus、VirusM、RadBeamWarhead、OCRadBeamWarhead、MIGWH 的 `BunkerPenetrationLevel`；`src/rules/warhead_type.rs:454` 的 PenetratesBunker 和 `src/sim/combat/damage/mod.rs:76` 的 stock 坦克掩体 gate 不是这两项 | 核正负等级语义，区分城市驻军、苏军碉堡、生化炉、坦克碉堡；覆盖受害者选择、伤亡、弹出/清空和回收，不只读取数值 |
+| F05 / P1 | 独立炮塔速度：常见坦克转炮仍用 `ROT`，忽略独立 `TurretROT`，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/object_type.rs:3350` 仅读ROT，`src/sim/world/unit_post.rs:66` 消费；`src/sim/movement/turret.rs:55` 的无此键说明仅适用stock | 核 #174 reader 和旋转消费者，原地/行进跟踪及开火准入；沿用旋转 owner，不以画面拟合速度 |
+| F06 / P1 | 飞机对空行为：ORCA 类型的扩展 `AACombat` 未接通，不能靠弹体 `AA` 替代 | **`[ORCA] AACombat` 是 AircraftType 键，不是 WeaponType**；`src/rules/object_type.rs`、飞机 attack/weapon-selection owner | 核 #174 飞机任务/追击/武器准入，先用 ORCA 完成对空与对地两条对照；不能以别的飞机描述推定其行为 |
+| F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |
+| F08 / P2 | 爆炸政策：`IsFlatExplosion` 尚无匹配的 NP 输入/效果政策，具体损害仍待原生确认 | BlimpHE、KTSTLEXP、CRNUKEWH、CRTerrorBombWH、DemobombWH；`src/rules/warhead_type.rs`、combat 收伤/爆炸 owner | 必须先定原生语义，不能只凭名字假定为地形高度忽略或平面伤害 |
+| F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
+| F10 / P2 | 电弧自定义配色：武器自定义三色没有传到最终绘制 | TankBolt、TankBoltE、TeslaFragmentT 的 `EBoltColor1/2/3`；`src/sim/combat/electric_bolt.rs:18` 只传 alternate_color 等字段；`src/render/electric_bolt.rs:25` 仍从 palette 10/5/15 取色 | reader → effect birth → renderer，全程使用既有电弧 owner；实际 TTNK 普通/精英攻击画面验证，不调截图拟合 |
+| F11 / P2 | 心灵终结器独立光照：超武 section 的 NP 光照覆盖未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
+| F12 / P2 | 扩展遭遇战 UI：科技等级滑条与扩展颜色未按 NP 配置进入 UI | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
+| F13 / P2 | BFRT第六乘员射击原点：读取/存储容量只有5座，第六乘员越界得到零FLH；不是单纯未验画面 | 固定ART有 AlternateFLH5/6；BFRT有6座。`src/rules/art_data.rs:1188` 只读0..4，`:325` 越界取零；`src/sim/combat/fire_coord.rs:807` 按实际乘员序号取原点 | 先核 #174 零基索引和六座映射；六人逐一开火，核模拟出生点与实际画面；离开/重上车、转身不串索引，复用既有FLH owner |
 
-These are initial findings, not the complete feature list. Ordinary `Hospital`,
-`BurstDelay0..3`, cloak/sensor keys and related existing mechanisms require their
-own classification and affected-path evidence; they must not be marked missing
-merely because the MOD uses them differently from retail data.
+F04、F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定义尚未全部证明**，
+不能直接依据键名写实现。F01–F03、F13 是本轮新增的明确生产控制流/容量缺口。
 
-The implemented rows describe local delivery candidates, not whole-mod certification.
-Reward/control is committed as `dd3756a77`;
-the technology, power and EMP commits are now combined on the local integration
-branch. Some individual mixed-feature paths have
-focused coverage, but combined-delivery feature combinations, save/load and real
-AYMod window/gameplay acceptance remain unverified. No row above is closed by
-implementation or a green focused test alone.
+## 4. 已有实现，仍需核对的功能链
 
-The combined local candidate passes seven opt-in scenarios against the maintained
-AYMod rules and assets through the headless scenario runtime:
+| ID / 优先级 | 类别与当前边界 | 下一次验收 |
+| --- | --- | --- |
+| V01 / P1 | 三组供电：ROBO/GAROBO、DRON/NARADR、CAOS/NAPSIS。已有 `src/sim/powered_unit.rs`、共享 House 计数和 provider/EMP 查询；不是“PoweredUnit 未实现” | 每组失去最后供电建筑、低电、手动断电、EMP、恢复、换主；同 House 混有另外两组和同阵营另一家 AI 时不得误供电/串状态。先核 #174 的按类型与全局计数关系 |
+| V02 / P2 | 医疗建筑：GAROBO、NARADR 的 `Hospital`。已有 `src/sim/docking/hospital.rs:18` 的进驻/治疗/退出owner及radio/app准入；不是Hospital未实现 | 受伤步兵 Enter、排队/满员、治疗、离开、失电/毁楼、换主；与驻军 F04 区分 |
+| V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM建筑四项BurstDelay物理值均9，但是否为#174建筑扩展或无效配置待核。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
+| V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
+| V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
+| V06 / P1 | 作者170601：精英盖特炮从高档/盖特坦克从中档开始；已有 gattling owner | YAGGUN/YTNK 实际晋升、初始档位、停火退档、换主/存档；用当前配置与补丁消费者定语义 |
+| V07 / P1 | 作者170601：辐射剥离缠船乌贼、乌贼自动选敌修复；已有 parasite 和 combat 关系 | 船被寄生后受辐射、释放/死亡/再捕获、双方归属和目标扫描；不要只用普通伤害击杀乌贼冒充剥离 |
+| V08 / P1 | 作者170601：BFRT不自动冲敌坦克碾压、TTNK不再给磁暴塔充电 | 核当前 `AutoCrush`/充电资格及生产消费者；分别观察自动 Guard 和显式 Attack，不能从作者旧版说明推定当前行为 |
+| V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
-- A real TTNK Attack delivers EMP to an APOC; actual frames expire it after the
-  shooter is removed.
-- EMP suspends a paid MTNK factory head without losing the object or its cost;
-  manual Off survives expiry, and On resumes real production progress.
-- A real Tanya kill receiver increases its House's spendable credits.
-- Actual Enter boarding into a BFRT trains its passenger; an elite passenger's
-  next kill trains the carrier instead.
-- Actual Yuri Attack captures a tank; its kills train the controller at the
-  authored ratio, and an elite controller leaves subsequent XP with the tank.
-- Actual Spy Attack consumes the boarder and permanently retains the tank.
-- Actual elite Yuri Attack permanently captures a building; removing Yuri does
-  not release it.
+作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、
+铁幕目标的自动攻击准入、船厂维修伤害归属、红血碉堡进驻、Alt 飞机误入维修厂/船厂、
+秘密实验室单位选择概率、火箭飞行兵坠落目标层。特别是 `src/sim/secret_lab.rs:78`
+明确保留stock的缩短范围位置回原数组抽签缺陷，值得优先对照作者的概率修复；
+没有证据时不能直接重写RNG算法。这些项目有对应 retail owner，
+本轮未逐条追 #174 补丁和实际运行，因此既不算已兼容，也不统一判缺失。
+V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 
-The maintained technology/shipyard regression also passes through production
-CanBuild and building Unlimbo/Limbo counters. Eight combined NPatch EMP tests
-cover production identity/cash/progress, other online producers, user holds,
-low-power recovery and saved EMP/manual-power intent. The production fix keeps
-physical factory lookup separate from online admission and notifies the existing
-queue owner on EMP transitions. No second hold state was added.
+## 5. AI 专项清单：优先于纯画面项目
 
-The seven scenarios above are headless production-path checks, not whole-mod
-rendering certification. Computer Use additionally exercised normal menus,
-skirmish launch, base deployment, power-plant/barracks construction and loading
-the original QA save. The saved terrain source-to-LAT variant restoration defect
-is repaired without rewriting the saved Cell fields or bypassing layout checks.
-Actual GUI V/click targeting produced Barracks Off and then On commands; the
-next click observed the prior command's committed online latch, not merely an
-input receipt.
+**本轮未发现足以确认为“当前固定 AIMD 活跃战术故障”的新证据。**
+以下多数是生产实现已有但尚未覆盖用户多电脑场景的验收债，不是宣称 AI 系统未实现。
+根 AIMD 注册脚本的物理用法共21种 opcode：
+`0,3,5,6,8,9,11,14,21,43,46,47,49,53,54,55,57,58,61,62,63`。
+它们均在 `src/sim/team_script_vm/actions.rs:110` 的已移植分发名单中；
+这只能排除“所有这些指令没有分发”的说法，不能证明各条战术完整执行。
 
-The apparent black field was reproduced from an actual camera that had scrolled
-outside the explored area. Re-centering with the pointer inside the tactical
-view restores the base; no shroud bypass or speculative palette fix was made.
-The windowed camera owner now stops edge/coast scrolling on pointer exit while
-retaining in-window coast and captured right-drag behavior. Its focused regression
-fails before the fix and the 26-test camera module passes. Earlier startup white
-screens have not recurred on subsequent normal launches; no startup fix is claimed.
-The clean build was reloaded through the normal save-game menu after removing
-all temporary input/render diagnostics; its original QA battle renders normally.
+| ID / 优先级 / 状态 | 机制与代码入口 | 多电脑对战收口条件 |
+| --- | --- | --- |
+| A01 / P1 / 待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 三阵营各自完成队伍、出基地、接敌、损耗后重建；不只数“团队已创建”，不能被永久空队占满 Max |
+| A02 / P1 / 待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 同阵营至少两家 AI 同场独立付款、造厂、补矿车和补兵；一家的失厂/缺钱不污染另一家选择；三阵营都可发展到实际高级科技 |
+| A03 / P1 / 待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 人类对多家结盟 AI、自由混战分别验；不把盟友错误选为敌对目标，范围友伤按武器政策验；目标灭亡后重选，视野/外交符合 #174，不借 retail 注释断言补丁行为 |
+| A04 / P1 / 待核+待验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
+| A05 / P1 / 待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 多家独立充能和发射，不跨House消费超武；敌对超武不错误选盟友，铁幕/超时空允许的己方或盟军目标按#174政策验，投送后继续作战；光照另见 F11 |
+| A06 / P1 / 待验 | EMP、断电、捕获后队伍与工厂生命周期：既有 EMP/生产/capture owner | AI付款头暂停后恢复、其他同阵营House不受影响；被控制/死亡后原队成员/需求/计数正确更新，仅符合Reinforce/组建状态政策的队伍补员（`src/sim/team_script_vm.rs:735`），不产生跨House需求；无人单位失provider后可恢复 |
+| A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
+| A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
+| A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 两架 SCHP 执行 `54 → 5 → 9 → 0...`，移动、落地部署、开火和再次移动；不是只加载成功。现有 TickTank DeployToFire/DeploysInto 注释残留不能直接归罪 SCHP |
+| A10 / P1 / 待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 盟军AI实际建巨炮/裂缝，实际使用超级裂缝相关单位/能力；核当前生效配置和消费者，不把旧作者 bug 当当前引擎必然存在 |
 
-These selected five delivery families do not close the other missing mechanisms
-in this ledger. Full balance, every mode/map combination and every visual effect
-are not certified. Documented player-friendly NPatch policies remain intentional
-rather than being presented as exact NPAE arithmetic.
+A04 的特定残留：`src/sim/ai_unit_choice.rs:86` 只有一个车辆选择槽，
+`src/sim/production/factory_ai.rs:355` 记录了独立 naval slot 未完成。
+现有说明引用 **NPSE #359/ext173**，尚未证明 #174 也需要双槽；
+不能直接移植另一版本或写成“AYMOD海军必然不能生产”。先原生核对和实际竞争场景复现。
 
-## Initial data families
+### 固定 AIMD 的配置残留：单独管理，不猜修复
 
-The 207 main queries were grouped as follows. Counts are query instances, not
-the count of every occurrence of those keys in the MOD, and not runtime test
-coverage. Three additional probes checked an absent `AlternatePrerequisite`
-on GATECH and BFRT's two added ART firing origins.
+| ID / 优先级 | 引用链与现状 | 后续动作/风险 |
+| --- | --- | --- |
+| C01 / P3 | TF `07C338DC-G` 含未知成员 SHD → Team `0610813C-G` → AITrigger `0616004C-G` / `07C330CC-G`；根 AIMD 两条触发的三个难度位物理值均0 | 当前固定触发不可达；不能写成“活跃碉堡队少造兵”。地图可重新启用，届时按未知成员忽略政策运行；不猜为 SHK/SCHD |
+| C02 / P3 | 已注册但缺定义的 TF `05FC0DEC-G` → Team `060F883C-G`（Yuri Armor - H3）；根 AIMD 固定 AITrigger 未引用该 Team | 保留身份，不能补抄原版编队；地图/脚本重开才会产生实际影响，若恢复战术需作明确维护设计 |
+| C03 / P2 | 短行 AITrigger `0C8C51BC-G` / `FFFFFF12-G` 的对象类型字段为空；顺序token读取跳过空字段，移读后multiplayer=false，当前遭遇战不具资格（FixedAimd的enabled仍为true） | 两条原配置战术尚未恢复，但不是enabled=false或新的加载回归；reader `src/rules/team_ai_ini.rs:625`、空项读取`src/rules/ini_value.rs:804`、拒绝入口`src/sim/ai_team_creation.rs:393`。先核作者意图与原生读取，不加占位值擅自启用 |
 
-| Family | Query instances | Required mechanism boundary |
-| --- | ---: | --- |
-| Supporting references | 39 | Registered types, weapons, projectiles and warheads |
-| Retail or reactivated fields | 55 | EMP, power providers, cloak, sensors and prerequisite groups |
-| AI planning and legacy AI | 12 | Counted candidates and `[AI] Build*` call reachability |
-| Experience | 3 | Passenger training and controller sharing |
-| Turret and burst timing | 20 | Independent turret rate versus existing retail burst delays |
-| Alternative/negative prerequisites | 10 | Seven alternate groups and three shipyard exclusions |
-| Garrison penetration | 9 | Six warhead levels and three building protection levels |
-| Bounty | 22 | Recipient/rank flags, values, multipliers and animation |
-| Other warhead effects | 6 | Flat explosion and house filtering |
-| Permanent control | 2 | Implemented; real AYMod Spy boarding/consumption and elite Yuri building capture persist after controller removal; focused refusal/miss regressions pass |
-| Hospitals | 2 | GAROBO/NARADR entry, treatment and departure |
-| Country/UI | 4 | Country range, power toggle, tech slider and colors |
-| Weapon targeting | 5 | Air/naval/underwater weapon policies |
-| Dominator lighting | 6 | Per-superweapon lighting activation and restoration |
-| Electric bolt colors | 12 | Three weapons with custom-color flags and RGB triplets |
+## 6. 已交付机制和有意政策：不重复“修复”
 
-Author-described changes without a distinct new key remain additional inventory
-items: spawned/mother experience, building veterancy, crate effects and inherited
-bug fixes must be reconciled with actual native consumers. An unchanged sound,
-mode or UI file does not exclude a binary patch changing its interpretation.
+以下是交接分支已有实现，不再列为纯缺失。macOS 的已有覆盖不冒称 Windows 重跑。
 
-The candidate Tesla EMP path is TTNK -> TankBolt/TankBoltE ->
-ElectricbounceT/ElectricbounceTE -> TankBoltEMP -> EMPulsWH. The parent
-projectiles also author `Airburst=no`; the static `AirburstWeapon` reference
-alone does not prove that the EMP child fires. Preserve this reachability
-question instead of treating the reference graph as an executed attack.
+| 机制 | 实现/覆盖边界 | 尚未关闭的边界 |
+| --- | --- | --- |
+| 宽容 AIMD 安装、顺序 AITrigger、TeamType 查找 | 未知成员忽略、缺定义编队身份保留；已有生产 reader/VM 改动 | 不证明每条活跃战术；见 A01/C01–C03 |
+| 三阵营随机范围 | `NewPlayableCountries=-7`；startup root reader，现有 RNG 顺序 | Windows 人类/AI多个随机槽；不是 mode/map 覆盖项 |
+| 科技树与 AI 规划 | 七处 Prerequisite2、三处 NegativePrerequisite、八厂 AIBasePlanningCount 通过共享 owner；已有实际MOD科技/船厂生命周期覆盖 | 普通AI原生提前成功分支保留，不强制套人类前置规则；实际发展见 A02 |
+| 手动切电 | UseTogglePower、V/可重绑、鼠标与事件/BuildingOnline 链；已有 GUI 兵营Off/On与地图切换/手势回归 | Windows普通输入与存档；不另建客户端电力状态 |
+| EMP | 实际 TTNK → TankBolt/TankBoltE → ElectricbounceT/TE → TankBoltEMP → EMPulsWH；impact child 已接通，不能继续当作只引用未触发 | 时长/适用对象/算术为[明确可玩政策](npatch-emp.md)，不是完整 #174 等价；多AI见 A06 |
+| 已付款生产头暂停/恢复 | EMP不退款/重建，手动Off和用户Hold不被到期覆盖；已有实际MOD生产场景和保存状态回归 | Windows运行与多工厂/多House |
+| 乘员/母子机经验 | BFRT乘员先升、精英回退载具；子机训练母体、现存同步/再生继承；已有实际BFRT Enter场景 | 见 V05/F13；不是所有驻军链都已验 |
+| 控制者经验 | 有效非精英控制者分配既有XP，精英/无效回退普通受益者；实际尤里场景 | 比例限制与整数守恒为[政策](npatch.md)，不是所有 #174 算术已证 |
+| 英雄赏金 | Tanya实杀产生可支配金钱；敌对终结击杀只结一次，普通/精英击杀和去重有回归 | 默认值/钳制/比例是政策；动画外观未单独验，其他英雄未全部实际场景验 |
+| 永久控制/间谍劫车 | Spy登车成功消耗自身；精英尤里夺建筑后移除控制者仍保有建筑；拒绝/落空有回归 | Windows多AI换主/补员与存档；不创建临时manager竞争owner |
+| 存档地形、窗口边滚 | baseline ClearTile/LAT变体重绑与缺失radar派生面重建已修；出窗口停止边滚 | 不宣称所有存档或启动白屏已修。作者原引擎“不支持读档”不等于要求VERA禁用存档 |
 
-Likewise, `GetsBounty` rank flags are authored on TANY/BORIS/BPLN, whereas the
-`Bounty` rank values are on TANY/BORIS/YURIPR. Their beneficiary/victim roles
-must come from the native kill chain, not from an assumed shared switch.
+经验、赏金、EMP、混合扩展、负数generic前置处理和切电root生命周期的有意差异，
+继续以 [npatch.md](npatch.md) / [npatch-emp.md](npatch-emp.md) 为机制说明 owner。
+不要为了清单显示“完成”而悄悄抹掉政策残留。
 
-## Native chains established so far
+## 7. 建议适配顺序与验收矩阵
+
+1. **P0基线**：使用本交接分支的 `npatch` 普通游戏构建，在 Windows 新局确认三个阵营；
+   补齐正版零售 `ini/` 回归环境，不把本轮 asset 构建说成游戏已更新安装。
+2. **先做A01/A02/A09最小多AI验收**：一人对三阵营电脑，至少再加同阵营重复 House；
+   先找实际发展/出击阻塞，再选一条有复现的链修复，避免凭清单批量改权重。
+3. **常见战斗机制**：F01步兵隐形、V01三组供电、F04驻军穿透、F05炮塔；
+   每次一条普通兵种链，修必要前置和生命周期，保留其他独立机制为明确 residual。
+4. **箱子**：F02与F03分别完成；关闭箱子的对局暂不受这两项影响，不能删掉要求。
+5. **水陆/长局/超武**：A03–A07与A10；查到真正差异再实现，尤其不套用NPSE海军槽。
+6. **较窄武器与画面/UI**：F06–F13；渲染项必须用实际输出验证，不只跑CPU测试。
+
+| 维度 | 最小代表组合 | 观察终点 |
+| --- | --- | --- |
+| 三阵营/重复阵营 | 人类 + 三阵营AI + 同阵营第二家；普通难度先复现，后覆盖困难/简单 | 各自经济、科技、成队出击、损耗重建，House间无串状态 |
+| 关系 | 多家AI联军；自由混战；一个主要目标被消灭 | 目标切换、盟友安全、各自超武/资金/编队归属 |
+| 地图 | 陆图；明确有可用船厂出口/水路的水陆图 | 建基地/寻路/海军与陆军同时有进展；地图不适配与引擎故障分开 |
+| 压力 | 失矿车、失工厂、EMP、失provider、换主、矿枯 | 恢复/败退条件到达，不永久等待；不跨House暂停生产 |
+| 持久化 | Windows本分支新局保存再读；相同能力构建 | 队伍、生产头、控制/隐形/EMP/电力状态保持，不重抽奖励或RNG |
+| 模式 | 先Battle ID1；其余可用AI模式单独验证 | mode/map实际层次和类型变更均生效；不声称九个模式全通过 |
+
+不以固定6000逻辑帧或“出现一次Team”代替发展、出击和恢复终点；
+需要稳定复现时使用固定seed和明确初始状态，不做大网格扫测。
+每项修复补1–3个能在修复前失败的生产路径回归、必要实际MOD场景，玩法改动在PR前做只读critic。
+本轮仅清单与证据更新，不改MOD平衡、原始快照、AI战术权重，不推送/发PR/发布资源。
+
+## 8. 已建立的原生证据
+
+以下保留此前读过的原生链；没有为本轮清单重新执行或扩展它们。
 
 ### AIBasePlanningCount
 
@@ -240,12 +248,3 @@ Negative generic-group codes are not ordinary group queries: the native counter
 does not reject negative indices safely. AYMod's three entries name concrete
 shipyards, so that undefined domain is not needed to reproduce them. No native
 execution or whole-match equivalence is claimed by these instruction reads.
-
-## Next closure
-
-Finish the inventory classification, then prioritize the technology-tree chain,
-manual power control and EMP by player visibility and frequency. Each repair
-must extend the existing owner, include its necessary lifecycle consumers, and
-get focused regression plus affected MOD runtime verification. Keep source,
-installed-build and actual configuration state separate. Do not mark the ledger
-complete while any used mechanism is missing, partial or unverified.
