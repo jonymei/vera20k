@@ -17,6 +17,9 @@ pub struct ElectricBoltBirth {
     pub z_adjust: i32,
     pub phase: i32,
     pub alternate_color: bool,
+    /// NPAE174 CreateElectricBolt6FD526 -> B96A20 copies the explicit
+    /// weapon's colors into the bolt. Outer1, outer2, center; no late lookup.
+    pub custom_colors: Option<[[u8; 3]; 3]>,
     /// The firer [`fired`] names for `EBolt::SetOwner @ 0x004C2BD0`
     /// (bolt `+0x20`/`+0x24`); the app keeps it only while the Unit holds
     /// no other bolt (`+0x6DC`).
@@ -168,6 +171,7 @@ pub(crate) fn create(
                 z_adjust,
                 phase,
                 alternate_color,
+                custom_colors: weapon.npatch_electric_bolt.colors(),
                 owner,
             },
         ));

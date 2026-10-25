@@ -60,6 +60,7 @@ fn native_tactical_visits_own_lifetime_reverse_order_and_clear() {
                 z_adjust: int(&birth["z_adjust"]),
                 phase: int(&birth["phase"]),
                 alternate_color: birth["alternate"].as_bool().unwrap(),
+                custom_colors: None,
                 owner: None,
             });
             // These explicit native manager fixtures include retained zero
@@ -199,6 +200,7 @@ fn accepted_bolt_composites_preserve_the_next_actual_bullet_identity() {
             z_adjust: int(&birth["z_adjust"]),
             phase: int(&birth["phase"]),
             alternate_color: birth["alternate"].as_bool().unwrap(),
+            custom_colors: None,
             owner: None,
         });
         for visit in row["visits"]
@@ -276,6 +278,7 @@ fn a_unit_owns_one_bolt_whose_source_follows_it() {
         z_adjust: 0,
         phase: 0,
         alternate_color: false,
+        custom_colors: None,
         owner: Some(owner),
     };
     let mut bolts = ElectricBolts::default();

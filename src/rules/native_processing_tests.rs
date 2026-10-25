@@ -4,6 +4,70 @@ use super::*;
 use crate::util::save_codec;
 
 #[test]
+fn npatch_bolt_colors_keep_disabled_reads_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |red| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=T\n[T]\nPrimary=W\nSecondary=D\n\
+             [W]\nIsCustomColor=no\nEBoltColor1={red},-1,256\n[D]\nIsCustomColor=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[W]\nIsCustomColor=yes\nEBoltColor2=10,20,30\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed =
+            RulesLayerStack::new(IniFile::from_str("[W]\nEBoltColor1=\nEBoltColor3=4,5,6\n"))
+                .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+                .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(257);
+    let second = continued(258);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(
+            first.weapon("W").unwrap().npatch_electric_bolt.colors(),
+            Some([[1, 255, 0], [10, 20, 30], [4, 5, 6]])
+        );
+        assert_eq!(
+            first.weapon("D").unwrap().npatch_electric_bolt.colors(),
+            Some([[83, 83, 255], [255; 3], [83, 83, 255]])
+        );
+        assert_ne!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    } else {
+        assert!(
+            first
+                .weapon("W")
+                .unwrap()
+                .npatch_electric_bolt
+                .colors()
+                .is_none()
+        );
+        assert!(
+            first
+                .weapon("D")
+                .unwrap()
+                .npatch_electric_bolt
+                .colors()
+                .is_none()
+        );
+        assert_eq!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    }
+}
+
+#[test]
 fn npatch_bunker_bytes_keep_layers_fire_alias_and_saved_registry() {
     use crate::rules::ruleset::RuleSet;
     let continued = |penetration| {

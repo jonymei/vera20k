@@ -21,6 +21,41 @@
 
 use crate::rules::ini_parser::IniSection;
 
+/// NPAE174 Weapon771C70 defaults and ReadINI772901 -> B937F8/B96950.
+/// Keep colors even while disabled: later physical Rules passes can enable them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub(crate) struct NpatchElectricBolt {
+    custom: bool,
+    colors: [[u8; 3]; 3],
+}
+
+impl Default for NpatchElectricBolt {
+    fn default() -> Self {
+        Self {
+            custom: false,
+            colors: [[83, 83, 255], [255; 3], [83, 83, 255]],
+        }
+    }
+}
+
+impl NpatchElectricBolt {
+    #[cfg(feature = "npatch")]
+    pub(crate) fn apply_pass(&mut self, section: &IniSection) {
+        self.custom = section.read_bool("IsCustomColor", self.custom);
+        for (color, key) in
+            self.colors
+                .iter_mut()
+                .zip(["EBoltColor1", "EBoltColor2", "EBoltColor3"])
+        {
+            *color = section.read_color_rgb(key, *color, None);
+        }
+    }
+
+    pub(crate) fn colors(self) -> Option<[[u8; 3]; 3]> {
+        self.custom.then_some(self.colors)
+    }
+}
+
 /// A weapon definition parsed from a rules.ini section.
 ///
 /// Weapons are the bridge between units and damage. A unit fires a weapon,
@@ -205,6 +240,8 @@ pub struct WeaponType {
     pub draw_bolt_as_laser: bool,
     /// Laser uses alternate (darker) color scheme (+0x153).
     pub is_alternate_color: bool,
+    /// Retained NPAE174 custom bolt colors; stock builds keep constructor defaults.
+    pub(crate) npatch_electric_bolt: NpatchElectricBolt,
     /// Weapon fires a radiation beam visual (+0x154).
     pub is_rad_beam: bool,
     /// Weapon triggers a radiation eruption effect (+0x155).
@@ -330,6 +367,7 @@ impl WeaponType {
             is_electric_bolt: section.read_bool("IsElectricBolt", false),
             draw_bolt_as_laser: section.read_bool("DrawBoltAsLaser", false),
             is_alternate_color: section.read_bool("IsAlternateColor", false),
+            npatch_electric_bolt: NpatchElectricBolt::default(),
             is_rad_beam: section.read_bool("IsRadBeam", false),
             is_rad_eruption: section.read_bool("IsRadEruption", false),
             is_mag_beam: section.read_bool("IsMagBeam", false),

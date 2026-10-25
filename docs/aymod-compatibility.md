@@ -127,7 +127,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `--profile fast --no-default-features --features npatch`构建成功；固定保留，不受后续编译覆盖。
   本机启动入口：`D:/Workshop/vera20k/target/AYMOD-test-20261025.cmd`，
   使用主工作树配置和AYMOD资源；未自动启动。新保留字段改变存档布局，请新开对局。
-- 明确开放的F项为F02/F03/F06/F07/F08/F09（功能）与F10/F11/F12（视觉/UI）；
+- 明确开放的F项为F02/F03/F06/F07/F08/F09（功能）与F11/F12（视觉/UI）；F10已接通并通过GPU定向验收，玩家画面待验；
   F01/F05/F13已有实现但还需画面/移动验收，F04已有定向功能验收。
   V01–V10以及AI专项仍是核对/验收项，不能计作全部缺失或全部通过。
 - V01已开始原生复读：当前AYMOD的Building operational-on调用点
@@ -219,7 +219,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - F10原生研究已补齐：还必须读IsCustomColor（默认false）；RGB三色默认83,83,255 / 255,255,255 /
   83,83,255，逐物理层current-default读取，即使gate关闭也保留颜色；出生复制后用RGB565绘制，custom覆盖alternate。
   TankBolt/TankBoltE的生产配置已确认使用；TeslaFragmentT没有IsElectricBolt，不为显色擅改其准入。
-  此处只是下一条电弧实现的证据入口，F10仍未实现/未做GPU验收。
+  F10现已按此链接通，并通过实际AYMOD普通/精英开火和GPU读回；详见下方当前检查点。
 ### 存档驱动 A01：集结堵塞已修一条真实链
 
 - `6c2b97629`修复Walk重试续接：原生75B6D1/75BBBF在同一对象访问中进入Process(false)，
@@ -240,6 +240,28 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 更新顺序变化：仅Walk本次递归Find_Path改回同步，最多增加一次该访问内的搜索；普通batch和Drive/Ship不变。
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
+
+### 当前检查点：集结修复与配色交付（2026-10-26）
+
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
+  无推送/PR/合并授权，历史存档分析工作区与旧测试构建保留，原存档未修改。
+- AI当前结论：发展与满员不是唯一阻塞；陆海选择槽竞争和Walk集结永久等待已有修复。
+  同一旧存档300帧对照已证明14人队进入Attack；全局强度、长局、多AI与海军184仍开放。
+  不改AIMD、权重、兵种数值、集结半径或供电设计政策。
+- `96c296d47`扩展现有telemetry工具：显式trace模式复用正式资源准备与交互式runtime提交owner，
+  最多300帧、每类32个指定观察者；inspect仍完全不推进。旧版实际存档trace通过，
+  当前fast工具help/参数上限/无观察者/模式冲突/负ID/布局拒绝通过；资源加载6项回归通过。
+- F10已接通Weapon逐层保留读取、配置hash、保存注册表、共享电弧出生和渲染RGB565颜色。
+  custom覆盖alternate；默认色与读取次序来自NPAE174 771C70、772901/B937F8、B96950/B96AC8，
+  出生6FD526/B96A20、三股绘制B96A50/B96A78/B96AA0；未改伤害、EMP或发射准入。
+- 定向验收：NP NativeProcessing94项；无NP92项；实际AYMOD普通/精英与显式武器出生场景1项；
+  renderer电弧4项（含GPU读回及既有原生像素），presentation lifetime3项均通过。
+  TeslaFragmentT未配置IsElectricBolt，不为配色强开。玩家新局画面仍待验。
+- 新保存布局为`0x8c6ede71`；旧两份`0xd4be79fe`与此前`0x91e21ca0`不强制兼容。
+  请新开局；旧文件继续通过隔离历史版本分析，不能伪造头部绕过门禁。
+- 下一安全动作：交付新普通fast+npatch构建；继续海军184的Float/Water连通与Ship阻挡/路线检查，
+  再查长期补员/接敌。三组独立供电属于与目标原生共享计数不同的政策，尚未得到用户确认，不静默改动。
+
 ## 3. 功能缺口与适配进度
 
 每一行是一条可独立收口的玩法链，不要求合并成一个大改动。
@@ -255,7 +277,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |
 | F08 / P2 | 爆炸政策：`IsFlatExplosion` 尚无匹配的 NP 输入/效果政策，具体损害仍待原生确认 | BlimpHE、KTSTLEXP、CRNUKEWH、CRTerrorBombWH、DemobombWH；`src/rules/warhead_type.rs`、combat 收伤/爆炸 owner | 必须先定原生语义，不能只凭名字假定为地形高度忽略或平面伤害 |
 | F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
-| F10 / P2 | 电弧自定义配色：武器自定义三色没有传到最终绘制 | TankBolt、TankBoltE、TeslaFragmentT 的 `EBoltColor1/2/3`；`src/sim/combat/electric_bolt.rs:18` 只传 alternate_color 等字段；`src/render/electric_bolt.rs:25` 仍从 palette 10/5/15 取色 | reader → effect birth → renderer，全程使用既有电弧 owner；实际 TTNK 普通/精英攻击画面验证，不调截图拟合 |
+| F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 | 心灵终结器独立光照：超武 section 的 NP 光照覆盖未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
 | F12 / P2 | 扩展遭遇战 UI：8色大厅/战场错配本轮已修；科技等级滑条与完整16色界面仍开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |

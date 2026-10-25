@@ -1473,6 +1473,7 @@ impl ProcessedRulesLayers {
                     occupant_anim: member.weapon.occupant_anim.as_deref(),
                     open_topped_anim: member.weapon.open_topped_anim.as_deref(),
                     attached_particle_system: member.weapon.attached_particle_system.as_deref(),
+                    npatch_electric_bolt: member.weapon.npatch_electric_bolt,
                 }
             })
     }
@@ -3837,6 +3838,7 @@ pub(crate) struct WeaponState<'a> {
     pub(crate) occupant_anim: Option<&'a str>,
     pub(crate) open_topped_anim: Option<&'a str>,
     pub(crate) attached_particle_system: Option<&'a str>,
+    pub(crate) npatch_electric_bolt: crate::rules::weapon_type::NpatchElectricBolt,
 }
 
 /// Fields needed by Weapon7729F0, retained on the same live Weapon object.
@@ -3844,6 +3846,7 @@ pub(crate) struct WeaponState<'a> {
 /// name: repeated names longer than 24 bytes can allocate distinct native types.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 struct WeaponReadState {
+    npatch_electric_bolt: crate::rules::weapon_type::NpatchElectricBolt,
     speed: i32,
     /// +B4, ReadRange (`0x00474620`) at `0x00772331` with the retained value
     /// as its default, over the constructor's zero (`0x00771CB6`): leptons,
@@ -6236,6 +6239,13 @@ impl RulesPassProcessor {
                         .weapon
                         .open_topped_anim = anim;
                 }
+                // NPAE174 772901 -> B937F8/B96950/B96AC8, before
+                // AttachedParticleSystem. Colors read even when custom=false.
+                #[cfg(feature = "npatch")]
+                self.family_mut(RulesTypeFamily::Weapon)[index]
+                    .weapon
+                    .npatch_electric_bolt
+                    .apply_pass(&raw);
                 let incoming = raw.read_string("AttachedParticleSystem", "", 0x14);
                 if let Some(system) = self.find_or_create_particle_system(&incoming) {
                     let id = self.families[&RulesTypeFamily::ParticleSystem][system]

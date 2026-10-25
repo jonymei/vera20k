@@ -5644,6 +5644,7 @@ impl RuleSet {
             weapon.occupant_anim = state.occupant_anim.map(str::to_owned);
             weapon.open_topped_anim = state.open_topped_anim.map(str::to_owned);
             weapon.attached_particle_system = state.attached_particle_system.map(str::to_owned);
+            weapon.npatch_electric_bolt = state.npatch_electric_bolt;
             weapons.insert(section.name.clone(), weapon);
         }
 
@@ -7147,6 +7148,7 @@ impl RuleSet {
                             weapon.laser_outer_color,
                             weapon.laser_outer_spread,
                         ),
+                        weapon.npatch_electric_bolt,
                     ),
                 )
             })

@@ -1916,6 +1916,83 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY TankBolt normal/elite and explicit-weapon colors"]
+    fn aymod_tesla_bolt_colors_follow_the_birth_weapon() {
+        use crate::sim::combat::electric_bolt;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::LifecycleOutput;
+        let ordinary = [[128, 160, 255], [128, 40, 255], [128, 160, 255]];
+        let elite = [[160, 160, 255], [255, 192, 255], [160, 160, 255]];
+        for (promoted, expected, direct_weapon, direct_colors) in [
+            (false, ordinary, "TankBoltE", elite),
+            (true, elite, "TankBolt", ordinary),
+        ] {
+            let (mut scenario, actor, target) = aymod_nearby_pair("TTNK", "APOC", false);
+            let sim = &mut scenario.runtime.simulation;
+            let entity = sim.substrate.entities.get_mut(actor).unwrap();
+            if promoted {
+                entity.veterancy.set_elite();
+            }
+            let owner = entity.owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            ));
+            let birth = (0..240)
+                .find_map(|_| {
+                    tick_with_due_commands(&mut scenario)
+                        .lifecycle_outputs
+                        .into_iter()
+                        .find_map(|output| match output {
+                            LifecycleOutput::ElectricBoltCreated(birth)
+                                if birth.owner.is_some_and(|owner| owner.unit == actor) =>
+                            {
+                                Some(birth)
+                            }
+                            _ => None,
+                        })
+                })
+                .expect("actual TTNK Attack must create its owned electric bolt");
+            assert_eq!(birth.custom_colors, Some(expected));
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            electric_bolt::create(
+                sim,
+                rules,
+                actor,
+                crate::sim::projectile::ProjectileTarget::Entity(target),
+                rules.weapon(direct_weapon).unwrap(),
+                birth.from,
+                None,
+            );
+            let direct = sim
+                .lifecycle_outputs
+                .iter()
+                .find_map(|output| match output {
+                    LifecycleOutput::ElectricBoltCreated(birth) if birth.owner.is_none() => {
+                        Some(birth)
+                    }
+                    _ => None,
+                })
+                .expect("explicit-weapon CreateElectricBolt must create a bolt");
+            assert_eq!(
+                direct.custom_colors,
+                Some(direct_colors),
+                "must not reselect the firer's own weapon"
+            );
+            assert!(
+                !rules.weapon("TeslaFragmentT").unwrap().is_electric_bolt,
+                "custom colors must not enable an unconfigured bolt effect"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY MTNK independent turret speed"]
     fn aymod_mtnk_keeps_independent_turret_speed_while_firing() {
         use crate::sim::command::{Command, CommandEnvelope};
