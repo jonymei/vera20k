@@ -18,14 +18,16 @@
   前端、加载标记/进度行/合成与消息相关覆盖通过；真实AY地图加载/MTNK攻击场景通过。
   AY第3色白、第5色蓝，玩家需在新大厅重新选择蓝色色块。完整16色UI与科技滑条仍开放。
 - 旧已保留标签`aymod-playtest-20261025-f04`与`aymod-playtest-20261025-sonic-fix`不覆盖；
-  最新代码尚待保留普通fast+npatch测试版。新增House保留字段改变存档布局，请新开局。
+  最新普通fast+npatch构建已从干净`dc330e87b`保留为`aymod-playtest-20261025-ai-colors`，
+  manifest已解析并校验。新入口`D:/Workshop/vera20k/target/AYMOD-test-20261025-ai-colors.cmd`，
+  未自动启动。新增House保留字段改变存档布局，请新开局。
 - 环境：VS C++，Python为主工作树`.venv/Scripts/python.exe`；RA2_DIR为Steam正版，
   VERA20K_AYMOD_DIR为本机MOD，VERA20K_REQUIRE_RETAIL_INI=1。每次Cargo通过tools.cargo_run且测试带--lib。
   未跑全仓库/Clippy；一次加载init::tests过滤未命中，不计覆盖，随后补跑实际加载消费者。
 - 仍开放：AI同需求候选重置、可选DisableAIParallelProduction、多AI/长局强度与其他清单项。
   三组供电V01未因本次改动关闭；完整GUI验收/玩家原局重放未完成。一次性地图诊断已移出源码，
   本机重放片段在主工作树忽略的target内，不提交日志/静态反汇编包/critic记录。
-- 下一步：保留新游戏构建，更新入口供玩家新局验证，再按实测继续AI或其他功能链。
+- 下一步：玩家使用已保留的新入口开局验证颜色与持续陆海出兵，再按实测继续AI或其他功能链。
   本检查点写入时无Cargo/合并操作待完成。
 下文1–7节保留此前macOS交接历史，不代表在Windows重新执行了全部旧验收。
 
