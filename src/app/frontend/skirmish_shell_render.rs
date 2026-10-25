@@ -225,6 +225,7 @@ fn build_skirmish_shell_instances(
     setup_layout: Option<&RandomMapSetupLayout>,
     shell: &SkirmishShellState,
     color_schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
     maps: &[MapMenuEntry],
     wave: Option<&ShellFrameWave>,
     leaving: bool,
@@ -412,7 +413,15 @@ fn build_skirmish_shell_instances(
     // The player-name edit is a dialog child, so it follows the parent
     // background: this batch has no depth test and paints in queue order.
     push_player_name_edit_instances(&mut instances, atlas, font, layout, shell);
-    push_combo_instances(&mut instances, atlas, color_schemes, layout, shell, maps);
+    push_combo_instances(
+        &mut instances,
+        atlas,
+        color_schemes,
+        dropdown_colors,
+        layout,
+        shell,
+        maps,
+    );
     push_checkbox_instances(&mut instances, atlas, layout, shell);
     push_trackbar_instances(&mut instances, atlas, layout, shell);
 
@@ -680,6 +689,9 @@ fn render_skirmish_shell_with_atlas(
         .rules()
         .map(|rules| rules.color_schemes.as_slice())
         .unwrap_or(&[]);
+    let dropdown_colors = state
+        .rules()
+        .is_some_and(|rules| rules.npatch_dropdown_colors);
     let validation_ok_pressed = state.frontend.shell_controller.top_id()
         == Some(crate::ui::shell::descriptor::DialogId(0x00CE))
         && state.frontend.shell_controller.pressed() == Some(crate::ui::shell::modal::control::OK);
@@ -708,6 +720,7 @@ fn render_skirmish_shell_with_atlas(
             setup_layout,
             &state.frontend.skirmish_shell_state,
             color_schemes,
+            dropdown_colors,
             state.frontend.scenario_catalog.shell_maps(),
             wave.as_ref(),
             leaving,
@@ -731,6 +744,7 @@ fn render_skirmish_shell_with_atlas(
             &mut dropdown_instances,
             atlas,
             color_schemes,
+            dropdown_colors,
             &layout,
             &state.frontend.skirmish_shell_state,
             state.frontend.scenario_catalog.shell_maps(),

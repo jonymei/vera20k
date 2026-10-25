@@ -53,6 +53,36 @@ pub fn scheme_entry_for_priority(priority: i32) -> usize {
     scheme_index_for_priority(priority) / 2
 }
 
+/// NPAE174 Session priority conversion:69A310 -> C2AEF0 formats MPC%02d,
+/// finds its doubled scheme index through68CAB0 and falls back to the stock
+/// table on a miss. Startup52D144/C2ADE9 enables this with UseDropDownColors.
+pub fn multiplayer_scheme_index_for_priority(
+    schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
+    priority: i32,
+) -> usize {
+    if crate::rules::NPATCH_ENABLED && dropdown_colors {
+        let number = if priority == -2 {
+            17i64
+        } else {
+            i64::from(priority) + 1
+        };
+        let name = format!("MPC{number:02}");
+        if let Some(entry) = scheme_entry_by_name(schemes, &name) {
+            return entry * 2 + 1;
+        }
+    }
+    scheme_index_for_priority(priority)
+}
+
+pub fn multiplayer_scheme_entry_for_priority(
+    schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
+    priority: i32,
+) -> usize {
+    multiplayer_scheme_index_for_priority(schemes, dropdown_colors, priority) / 2
+}
+
 /// `[Colors]` entry index for a map `Color=<name>` (case-insensitive). `None` if no entry matches.
 pub fn scheme_entry_by_name(schemes: &[ColorSchemeEntry], name: &str) -> Option<usize> {
     let want = name.trim();
@@ -225,6 +255,36 @@ mod tests {
                 hsv: *hsv,
             })
             .collect()
+    }
+
+    #[test]
+    fn npatch_dropdown_colors_keep_root_gate_and_resolve_named_schemes() {
+        use crate::rules::native_processing::{RulesLayerKind, RulesLayerStack};
+        let mut layers = RulesLayerStack::new(IniFile::from_str(
+            "[UISettings]\nUseDropDownColors=yes\n[Colors]\nOther=0,0,1\nMPC03=0,0,255\nMPC05=153,214,255\n",
+        ));
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str("[UISettings]\nUseDropDownColors=no\n"),
+        );
+        let processed = layers.process().unwrap();
+        let saved = serde_json::to_vec(&processed).unwrap();
+        let restored =
+            serde_json::from_slice::<crate::rules::native_processing::ProcessedRulesLayers>(&saved)
+                .unwrap();
+        let rules = crate::rules::ruleset::RuleSet::from_processed_rules(&restored).unwrap();
+        assert_eq!(rules.npatch_dropdown_colors, crate::rules::NPATCH_ENABLED);
+        let resolve = |enabled, priority| {
+            multiplayer_scheme_entry_for_priority(&rules.color_schemes, enabled, priority)
+        };
+        assert_eq!(
+            resolve(true, 4),
+            if crate::rules::NPATCH_ENABLED { 2 } else { 6 }
+        );
+        assert_eq!(resolve(false, 4), 6);
+        // Missing MPC02 and random's MPC17 retain the native stock fallback.
+        assert_eq!(resolve(true, 1), 5);
+        assert_eq!(resolve(true, -2), 2);
     }
 
     #[test]

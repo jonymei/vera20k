@@ -312,6 +312,13 @@ impl RulesLayerStack {
             ini,
             powerups,
             content_hash: self.content_hash(),
+            // Load_Game_Rules52D144 -> B98800 -> C2ADE9 reads the startup root,
+            // unlike RulesProcess668EC0's unpatched multiplayer-settings read.
+            npatch_dropdown_colors: crate::rules::NPATCH_ENABLED
+                && self.layers[0]
+                    .ini
+                    .section_or_empty("UISettings")
+                    .read_bool("UseDropDownColors", false),
             native_type_construction_trace,
         })
     }
@@ -561,6 +568,8 @@ const PARADROP_INFANTRY_KEYS: [&str; 4] = [
 /// Result of applying an ordered rules stack.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProcessedRulesLayers {
+    #[serde(default)]
+    npatch_dropdown_colors: bool,
     ini: IniFile,
     powerups: PowerupTable,
     content_hash: u64,
@@ -568,6 +577,10 @@ pub struct ProcessedRulesLayers {
 }
 
 impl ProcessedRulesLayers {
+    pub(crate) fn npatch_dropdown_colors(&self) -> bool {
+        self.npatch_dropdown_colors
+    }
+
     #[cfg(feature = "ares")]
     pub(crate) fn ares_global_controls(&self) -> &AresGlobalControls {
         &self

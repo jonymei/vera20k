@@ -417,7 +417,11 @@ pub(crate) fn packet_player_line_rgb(state: &AppState, priority: i32) -> [f32; 3
         return MESSAGE_RGB_SYSTEM;
     };
     country_message_rgb(
-        crate::rules::color_scheme::scheme_index_for_priority(priority) as i32,
+        crate::rules::color_scheme::multiplayer_scheme_index_for_priority(
+            &rules.color_schemes,
+            rules.npatch_dropdown_colors,
+            priority,
+        ) as i32,
         &rules.color_schemes,
     )
 }

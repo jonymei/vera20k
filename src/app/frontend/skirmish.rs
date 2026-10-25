@@ -16,7 +16,7 @@ use crate::render::gpu::GpuContext;
 use crate::render::overlay_assets::{render_overlay_names, resolve_overlay_name_for_render};
 use crate::render::overlay_atlas::{self, OverlayAtlas};
 use crate::rules::color_scheme::{
-    ColorSchemeEntry, scheme_entry_by_name, scheme_entry_for_priority,
+    ColorSchemeEntry, multiplayer_scheme_entry_for_priority, scheme_entry_by_name,
 };
 use crate::rules::house_colors::{DEFAULT_SCHEME_ENTRY, HouseColorIndex};
 use crate::rules::overlay_types::OverlayTypeRegistry;
@@ -28,6 +28,7 @@ pub(crate) fn house_color_map_for_launch_session(
     session: &SkirmishLaunchSession,
     house_roster: &HouseRoster,
     schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
 ) -> HouseColorMap {
     // Active-retail CreateHouses @ 0x6882D1..0x68837D constructs Neutral and
     // Special even without [Houses]. Each looks up literal "LightGrey" with
@@ -59,7 +60,11 @@ pub(crate) fn house_color_map_for_launch_session(
     for slot in normalized_launch_slots(session) {
         // `slot.color_index` is the gamemd color *priority* (lobby slot order);
         // resolve it to a `[Colors]` entry index via the priority LUT + /2 doubling.
-        let entry = scheme_entry_for_priority(slot.color_index as i32) as u8;
+        let entry = multiplayer_scheme_entry_for_priority(
+            schemes,
+            dropdown_colors,
+            slot.color_index as i32,
+        ) as u8;
         colors.insert(slot.owner_name, HouseColorIndex(entry));
     }
     colors
@@ -766,6 +771,40 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY dropdown color to House mapping"]
+    fn aymod_blue_lobby_choice_reaches_blue_house_instead_of_dark_red() {
+        let root =
+            std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").expect("AYMod install"));
+        let ini = IniFile::from_bytes(&std::fs::read(root.join("rulesmd.ini")).unwrap()).unwrap();
+        let rules = RuleSet::from_ini(&ini).unwrap();
+        assert!(rules.npatch_dropdown_colors);
+        let mut session = test_session();
+        session.local_slot_mut().color_index = 4; // MPC05, authored blue.
+        let colors = house_color_map_for_launch_session(
+            &session,
+            &roster_with_neutral_and_playable(),
+            &rules.color_schemes,
+            rules.npatch_dropdown_colors,
+        );
+        let entry = usize::from(colors["Player"].0);
+        assert_eq!(rules.color_schemes[entry].name, "MPC05");
+        assert_eq!(rules.color_schemes[entry].hsv, [153, 214, 255]);
+        // The formerly blue stock slot is authored white, never MPC11 dark red.
+        session.local_slot_mut().color_index = 2;
+        let colors = house_color_map_for_launch_session(
+            &session,
+            &roster_with_neutral_and_playable(),
+            &rules.color_schemes,
+            rules.npatch_dropdown_colors,
+        );
+        assert_eq!(
+            rules.color_schemes[usize::from(colors["Player"].0)].name,
+            "MPC03"
+        );
+    }
+
     #[test]
     fn launch_color_map_initializes_neutral_houses_and_uses_session_slots() {
         let Some(rules) = crate::rules::retail_ini_fixture::retail_ini("rulesmd.ini") else {
@@ -776,6 +815,7 @@ mod tests {
             &test_session(),
             &roster_with_neutral_and_playable(),
             &schemes,
+            false,
         );
 
         // CreateHouses overrides Neutral's authored color. Players resolve their
@@ -800,7 +840,7 @@ mod tests {
         let map = IniFile::from_str("[Structures]\n0=Neutral,CAOILD,256,168,78,64,None,0,0,0\n");
         let roster = crate::map::houses::parse_house_roster(&map, &schemes, None);
         assert!(roster.houses.is_empty());
-        let colors = house_color_map_for_launch_session(&test_session(), &roster, &schemes);
+        let colors = house_color_map_for_launch_session(&test_session(), &roster, &schemes, false);
         assert_eq!(colors.get("Neutral"), Some(&HouseColorIndex(2)));
         assert_eq!(colors.get("Special"), Some(&HouseColorIndex(2)));
         assert_eq!(colors.get("Player"), Some(&HouseColorIndex(5)));
@@ -818,7 +858,8 @@ mod tests {
             ),
         ] {
             let schemes = crate::rules::color_scheme::parse_color_schemes(&IniFile::from_str(ini));
-            let colors = house_color_map_for_launch_session(&test_session(), &roster, &schemes);
+            let colors =
+                house_color_map_for_launch_session(&test_session(), &roster, &schemes, false);
             for name in ["Neutral", "Special", "nEuTrAl"] {
                 assert_eq!(colors.get(name), Some(&HouseColorIndex(expected)));
             }
@@ -855,6 +896,7 @@ mod tests {
                 &session,
                 &roster_with_neutral_and_playable(),
                 &schemes,
+                false,
             );
             assert_eq!(colors.get("Neutral"), Some(&HouseColorIndex(2)));
             assert_eq!(colors.get(expected_key), Some(&HouseColorIndex(5)));
