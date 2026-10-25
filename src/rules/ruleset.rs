@@ -4593,6 +4593,7 @@ impl RuleSet {
             name,
             conventional,
             em_effect,
+            causes_delay_kill,
             penetration,
             anim_list,
             debris_types,
@@ -4607,6 +4608,7 @@ impl RuleSet {
             {
                 warhead.conventional = conventional;
                 warhead.em_effect = em_effect;
+                warhead.causes_delay_kill = causes_delay_kill;
                 if crate::rules::NPATCH_ENABLED {
                     warhead.project_npatch_bunker_penetration(penetration);
                 }
@@ -6425,6 +6427,14 @@ impl RuleSet {
                 .collect::<BTreeMap<_, _>>()
                 .hash(&mut hasher);
         }
+        // ReadINI75D42F/C2EF94 can retain +130 across an absent/invalid
+        // later pass; source_ini_hash alone cannot describe that history.
+        b"warhead-delay-kill-v1".hash(&mut hasher);
+        self.warheads
+            .values()
+            .map(|warhead| (&warhead.id, warhead.causes_delay_kill))
+            .collect::<BTreeMap<_, _>>()
+            .hash(&mut hasher);
         // OverlayRead5FE8BE / InitTheater5FE620 retain typed history that a
         // flattened Image key cannot recover; saved resource plans matter too.
         self.overlay_registry.hash_configuration(&mut hasher);

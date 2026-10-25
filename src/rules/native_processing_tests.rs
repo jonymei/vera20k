@@ -108,6 +108,58 @@ fn npatch_bolt_colors_keep_disabled_reads_layers_and_saved_registry() {
 }
 
 #[test]
+fn npatch_flat_explosion_alias_keeps_layer_order_saved_state_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |flat| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(
+            "[Warheads]\n0=Later\n1=Override\n2=Default\n3=Stock\n4=Case\n\
+             [Later]\nCausesDelayKill=no\n\
+             [Override]\nIsFlatExplosion=yes\nCausesDelayKill=no\n\
+             [Stock]\nCausesDelayKill=yes\n[Case]\nisflatexplosion=yes\n",
+        ));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str(&format!(
+                "[Later]\nIsFlatExplosion={flat}\nCausesDelayKill=invalid\n"
+            )),
+        );
+        let processed = layers.process().unwrap();
+        let read = RuleSet::from_processed_rules(&processed).unwrap();
+        assert_eq!(
+            read.warhead("Later").unwrap().causes_delay_kill,
+            crate::rules::NPATCH_ENABLED && flat == "yes"
+        );
+        assert!(!read.warhead("Override").unwrap().causes_delay_kill);
+        assert!(!read.warhead("Default").unwrap().causes_delay_kill);
+        assert!(!read.warhead("Case").unwrap().causes_delay_kill);
+        assert!(read.warhead("Stock").unwrap().causes_delay_kill);
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let saved = save_codec::serialize(&state).unwrap();
+        let restored = save_codec::deserialize(&saved).unwrap();
+        let resumed = RulesLayerStack::new(IniFile::from_str(
+            "[Later]\nIsFlatExplosion=\nCausesDelayKill=invalid\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&resumed).unwrap()
+    };
+    let yes = continued("yes");
+    let no = continued("no");
+    assert_eq!(yes.source_ini_hash(), no.source_ini_hash());
+    assert_eq!(
+        yes.warhead("Later").unwrap().causes_delay_kill,
+        crate::rules::NPATCH_ENABLED
+    );
+    assert!(!no.warhead("Later").unwrap().causes_delay_kill);
+    if crate::rules::NPATCH_ENABLED {
+        assert_ne!(yes.simulation_config_hash(), no.simulation_config_hash());
+    } else {
+        assert_eq!(yes.simulation_config_hash(), no.simulation_config_hash());
+    }
+}
+
+#[test]
 fn npatch_bunker_bytes_keep_layers_fire_alias_and_saved_registry() {
     use crate::rules::ruleset::RuleSet;
     let continued = |penetration| {

@@ -4485,6 +4485,58 @@ fn gsi_04_07_damage_receiver_updates_grudge_before_retaliation() {
     );
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_flat_explosion_fatal_hit_uses_existing_building_fuse() {
+    let ini = IniFile::from_str(
+        "[BuildingTypes]\n0=BARREL\n1=PLAIN\n[Warheads]\n0=FLAT\n1=Super\n[CombatDamage]\nC4Warhead=Super\n\
+         [BARREL]\nStrength=5\nArmor=concrete\nEligibleForDelayKill=yes\n\
+         [PLAIN]\nStrength=5\nArmor=concrete\n\
+         [Super]\nCellSpread=0\n[FLAT]\nCellSpread=1\nIsFlatExplosion=yes\n",
+    );
+    let rules = RuleSet::from_ini(&ini).unwrap();
+    let mut sim = crate::sim::world::Simulation::new();
+    sim.resolve_type_handles(&rules);
+    let barrel = sim
+        .spawn_object("BARREL", "Victim", 5, 5, 0, &rules)
+        .unwrap();
+    let plain = sim
+        .spawn_object("PLAIN", "Victim", 10, 5, 0, &rules)
+        .unwrap();
+    let owner = sim.entities().get(barrel).unwrap().owner();
+    register_computer_houses(&mut sim.houses, &[owner]);
+    let wh = sim.interner.intern("FLAT");
+    let hits =
+        [barrel, plain].map(|id| EntityDamageEvent::area(id, 10, 0, RAD_NO_ATTACKER, None, wh));
+    sim.commit_noncombat_aoe_hits(&rules, None, &hits, Default::default());
+    let delayed = sim.entities().get(barrel).unwrap();
+    assert_eq!(delayed.health.current(), 1);
+    assert_eq!(
+        delayed
+            .pending_c4_detonation
+            .pending()
+            .unwrap()
+            .timer()
+            .duration(),
+        5
+    );
+    assert!(
+        sim.entities()
+            .get(plain)
+            .is_none_or(|e| e.health.current() <= 0 || e.death.is_dying())
+    );
+    sim.session.set_binary_frame_for_test(4);
+    sim.tick_pending_building_detonation(barrel, &rules, None, Default::default());
+    assert_eq!(sim.entities().get(barrel).unwrap().health.current(), 1);
+    sim.session.set_binary_frame_for_test(5);
+    sim.tick_pending_building_detonation(barrel, &rules, None, Default::default());
+    assert!(
+        sim.entities()
+            .get(barrel)
+            .is_none_or(|e| e.health.current() <= 0 || e.death.is_dying())
+    );
+}
+
 #[test]
 fn gsi_04_07_damage_postmortem_stock_barrel_delay_and_nested_order() {
     let ini = IniFile::from_str(

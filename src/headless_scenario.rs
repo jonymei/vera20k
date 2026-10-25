@@ -1771,6 +1771,61 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Kirov warhead and barrel delayed death"]
+    fn aymod_flat_explosion_blimp_warhead_arms_and_expires_barrel_fuse() {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        let (mut scenario, actor, barrel) = aymod_nearby_pair("ZEP", "CAMISC02", false);
+        {
+            let runtime = &mut scenario.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            let primary = rules.object("ZEP").unwrap().primary().unwrap();
+            let warhead_name = rules.weapon(primary).unwrap().warhead.as_deref().unwrap();
+            assert_eq!(warhead_name, "BlimpHE");
+            assert!(rules.warhead(warhead_name).unwrap().causes_delay_kill);
+            assert!(rules.object("CAMISC02").unwrap().eligible_for_delay_kill);
+            let wh = sim.interner.intern(warhead_name);
+            let source_owner = sim.entities().get(actor).unwrap().owner();
+            let hp = sim.entities().get(barrel).unwrap().health.current();
+            let hit = EntityDamageEvent::direct_receiver(
+                barrel,
+                hp,
+                0,
+                actor,
+                Some(source_owner),
+                wh,
+                ReceiverCallFlags {
+                    ignore_defenses: true,
+                    arg6: true,
+                },
+            );
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&resources.overlay_registry),
+                hit,
+                Default::default(),
+            );
+            assert_eq!(
+                sim.entities().get(barrel).unwrap().health.current(),
+                1,
+                "actual alias-authored bomb leaves the eligible barrel alive on its fuse"
+            );
+        }
+        for _ in 0..12 {
+            scenario.tick();
+        }
+        assert!(
+            scenario
+                .sim()
+                .entities()
+                .get(barrel)
+                .is_none_or(|e| e.health.current() <= 0 || e.death.is_dying()),
+            "the ordinary object AI must expire and retire the delayed barrel"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY bounty reader/kill-credit integration"]
     fn aymod_tanya_kill_receiver_pays_real_house_bounty() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};

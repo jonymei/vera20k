@@ -1761,6 +1761,7 @@ impl ProcessedRulesLayers {
             &str,
             bool,
             bool,
+            bool,
             i8,
             &[String],
             &[String],
@@ -1779,6 +1780,7 @@ impl ProcessedRulesLayers {
                     &*member.native_stored_id,
                     member.warhead_anim.conventional,
                     member.warhead_anim.em_effect,
+                    member.warhead_anim.causes_delay_kill,
                     member.npatch_bunker_penetration,
                     member.warhead_anim.anim_list.as_slice(),
                     member.warhead_anim.debris_types.as_slice(),
@@ -3269,6 +3271,8 @@ struct SelectAnimRulesState {
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 struct WarheadAnimReadState {
+    // Warhead ctor75CF31: raw +130 starts false; both aliases retain it.
+    causes_delay_kill: bool,
     conventional: bool,
     em_effect: bool,
     anim_list: Vec<String>,
@@ -6389,6 +6393,17 @@ impl RulesPassProcessor {
             if let Some((_id, raw, _effective)) =
                 self.begin_rules_member_read(RulesTypeFamily::Warhead, index, pass)
             {
+                // NPAE174 ReadINI75D3F1 -> C2EF94 reads IsFlatExplosion
+                // into +130 first; stock75D42F..75D443 then reads
+                // CausesDelayKill into that SAME byte. Fold each raw pass,
+                // not the merged INI: a later alias can override an older key.
+                let current = &mut self.family_mut(RulesTypeFamily::Warhead)[index].warhead_anim;
+                if crate::rules::NPATCH_ENABLED {
+                    current.causes_delay_kill =
+                        raw.read_bool("IsFlatExplosion", current.causes_delay_kill);
+                }
+                current.causes_delay_kill =
+                    raw.read_bool("CausesDelayKill", current.causes_delay_kill);
                 let particle = self.resolve_scalar_from(
                     &raw,
                     "Particle",

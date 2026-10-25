@@ -459,7 +459,9 @@ impl WarheadType {
             cell_spread_f64,
             cell_inset_f32,
             percent_at_max_f64,
-            causes_delay_kill: section.read_bool("CausesDelayKill", false),
+            // The ordered Rules processor folds CausesDelayKill and NPAE's
+            // earlier IsFlatExplosion alias per raw layer, then publishes +130.
+            causes_delay_kill: false,
             delay_kill_frames: section.read_int("DelayKillFrames", 5),
             delay_kill_at_max_f64,
             wall: section.read_bool("Wall", false),
@@ -695,11 +697,11 @@ mod tests {
     #[test]
     fn postmortem_fields_preserve_signed_and_f32_inputs() {
         let ini = IniFile::from_str(
-            "[OilExplosionWH]\nCellSpread=4\nCausesDelayKill=yes\n\
+            "[Warheads]\n0=OilExplosionWH\n[OilExplosionWH]\nCellSpread=4\nCausesDelayKill=yes\n\
              DelayKillFrames=-7\nDelayKillAtMax=7.1\n",
         );
-        let wh =
-            WarheadType::from_ini_section("OilExplosionWH", ini.section("OilExplosionWH").unwrap());
+        let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
+        let wh = rules.warhead("OilExplosionWH").unwrap();
         assert!(wh.causes_delay_kill);
         assert_eq!(wh.delay_kill_frames, -7);
         assert_eq!(
