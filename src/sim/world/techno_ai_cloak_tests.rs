@@ -13,10 +13,12 @@ fn rules() -> RuleSet {
         "[General]\nCloakingStages=9\nCloakDelay=.02\n\
          [AudioVisual]\nCloakSound=NavalUnitEmerge\n\
          [VehicleTypes]\n0=SUB\n1=RANKED\n2=DEST\n\
+         [InfantryTypes]\n0=RANKINF\n\
          [BuildingTypes]\n0=NAYARD\n\
          [SUB]\nStrength=600\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\nSensorsSight=7\n\
          [DEST]\nStrength=600\nSpeed=6\nSensors=yes\nSensorsSight=8\n\
          [RANKED]\nStrength=600\nSpeed=4\nVeteranAbilities=CLOAK\nEliteAbilities=CLOAK\n\
+         [RANKINF]\nStrength=100\nSpeed=4\nVeteranAbilities=CLOAK\nEliteAbilities=CLOAK\n\
          [NAYARD]\nStrength=1000\nWeaponsFactory=yes\n",
     ))
     .expect("stock cloak rules")
@@ -249,6 +251,36 @@ fn stock_cloak_producer_honors_rank_selected_cloak_ability() {
             .unwrap()
             .state(),
         1
+    );
+    let infantry = sim
+        .spawn_object_at_height("RANKINF", "Soviet", rx + 1, ry, 0, 0, &rules)
+        .unwrap();
+    tick_stock_cloak_producer(&mut sim, infantry, &rules, None, FrameEffects::default());
+    assert!(
+        sim.substrate
+            .entities
+            .get(infantry)
+            .unwrap()
+            .cloak
+            .is_none()
+    );
+    sim.substrate
+        .entities
+        .get_mut(infantry)
+        .unwrap()
+        .veterancy
+        .set_rank_for_test(100);
+    tick_stock_cloak_producer(&mut sim, infantry, &rules, None, FrameEffects::default());
+    assert_eq!(
+        sim.substrate
+            .entities
+            .get(infantry)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .map(|cloak| cloak.state()),
+        Some(1),
+        "promotion must install and start the shared cloak runtime for infantry"
     );
 }
 
@@ -942,6 +974,9 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
     let rules = RuleSet::from_ini(&IniFile::from_str(
         "[General]\nCloakingStages=9\nCloakDelay=.02\n\
          [VehicleTypes]\n0=SUB\n\
+         [InfantryTypes]\n0=STEALTH\n\
+         [STEALTH]\nStrength=100\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\n\
+         Locomotor={4A582744-9839-11d1-B709-00A024DDAFD1}\n\
          [SUB]\nStrength=600\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\n\
          Locomotor={4A582741-9839-11d1-B709-00A024DDAFD1}\n",
     ))
@@ -960,6 +995,9 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
         .unwrap();
     let computer = sim
         .spawn_object_at_height("SUB", "Russians", 20, 20, 0, 0, &rules)
+        .unwrap();
+    let infantry = sim
+        .spawn_object_at_height("STEALTH", "Russians", 22, 20, 0, 0, &rules)
         .unwrap();
     let state = |sim: &Simulation, id| {
         sim.substrate
@@ -988,11 +1026,24 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
         }
     }
     assert_eq!((state(&sim, human), state(&sim, computer)), (2, 2));
+    assert_eq!(state(&sim, infantry), 2, "infantry runs CloakingTick too");
+    assert!(
+        !nav(&sim, infantry),
+        "only Unit scatters at cloak completion"
+    );
     assert!(!nav(&sim, human));
     assert!(
         nav(&sim, computer),
         "the computer's sub scatters on completion"
     );
+    let saved = GameSnapshot::save(&sim, 0, 0, "infantry-cloak", 0);
+    let restored = GameSnapshot::load(&saved).unwrap().sim;
+    // Load intentionally reseeds Scenario RNG; compare the owned cloak clocks.
+    assert_eq!(
+        restored.substrate.entities.get(infantry).unwrap().cloak,
+        sim.substrate.entities.get(infantry).unwrap().cloak
+    );
+    assert_eq!(state(&restored, infantry), 2);
 }
 
 #[test]

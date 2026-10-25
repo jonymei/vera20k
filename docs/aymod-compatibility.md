@@ -13,7 +13,7 @@
 - 目标补丁：**NPAE #0011 Extended #174**。NPSE #359、NPExt #173、Ares 的相似功能
   仅能提供线索，不能直接证明 #174 的读取和玩法。没有正面证据要求启用 Ares。
 - 要求 `npatch` 构建。此前 Windows 在 `main` 上未带此能力的启动结果，不覆盖本分支。
-  本轮只构建了该分支的只读 `asset` 工具，没有替换普通游戏、安装程序或运行中的游戏。
+  审计阶段构建了只读 `asset` 工具；后续适配已开始，见下文进度。尚未替换安装的普通游戏。
 - 原始作者说明以 170507 为背景、170601 更新为后续修订；例如尤里收入奖励已被后者取消，
   不能将旧说明的全部描述当当前规则。战役不在本轮目标内，作者也提示其配置冲突。
 
@@ -31,7 +31,7 @@ P1：常见作战机制、电脑发展和出击、单位生存/选敌、经济�
 P2：较窄兵种/模式链、视觉/UI 与原生细节。P3：当前固定触发不可达的残留。
 优先级不证明原生等价，低优先级也不是永久豁免。
 
-## 2. 本轮证据与范围
+## 2. 初次审计证据与当前适配进度
 
 本轮读取交接分支、根配置和作者说明，并在 Windows 成功构建：
 
@@ -67,21 +67,33 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | ROBO/DRON/CAOS的PoweredUnit及三个建筑的PowersUnit | `yes`；对应 `ROBO` / `DRON` / `CAOS` |
 | 固定ART `[BFRT] AlternateFLH5 / AlternateFLH6` | `100,100,160` / `100,-100,160` |
 
-没有运行 Windows 新局、多 AI 长局、NPAE 原生比较或本分支七项 gameplay 场景；
-没有执行全仓测试。`prepare_checkout` 已建立本地配置，但零售 `ini/` 尚缺，
-不能用 MOD INI 冒充零售回归基线。本轮没有玩法修改、RNG/计时器/Detach 行为变更。
+初次审计没有运行 Windows 对战或修改玩法。后续实现阶段已通过现有 `asset extract` 从
+正版 Steam 安装提取当前测试所需零售 INI 到忽略的本地 `ini/`，未用 MOD 数据替代。
+
+### 功能适配进度
+
+- F01：已扩展既有 cloak producer/facts 支持 Infantry，复用原有隐形、侦测和持久化状态；
+  完成隐形后的 Scatter 仍严格仅限电脑 Unit，不让电脑步兵误走车辆散开分支。
+- 先在旧实现复现两项失败：等级隐形步兵不创建运行态；天然隐形步兵普通帧始终停在state0。
+  修复后通过 `cloak` 定向覆盖、6项 `sensor_lifecycle` 回归，以及实际AYMOD谭雅
+  自主隐形后用真实 DoublePistols/Attack 开火且保持隐形的 Windows headless 场景。
+  步兵完整隐形计时状态通过保存/读取检查；没有新增实例状态或第二套计时器。
+- 新准入沿用已有 CloakingTick 的 RNG、计时器与 Detach_All 顺序；没有新增随机抽样政策。
+  原生证据来自当前NPAE174的 Infantry InitFromType/AI → Foot AI → Techno AI/CloakingTick，
+  见 `src/sim/world/techno_ai_cloak.rs` 邻近注释。
+- 没有运行Windows GUI隐形画面、多AI长局或NPAE原生对照；不将本项局部通过称为整个MOD兼容。
 
 此前库存的 25,068 个物理 section/key 对、2,374 个不同键、207 个 accessor 查询，
 以及相对 Steam 的 47 个字段候选，都不是已兼容机制数量。本轮没有重新认证这些计数。
 下面是已定位机制及验证缺口的首版分类；全量键、各地图/模式和无键补丁的发现仍开放。
 
-## 3. 已确认功能缺口
+## 3. 功能缺口与适配进度
 
 每一行是一条可独立收口的玩法链，不要求合并成一个大改动。
 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
-| F01 / P1 | 步兵自主隐形：谭雅、狙击手等常见单位不能进入当前自主隐形更新；影响生存、AI 选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs:31`、`:681` 将事实采集和更新限定为 Unit，排除 Infantry | 先核 #174 的步兵准入，再扩展已有 cloak owner；静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
+| F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 先核 #174 的步兵准入，再扩展已有 cloak owner；静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
 | F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
 | F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
 | F04 / P1 | 驻军保护与穿透：狙击/病毒/辐射/MiG 对驻军和建筑的伤害分配无法按 NPAE 扩展兑现 | 建筑 NABNKR、YAPOWR、YAPOWRAI 的 `BunkerProtectionLevel`；AWPWH、Virus、VirusM、RadBeamWarhead、OCRadBeamWarhead、MIGWH 的 `BunkerPenetrationLevel`；`src/rules/warhead_type.rs:454` 的 PenetratesBunker 和 `src/sim/combat/damage/mod.rs:76` 的 stock 坦克掩体 gate 不是这两项 | 核正负等级语义，区分城市驻军、苏军碉堡、生化炉、坦克碉堡；覆盖受害者选择、伤亡、弹出/清空和回收，不只读取数值 |
@@ -201,7 +213,8 @@ A04 的特定残留：`src/sim/ai_unit_choice.rs:86` 只有一个车辆选择槽
 不以固定6000逻辑帧或“出现一次Team”代替发展、出击和恢复终点；
 需要稳定复现时使用固定seed和明确初始状态，不做大网格扫测。
 每项修复补1–3个能在修复前失败的生产路径回归、必要实际MOD场景，玩法改动在PR前做只读critic。
-本轮仅清单与证据更新，不改MOD平衡、原始快照、AI战术权重，不推送/发PR/发布资源。
+当前授权按功能优先、UI随后逐链实施；不改MOD平衡、原始快照或AI战术权重。
+没有推送/发PR/发布资源授权，不以部分机制通过宣布清单全部完成。
 
 ## 8. 已建立的原生证据
 

@@ -1826,6 +1826,95 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY Tanya cloak and firing"]
+    fn aymod_tanya_cloaks_and_fires_without_decloaking() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let mut scenario = aymod_battle(0);
+        let actor = {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let owner = house_of(sim, "Americans");
+            let sites = cells_nearest(aymod_anchor(sim, owner));
+            assert!(runtime.resources.rules.object("TANY").unwrap().cloakable);
+            spawn_on_free_cells(sim, &runtime.resources.rules, owner, sites, &["TANY"])[0]
+        };
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .state()
+                == 2
+            {
+                break;
+            }
+        }
+        assert_eq!(
+            scenario
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .state(),
+            2
+        );
+        let (target, health) = {
+            let runtime = &mut scenario.runtime;
+            let sim = &mut runtime.simulation;
+            let owner = sim.entities().get(actor).unwrap().owner();
+            let enemy = house_of(sim, "Russians");
+            let at = sim.entities().get(actor).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
+            let target =
+                spawn_on_free_cells(sim, &runtime.resources.rules, enemy, sites, &["E1"])[0];
+            let health = sim.entities().get(target).unwrap().health.current();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            ));
+            (target, health)
+        };
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scenario);
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .state(),
+                2,
+                "AY Tanya's actual DecloakToFire=no weapon must not surface her"
+            );
+            if scenario
+                .sim()
+                .entities()
+                .get(target)
+                .is_none_or(|entity| entity.health.current() < health)
+            {
+                return;
+            }
+        }
+        panic!("the cloaked Tanya never damaged her target through the actual Attack mission");
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
         target_type: &str,

@@ -27,7 +27,11 @@ fn stock_cloak_tick_facts(
     registry: Option<&crate::rules::overlay_types::OverlayTypeRegistry>,
 ) -> Option<crate::sim::cloak_disguise::CloakTickFacts> {
     let entity = sim.substrate.entities.get(id)?;
-    if entity.category() != EntityCategory::Unit || entity.cloak.is_none() {
+    if !matches!(
+        entity.category(),
+        EntityCategory::Unit | EntityCategory::Infantry
+    ) || entity.cloak.is_none()
+    {
         return None;
     }
     let object = sim.interner.object_type(entity.type_ref(), rules)?;
@@ -145,14 +149,9 @@ fn stock_cloak_tick_facts(
         })
         // 5. `iVar3 = vt+0x2C(); if (iVar3 != 6 && CloakProgress(+0x224) != 0)
         //    return false` — a BUILDING is exempt from the progress test, every
-        //    other category is not. This producer is entered only for
-        //    `EntityCategory::Unit` (see the head of this function), so
-        //    `WhatAmI != 6` holds for every object that reaches here and the
-        //    exemption is structurally unreachable rather than dropped. It is
-        //    also unreachable in gamemd data: no stock section pairs
-        //    `Cloakable=yes` with a building. This is why the state-3 silent
-        //    re-cloak branch is unreachable for units: visual state 1 requires
-        //    a nonzero progress.
+        //    other category is not. Both admitted categories are Foots, not
+        //    buildings, so visual state 1 requires nonzero progress and the
+        //    state-3 silent re-cloak branch remains unreachable here.
         && cloak_progress == 0
         // 6. CloakDelay countdown at +0x240/+0x248, after the range query.
         && entity
@@ -161,7 +160,7 @@ fn stock_cloak_tick_facts(
             .is_some_and(|cloak| cloak.recloak_delay().expired(current_frame))
         // 7. `+0x2B0 && Foot && +0x6AD` (`0x006FBF57..0x006FBF7D`): an
         //    object a Magnetron holds aloft (`sim::locomotor_lift`). This
-        //    producer serves Units only, so the Foot test holds.
+        //    producer serves Units and Infantry, so the Foot test holds.
         && !(entity.lift.source().is_some() && entity.lift.swap_active())
         // 8. `GetHeight() < 1`.
         && crate::sim::movement::air_movement::current_fly_height(
@@ -659,8 +658,11 @@ fn original_health_ratio_corpus_populates_cloak_tick_facts() {
 }
 
 /// Produce the world-dependent virtual results consumed by
-/// `TechnoClass::CloakingTick @ 0x006FB740`. Stock cloakable objects are Units;
-/// the shared caller runs this after mission/targeting, Bomb, SlaveManager,
+/// `TechnoClass::CloakingTick @ 0x006FB740`. Infantry copies Cloakable at
+/// InitFromType (`0x00517D80..0x00517D86`) and reaches this same virtual through
+/// InfantryClass::AI (`0x0051BC9F`) -> FootClass::AI (`0x004DA539`) ->
+/// TechnoClass::AI (`0x006FA946`), also in AYMod's NPAE174 executable.
+/// The shared caller runs this after mission/targeting, Bomb, SlaveManager,
 /// CaptureManager, IsAlive and healing (Techno6FA941..6FA946), before Spawn.
 pub(super) fn tick_stock_cloak_producer(
     sim: &mut Simulation,
@@ -678,7 +680,7 @@ pub(super) fn tick_stock_cloak_producer(
     }) else {
         return;
     };
-    if category != EntityCategory::Unit {
+    if !matches!(category, EntityCategory::Unit | EntityCategory::Infantry) {
         return;
     }
     let Some(object) = sim.interner.object_type(type_ref, rules) else {
@@ -734,7 +736,8 @@ pub(super) fn tick_stock_cloak_producer(
         // @ 0x0050B730`) Scatter(null coordinate, forced, not no-kidding), so
         // a computer's freshly cloaked sub, dolphin or squid drifts off.
         let owner = sim.substrate.entities.get(id).map(|entity| entity.owner());
-        if owner.is_some_and(|owner| !sim.owner_is_human(owner)) {
+        if category == EntityCategory::Unit && owner.is_some_and(|owner| !sim.owner_is_human(owner))
+        {
             sim.scatter(
                 id,
                 None,
