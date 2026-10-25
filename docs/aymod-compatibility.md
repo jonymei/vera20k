@@ -265,7 +265,10 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `D:/Workshop/vera20k/target/AYMOD-test-20261026-gather-bolt.cmd`；包含声波防崩、陆海队列/颜色、
   Walk集结与GPU覆盖的自定义电弧，不包含F06。F06新增保留字段会再次改变保存布局；新构建须新开局。
   不伪造旧存档头部；两份`0xd4be79fe`继续用隔离历史版本分析。
-- 下一安全动作：保留本次普通fast+npatch构建，再沿海军184的Float/Water连通与Ship阻挡/路线检查。
+- 最新玩家版`aymod-playtest-20261026-aa-combat`已从干净`d3660b43c`构建普通fast+npatch游戏，
+  manifest来源与固定标签二进制校验通过；入口`D:/Workshop/vera20k/target/AYMOD-test-20261026-aa-combat.cmd`。
+  包含上一版全部修复和F06；不覆盖旧构建，未自动启动。当前工作区无未提交代码或运行中的Cargo。
+- 下一安全动作：沿海军184的Float/Water连通与Ship阻挡/路线检查。
   F06远距移动目标截击、精英武器对空、GUI与持续AI战术保留待验，不说成整个飞机系统或MOD已完成。
 
 ## 3. 功能缺口与适配进度
