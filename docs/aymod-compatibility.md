@@ -265,9 +265,11 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   无NP箱子84 passed、伤害后果3 passed；桥梁/两帧通知NP与无NP各1 passed；Ares箱子83 passed。
   未跑全仓库。实际AY测试不是Return Dubai困难/多AI长局，未作最终GPU/GUI爆炸、光照画面对照。
   共享Dummy被复杂嵌套回调restamp的所有组合、中断帧携带真实bridge通知还未独立场景穷举，代码经静态审查。
-- 本轮不改AI权重、兵种数值、MOD文件或旧保存。F03新普通fast+npatch玩家构建待独立保存；
-  目前最新入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-np-drive-emp.cmd`，不含此轮F03。
-  当前无待完成Cargo；源码与此检查点保存后继续下一条链。
+- 本轮不改AI权重、兵种数值、MOD文件或旧保存。已从干净e3e05ec46保存普通fast+npatch构建
+  `aymod-playtest-20261026-explosion-crate`，manifest已读且固定标签解析通过。最新入口
+  `D:/Workshop/vera20k/target/AYMOD-test-20261026-explosion-crate.cmd`，含此轮F03及此前全部已交付修复。
+  旧入口/构建保留，未启动游戏；测试本项需开带箱子的新局，保存仍走正常门禁、不强读旧布局。
+  当前无待完成Cargo或未提交代码；继续下一条链。
 - V01/A06保持既有Drive EMP修复和原生/作者冲突结论，详见npatch-emp：原补丁可让失联Drive被AI重发Move，
   作者却要求指定三组建筑失去支持则瘫痪。独立供电与禁失联移动仍待明确兼容策略确认，未静默加全局冻结。
 - 全面PLAN继续有效。下一安全动作：保存F03可玩版，然后推进F11 Psychic Dominator独立光照的原生读取/生命周期调查；
