@@ -127,7 +127,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `--profile fast --no-default-features --features npatch`构建成功；固定保留，不受后续编译覆盖。
   本机启动入口：`D:/Workshop/vera20k/target/AYMOD-test-20261025.cmd`，
   使用主工作树配置和AYMOD资源；未自动启动。新保留字段改变存档布局，请新开对局。
-- 明确功能缺口仍有F03/F09；F02/F08已接入但保留场景/画面边界；F06已接通ORCA对空链，远距追击/GUI待验。
+- 本组明确功能缺口仍有F09；F02/F03/F08已接入但保留场景/画面边界；F06已接通ORCA对空链，远距追击/GUI待验。
   F07的Sapper普通/精英对机械水面舰船已有实际场景覆盖，两个疑似键改列C04，不虚构新开关；水下/GUI仍待验。
   F11/F12（视觉/UI）开放；F10已接通并通过GPU定向验收，玩家画面待验；
   F01/F05/F13已有实现但还需画面/移动验收，F04已有定向功能验收。
@@ -243,36 +243,35 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：普通地面Drive的NP供电/EMP分离（2026-10-26）
+### 当前检查点：F03爆炸箱生产链与即时伤害通知（2026-10-26）
 
-- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；本地玩法
-  `ff92b57a6`、审查/消费者修正 `1acc9fb11`。无推送/PR/合并或启动另一份游戏授权。
-  用户原始存档、历史分析工作区、主工作区`.gitignore`及旧游戏构建保留。
-- 纯NP普通地面Drive现在按B990DC/B9914C处理命中：清基础Foot导航、目标，保留选择/任务/供电位和地面动力。
-  同等命中重复效果/新火花，较弱命中跳过；现有manager释放回调按原次序调用，不复制owner。
-  EMP到期直接按provider位恢复声音/动力、结束全部匹配火花，不再由Ares恢复链下Hunt。
-  NP Reactivate在EMP期间仍ResetOrders/清provider位，只跳过动力和声音；Ares/mixed维持原策略。
-- 一次独立critic提出策略切换风险；随后用正高度legacy命中→落地→重击边界复现永久离线并修复：
-  正计时器整个生命周期保持首次策略，未把特殊路径当作已完整原生化。还补齐70FBD0/7E0F9D的组合失能查询，
-  保留EMP独立火花及原有Scenario随机副作用；使用现有原生spark向量，不新增手算golden或执行包。
-- 三项新生产回归包括RNG/同等与弱命中、选择/任务/动力、全部火花清理、provider返回/未返回、
-  overlap保存/恢复、无Hunt和legacy策略稳定。原有“EMP等于provider离线”的Drive断言同步纠正。
-  最终NP EMP13 passed、供电8 passed，实际AY TTNK→APOC普通战斗/到期1 passed；
-  Ares EMP19 passed、mixed EMP29 passed、无NP供电8 passed。直接manager覆盖Capture29、Spawn36/1 ignored先前通过。
-  未跑全仓库，未作实际DRON完整控制中心重叠或GUI验收；保存布局增加策略字段，旧保存仍正常拒绝。
-- 本轮不宣称时长/目标mask/receiver预处理或Walk/Ship/Hover/建筑/空中/复杂manager全部符合#174。
-  动态换运动器/升降仍保留首次兼容策略；全局非空激活声音fallback尚缺。详见npatch-emp当前owner文档。
-- 蜘蛛失联移动已另有原生正向链证据：Team6EBE0D→Unit741970→Foot4D94B0→Drive4AFD4B、
-  UnitAI7360C9火花后继续FootAI，fresh4B2746和speed70EFE0均不因provider位阻止普通Move。
-  原补丁确实可出现该症状；不把EMP修复或“没读powerbyte”当成已修蜘蛛行动。
-  作者完整说明却明确说三组指定建筑支持、失去支持则瘫痪，故属原生/设计冲突，不是静态移植遗漏。
-  三组独立供电与失联无人单位移动限制仍待明确兼容策略决定，不静默调整MOD平衡或加全局冻结。
-- 已从干净5ae94e921保存普通fast+npatch构建 `aymod-playtest-20261026-np-drive-emp`，
-  manifest已读、固定标签解析通过。最新入口 `D:/Workshop/vera20k/target/AYMOD-test-20261026-np-drive-emp.cmd`，
-  含本轮Drive链及此前F08/F02/AI/颜色/电弧等修复。旧版保留，未启动或替换正在运行的游戏。
-  新策略字段改变保存布局，须新局；原始保存未修改、不强读。当前无待完成Cargo或未提交代码。
-- 下一安全动作：保存此批测试版并交接策略差异；继续PLAN的F02实际场景、F03/F09/F11/F12及多AI/长局，
-  不把全面目标缩小为本轮EMP。AI权重/兵种数值/MOD配置未改，供电设计偏差仍不能标已兼容。
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；玩法提交
+  `27050a89f`，另补连续两帧通知断言已通过。一次独立只读critic未发现具体新增缺陷；未推送/PR/合并/启动游戏。
+  原始保存、历史分析工作区、主工作区用户`.gitignore`与已保存构建均保留。
+- F03已接通CellPickup482565..482719：ftol幅度的独立副本直接C4命中拾取者(ignoreDefenses1,arg6=0)，
+  然后5轮半径[0,512]→重读retained Cell坐标/地板→49F420 raw方向/snap0→同步区域C4伤害→
+  SelectAnim literal land0→真实Anim(loop1/2600/-15)→CombatLight(extra0/forcefalse)。均无攻击者或来源House。
+  已用共享数值/伤害/动画/光照owners；不复制散射公式、不预抽五组随机数。较多raw消耗可能来自ranged拒绝或下游回调，
+  不是固定10个raw词。没有新增producer计时器/直接Detach；现有死亡、桥梁、地形与动画owner保持自身副作用。
+- 拾取者死亡不会提前返回，5轮和通用Powerups动画尾继续。移除与MP替换箱仍在本轮效果前，由原有owner完成。
+  修复所需的另一个前置：即时伤害的bridge/structure receipt可能被只返回AL的移动调用者丢弃，导致显示刷新遗漏。
+  现由既有DamageConsequences记录两个serde-skip/不hash的派生通知，在现有frame边界取走，不重放任何玩法后果。
+- 3项新箱子回归：直接packet被晚期免疫清零后仍5次足额区域伤害/RNG/动画/光照；正常Drive中拾取者死亡后
+  5爆/动画尾/替换箱；实际AY正式加载、生产放箱+普通Move、实际weight15/magnitude500和5个光照请求进入帧输出。
+  原有真实IFV/桥梁回归扩展到后果提交和普通帧，再验证第二帧不重复通知；原native ID/动画/RNG对照保留。
+  两项合成箱子和桥梁通知均先失败后通过。夹具重复物理段落、ignoreDefenses绕过IC、水木箱同图像造成ghost，
+  以及误读已drain的内部光照队列均已纠正，不计引擎bug或修改MOD配置。
+- 最终NP箱子84 passed、伤害后果3 passed、network wait5 passed、真实AY箱子1 passed；
+  无NP箱子84 passed、伤害后果3 passed；桥梁/两帧通知NP与无NP各1 passed；Ares箱子83 passed。
+  未跑全仓库。实际AY测试不是Return Dubai困难/多AI长局，未作最终GPU/GUI爆炸、光照画面对照。
+  共享Dummy被复杂嵌套回调restamp的所有组合、中断帧携带真实bridge通知还未独立场景穷举，代码经静态审查。
+- 本轮不改AI权重、兵种数值、MOD文件或旧保存。F03新普通fast+npatch玩家构建待独立保存；
+  目前最新入口仍 `D:/Workshop/vera20k/target/AYMOD-test-20261026-np-drive-emp.cmd`，不含此轮F03。
+  当前无待完成Cargo；源码与此检查点保存后继续下一条链。
+- V01/A06保持既有Drive EMP修复和原生/作者冲突结论，详见npatch-emp：原补丁可让失联Drive被AI重发Move，
+  作者却要求指定三组建筑失去支持则瘫痪。独立供电与禁失联移动仍待明确兼容策略确认，未静默加全局冻结。
+- 全面PLAN继续有效。下一安全动作：保存F03可玩版，然后推进F11 Psychic Dominator独立光照的原生读取/生命周期调查；
+  F02实际箱子/画面、F09、F12、三阵营/重复House与多AI长局等仍开放，不以本轮箱子通过结束全面目标。
 
 ### 已完成批次：F02隐形箱接入，场景/画面待验（2026-10-26）
 
@@ -337,7 +336,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | --- | --- | --- | --- |
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
 | F02 / P1 / 已接入，场景与画面待验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY正式加载箱子与GUI待验；建筑/落地飞机仅能力接收已测，不冒称完整生命周期/画面等价；新字段改变保存布局 |
-| F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
+| F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK | 远距移动目标截击、精英武器对空、玩家GUI与持续AI战术尚未单独验；不将此链扩大为所有飞机行为通过 |
