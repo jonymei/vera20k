@@ -387,6 +387,11 @@ fn native_ifv_bridge_impact_orders_live_selection_debris_ids_and_rng() {
             name == "collapsed",
             "immediate bridge consequences must publish even without a caller forwarding the receipt"
         );
+        let next = world.advance_tick(&[], Some(&rules), None, Some(&overlays), 33);
+        assert!(
+            !next.bridge_state_changed,
+            "consumed immediate notifications must not repeat next frame"
+        );
         // Quaternion bits are not represented by the SHP Bouncer owner. The
         // selected zero-spin SHP does not consume orientation. Later flight,
         // child AI and physical Bullet drain have separate comparisons.
