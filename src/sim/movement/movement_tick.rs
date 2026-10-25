@@ -216,6 +216,11 @@ impl FootPathRequest {
         })
     }
 
+    /// Walk75AEC0(false) is already the bounded admission retry, not a new
+    /// outer Process. Deferring it would lose this continuation at the next visit.
+    pub(super) fn is_walk_admission_retry(&self) -> bool {
+        !self.visit.walk_retry_allowed
+    }
     /// The mover facts this request's search reads, as snapshotted.
     pub(super) fn snapshot(&self) -> &MoverSnapshot {
         &self.visit.snap

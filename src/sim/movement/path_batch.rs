@@ -32,9 +32,12 @@
 //! had run out. Through these requests a Foot searches at most once a
 //! frame, and only when the pass answered it: its first request that frame
 //! takes the answer, or searches for itself when none fits, and any other
-//! waits. That includes the requests of a refused cell's recursion (Walk's
-//! admission retries, which expire the timer; Drive/Ship's Process_Movement
-//! re-entries, of which the 0x4B4541 tail expires it) and a code-2 re-path
+//! waits, except Walk's bounded admission retry:75B6D1 recurses into
+//! Process(false), whose refusal tails must finish in that same visit. Otherwise
+//! the next ordinary Process resets its retry flag and can repeat forever
+//! without reaching code6's close-enough Stop75B7E1. That one retry searches
+//! synchronously and draws no search RNG. Drive/Ship's Process_Movement
+//! re-entries (the 0x4B4541 tail expires its timer) and a code-2 re-path
 //! right after a found route, whose timer Find_Path left run out. So a Foot
 //! whose next cell refuses it stands that frame with its head cleared and
 //! re-paths the next, where native re-paths and usually steps at once, and a

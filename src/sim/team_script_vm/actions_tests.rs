@@ -1734,3 +1734,68 @@ fn deploy_refused_for_a_computer_owner_clears_the_site() {
         assert_eq!(team.yards(), yards, "human {human}");
     }
 }
+
+/// An idle-friendly occupied gather cell must not leave the team's Walk
+/// member permanently IsMoving: Coordinate_Move6EBAD0 waits for that owner.
+#[test]
+fn blocked_nearby_walker_releases_the_gather_action_after_batch_retry() {
+    use crate::sim::command::{Command, CommandEnvelope};
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let rules = retail.rules;
+    let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0x6EBAD0);
+    sim.overlay_grid = Some(crate::sim::overlay_grid::OverlayGrid::new(32, 32));
+    let grid = sim.path_grid_snapshot().unwrap();
+    let mover = sim
+        .spawn_object("BORIS", "Americans", 10, 10, 0, &rules)
+        .unwrap();
+    sim.spawn_object("APOC", "Americans", 11, 11, 0, &rules)
+        .unwrap();
+    let owner = sim.interner.get("Americans").unwrap();
+    sim.batch_path_searches();
+    sim.set_input_delay_ticks(0);
+    sim.queue_command(CommandEnvelope::new(
+        owner,
+        1,
+        Command::Move {
+            entity_id: mover,
+            target_rx: 11,
+            target_ry: 11,
+        },
+    ));
+    for _ in 0..16 {
+        let commands = sim.take_due_commands();
+        sim.advance_tick(&commands, Some(&rules), Some(&grid), None, 67);
+    }
+    let script = sim.interner.intern("BLOCKED-GATHER");
+    sim.team_script_vm.register_script(TeamScriptDefinition {
+        id: script,
+        source: TeamAiDefinitionSource::FixedAimd,
+        actions: vec![
+            TeamScriptAction {
+                action_id: 53,
+                argument: 0,
+            },
+            TeamScriptAction {
+                action_id: 5,
+                argument: 1,
+            },
+        ],
+    });
+    let team = sim.team_script_vm.create_team(
+        owner,
+        script,
+        vec![mover],
+        sim.session.binary_frame() as i32,
+    );
+    sim.team_script_vm.teams.get_mut(&team).unwrap().focus =
+        Some(TeamTarget::Cell { x: 11, y: 11 });
+    sim.team_coordinate_move(team, &rules, None, FrameEffects::default());
+    assert!(
+        sim.team_script_vm.team(team).unwrap().advance_pending(),
+        "the stopped near member completes Coordinate_Move instead of holding action53"
+    );
+    sim.advance_tick(&[], Some(&rules), Some(&grid), None, 67);
+    assert_eq!(sim.team_script_vm.team(team).unwrap().cursor(), 1);
+}

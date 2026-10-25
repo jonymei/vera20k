@@ -814,11 +814,10 @@ fn a_foots_first_request_in_a_frame_claims_its_answer() {
 /// An infantryman's no-queue request waits for the batch and does what the
 /// timer-running branch does: the owner's vt+0x548 clears its walking Doing
 /// (0x75AF57..0x75AF5F). Next frame it routes with the answer, and when its
-/// next cell then refuses it (code 7), the admission retry clears the path
-/// and expires +640, and the retry's recursion waits for the batch after,
-/// whose answer the repeated request takes.
+/// next cell then refuses it (code 7), the bounded admission retry clears
+/// the path and expires +640, then finishes synchronously as75BBBF requires.
 #[test]
-fn a_refused_walk_retry_waits_for_the_next_batch() {
+fn a_refused_walk_retry_finishes_synchronously_after_the_batch_answer() {
     let rules = rules();
     let route = |sim: &Simulation, id: u64| {
         let foot = sim.substrate.entities.get(id).unwrap();
@@ -866,18 +865,19 @@ fn a_refused_walk_retry_waits_for_the_next_batch() {
         .expect("code 7 retries once");
     run(&mut sim, &recursion);
     let batch = sim.path_batch.as_ref().unwrap();
-    assert_eq!(batch.pending, [(infantry, WaitingRequest::NoQueue)]);
-    assert_eq!(batch.used, [1, 0], "the recursion did not search");
     assert!(
-        route(&sim, infantry).is_empty(),
-        "the retry cleared the path"
+        batch.pending.is_empty(),
+        "the bounded continuation cannot wait for another outer Process"
     );
-
-    sim.answer_batched_path_searches(&rules, None);
-    let repeated = sim.no_queue_request(infantry).unwrap();
-    run(&mut sim, &repeated);
-    assert_eq!(sim.path_batch.as_ref().unwrap().used, [2, 0]);
-    assert!(!route(&sim, infantry).is_empty(), "the next answer routes");
+    assert_eq!(
+        batch.used,
+        [1, 0],
+        "the synchronous search is not another batch answer"
+    );
+    assert!(
+        !route(&sim, infantry).is_empty(),
+        "the same-visit retry installed its route"
+    );
 }
 
 /// Drive's no-queue arm in a retry recursion (Process_Movement(0, 0)) waits
@@ -1400,4 +1400,50 @@ fn an_own_cell_request_claims_the_frames_answer() {
         defer(&mut sim),
         "a later request east waits for the next batch"
     );
+}
+
+/// A reduced version of the player's Boris/APOC gather blockage. The same
+/// ordinary Move must reach Walk75B7E1's Stop with or without the batch.
+#[test]
+fn nearby_friendly_vehicle_does_not_keep_a_walker_moving_forever() {
+    use crate::sim::command::{Command, CommandEnvelope};
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules_for_map("XMP03T4.MAP")
+    else {
+        return;
+    };
+    let rules = retail.rules;
+    assert_eq!(rules.general.close_enough, 576);
+    for batched in [false, true] {
+        let (mut sim, grid) = arena(&rules);
+        let mover = spawn(&mut sim, &rules, "BORIS", (10, 10));
+        spawn(&mut sim, &rules, "APOC", (11, 11));
+        spawn(&mut sim, &rules, "TTNK", (11, 10));
+        spawn(&mut sim, &rules, "HTK", (12, 10));
+        spawn(&mut sim, &rules, "APOC", (11, 12));
+        if batched {
+            sim.batch_path_searches();
+        }
+        let owner = sim.interner.get("Americans").unwrap();
+        sim.set_input_delay_ticks(0);
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            1,
+            Command::Move {
+                entity_id: mover,
+                target_rx: 11,
+                target_ry: 11,
+            },
+        ));
+        for _ in 0..16 {
+            let commands = sim.take_due_commands();
+            sim.advance_tick(&commands, Some(&rules), Some(&grid), None, 67);
+        }
+        let actor = sim.entities().get(mover).unwrap();
+        assert_eq!(
+            actor.locomotor.as_ref().unwrap().walk_is_moving(),
+            Some(false),
+            "batched={batched}"
+        );
+        assert!(actor.navigation.nav_com().is_none(), "batched={batched}");
+    }
 }

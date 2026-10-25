@@ -402,18 +402,20 @@ impl Simulation {
     ) -> Result<FootPathOutcome, String> {
         // A batched request waits for the next frame's batch as if the +640
         // timer still ran (`path_batch`, a proposed deviation): 75AF4B..75AF66
-        // calls the owner's vt+0x548 and returns. So does the admission
-        // retry's recursion, whose +640 the retry just expired, unless it is
-        // the Foot's first request in a frame the batch answered. A request
-        // for the Foot's own cell never waits.
-        if Self::defer_path_search(
-            &mut self.path_batch,
-            &self.resolved_terrain,
-            &self.overlay_grid,
-            &self.substrate.entities,
-            request.entity_id,
-            super::path_batch::WaitingRequest::NoQueue,
-        ) {
+        // calls the owner's vt+0x548 and returns. The bounded Walk75B6D1
+        // admission retry must instead finish in this visit: starting another
+        // outer Process would restore its retry flag and repeat forever before
+        // code6's Stop75B7E1 (or the other non-retrying refusal tails).
+        if !request.is_walk_admission_retry()
+            && Self::defer_path_search(
+                &mut self.path_batch,
+                &self.resolved_terrain,
+                &self.overlay_grid,
+                &self.substrate.entities,
+                request.entity_id,
+                super::path_batch::WaitingRequest::NoQueue,
+            )
+        {
             self.substrate.walk_owner_clear_doing(request.entity_id)?;
             return Ok(FootPathOutcome::Returned);
         }
