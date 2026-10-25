@@ -5,30 +5,33 @@
 
 ## 当前 Windows 接续检查点
 
-- 工作树`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`；最新代码
-  `8e944009f`为NPAE独立陆海生产，`372af3d64`为大厅/战场颜色一致。此前声波防崩`e18a67f21`仍保留。
-  所有提交仅本地，无推送/PR/合并；主工作树用户`.gitignore`、MOD配置与正在运行的游戏进程未动。
-- 用户授权：继续定位Return Dubai/1v1/困难攻势弱，先区分发展/编队/出击，不改AI权重或兵种数值；
-  同步处理美国选蓝色进图暗红。真实地图诊断、原生核对和实现细节见唯一兼容台账及npatch.md。
-- 诊断显示AI有钱、升科技、成队并推进出击；旧共享车辆选择让陆海工厂相互等待。现由既有House私有状态
-  分离陆/海槽，接通需求过滤、工厂选择、出厂、限额与保存/hash，保留原生取消/重启/矿车优先非对称规则。
-  新3项生产回归、NP FactoryAI13及Chooser/BaseBuilding/生命周期/队列覆盖通过；无NP FactoryAI8、
-  Chooser4、BaseBuilding12等隔离通过。只读critic未发现具体缺陷，不冒称弱攻势全部解决。
-- 颜色根因是UseDropDownColors/MPC色表未贯通：根开关保存/层次隔离和实际AY映射/色块3项回归通过，
-  前端、加载标记/进度行/合成与消息相关覆盖通过；真实AY地图加载/MTNK攻击场景通过。
-  AY第3色白、第5色蓝，玩家需在新大厅重新选择蓝色色块。完整16色UI与科技滑条仍开放。
-- 旧已保留标签`aymod-playtest-20261025-f04`与`aymod-playtest-20261025-sonic-fix`不覆盖；
-  最新普通fast+npatch构建已从干净`dc330e87b`保留为`aymod-playtest-20261025-ai-colors`，
-  manifest已解析并校验。新入口`D:/Workshop/vera20k/target/AYMOD-test-20261025-ai-colors.cmd`，
-  未自动启动。新增House保留字段改变存档布局，请新开局。
-- 环境：VS C++，Python为主工作树`.venv/Scripts/python.exe`；RA2_DIR为Steam正版，
-  VERA20K_AYMOD_DIR为本机MOD，VERA20K_REQUIRE_RETAIL_INI=1。每次Cargo通过tools.cargo_run且测试带--lib。
-  未跑全仓库/Clippy；一次加载init::tests过滤未命中，不计覆盖，随后补跑实际加载消费者。
-- 仍开放：AI同需求候选重置、可选DisableAIParallelProduction、多AI/长局强度与其他清单项。
-  三组供电V01未因本次改动关闭；完整GUI验收/玩家原局重放未完成。一次性地图诊断已移出源码，
-  本机重放片段在主工作树忽略的target内，不提交日志/静态反汇编包/critic记录。
-- 下一步：玩家使用已保留的新入口开局验证颜色与持续陆海出兵，再按实测继续AI或其他功能链。
-  本检查点写入时无Cargo/合并操作待完成。
+- 持续goal为整个AYMOD预定设计正常游玩，不是单一修复；用户要求完整PLAN、用两份存档查AI与功能，
+  包括电弧等实际使用的NPatch。范围/顺序/完成门见[PLAN](aymod-plan.md)，状态见唯一兼容台账。
+  goal保持active；用户次日才验证新AI/颜色，不把等待玩家验收扩大为停工或完成。
+- 工作树`D:/Workshop/vera20k-aymod-audit`，分支`feature/aymod-integration-resume`。
+  最新新增`109328687`为PLAN，`04bf112b7`为只读存档工具；游戏行为仍为`8e944009f`双队列+
+  `372af3d64`颜色、此前`e18a67f21`声波修复。没有推送/PR/合并，主工作树用户.gitignore与MOD配置未动。
+- 玩家确认海豚正常。报告GAROBO断电/出售后ROBO仍可用、DRON有离线动画但移动；V01优先。
+  旧存档证明末盘仅NARADR计数但五ROBO仍online；这与目标原生共享House计数相符，独立供电的设计预期
+  与原生quirk需明确区分，不直接改全局计数。末盘DRON无导航，不足以证明此前移动原因。
+- 两份用户存档原件在主工作树saves/，tick84941与161562，布局d4be79fe。
+  已由匹配历史源码e18a67f21通过正式GameSnapshot::load_with_resources完整载入；当前源码布局91e21ca0
+  正确拒绝旧数据，未放松门禁。报告在忽略的`D:/Workshop/vera20k/target/aymod-save-analysis/{mid,late}.json`，
+  包含所有保留owner，无推进、无资源重绑；不得提交用户存档/完整报告。
+- 历史分析工作树已注册附着：`C:/Users/ahume/.codex/worktrees/aymod-save-analysis/vera20k`，
+  detached e18a67f21，仅有本任务telemetry-serve工具改动，prepare_checkout完成。
+  其fast telemetry-serve已成功读取两份旧存档；源码/二进制仍为分析所需，不归档或清理。
+- 当前工作树同一工具也已fast构建；旧布局、缺文件拒绝与help验证通过。命令为tools.cargo_run build
+  --profile fast -p vera20k --bin telemetry-serve --no-default-features --features npatch,telemetry-dashboard。
+  用户数据通过既有serde owner观察，不另建保存解析器；没有新游戏构建或替换玩家入口。
+- AI中盘已有高科和钱、14/15队formed；优先研究团队200/鲍里斯的一格blocked导航与53集结完成，
+  早期2/3队54集结、海军184远目标/海路。下一步按生产链/原生6EBAD0复现，不放宽距离或改权重掩盖。
+- 电弧F10已只读查明IsCustomColor门、RGB默认、layer读取、出生复制、RGB565及三股顺序；
+  没有实现。具体地址和配置见台账/代理研究摘要，继续时读指令及原owner，不复制renderer或猜键名。
+- 原生停机调查已确认：共享计数确实未按类型分离；离线Unit仍进任务/locomotor AI，不能加一刀切freeze。
+  NPAE Reactivate/EMP到期与当前Ares共用策略有差异，需完整链修复；暂未动模拟源码。
+- Cargo均已终止，无合并操作；工具和计划文档已本地保存。下一安全动作是完成存档相关动态复现，
+  明确供电quirk政策并修正实际功能/出击问题，再接通已具备证据的F10，不把其他PLAN批次遗忘。
 下文1–7节保留此前macOS交接历史，不代表在Windows重新执行了全部旧验收。
 
 ## 1. 从哪里继续
