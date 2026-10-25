@@ -353,7 +353,7 @@ impl Simulation {
         // Installed Ares Activate1004CCB0 replaces70FBE0 and vetoes before
         // ResetOrders/Power_On/sound. Keep this admission in the shared owner:
         // House50E010's power-center recovery also calls this function.
-        #[cfg(any(feature = "ares", feature = "npatch"))]
+        #[cfg(feature = "ares")]
         {
             let entity = self.substrate.entities.get(id).expect("same receiver");
             // Selected live Drive/Walk path: Techno70EFD0 tests signed>0.
@@ -393,7 +393,16 @@ impl Simulation {
             }
         }
         self.reset_orders_to_guard(id, rules, effects);
+        // NPAE17470FC0C->C2BC8B skips only PowerOn while EMP is nonzero;
+        // ResetOrders above and the provider-latch clear below still run.
+        let power_on = !cfg!(all(feature = "npatch", not(feature = "ares")))
+            || self
+                .substrate
+                .entities
+                .get(id)
+                .is_some_and(|entity| entity.emp_remaining() == 0);
         if foot
+            && power_on
             && let Some(locomotor) = self
                 .substrate
                 .entities
@@ -428,6 +437,38 @@ impl Simulation {
             return;
         };
         if entity.deactivated.is_offline() != deactivated
+            && (!cfg!(all(feature = "npatch", not(feature = "ares")))
+                || entity.emp_remaining() == 0)
+        {
+            Self::emit_power_transition_sound(
+                interner,
+                substrate,
+                sound_events,
+                id,
+                deactivated,
+                rules,
+            );
+        }
+        substrate
+            .entities
+            .get_mut(id)
+            .expect("same object")
+            .deactivated
+            .offline = deactivated;
+    }
+
+    /// Shared type-sound selector for provider edges and NPAE EMP tails
+    /// B99113/C2BC0C. AY's global Activate/Deactivate fallbacks are empty;
+    /// nonempty Rules fallback resolution is still an explicit residual.
+    pub(crate) fn emit_power_transition_sound(
+        interner: &StringInterner,
+        substrate: &ObjectSubstrate,
+        sound_events: &mut FrameChannel<SimSoundEvent>,
+        id: u64,
+        deactivated: bool,
+        rules: &RuleSet,
+    ) {
+        if let Some(entity) = substrate.entities.get(id)
             && let Some(object) = interner.object_type(entity.type_ref(), rules)
             && let Some(sound) = if deactivated {
                 object.deactivate_sound.clone()
@@ -437,12 +478,6 @@ impl Simulation {
         {
             sound_events.emit(SimSoundEvent::voc_at(sound, &entity.position));
         }
-        substrate
-            .entities
-            .get_mut(id)
-            .expect("same object")
-            .deactivated
-            .offline = deactivated;
     }
 
     /// `UnitClass::Per_Cell_Process`'s arm for a cell arrival

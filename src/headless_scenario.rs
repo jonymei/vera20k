@@ -1611,14 +1611,16 @@ mod retail_construction_tests {
     fn aymod_tesla_attack_delivers_emp_and_actual_frames_recover() {
         let (mut scenario, shooter, target) = aymod_emp_duel(1, "APOC");
         aymod_attack_until_emp(&mut scenario, shooter, target);
-        assert!(
+        assert_eq!(
             scenario
                 .sim()
                 .entities()
                 .get(target)
                 .unwrap()
                 .deactivated
-                .is_offline()
+                .is_offline(),
+            cfg!(feature = "ares"),
+            "pure NP ground Drive EMP does not acquire the provider latch"
         );
         aymod_remove_shooter(&mut scenario, shooter);
         for _ in 0..1000 {

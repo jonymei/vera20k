@@ -11,6 +11,10 @@ pub(super) struct EmpState {
     remaining: i32,
     sparkle: Option<u64>,
     last_mission: i32,
+    // Delivery policy belongs to the same counter owner and survives save/load.
+    // Other locomotors/buildings and mixed builds keep the documented policy.
+    #[cfg(all(feature = "npatch", not(feature = "ares")))]
+    native_ground_drive: bool,
 }
 impl Default for EmpState {
     fn default() -> Self {
@@ -19,6 +23,8 @@ impl Default for EmpState {
             remaining: 0,
             sparkle: None,
             last_mission: -1,
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            native_ground_drive: false,
         }
     }
 }
@@ -267,6 +273,20 @@ mod receiver {
                     })
                     || self.unit_in_contact_war_factory(target, rules)
                 {
+                    continue;
+                }
+                #[cfg(not(feature = "ares"))]
+                if victim.category() == EntityCategory::Unit
+                    && victim
+                        .locomotor
+                        .as_ref()
+                        .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
+                    && crate::sim::movement::air_movement::current_fly_height(
+                        victim,
+                        self.resolved_terrain.as_ref(),
+                    ) <= 0
+                {
+                    self.commit_npatch_ground_drive_emp(target, duration, rules, effects);
                     continue;
                 }
                 let remaining = victim.emp.remaining.max(duration);
@@ -538,6 +558,114 @@ mod receiver {
             EmpDelivery::Applied
         }
 
+        /// NPAE174 B9517D/B990DC..B991DF: ordinary ground Drive chain.
+        /// Duration/target admission upstream remains the documented NP policy.
+        /// Equal rehits repeat side effects; stronger existing timers reject.
+        #[cfg(all(feature = "npatch", not(feature = "ares")))]
+        fn commit_npatch_ground_drive_emp(
+            &mut self,
+            target: u64,
+            duration: i32,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            let Some(victim) = self.substrate.entities.get(target) else {
+                return;
+            };
+            if victim.emp.remaining > duration {
+                return;
+            }
+            if let Some(name) = rules.emp_sparkles() {
+                // C2EFD3: one Scenario [0,25] constructor-delay draw per
+                // admitted hit, including equality. Anim store owns all IDs.
+                let coord = crate::sim::movement::ground_pose::object_get_coords(
+                    victim,
+                    self.resolved_terrain.as_ref(),
+                );
+                let world = AnimWorldCoord {
+                    x: coord.x,
+                    y: coord.y,
+                    z: coord.z,
+                };
+                let (rx, ry, sub_x, sub_y, z) = world.to_cell_sub_z();
+                let descriptor = AnimClassSpawnDescriptor {
+                    delay: self.scenario_rng.next_range_i32_inclusive(0, 25) as u16,
+                    draw_flags: 0x600,
+                    ..AnimClassSpawnDescriptor::new(
+                        self.interner.intern(name),
+                        rx,
+                        ry,
+                        sub_x,
+                        sub_y,
+                        z,
+                    )
+                };
+                if let Ok(anim) = self.spawn_anim_at_world(rules, descriptor, world) {
+                    self.set_anim_owner_object(anim, Some(target), rules);
+                }
+            }
+            // B990DC calls base Foot4D94B0, not Unit's override or Guard reset.
+            if self.begin_foot_destination(
+                target,
+                false,
+                rules,
+                effects.overlay_registry(),
+                effects,
+            ) {
+                self.foot_null_destination(target, rules, effects.overlay_registry(), effects);
+            }
+            let Some(victim) = self.substrate.entities.get_mut(target) else {
+                return;
+            };
+            if self
+                .interner
+                .object_type(victim.type_ref(), rules)
+                .is_some_and(|object| !object.perma_disguise)
+                && let Some(disguise) = victim
+                    .disguise
+                    .as_mut()
+                    .filter(|state| state.is_disguised())
+            {
+                // Unit746720, reached by B990EB's virtual ClearDisguise.
+                disguise.clear_unit();
+            }
+            let play_sound = !victim.deactivated.is_offline() && victim.emp.remaining == 0;
+            if play_sound {
+                Self::emit_power_transition_sound(
+                    &self.interner,
+                    &self.substrate,
+                    &mut self.sound_events,
+                    target,
+                    true,
+                    rules,
+                );
+            }
+            let victim = self
+                .substrate
+                .entities
+                .get_mut(target)
+                .expect("same EMP receiver");
+            victim.emp.remaining = duration; // B9914C; never writes provider+1C8.
+            victim.emp.native_ground_drive = true;
+            // B99154..6D call the existing managers in this order.
+            self.free_all_captures(target, rules, effects.overlay_registry(), effects);
+            crate::sim::spawn_manager::kill_all_spawns_with_context(
+                self,
+                target,
+                crate::sim::world::UninitContext::new(rules, effects.overlay_registry())
+                    .with_effects(effects),
+            );
+            // Ground Unit B9917E bypasses PowerOff. Its existing locomotor
+            // byte stays unchanged; Nav clear and EMP movement guards stop it.
+            let _ = self.assign_target_represented(
+                target,
+                None,
+                rules,
+                effects.overlay_registry(),
+                effects,
+            );
+        }
+
         fn commit_emp_duration(
             &mut self,
             target: u64,
@@ -805,6 +933,65 @@ mod receiver {
             let Some(entity) = self.substrate.entities.get_mut(target) else {
                 return;
             };
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            if entity.emp.native_ground_drive {
+                // TechnoAI6FAF0D/C2BB3E: positive countdown; HP0 skips only
+                // the store. Expiry is not Reactivate and never queues Hunt.
+                if entity.emp.remaining <= 0 {
+                    return;
+                }
+                let next = entity.emp.remaining - 1;
+                if entity.health.current() != 0 {
+                    entity.emp.remaining = next;
+                }
+                if next != 0 {
+                    return;
+                }
+                entity.emp.native_ground_drive = entity.emp.remaining != 0;
+                let online = !entity.deactivated.is_offline();
+                if online {
+                    Self::emit_power_transition_sound(
+                        &self.interner,
+                        &self.substrate,
+                        &mut self.sound_events,
+                        target,
+                        false,
+                        rules,
+                    );
+                    if let Some(loco) = self
+                        .substrate
+                        .entities
+                        .get_mut(target)
+                        .and_then(|entity| entity.locomotor.as_mut())
+                    {
+                        loco.power_on();
+                    }
+                }
+                // 6FAFB9..6FAFFB ends ALL attached anims of the current
+                // Rules EMP sparkle type; no competing retained ID list.
+                let sparkle = rules
+                    .emp_sparkles()
+                    .and_then(|name| self.interner.get(name));
+                if let Some(sparkle) = sparkle {
+                    let matches: Vec<_> = self
+                        .substrate
+                        .anims
+                        .iter()
+                        .filter_map(|(&id, anim)| {
+                            (anim.owner_entity() == Some(target) && anim.type_id() == sparkle)
+                                .then_some(id)
+                        })
+                        .collect();
+                    for id in matches {
+                        self.substrate
+                            .anims
+                            .get_mut(id)
+                            .expect("matched EMP anim")
+                            .end_loops();
+                    }
+                }
+                return;
+            }
             if entity.emp.remaining == 0 {
                 return;
             }

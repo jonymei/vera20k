@@ -437,12 +437,12 @@ fn tesla_impact_child_with_airburst_no_reaches_the_emp_receiver() {
         victim.emp_remaining() > 0,
         "actual child detonation must stun the tank"
     );
-    assert!(victim.deactivated.is_offline());
+    assert_eq!(victim.deactivated.is_offline(), cfg!(feature = "ares"));
     assert!(!sim.entities().get(source).unwrap().deactivated.is_offline());
 }
 
 #[test]
-fn emp_refresh_expiry_and_owner_change_keep_one_authoritative_latch() {
+fn emp_refresh_expiry_and_owner_change_keep_separate_provider_and_emp_state() {
     let (mut sim, rules, source, target) = scene();
     hit(&mut sim, &rules, source, target, 3);
     assert_eq!(sim.entities().get(target).unwrap().emp_remaining(), 3);
@@ -457,10 +457,16 @@ fn emp_refresh_expiry_and_owner_change_keep_one_authoritative_latch() {
     let new_owner = sim.interner.intern("Americans");
     sim.change_owner_with_rules(target, new_owner, &rules, None, FrameEffects::default());
     sim.techno_reactivate(target, &rules, FrameEffects::default());
-    assert!(
+    assert_eq!(
         sim.entities().get(target).unwrap().deactivated.is_offline(),
-        "capture/reactivation cannot clear live EMP"
+        cfg!(feature = "ares")
     );
+    assert_eq!(
+        sim.entities().get(target).unwrap().emp_remaining(),
+        3,
+        "provider reactivation must not clear live EMP"
+    );
+    assert!(!sim.techno_player_controllable(target, &rules));
     for frame in 2..=4 {
         sim.session.set_binary_frame_for_test(frame);
         sim.object_ai_visit_one(target, Some(&rules), Default::default());
@@ -671,4 +677,199 @@ fn expired_emp_restores_building_stuff_when_house_power_returns() {
             .stuff_enabled(),
         "the shared light and powered-animation gate must recover too"
     );
+}
+
+#[cfg(not(feature = "ares"))]
+fn drive_provider_scene() -> (Simulation, RuleSet, u64, u64, u64) {
+    use crate::rules::{art_data::ArtRegistry, ini_parser::IniFile, sound_ini::SoundRegistry};
+    let ini = arena_fixture::clear_ground_ini(
+        "[Countries]\n0=Americans\n1=Russians\n[General]\nEMPulseSparkles=EMPFX\n\
+         [VehicleTypes]\n0=DRON\n1=SOURCE\n[BuildingTypes]\n0=CENTER\n\
+         [DRON]\nStrength=300\nSpeed=5\nSpeedType=Track\nPoweredUnit=yes\nArmor=heavy\n\
+         Locomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\nActivateSound=On\nDeactivateSound=Off\n\
+         [SOURCE]\nStrength=100\n[CENTER]\nStrength=500\nPowersUnit=DRON\n\
+         [Warheads]\n0=EMPulsWH\n[EMPulsWH]\nEMEffect=yes\nAffectsAllies=no\n\
+         [Animations]\n0=EMPFX\n",
+    );
+    let art = IniFile::from_str("[EMPFX]\nLoopCount=-1\nRate=1\nEnd=4\n");
+    let mut rules = RuleSet::from_ini_with_fixed_art_for_test(&ini, &art).unwrap();
+    let sounds = SoundRegistry::from_ini(&IniFile::from_str("[SoundList]\n0=On\n1=Off\n"));
+    rules.bind_type_sound_references(&ini, &sounds);
+    let mut art = ArtRegistry::from_ini(&art);
+    art.bind_anim_frame_count_for_test("EMPFX", 4);
+    rules.install_art_data(art);
+    let mut sim = arena_fixture::rival_arena(&rules, 31);
+    sim.intern_rule_type_ids(&rules);
+    sim.resolve_type_handles(&rules);
+    let source = sim
+        .spawn_object("SOURCE", "Americans", 6, 20, 0, &rules)
+        .unwrap();
+    let target = sim
+        .spawn_object("DRON", "Russians", 10, 20, 0, &rules)
+        .unwrap();
+    let center = sim
+        .spawn_object("CENTER", "Russians", 20, 20, 0, &rules)
+        .unwrap();
+    sim.powered_center_edge(center, true, &rules, Default::default());
+    sim.sound_events.take_for_test();
+    (sim, rules, source, target, center)
+}
+
+#[cfg(not(feature = "ares"))]
+#[test]
+fn npatch_drive_hit_and_equal_rehit_preserve_provider_mission_and_selection() {
+    use crate::sim::{
+        components::NavTargetRef,
+        mission::{MissionId, MissionType},
+    };
+    let (mut sim, rules, source, target, _) = drive_provider_scene();
+    sim.set_unit_destination(
+        target,
+        NavTargetRef::cell(15, 20),
+        &rules,
+        true,
+        Default::default(),
+    );
+    sim.substrate
+        .entities
+        .get_mut(target)
+        .unwrap()
+        .mission
+        .set_current_for_test(MissionId::from_known(MissionType::Attack), 0);
+    sim.substrate
+        .entities
+        .get_mut(target)
+        .unwrap()
+        .selection
+        .select();
+    let mut expected_rng = sim.scenario_rng.clone();
+    expected_rng.next_range_i32_inclusive(0, 25);
+    hit(&mut sim, &rules, source, target, 3);
+    assert_eq!(
+        sim.scenario_rng.logical_state(),
+        expected_rng.logical_state()
+    );
+    let victim = sim.entities().get(target).unwrap();
+    assert!(
+        !victim.deactivated.is_offline(),
+        "EMP must not acquire the provider latch"
+    );
+    assert!(victim.selection.is_selected());
+    assert_eq!(victim.mission.current().known(), Some(MissionType::Attack));
+    assert!(victim.navigation.nav_com().is_none());
+    assert!(victim.locomotor.as_ref().unwrap().is_powered());
+    let first = sim
+        .anims()
+        .filter(|(_, a)| a.owner_entity() == Some(target))
+        .count();
+    assert_eq!(first, 1);
+    sim.set_unit_destination(
+        target,
+        NavTargetRef::cell(16, 20),
+        &rules,
+        true,
+        Default::default(),
+    );
+    hit(&mut sim, &rules, source, target, 3);
+    assert!(
+        sim.entities()
+            .get(target)
+            .unwrap()
+            .navigation
+            .nav_com()
+            .is_none(),
+        "equal rehit clears newly published Foot orders"
+    );
+    assert_eq!(
+        sim.anims()
+            .filter(|(_, a)| a.owner_entity() == Some(target))
+            .count(),
+        2
+    );
+    assert_eq!(
+        sim.sound_events.take_for_test().len(),
+        1,
+        "only the first online hit plays Off"
+    );
+    let rng = sim.scenario_rng.logical_state();
+    hit(&mut sim, &rules, source, target, 2);
+    assert_eq!(
+        sim.scenario_rng.logical_state(),
+        rng,
+        "weaker hit is rejected before animation allocation"
+    );
+    assert_eq!(
+        sim.anims()
+            .filter(|(_, a)| a.owner_entity() == Some(target))
+            .count(),
+        2
+    );
+    for _ in 0..3 {
+        sim.tick_ares_emp(target, &rules, Default::default());
+    }
+    assert!(
+        sim.anims()
+            .filter(|(_, a)| a.owner_entity() == Some(target))
+            .all(|(_, a)| a.runtime().loop_remaining == 0)
+    );
+}
+
+#[cfg(not(feature = "ares"))]
+#[test]
+fn npatch_drive_provider_returns_during_emp_then_saved_expiry_powers_on_without_hunt() {
+    use crate::sim::{components::NavTargetRef, mission::MissionType, snapshot::GameSnapshot};
+    let (mut sim, rules, source, target, center) = drive_provider_scene();
+    sim.powered_center_edge(center, false, &rules, Default::default());
+    hit(&mut sim, &rules, source, target, 2);
+    sim.set_unit_destination(
+        target,
+        NavTargetRef::cell(16, 20),
+        &rules,
+        true,
+        Default::default(),
+    );
+    sim.powered_center_edge(center, true, &rules, Default::default());
+    let victim = sim.entities().get(target).unwrap();
+    assert!(
+        !victim.deactivated.is_offline(),
+        "provider latch clears even while EMP is positive"
+    );
+    assert!(victim.navigation.nav_com().is_none());
+    assert!(!victim.locomotor.as_ref().unwrap().is_powered());
+    let bytes = GameSnapshot::save(&sim, 0, 0, "NP Drive overlap", 0);
+    sim = GameSnapshot::load(&bytes).unwrap().sim;
+    sim.restore_after_snapshot_load().unwrap();
+    sim.resolve_type_handles(&rules);
+    sim.sound_events.take_for_test();
+    for _ in 0..2 {
+        sim.tick_ares_emp(target, &rules, Default::default());
+    }
+    let victim = sim.entities().get(target).unwrap();
+    assert_eq!(victim.emp_remaining(), 0);
+    assert!(!victim.deactivated.is_offline());
+    assert!(victim.locomotor.as_ref().unwrap().is_powered());
+    assert_ne!(victim.mission.queued().known(), Some(MissionType::Hunt));
+    assert_eq!(sim.sound_events.take_for_test().len(), 1);
+    assert!(
+        sim.anims()
+            .filter(|(_, a)| a.owner_entity() == Some(target))
+            .all(|(_, a)| a.runtime().loop_remaining == 0)
+    );
+}
+
+#[cfg(not(feature = "ares"))]
+#[test]
+fn npatch_drive_expiry_without_provider_keeps_latch_and_power_off() {
+    let (mut sim, rules, source, target, center) = drive_provider_scene();
+    sim.powered_center_edge(center, false, &rules, Default::default());
+    hit(&mut sim, &rules, source, target, 2);
+    sim.sound_events.take_for_test();
+    for _ in 0..2 {
+        sim.tick_ares_emp(target, &rules, Default::default());
+    }
+    let victim = sim.entities().get(target).unwrap();
+    assert_eq!(victim.emp_remaining(), 0);
+    assert!(victim.deactivated.is_offline());
+    assert!(!victim.locomotor.as_ref().unwrap().is_powered());
+    assert!(sim.sound_events.take_for_test().is_empty());
 }
