@@ -127,7 +127,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `--profile fast --no-default-features --features npatch`构建成功；固定保留，不受后续编译覆盖。
   本机启动入口：`D:/Workshop/vera20k/target/AYMOD-test-20261025.cmd`，
   使用主工作树配置和AYMOD资源；未自动启动。新保留字段改变存档布局，请新开对局。
-- 明确功能缺口为F02/F03/F08/F09；F06已接通ORCA对空链，远距追击/GUI待验。
+- 明确功能缺口仍有F03/F09；F02/F08已接入但保留场景/画面边界；F06已接通ORCA对空链，远距追击/GUI待验。
   F07的Sapper普通/精英对机械水面舰船已有实际场景覆盖，两个疑似键改列C04，不虚构新开关；水下/GUI仍待验。
   F11/F12（视觉/UI）开放；F10已接通并通过GPU定向验收，玩家画面待验；
   F01/F05/F13已有实现但还需画面/移动验收，F04已有定向功能验收。
@@ -243,7 +243,32 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   搜索kernel不加随机抽样，既有Find_Path回调/RNG、movement timer写入与清目标仍由原owner执行；
   不新增计时器或Detach_All。大军广泛拥堵时该例外的总体性能与画面对照仍是残余验收项。
 
-### 当前检查点：F02隐形箱已接入，原生场景/画面待验（2026-10-26）
+### 当前检查点：F08弹头别名接入与供电/EMP后续（2026-10-26）
+
+- 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
+  本地玩法提交 `01d66dc97`，独立只读critic未发现具体缺陷。无推送/PR/合并或启动游戏授权。
+- F08的IsFlatExplosion并不是新平面伤害参数。实际NPAE读C2EF94..C2EFA8，接回75D410，
+  随后75D42F..75D443读CausesDelayKill，两个键顺序写同一WH+130。constructor75CF31=false。
+  有序规则处理器现在逐原始层保留此字节，NP别名先、stock键后；运行时发布、保存的registry及配置hash连通。
+  未新增死亡状态/计时器或复制伤害逻辑；直接接回701E92和已有PostMortem/C4Detonation owner。
+- 3项新回归：层次/同层覆盖/大小写/default/保存/hash；致死的eligible/ineligible与5帧引爆边界；
+  实际AY正式加载ZEP primary→BlimpHE，直接receiver命中CAMISC02并由普通对象更新完成死亡。
+  第1项修复前false/true断言失败，修复后通过。合成夹具遗漏resolve_type_handles和C4Warhead已补齐，
+  这两个装配失败不算引擎bug。实际场景通过debug及fast两种profile各1项。
+- 最终NP有序规则96 passed、PostMortem4 passed、弹头reader9 passed，flat_explosion为2 passed/1 ignored；
+  ignored实际AY项已单独执行通过。无NP别名隔离1 passed、PostMortem4 passed。未跑全仓库。
+  实际场景是伤害入口/正常引爆，不是完整基洛夫飞行→投弹→碰撞或GUI验收，也不重新认证全部死亡算术。
+- 新保留字段改变保存registry布局及规则hash；旧保存仍按正常门禁拒绝，不强读或改写用户原文件。
+  F08当前源码待独立保留玩家构建；既有最新玩家入口仍为下述cloak-crate版本。
+- V01/A06只读追踪取得下一整链依据：provider返回时Reactivate即使EMP非零也必须先ResetOrders并清provider latch，
+  只跳过PowerOn/激活声音；EMP到期直接检查该latch后恢复供电，不经Reactivate且不下Hunt。
+  当前NP借用Ares的提前return/Deactivate/到期Hunt会混淆+1C8与+504。详见npatch-emp的Drive边界；尚未改代码。
+  下一优先链：普通未附着Drive DRON失provider→EMP重叠→provider返回→EMP到期的施加/恢复共同迁移，
+  仍须补完必要manager/动画消费者，不能只改Reactivate一端。聚合中心计数不擅改为独立类型政策。
+- F02正式AY箱子/画面、F03/F09/F11/F12、其他V项、海军184、多House/长局AI仍开放；
+  全面PLAN继续有效，不将目标缩小为本次弹头读取。当前没有待完成的本任务Cargo。
+
+### 已完成批次：F02隐形箱接入，场景/画面待验（2026-10-26）
 
 - 工作区 `D:/Workshop/vera20k-aymod-audit`，分支 `feature/aymod-integration-resume`；
   本地玩法提交 `958963e4f`、审查修正 `f288fe425`。无推送/PR/合并/启动另一份游戏授权。
@@ -311,7 +336,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK | 远距移动目标截击、精英武器对空、玩家GUI与持续AI战术尚未单独验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。仍需单验感知/未感知潜艇、Hover/Organic主武器例外与GUI，不扩大为所有海军行为通过 |
-| F08 / P2 | 爆炸政策：`IsFlatExplosion` 尚无匹配的 NP 输入/效果政策，具体损害仍待原生确认 | BlimpHE、KTSTLEXP、CRNUKEWH、CRTerrorBombWH、DemobombWH；`src/rules/warhead_type.rs`、combat 收伤/爆炸 owner | 必须先定原生语义，不能只凭名字假定为地形高度忽略或平面伤害 |
+| F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
 | F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 | 心灵终结器独立光照：超武 section 的 NP 光照覆盖未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |

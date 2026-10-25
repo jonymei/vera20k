@@ -84,6 +84,41 @@ preserves the offline latch. Migrating only one end would leave the current
 Ares-style application inconsistent. Keep the existing duration/target/queue
 policies until the application, movement consumers and expiry can move together.
 
+## Native Drive provider/EMP overlap: next migration boundary
+
+Static reads of actual NPAE174 establish separate provider latch `Techno+1C8`
+and EMP countdown `+504` for an ordinary live, unattached Drive DRON:
+
+- Building4549B0 clears/sets counted+662 before House50E0E0/50E010's
+  last/first-center reverse Techno walk calls Deactivate70FC90/Reactivate70FBE0.
+  This caller does not veto EMP or rescan per-type providers.
+- Deactivate70FCD4 resets orders, deselects, then powers off the Foot and sets
+  +1C8 (70FD50), even during EMP. It does not write+504. Existing tether/same-cell
+  building exemptions precede this body.
+- Reactivate70FBE8 always resets orders. C2BC8B skips only PowerOn/sound during
+  EMP;70FC5A still clears+1C8. A blanket Ares-style early return is not equivalent.
+- TechnoAI6FAF0D decrements a positive+504; C2BB3E retains the HP-nonzero store
+  condition. At zero, C2BC5D/C2BC6E gate activation sound/Foot PowerOn on+1C8.
+  No Reactivate, order reset, provider rescan or Hunt is issued by this expiry.
+  6FAFB9..6FAFFB retires the attached matching EMP sparkle through anim+195.
+- Base Drive PowerOff55A910/PowerOn55A8F0 writes interface+C and queries
+  IsPowered. Neither clears navigation or stops movement by itself. Preserve
+  shared ResetOrdersToGuard70F850 instead of inventing a universal offline freeze.
+
+No direct RNG or detach call occurs in those selected control bodies. Existing
+order/mission timers and separate offline-spark Scenario RNG stay in their owners.
+NP application must stop acquiring the provider latch through enable_ares_emp;
+Reactivate, application and tick/expiry need to migrate together inside their
+current owners, without a second EMP sweep. Ares behavior must remain separate.
+Current implementation is unchanged by this research. Required tests are final
+provider loss while moving, provider return during EMP, and expiry with/without
+provider (including overlap save/restore and sparkle retirement).
+
+This is not closure for Hover/Fly, Buildings, parasite/tethered DRON or linked
+Capture/Spawn managers. B99154..B9916D application callbacks and special airborne
+first-hit paths need their own necessary dependencies before a broader migration.
+Do not close V01/A06 from this ordinary Drive trace.
+
 ## AYMod's Tesla projectile
 
 AYMod authors `TankBolt -> ElectricbounceT` (elite `TankBoltE -> ElectricbounceTE`)
