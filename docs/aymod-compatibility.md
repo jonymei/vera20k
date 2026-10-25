@@ -81,7 +81,15 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 新准入沿用已有 CloakingTick 的 RNG、计时器与 Detach_All 顺序；没有新增随机抽样政策。
   原生证据来自当前NPAE174的 Infantry InitFromType/AI → Foot AI → Techno AI/CloakingTick，
   见 `src/sim/world/techno_ai_cloak.rs` 邻近注释。
-- 没有运行Windows GUI隐形画面、多AI长局或NPAE原生对照；不将本项局部通过称为整个MOD兼容。
+- F01独立只读critic未发现本次引入的可确认缺陷；车辆传感器回归不冒称步兵专项传感器实测。
+- F05：按当前NPAE174 reader/constructor接入独立炮塔速度。逐物理层保留当前byte默认、
+  读后截断到u8，255回退ROT；车体、飞机和建筑的ROT路径不变。复用FacingClass和开火对准门，
+  没有新增RNG、Detach或计时器owner，只改变现有炮塔转向的时长。
+  旧实现先失败的byte/layer/初始化隔离回归已通过；新增保留状态存读与配置hash回归通过。
+  炮塔作战模块7项、NativeProcessing92项及不启用npatch时的隔离回归通过。
+  `--profile fast`实际AYMOD地图加载/MTNK Attack场景通过：车体7、炮塔9，持续瞄准开火不重置回7。
+  新增保留Rules字段会改变自动计算的存档layout；旧layout存档按既有政策拒绝，不伪造兼容。
+- 没有运行Windows GUI、多AI长局或NPAE原生对照；不将局部通过称为整个MOD兼容。
 
 此前库存的 25,068 个物理 section/key 对、2,374 个不同键、207 个 accessor 查询，
 以及相对 Steam 的 47 个字段候选，都不是已兼容机制数量。本轮没有重新认证这些计数。
@@ -97,7 +105,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F02 / P1 | 隐形箱：启用箱子时，拾取后只有消费/动画，没有应有的实例隐形能力；不是整类单位规则变更 | `[Powerups] Cloak`；`src/sim/crates/pickup.rs:627` 明记 residual，最终落入无效果分支 | 实例能力、半径内对象准入、后续 cloak producer、持久化和清理；与 F01 共用隐形 owner，但分别验收 |
 | F03 / P1 | 爆炸箱：启用箱子时不伤害拾取者/周围对象，且少消耗原生爆炸位置随机数 | `[Powerups] Explosion`；`src/sim/crates/pickup.rs:631`、`:640` 明记 actor 伤害、五次偏移爆炸及缺少 RNG draws | 核 #174 是否改了 stock 箱子；伤害/爆炸消费者、五次偏移的随机数顺序、死亡/替换箱生命周期；确定性必须一并闭环 |
 | F04 / P1 | 驻军保护与穿透：狙击/病毒/辐射/MiG 对驻军和建筑的伤害分配无法按 NPAE 扩展兑现 | 建筑 NABNKR、YAPOWR、YAPOWRAI 的 `BunkerProtectionLevel`；AWPWH、Virus、VirusM、RadBeamWarhead、OCRadBeamWarhead、MIGWH 的 `BunkerPenetrationLevel`；`src/rules/warhead_type.rs:454` 的 PenetratesBunker 和 `src/sim/combat/damage/mod.rs:76` 的 stock 坦克掩体 gate 不是这两项 | 核正负等级语义，区分城市驻军、苏军碉堡、生化炉、坦克碉堡；覆盖受害者选择、伤亡、弹出/清空和回收，不只读取数值 |
-| F05 / P1 | 独立炮塔速度：常见坦克转炮仍用 `ROT`，忽略独立 `TurretROT`，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/object_type.rs:3350` 仅读ROT，`src/sim/world/unit_post.rs:66` 消费；`src/sim/movement/turret.rs:55` 的无此键说明仅适用stock | 核 #174 reader 和旋转消费者，原地/行进跟踪及开火准入；沿用旋转 owner，不以画面拟合速度 |
+| F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 核 #174 reader 和旋转消费者，原地/行进跟踪及开火准入；沿用旋转 owner，不以画面拟合速度 |
 | F06 / P1 | 飞机对空行为：ORCA 类型的扩展 `AACombat` 未接通，不能靠弹体 `AA` 替代 | **`[ORCA] AACombat` 是 AircraftType 键，不是 WeaponType**；`src/rules/object_type.rs`、飞机 attack/weapon-selection owner | 核 #174 飞机任务/追击/武器准入，先用 ORCA 完成对空与对地两条对照；不能以别的飞机描述推定其行为 |
 | F07 / P1 | 武器海军/水下政策：Sapper/SapperE 的 `AntiNaval` / `AntiUnderwater` 无对应 NPAE 消费链 | `[Sapper]` / `[SapperE]`；`src/rules/weapon_type.rs`、`src/sim/combat/combat_weapon.rs`；既有 projectile AA/AG、海陆规则不是这些键的实现 | 先追实际使用者与 #174 语义，再验地面、船、水下目标及拒绝边界；与 F06 分开 |
 | F08 / P2 | 爆炸政策：`IsFlatExplosion` 尚无匹配的 NP 输入/效果政策，具体损害仍待原生确认 | BlimpHE、KTSTLEXP、CRNUKEWH、CRTerrorBombWH、DemobombWH；`src/rules/warhead_type.rs`、combat 收伤/爆炸 owner | 必须先定原生语义，不能只凭名字假定为地形高度忽略或平面伤害 |

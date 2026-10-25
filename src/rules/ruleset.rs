@@ -4738,6 +4738,15 @@ impl RuleSet {
                 object.lepton_mind_control_offset = offset;
             }
         }
+        for (name, rot) in processed.unit_turret_rot_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Vehicle && object.id == name)
+            {
+                object.project_npatch_turret_rot(rot);
+            }
+        }
         for (
             category,
             name,
@@ -6353,6 +6362,14 @@ impl RuleSet {
             self.object_list
                 .iter()
                 .map(|object| (&object.id, &object.npatch_rewards))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            // NPAE174's retained +5A5 byte can outlive its authored pass.
+            b"npatch-unit-turret-rot-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Vehicle)
+                .map(|object| (&object.id, object.unit_turret_rot()))
                 .collect::<Vec<_>>()
                 .hash(&mut hasher);
         }

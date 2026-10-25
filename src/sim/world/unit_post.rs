@@ -63,7 +63,7 @@ pub(crate) fn apply_unit_facing(
         };
         let rot = interner
             .object_type(entity.type_ref(), rules)
-            .map(|obj| obj.turret_rot)
+            .map(|obj| obj.unit_turret_rot())
             .unwrap_or(5);
         let before = UnitFacing::of(entity);
         let mut after = before;

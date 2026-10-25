@@ -3,6 +3,35 @@
 use super::*;
 use crate::util::save_codec;
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_turret_rot_survives_registry_save_and_hashes_retained_speed() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |rot| {
+        let processed = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=TANK\n[TANK]\nROT=7\nTurretROT={rot}\n"
+        )))
+        .process()
+        .unwrap();
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[TANK]\nROT=6\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(9);
+    let second = continued(10);
+    assert_eq!(first.object("TANK").unwrap().unit_turret_rot(), 9);
+    assert_eq!(second.object("TANK").unwrap().unit_turret_rot(), 10);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_ne!(
+        first.simulation_config_hash(),
+        second.simulation_config_hash()
+    );
+}
+
 #[test]
 fn airburst_retained_flag_matches_native_reads_and_registry_restore() {
     let native = crate::test_fixture::json("tools/projectile_oracle/airburst_retained.json");

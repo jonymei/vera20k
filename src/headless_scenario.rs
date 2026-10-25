@@ -1915,6 +1915,50 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY MTNK independent turret speed"]
+    fn aymod_mtnk_keeps_independent_turret_speed_while_firing() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, actor, target) = aymod_nearby_pair("MTNK", "APOC", false);
+        let sim = &mut scenario.runtime.simulation;
+        let entity = sim.entities().get(actor).unwrap();
+        assert_eq!(entity.body_facing.rot_per_frame(), 7 << 8);
+        assert_eq!(
+            entity.barrel_facing.as_ref().unwrap().rot_per_frame(),
+            9 << 8
+        );
+        let owner = entity.owner();
+        let health = sim.entities().get(target).unwrap().health.current();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scenario);
+            let entity = scenario.sim().entities().get(actor).unwrap();
+            assert_eq!(entity.body_facing.rot_per_frame(), 7 << 8);
+            assert_eq!(
+                entity.barrel_facing.as_ref().unwrap().rot_per_frame(),
+                9 << 8,
+                "aim/idle updates must not reset the turret to hull ROT"
+            );
+            if scenario
+                .sim()
+                .entities()
+                .get(target)
+                .is_none_or(|entity| entity.health.current() < health)
+            {
+                return;
+            }
+        }
+        panic!("the actual MTNK Attack did not align and fire");
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
         target_type: &str,

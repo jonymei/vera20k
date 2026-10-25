@@ -1169,6 +1169,17 @@ impl ProcessedRulesLayers {
             .map(|member| (member.native_stored_id.as_str(), &member.unit_shp))
     }
 
+    /// NPAE174's retained byte used by UnitCtor735584 -> C2DEB6.
+    pub(crate) fn unit_turret_rot_states(&self) -> impl Iterator<Item = (&str, u8)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Vehicle)
+            .into_iter()
+            .flatten()
+            .map(|member| (member.native_stored_id.as_str(), member.npatch_turret_rot))
+    }
+
     /// UnitType+67C after the last admitted Rules body; an unread type keeps
     /// constructor -1. Missing sections and missing SpeedType keys differ.
     pub(crate) fn unit_speed_type_states(&self) -> impl Iterator<Item = (&str, SpeedType)> {
@@ -3442,6 +3453,9 @@ struct ProcessedType {
     npatch_prerequisites: crate::rules::prerequisite::NpatchPrerequisites,
     #[serde(default)]
     ai_planning_count: i32,
+    /// AYMod NPAE174 TechnoType ctor710F93 seeds FF; ReadINI713879..71388D
+    /// passes the retained byte to ReadInt5276D0 and stores only AL.
+    npatch_turret_rot: u8,
     weapon_slots: WeaponSlots,
     techno_references: TechnoTypeReferences,
     weapon: WeaponReadState,
@@ -3888,6 +3902,7 @@ impl ProcessedType {
             npatch_prerequisites: Default::default(),
             // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
             ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
+            npatch_turret_rot: u8::MAX,
             weapon_slots: WeaponSlots::default(),
             weapon: WeaponReadState::default(),
             warhead_anim: WarheadAnimReadState::default(),
@@ -5556,6 +5571,10 @@ impl RulesPassProcessor {
                 member.prerequisite_override = prerequisite_override;
                 member.npatch_prerequisites = npatch_prerequisites;
                 if crate::rules::NPATCH_ENABLED {
+                    // NPAE174 ReadINI713879..71388D: current-byte default,
+                    // then byte truncation on every physical Rules pass.
+                    member.npatch_turret_rot =
+                        raw.read_int("TurretROT", i32::from(member.npatch_turret_rot)) as u8;
                     // NPAE174 ReadINI7138C7 -> C2EF3E retains the byte;
                     // NPSE359 reads AIPlanningCount at C2E223. Compatibility
                     // policy: the legacy spelling wins within the same pass.

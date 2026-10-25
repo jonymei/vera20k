@@ -927,6 +927,9 @@ pub struct ObjectType {
     /// Higher = faster turret rotation. Only meaningful when `has_turret` is true.
     /// Typical values: 5 (War Miner), 7 (Grizzly/Rhino).
     pub turret_rot: i32,
+    /// NPAE174 TechnoType byte +5A5, projected by the ordered Rules reader.
+    /// UnitCtor735584 -> C2DEB6 uses FF as the ROT fallback, not a speed.
+    npatch_turret_rot: u8,
     /// Retained TechnoType recoil reader; shared by every voxel turret.
     pub recoil: crate::rules::recoil::RecoilConfig,
     /// Six retained settings copied when this Techno creates an Airstrike manager.
@@ -2263,6 +2266,20 @@ fn native_minutes_to_ticks(value: f64) -> u32 {
 }
 
 impl ObjectType {
+    /// NPAE174 UnitCtor735584 -> C2DEB6 selects only the turret's rate.
+    /// Body, Aircraft and Building controllers still consume ordinary ROT.
+    pub fn unit_turret_rot(&self) -> i32 {
+        if self.npatch_turret_rot == u8::MAX {
+            self.turret_rot
+        } else {
+            i32::from(self.npatch_turret_rot)
+        }
+    }
+
+    pub(super) fn project_npatch_turret_rot(&mut self, rot: u8) {
+        self.npatch_turret_rot = rot;
+    }
+
     /// Native TechnoType `PitchSpeed` double used by the normal Fly draw gate.
     pub fn fly_pitch_speed(&self) -> f64 {
         f64::from_bits(self.pitch_speed.bits())
@@ -3348,6 +3365,7 @@ impl ObjectType {
             // gamemd writes a separate UnitType +0x398=10 for Harvester/Weeder,
             // but ROT= remains the parsed TechnoType +0x71C facing-rate field.
             turret_rot: section.read_int("ROT", 0),
+            npatch_turret_rot: u8::MAX,
             // Constructor values. Recoil, Airstrike and RadialFireSegments
             // are read only by the ordered Process owner (`native_processing`),
             // whose retained per-pass result `RuleSet` publishes.
