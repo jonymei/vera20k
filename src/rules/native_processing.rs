@@ -5600,12 +5600,6 @@ impl RulesPassProcessor {
                     // then byte truncation on every physical Rules pass.
                     member.npatch_turret_rot =
                         raw.read_int("TurretROT", i32::from(member.npatch_turret_rot)) as u8;
-                    // NPAE174 TechnoType7138C7 -> C2EF58, current byte
-                    // default and low-byte store, without a clamp.
-                    member.npatch_bunker_protection = raw.read_int(
-                        "BunkerProtectionLevel",
-                        i32::from(member.npatch_bunker_protection),
-                    ) as i8;
                     // NPAE174 ReadINI7138C7 -> C2EF3E retains the byte;
                     // NPSE359 reads AIPlanningCount at C2E223. Compatibility
                     // policy: the legacy spelling wins within the same pass.
@@ -5615,6 +5609,12 @@ impl RulesPassProcessor {
                         "AIPlanningCount"
                     };
                     member.ai_planning_count = raw.read_int(key, member.ai_planning_count) & 0xff;
+                    // NPAE174 C2EF58 follows its planning-count read;
+                    // current-byte default and low-byte store, no clamp.
+                    member.npatch_bunker_protection = raw.read_int(
+                        "BunkerProtectionLevel",
+                        i32::from(member.npatch_bunker_protection),
+                    ) as i8;
                 }
                 self.families.get_mut(&family).unwrap()[index]
                     .recoil
@@ -6344,15 +6344,6 @@ impl RulesPassProcessor {
             if let Some((_id, raw, _effective)) =
                 self.begin_rules_member_read(RulesTypeFamily::Warhead, index, pass)
             {
-                if crate::rules::NPATCH_ENABLED {
-                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
-                    // AYMod NPAE174 ReadINI75D5DE..75D5F2 replaces Fire,
-                    // retaining +14C as the signed penetration byte.
-                    member.npatch_bunker_penetration = raw.read_int(
-                        "BunkerPenetrationLevel",
-                        i32::from(member.npatch_bunker_penetration),
-                    ) as i8;
-                }
                 let particle = self.resolve_scalar_from(
                     &raw,
                     "Particle",
@@ -6361,6 +6352,15 @@ impl RulesPassProcessor {
                 );
                 if let Some(particle) = particle {
                     self.family_mut(RulesTypeFamily::Warhead)[index].warhead_particle = particle;
+                }
+                if crate::rules::NPATCH_ENABLED {
+                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
+                    // NPAE17475D5DE follows Particle75D4BE and replaces
+                    // Fire, retaining +14C as the signed penetration byte.
+                    member.npatch_bunker_penetration = raw.read_int(
+                        "BunkerPenetrationLevel",
+                        i32::from(member.npatch_bunker_penetration),
+                    ) as i8;
                 }
                 // Warhead ctor75CF89/75CFB3 initializes both false. The
                 // original reader uses the live field as its ReadBool default.

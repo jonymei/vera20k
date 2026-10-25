@@ -252,6 +252,46 @@ fn npatch_penetration_removes_last_garrison_without_damaging_immune_building() {
     assert!(scene.actor(cargo).is_object_alive());
     scene.save_and_restore();
     assert_eq!(scene.cargo(reactor), &[cargo]);
+
+    let city = scene.spawn("CAHSE01", "Russians", (20, 22));
+    let survivor = scene.enter("E2", "Russians", city, true);
+    let pierced = scene.enter("E2", "Russians", city, true);
+    let damage = scene.actor(city).health.current() - 1;
+    let warhead = scene.0.simulation.interner.intern("SA");
+    scene.0.simulation.commit_direct_damage_receiver(
+        &scene.0.resources.rules,
+        Some(&scene.0.resources.overlay_registry),
+        EntityDamageEvent::direct_receiver(
+            city,
+            damage,
+            0,
+            attacker,
+            None,
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        FrameEffects::default(),
+    );
+    assert_eq!(scene.actor(city).health.current(), 1);
+    assert!(!scene.actor(pierced).is_object_alive());
+    assert_eq!(
+        scene.actor(city).passenger_role.occupants().ids(),
+        &[survivor],
+        "penetration removes its victim before the later red-health ejection"
+    );
+    scene.until(|scene| {
+        scene
+            .actor(survivor)
+            .passenger_role
+            .inside_transport_id()
+            .is_none()
+    });
+    assert!(scene.actor(survivor).is_object_alive());
+    assert!(!scene.actor(survivor).lifecycle.in_limbo());
+    assert!(scene.actor(city).passenger_role.occupants().is_empty());
 }
 
 impl Scene {
@@ -262,6 +302,14 @@ impl Scene {
         )?;
         let (_, mut assets) = crate::rules::retail_ini_fixture::retail_assets()?;
         let theater = crate::map::theater::load_theater(&mut assets, "TEMPERATE").unwrap();
+        let registry =
+            OverlayTypeRegistry::from_ini(&retail.processed_rules, Some(&retail.fixed_art));
+        let scheduler_roots =
+            crate::map::resolved_terrain::scheduler_anim_roots(&retail.rules, &registry, &[]);
+        retail
+            .rules
+            .bind_scheduler_anim_assets(&scheduler_roots, &assets, theater.extension, "TEMPERATE")
+            .expect("ordinary building damage-fire assets");
         let roots = crate::rules::effect_asset_catalog::tolerant_anim_class_roots(&retail.rules);
         retail
             .rules
@@ -269,8 +317,6 @@ impl Scene {
         retail
             .rules
             .bind_effect_assets(&assets, theater.extension, "TEMPERATE");
-        let registry =
-            OverlayTypeRegistry::from_ini(&retail.processed_rules, Some(&retail.fixed_art));
         let rules = retail.rules;
         let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0x522970);
         sim.install_overlay_grid_for_load(crate::sim::overlay_grid::OverlayGrid::new(32, 32));
