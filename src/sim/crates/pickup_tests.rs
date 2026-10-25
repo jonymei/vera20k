@@ -451,6 +451,16 @@ fn cloak_crate_grants_instances_in_strict_radius_then_mobile_ai_cloaks() {
     let aircraft = sim
         .spawn_object("A", "Americans", 10, 12, 0, &rules)
         .unwrap();
+    let unmarked = sim
+        .spawn_object("TNK", "Americans", 9, 10, 0, &rules)
+        .unwrap();
+    sim.foot_mark_remove(unmarked, &rules, Some(&registry), FrameEffects::default());
+    assert!(
+        sim.substrate
+            .display
+            .members(crate::sim::world::display_layers::DisplayLayer::GROUND)
+            .contains(&unmarked)
+    );
     let rng = sim.scenario_rng.native_state_hex();
     assert!(pickup_crate(
         &mut sim,
@@ -464,6 +474,10 @@ fn cloak_crate_grants_instances_in_strict_radius_then_mobile_ai_cloaks() {
         sim.scenario_rng.native_state_hex(),
         rng,
         "the ability arm draws no RNG"
+    );
+    assert!(
+        sim.entities().get(unmarked).unwrap().cloak.is_none(),
+        "unmarked ground members must be skipped"
     );
     for id in [actor, infantry, enemy, building, aircraft] {
         assert!(

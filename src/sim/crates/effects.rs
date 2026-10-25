@@ -117,10 +117,13 @@ impl CrateMultipliers {
 
 /// Ground-layer objects within `radius` of `center`, in layer order, with the
 /// native `Sqrt_Approx`/`ftol` distance and strict `<` (`0x00482E38..0x00482E51`).
+// CellPickup482887 (Cloak) and4829B9 (Veteran) require Object+74;
+// Armor482D9A and Firepower48316B test only Techno+14 before distance.
 fn ground_members_in_radius(
     substrate: &ObjectSubstrate,
     center: DriveCoord,
     radius: i32,
+    require_cell_mark: bool,
 ) -> Vec<u64> {
     substrate
         .display
@@ -129,6 +132,9 @@ fn ground_members_in_radius(
         .copied()
         .filter(|&id| {
             substrate.entities.get(id).is_some_and(|entity| {
+                if require_cell_mark && !entity.lifecycle.cell_marked() {
+                    return false;
+                }
                 let position = position_world_coord(&entity.position);
                 distance_3d_leptons(
                     [center.x, center.y, center.z],
@@ -148,7 +154,7 @@ pub(crate) fn apply_cloak_crate(
     radius: i32,
     frame: i32,
 ) {
-    for id in ground_members_in_radius(substrate, center, radius) {
+    for id in ground_members_in_radius(substrate, center, radius, true) {
         if let Some(entity) = substrate.entities.get_mut(id) {
             crate::sim::cloak_disguise::CloakRuntime::grant_from_crate(&mut entity.cloak, frame);
         }
@@ -172,7 +178,7 @@ pub(crate) fn apply_multiplier_crate(
     #[cfg(not(feature = "ares"))]
     let _ = (rules, interner);
     let mut changed_owners = Vec::new();
-    for id in ground_members_in_radius(substrate, center, radius) {
+    for id in ground_members_in_radius(substrate, center, radius, false) {
         let Some(entity) = substrate.entities.get_mut(id) else {
             continue;
         };
@@ -227,16 +233,10 @@ pub(super) fn apply_veteran_crate(
     if !ordered_less(0.0, magnitude) {
         return;
     }
-    for id in ground_members_in_radius(&*substrate, center, radius) {
+    for id in ground_members_in_radius(&*substrate, center, radius, true) {
         let Some(entity) = substrate.entities.get(id) else {
             continue;
         };
-        // `Object+0x74`: ObjectClass::Mark sets it on PUT and clears it on
-        // REMOVE (`0x005F58F7`, `jumpjet_cruise` `0x0054D0FF..0x0054D12C`),
-        // which is the cell-membership byte `lifecycle.cell_marked` owns.
-        if !entity.lifecycle.cell_marked() {
-            continue;
-        }
         if !interner
             .object_type(entity.type_ref(), rules)
             .is_some_and(|object| object.trainable)
