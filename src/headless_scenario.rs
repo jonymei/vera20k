@@ -4341,6 +4341,68 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; ordered actual AY deployment prerequisites"]
+    fn aymod_siege_chopper_deploy_hooks_are_unset_in_every_battle_layer() {
+        use crate::rules::retail_sources::{RetailRulesSources, select_mode_ini};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let assets = AssetManager::new(&root, MediaArchiveMode::STOCK_DIGITAL).unwrap();
+        let sources = RetailRulesSources::select(&assets).unwrap();
+        let map = crate::map::source::load_map_by_name_or_path_with_assets(
+            &root,
+            "重返迪拜.yrm",
+            &assets,
+        )
+        .unwrap()
+        .map;
+        let mode = select_mode_ini(&assets, Some("MPBattleMD.ini")).unwrap();
+        for (name, ini) in [
+            ("RULESMD", Some(&sources.rulesmd.ini)),
+            ("LANGRULE", sources.langrule.as_ref().map(|s| &s.ini)),
+            ("MPBattleMD", mode.as_ref()),
+            ("Return Dubai", Some(&map.ini)),
+        ] {
+            let Some(ini) = ini else { continue };
+            let section = ini.section_or_empty("SCHP");
+            // Original ctor: DeployFacing710F93=-1, TrueConversion7113A7=0,
+            // DeployToFire747127=0. Prove absence per physical pass instead of
+            // interpreting a merged empty value as a native retained default.
+            for key in ["DeployFacing", "TrueConversion", "DeployToFire"] {
+                assert!(
+                    !section.is_present(key),
+                    "{name} SCHP unexpectedly authors {key}"
+                );
+            }
+        }
+        let audio = crate::rules::audio_sources::AudioDefinitions::select(&assets);
+        let mut owner = sources
+            .into_owner(
+                std::sync::Arc::clone(audio.sounds()),
+                std::sync::Arc::clone(audio.eva()),
+            )
+            .unwrap();
+        let (rules, _, _, _) = owner
+            .load_scenario(
+                crate::rules::process_owner::NativeScenarioRulesPrefix::NonCampaign(mode.as_ref()),
+                &map.ini,
+            )
+            .unwrap()
+            .into_parts();
+        let schp = rules.object("SCHP").unwrap();
+        assert!(schp.is_simple_deployer && schp.deploy_to_land && !schp.balloon_hover);
+        assert!(schp.deploys_into.is_none());
+        assert_eq!(schp.unloading_class.as_deref(), Some("SCHD"));
+        assert!(
+            schp.deploy_fire,
+            "DeployFire is not TrueConversion or DeployToFire"
+        );
+        let miner = rules.object("SMIN").unwrap();
+        assert!(!miner.is_simple_deployer);
+        assert_eq!(miner.deploys_into.as_deref(), Some("YAREFN"));
+        assert_eq!(rules.object("YAREFN").unwrap().deploy_facing, 0);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Siege Chopper gather/deploy diagnostic"]
     fn aymod_siege_chopper_team_gather_and_deploy_boundaries() {
         use crate::sim::mission::MissionType;

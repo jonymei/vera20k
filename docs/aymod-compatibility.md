@@ -6,32 +6,30 @@
 
 ## 当前检查点（2026-10-26）
 
-- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于b1bd77720。
-  仅新增真实AY攻城直升机诊断测试与台账，未改玩法、MOD数值、AI权重、供电政策或F11接线。
-- A09正式加载Return Dubai/Battle，美国被动人类对苏联困难，seed=0x00C0FFEE；发展1500帧后，
-  在电脑基地旁补足两架真实SCHP，创建实际Team07C3092C-G，确认Script07C48DBC-G。
-  这复用正式编队/招募/普通帧，是受控补兵场景，不是随机AI触发全流程或玩家存档重放。
-- 生产typed配置确认SCHP IsSimpleDeployer=true、DeployToLand=true、BalloonHover=false、DeploysInto=None。
-  两机从观察第499帧起均为已加入队伍、Move、NavCom非空、State2且moving=true、精确XY等于目的地；
-  之后直到1500帧持续保持该状态，cursor始终0/action54。不是只凭某次State2或离目标很近判定。
-- 另在明确组件边界seek到script line2/action9，后续600普通帧两机都曾进入Unload、都未deployed、
-  随后均到Attack。不是自然通过action54，不把这个测试钩子说成实际出击修复或部署成功。
-  加强后真实资源测试aymod_siege_chopper_team_gather_and_deploy_boundaries显式ignored运行1项通过。
-- 原生局部证据：实际NP54BD30..54BE3A与Coordinate_Move6EBAD0..6EBF6F相关逻辑保持零售，
-  Jumpjet IsMoving54AE50仍返回+48；ScriptDeploy6ED4D0的simple-deployer也只排Unload即推进。
-  但NP另改UpdateSimpleDeploy739B0E/C2DE77、739B6A/7E0D3C等前置消费者，不能只据相同局部字节
-  宣布整个原MOD必然同样卡住，或直接改BalloonHover/跳过集结。作者说明未专门承诺SCHP部署战术。
-- 新调查V11：TechnoType DeployFacing+5A4（默认signed byte -1）不同于已实现BuildingType+EDC；
-  71385F..713873逐层ReadInt后截byte，739B0E/C2DE77调用C2DF74等待停止/转向并写134。
-  TrueConversion+C92默认false，714C02..714C1D读Bool，739B6A/739B98经7E0D3C/6B在配UnloadingClass时变型。
-  TrueConversion不是DeployFire。根文件只见前者注释、SCHP未设DeployFacing；最终仍需用生产读取核全部层
-  和活跃消费者，不凭grep宣布休眠，也不把有字符串当成当前必需缺口。当前没有移植这两个独立机制。
-- 已提交b1bd77720实验室分配修复仍保留：NP/stock直接消费者各9项通过，原生三例/check通过、critic问题已修。
-  Python936项仍有已知1依赖闭包失败/6符号链接权限错误/49跳过，不宣称全绿；本批未改Python工具。
-  可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未生成/启动新玩家版。
-- V01独立供电/离线禁移动政策、被拒绝的F11跨模块接线仍待明确批准；自动续接不是批准。
-  下一安全动作：核实际全部层SCHP可达门与NP状态写入后再选修复；V11适用性、海军地形/FNPC、多AI恢复继续开放。
-  未发布/PR/推送；完整16色/科技滑条及其他F/V/A仍按PLAN，不以本次诊断缩小目标。
+- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于0aec578bf。
+  仅新增真实AY逐物理层前置回归与台账；未改玩法、MOD数值、AI权重、供电政策或F11接线。
+- A09新证据：用AssetManager/RetailRulesSources实际选择RULESMD、可选LANGRULE、MPBattleMD与Return Dubai，
+  逐层确认SCHP均未写DeployFacing、TrueConversion、DeployToFire；不是仅检查根文件或合并空值。
+  随后正式NativeRulesProcessOwner重建场景：SCHP IsSimpleDeployer/DeployToLand为true、BalloonHover=false、
+  DeploysInto=None、UnloadingClass=SCHD、DeployFire=true。DeployFire不同于另外两个开关。
+- 原生默认已读：710F93/构造链给Techno DeployFacing byteFF（signed -1），7113A7给TrueConversion=false，
+  Unit ctor7470E9清EBX、747127给DeployToFire=false。所以上述当前SCHP新发现的NP分支回到默认路径，
+  不能将它们当成已找到的集结停滞原因；不代表全引擎/其他类型已支持这两个扩展。
+- SMIN生产结果：IsSimpleDeployer=false、DeploysInto=YAREFN，YAREFN BuildingType部署朝向0。
+  原生739AC0在739AD4拒绝非simple；MissionUnload73D694先转MCV，7395C0取DeploysInto后7395C6→465D70
+  读取建筑+EDC。故根SMIN的同名Techno键不消费于本次NP简易部署转向点，不能为它新增重复方向owner。
+- 新测试aymod_siege_chopper_deploy_hooks_are_unset_in_every_battle_layer显式ignored实际资源1项通过。
+  上轮两机自然编队测试仍证明：发展1500帧后补足SCHP、实际Team07C3092C-G/Script07C48DBC-G，
+  观察第499..1500帧精确到达/State2/moving/NavCom、停action54；测试seek到action9后两机Unload、
+  未部署并到Attack。不是随机触发/玩家重放或自然通过集结，更不是已修好这条战术。
+- 原生相关State2、CoordinateMove、IsMoving、ScriptDeploy及有界SetDestination路径保持原门禁；
+  目前排除了三个具体NP开关遗漏解释，但仍不把整个原MOD行为认证为同样卡住，或静默改BalloonHover/跳脚本。
+  下一安全动作是确定这条原生等待的兼容政策/其余必要状态来源，或继续其他已证活跃功能；V11不再当已证必需缺失。
+- b1bd77720实验室修复已提交，NP/stock相关消费者各9项及原生三例通过；Python已知1依赖闭包失败、
+  6符号链接权限错误、49跳过仍未解决，本批未改Python。本批无玩法改动，无需玩法critic或新玩家构建。
+  可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未自动启动。
+- V01独立供电/离线禁移动政策、被拒绝的F11跨模块接线仍待明确批准，自动续接不是批准。
+  海军地形/FNPC、多AI恢复、完整16色/科技滑条及其他F/V/A继续按PLAN开放；没有发布/PR/推送授权。
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -637,10 +635,11 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 不改变既有保存fallback/夺取/授权owner；真实AY多实验室/GUI场景仍待验。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
-本轮新增 **V11 / P2 待核**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门，
-不同于已有BuildingType同名键。根SMIN/YAREFN有作者值，但仍需确认实际消费者/全部生效层及默认路径；
-先核影响，不根据同名键复用错误字段。`TrueConversion`是另外的部署变型开关，根只有注释，
-尚未证明当前实际模式/地图启用，不能凭SCHP的`DeployFire`认成它。二者原生证据见当前检查点。
+**V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。
+当前Return Dubai/Battle各实际物理层均未给SCHP配置该键、TrueConversion或DeployToFire；对应默认为-1/false/false。
+SMIN实际非simple、DeploysInto=YAREFN，实际转换消费YAREFN的建筑+EDC朝向，已有owner覆盖；见C06。
+`TrueConversion`是另外的部署变型开关，不能凭SCHP的`DeployFire`认成它。缺少独立扩展实现不等于当前场景必需缺失；
+其他模式/地图或未来重新启用仍须重审。两类扩展尚未移植，不以默认未启用声称全引擎支持。
 
 ## 5. AI 专项清单：优先于纯画面项目
 
@@ -661,7 +660,7 @@ V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开�
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
-| A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。原生部分门同样保留，但NP部署前置/所有层尚未核完，不能擅改悬停参数或把问题归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
+| A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。三项相关NP开关已核各物理层未设置，对应默认不能解释此停滞；原生相关门同样保留。仍不能擅改悬停参数或直接归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
 | A10 / P1 / 待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 盟军AI实际建巨炮/裂缝，实际使用超级裂缝相关单位/能力；核当前生效配置和消费者，不把旧作者 bug 当当前引擎必然存在 |
 
 A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](npatch.md)；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
@@ -676,6 +675,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C04 / P3 | Sapper/SapperE物理配置含AntiNaval=yes、AntiUnderwater=yes；实际已检查NPAE174 Weapon reader不读取两键 | 已逐分支追772080..7729E2，以及772901→B937F8/B96950/B96AC8→772907和7729AA→B94D06..B94EB1→7729B0，固定key读入无这两项或外部reader调用；字节/根DLL字面值检查只是补充证据，不单凭搜不到作结论。谭雅对舰由现有NavalTargeting4解释且已实测，不添加无原生定义的默认值/字段。换目标补丁/有运行时注入证据时重审；不宣称排除了任意外部注入 |
 
 | C05 / P3 | NASAM的BurstDelay0..3=9不参与实际#174建筑开火ROF，不是遗漏建筑扩展 | Building构造43B71F的vtable7E3EBC，+2C=459EC0返回类号6；Mission_Attack44B6C4..D0经+3CC=6FDD50进入FireAt，6FF274..289经+318=6FCFA0进入GetROF。6FD03E取得类号后只保留Unit1，Building6成为null，6FD067..69跳过delay数组。Unit reader747B03..47才读取四个单数键。另有复数字符串BurstDelays不建立活跃消费者或别名，不能凭字面值扩展NASAM射速 |
+| C06 / P3 | SMIN的TechnoType DeployFacing不消费于NP简易部署方向点；YAREFN建筑同名键已有消费者 | 生产实际规则确认SMIN非simple、DeploysInto=YAREFN，YAREFN朝向0；原生739AD4入口拒绝非simple，MCV转换7395C0..C6→465D70读取目标BuildingType+EDC而非UnitType+5A4。仅关闭这条具体误归因，不宣称所有可能间接调用或其他类型从不使用NP键 |
 ## 6. 已交付机制和有意政策：不重复“修复”
 
 以下是交接分支已有实现，不再列为纯缺失。macOS 的已有覆盖不冒称 Windows 重跑。
