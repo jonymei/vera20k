@@ -579,7 +579,11 @@ impl Simulation {
         ) {
             return false;
         }
-        !self.unit_in_contact_war_factory(target, rules)
+        !self.unit_in_contact_war_factory(
+            target,
+            rules,
+            crate::sim::production::FactoryContactQuery::WeaponsFactory,
+        )
     }
 
     /// `TemporalClass::Update @ 0x0071A760`, run for `head` by its target.

@@ -6,45 +6,26 @@
 
 ## 当前检查点（2026-10-26）
 
-- 用户已收到累计玩家测试入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd；保存标签aymod-playtest-20261026-burst，
-  干净源cfb479750e39fdc2c104f8a856f1414ad12c0d5b、fast/no-default-features/npatch，manifest与from-label解析校验通过；未启动游戏。
-  hospital-xp及更早入口、原始存档均保留。此入口固定于cfb479750，不随后续源码/编译变化；当前红血准入修复尚未加入该玩家构建。
-- 本批V10红血碉堡准入已修：作者说的是步兵进入红血碉堡，不是红血步兵本身。实际NPAE457D8D→7E0712..31按building/infantry House指针相等跳过5F5CD0，
-  不相等仍检查红血，随后继续mind-control门。原版457D8D/8F仍无条件调用5F5CD0。本次仅给既有can_dock_occupier_garrison的红血检查加NP同主例外，
-  其他准入顺序、平民TechLevel=-1红血撤出、Owner/MultiplayPassive、容量、建造/卖出、playfield、warp、mind-control全部保留。
-  没有新增RNG抽样、timer/Detach写入、保留状态或保存字段；UI光标/点击、AI自动择楼、到达准入共用这个owner，不造第二套政策。
-- 新边界回归在修复前已真实红：同House、HP100/Strength400、ConditionRed25%被误拒。修复后NP允许、stock仍拒；不同passive owner在100仍拒、101允许。
-  实际AY NABNKR/E1普通CaptureBuilding命令已真实进驻，额外60帧仍在红血碉堡；有效TechLevel>=0，未关闭平民撤出或动画来凑通过。
-  NP passenger48、building_entry43、garrison43通过；原有自动驻军测试的红血预期按native profile更新，NP会选满员近楼之外的红血同主远楼，stock仍无候选。
-  stock passenger48/building_entry43通过；客户端驻军普通1项与两项直接相关slow/ignored实战回归全部通过；实际AY测试1项显式ignored通过。
-  一次独立只读critic无可操作发现；测试接口编译错误contains已改读既有ids()，未加新接口。当前无运行中的Cargo/native/诊断进程；未改Python，无额外Python整套重跑。
-- 2026-10-26用户明确批准了V03原生乘员初始化/对照和实际TTNK连发/保存集成测试，两项现均已执行并通过；此前这两项缺授权的阻塞已解除，不重复申请。
-  批准不包括V01独立供电/失联Drive政策或F11跨模块接线；这两个既有门禁不变。未启动GUI、改MOD数值/原始存档、替换稳定玩家版或推送/PR/发布。
-- 任务目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume；本批基于55a78acce，V03为一条本地完整普通连发链。
-  实现包括retained UseROFAsBurstDelays、GetROF双结果、普通/狂暴/Disk写入、FireError短门、空目标保留burst、既有+2F8的保存及NP hash。
-  共享内核保留stock分支；C4/Receive/RemoveGunner仅写主timer，未新存第二短clock、未改SpawnManager自己的reset。
-- 原生GetROF六例+三种FireAt writer通过write/check及Rust消费，stock535未改。新ifv_temporal_gunner_npatch三个案例/81085bytes：
-  active_rookie、signed burst overflow、actual FireAt rearm-tail；原生bootstrap52BB02→B97000与ctor52BB07→B99000按EBX0运行，
-  B98000按每个物理INI/EDI执行，不写猜测默认。所缺CRT malloc7C9430复用既有allocator transport，原strdup/strlen/strcpy仍执行，无指令或ROF/RNG结果替换。
-  NP乘员receive主timer实测80、remove120；旧stock81含jitter，本次NP取真实新期望而非机械重写或跳过。三例含12个真实回调及1个测量的FireAt边界，完整Scenario RNG/原始draw顺序通过。
-  该原生fixture使用物理retail FV/CLEG输入隔离NP指令差异，最终字段由生产retail reader逐项核对，不冒称全AY对局。
-- 已批准的实际AYMOD测试aymod_tesla_burst_survives_stop_guard_and_save_resume显式ignored运行通过：普通TTNK/TankBolt的typed Burst2/ROF50、delays15/45，
-  真正Attack首发保留50/15/index1；Stop和Guard各走普通玩家事件，随后验证内存存档及完整生产恢复，重获目标后第二发不早于短间隔且早于完整装填，
-  第二发50/50/index0，第三发至少等完整50后回50/15/index1。仅扩大既有两个test helper的crate可见范围，无另造保存/恢复逻辑，无原文件写入。
-- 最终NP定向覆盖全部通过：native_processing99、ROF2（含stock535）、burst5、FireError9、gunner owner5、C4 11、乘员gunner25、Aegis14、焊接原生1、主timer算术1；实际AY TTNK1另显式运行通过。
-  stock无NP定向覆盖全部通过：native_processing96、ROF1/535、burst5、乘员gunner25（含原12例45回调）、C4 11。
-  NP新corpus重放check通过；工具stock的12条逻辑历史、全部RNG状态/draw与最终物理reader字段重执行保持不变。
-  原版整份raw记录曾因换用物理地图导致临时scratch指针trace不等，后按Rust消费的逻辑字段/RNG核对；不把地址trace差异重基线为玩法差异，旧stock corpus未写。
-- 既有一次只读critic未发现确定生产缺陷，指出的真实TTNK链与NP乘员对照缺口本轮已补；没有重复critic。
-  building-ammo>1/空武器早返的EDX仍未建立语义，显式None→完整reload安全fallback继续记录；三例/普通TTNK不覆盖该same-frame域，不以此宣称所有NP/所有武器等价。
-  Python工具最终936项：1失败/6错误/49跳过，仍为core/workspace依赖feature闭包差异与Windows symlink WinError1314；没有新增失败身份。
-  本机日志target/aymod-save-analysis/python-tests-v03-approved-validation.log；未改依赖、缓存或权限工具来抹掉失败。未跑全仓库/clippy。
-- 最近AI证据仍为现有WIP的Return Dubai/Battle、seed0x00C0FFEE、闲置美国人类：困难1v1于11203结束，有发展/补员/陆军接敌，18栋存活非limbo建筑、2重工2船厂；
-  美/苏/尤里/第二苏联四电脑于6598结束，末帧22队/100成员/11生产头无跨House归属或重复入队，不能当多AI长局验收。
-  旧team184跨水区FNPC、SCHP集结hold、主动玩家抗压/损耗恢复仍开放；不靠重复闲置人类败局或调权重宣布修好。
-- 最新保留玩家测试版已更新为上述干净cfb479750累计burst标签；原c18d21958的hospital-xp入口继续保留，不覆盖旧版。
-  原始两份旧布局存档/旧构建保留，不强读新布局。整体PLAN与F09/F11/F12及其余F/V/A项不缩小；普通V03验证通过不等于整个AYMOD完成。
-  本轮Cargo/Python/native/trace均已结束；后续按当前Git状态保存已验证本地增量，再继续下一条功能/AI链，不擅自发布。
+- 任务目录D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；V03普通连发/Stop/Guard/保存恢复已提交cfb479750，
+  同House红血碉堡准入已提交444b79f31。本批在其上修复船厂维修中的错误工厂免伤；只做本地提交，未推送/PR/发布。
+- 玩家入口仍固定为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst，
+  干净源cfb479750、fast/no-default-features/npatch；manifest与from-label解析校验通过，未启动游戏。
+  不包含后续红血碉堡和船厂修复；旧hospital-xp及更早入口、原始存档均保留，不静默替换玩家版。
+- 船厂修复：NPAE UnitClass::ReceiveDamage737CE4→7E0495/7E04A3在WeaponsFactory之外排除UnitRepair（+16A9），
+  不是Naval，也不是把船受伤转移给船厂。生产reader460915读取UnitRepair；实际AY Return Dubai/Battle三个船厂均启用这两键。
+  共享slot0/实际占格owner增加查询用途，只有ReceiveDamage及声波同源伤害预检采用NP排除；Temporal71AECA、Chrono6CC7FF、Locomotor46958B和EMP保留原查询。
+- 真实retail GAYARD/DEST普通Enter、无线电对接、重叠占格和首次付费维修期间的直接受击回归已先红后绿：NP船受伤、stock仍免伤，
+  非伤害查询仍为true，船厂直接receiver不受牵连，后续继续付费修满并解除联系。普通重工出厂免伤仍通过。
+  该输入是直接receiver，不是投射物/溅射实战；共格的船厂仍可受合法AoE，不引入船厂溅射免疫。致死维修清理、实际AY投射物及声波维修中实战未另验。
+- 最终NP：船厂1、Unit伤害8、production_spawn2、Temporal37、locomotor13、EMP13、wave26、Chronosphere13通过；stock船厂1/重工免伤1通过。
+  locomotor的docked-aircraft物理地图测试与Chrono落点slow测试不涉及本次保持不变的准入，未额外运行；首次Chronosphere/stock dock错误过滤得到0项，已用正确过滤补跑，不算通过覆盖。
+  一次只读critic无可操作发现；无新增保存字段、RNG抽样、timer或Detach写入；未改Python，未重复工具全套。
+- 先前V03原生乘员真实初始化三例、实际AY TTNK Attack→Stop/Guard→内存保存恢复→继续连发均已获批准并通过，授权阻塞已解除。
+  V03仍保留building-ammo>1/空武器EDX短返回语义未知的完整reload安全fallback；不扩称所有NP武器等价。
+  上一Python936项的1失败/6错误/49跳过仍为依赖feature闭包与Windows symlink WinError1314，没有借改依赖/权限掩盖。
+- 最近AI证据：Return Dubai/Battle闲置人类困难1v1于11203结束，具备发展/编队/陆军接敌；四电脑于6598结束，22队/100成员/11生产头无跨House或重复入队。
+  这些不算多AI长局验收；旧team184跨水区FNPC、SCHP hold、主动抗压/损耗恢复仍开放，不靠调权重或重跑闲置败局充数。
+- V01独立供电/失联Drive政策、F11跨模块光照接线门禁不变；未启动GUI、改MOD配置或原始存档。完整PLAN有效，下一条继续F09原生reader与两个消费者的功能链。
 
 ### 本轮独立只读调查：F09
 
@@ -664,7 +645,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、
-铁幕目标的自动攻击准入、船厂维修伤害归属、红血碉堡进驻、Alt 飞机误入维修厂/船厂、
+铁幕目标的自动攻击准入、Alt 飞机误入维修厂/船厂、
 秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已按实际#174修改接入：
 68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零但不标记返回项；
 `src/sim/secret_lab.rs`沿原owner保留NP/stock分支，原生RNG三例和直接消费者NP/无NP各九项通过。

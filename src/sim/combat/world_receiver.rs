@@ -1116,7 +1116,11 @@ pub(crate) fn commit_entities(
         // `UnitClass::ReceiveDamage 0x00737CB6..0x00737D2E`: a unit still
         // inside its war factory returns 0 before FootClass::ReceiveDamage.
         if !event.receiver_flags.ignore_defenses
-            && world.unit_in_contact_war_factory(target_id, rules)
+            && world.unit_in_contact_war_factory(
+                target_id,
+                rules,
+                crate::sim::production::FactoryContactQuery::ReceiveDamage,
+            )
         {
             continue;
         }

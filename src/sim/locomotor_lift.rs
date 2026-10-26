@@ -312,7 +312,13 @@ impl Simulation {
         {
             return;
         }
-        let in_factory = object.is_some_and(|id| self.unit_in_contact_war_factory(id, rules));
+        let in_factory = object.is_some_and(|id| {
+            self.unit_in_contact_war_factory(
+                id,
+                rules,
+                crate::sim::production::FactoryContactQuery::WeaponsFactory,
+            )
+        });
         if firer.lift.target().is_some() {
             self.release_locomotor(owner, false, rules, registry, effects);
         }

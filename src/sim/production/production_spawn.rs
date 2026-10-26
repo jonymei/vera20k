@@ -181,6 +181,14 @@ pub fn mark_war_factory_spawn_contact(
     }
 }
 
+/// The shared slot-0/occupied-cell query has caller-specific type gates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FactoryContactQuery {
+    WeaponsFactory,
+    /// NPAE174 ReceiveDamage737CE4 -> 7E0495 excludes UnitRepair factories.
+    ReceiveDamage,
+}
+
 impl Simulation {
     /// Whether `id` is a Building (vt+0x2C == 6) whose type has
     /// `WeaponsFactory=` (BuildingType `+0x16BD`): the war factory test on a
@@ -207,13 +215,26 @@ impl Simulation {
     /// `TemporalClass::CanWarpTarget` (`0x0071AE50`), the Chrono Warp
     /// (`SuperClass::Launch 0x006CC7BC..0x006CC858`) and the locomotor imbue
     /// (`0x0046953E..0x004695E6`).
-    pub(crate) fn unit_in_contact_war_factory(&self, id: u64, rules: &RuleSet) -> bool {
+    pub(crate) fn unit_in_contact_war_factory(
+        &self,
+        id: u64,
+        rules: &RuleSet,
+        query: FactoryContactQuery,
+    ) -> bool {
         let Some(unit) = self.substrate.entities.get(id) else {
             return false;
         };
         unit.category() == crate::map::entities::EntityCategory::Unit
             && unit.radio_contacts.slot(0).is_some_and(|contact| {
                 self.is_weapons_factory(contact, rules)
+                    // UnitRepair is +16A9 (reader460915), not Naval. Only
+                    // NPAE174's damage gate7E04A3 adds this exclusion;
+                    // Temporal71AECA/Chrono6CC7FF/Locomotor46958B do not.
+                    && (!crate::rules::NPATCH_ENABLED
+                        || query != FactoryContactQuery::ReceiveDamage
+                        || self.substrate.entities.get(contact)
+                            .and_then(|building| self.entity_object_type(building, rules))
+                            .is_some_and(|object| !object.unit_repair))
                     && self.substrate.occupancy.first_building_on_layer(
                         unit.position.rx(),
                         unit.position.ry(),

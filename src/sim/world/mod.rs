@@ -2645,7 +2645,11 @@ impl Simulation {
                             // (`0x00737CB6..0x00737D2E`) before it touches
                             // the shared damage.
                             let post_object_damage =
-                                if self.unit_in_contact_war_factory(target_id, rules) {
+                                if self.unit_in_contact_war_factory(
+                                    target_id,
+                                    rules,
+                                    crate::sim::production::FactoryContactQuery::ReceiveDamage,
+                                ) {
                                     None
                                 } else {
                                     crate::sim::combat::wave_post_object_damage(

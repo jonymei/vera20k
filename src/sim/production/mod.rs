@@ -24,6 +24,7 @@ mod production_repair;
 pub(crate) use production_repair::{AiSellRepair, RepairByte};
 mod production_sell;
 mod production_spawn;
+pub(crate) use production_spawn::FactoryContactQuery;
 mod production_tech;
 mod production_types;
 mod wall_placement;

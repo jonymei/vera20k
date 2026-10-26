@@ -271,7 +271,11 @@ mod receiver {
                     || object.emp_rules().is_some_and(|emp| {
                         emp.immune() == Some(true) || emp.rank_immune(victim.veterancy.rank())
                     })
-                    || self.unit_in_contact_war_factory(target, rules)
+                    || self.unit_in_contact_war_factory(
+                        target,
+                        rules,
+                        crate::sim::production::FactoryContactQuery::WeaponsFactory,
+                    )
                 {
                     continue;
                 }
@@ -537,7 +541,11 @@ mod receiver {
             {
                 return EmpDelivery::Unsupported;
             }
-            if self.unit_in_contact_war_factory(target, rules) {
+            if self.unit_in_contact_war_factory(
+                target,
+                rules,
+                crate::sim::production::FactoryContactQuery::WeaponsFactory,
+            ) {
                 return EmpDelivery::Rejected;
             }
             let delta = duration_delta(settings.duration(), kind.modifier());
