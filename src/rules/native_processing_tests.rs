@@ -4,6 +4,99 @@ use super::*;
 use crate::util::save_codec;
 
 #[test]
+fn npatch_superweapon_lighting_keeps_physical_layers_and_constructor_seeds() {
+    use crate::rules::ruleset::RuleSet;
+    let mut layers = RulesLayerStack::new(IniFile::from_str(
+        "[SuperWeaponTypes]\n0=D\n1=N\n2=S\n\
+         [D]\nType=PsychicDominator\nLighting=no\nLightRed=70\n\
+         [N]\nType=MultiMissile\n[S]\nType=LightningStorm\n",
+    ));
+    layers.push(
+        RulesLayerKind::GameMode,
+        IniFile::from_str("[D]\nLightBlue=$46\nLightGround=-2\nLightAmbientChangeRate=3tail\n"),
+    );
+    layers.push(
+        RulesLayerKind::Scenario,
+        IniFile::from_str(
+            "[SuperWeaponTypes]\n3=L\n[D]\nType=not-a-kind\nLightRed=\nlightblue=99\n\
+         [L]\nType=PsychicDominator\n\
+         [Lighting]\nDominatorAmbient=0.25\nDominatorRed=0.99\nNukeAmbient=0.1\n",
+        ),
+    );
+    let rules = RuleSet::from_processed_rules(&layers.process().unwrap()).unwrap();
+    let d = rules.super_weapon("D").unwrap();
+    assert_eq!(
+        d.kind,
+        crate::rules::superweapon_type::SuperWeaponKind::PsychicDominator
+    );
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(d.npatch_lighting.profile(), [150, 70, 20, 70, -2, 0, 3]);
+        assert!(!d.npatch_lighting.enabled());
+        for (id, expected) in [
+            ("N", [200, 175, 150, 125, 100, 100, 1]),
+            ("S", [87, 30, 40, 75, 0, 0, 200]),
+            ("L", [150, 85, 20, 30, 0, 0, 1]),
+        ] {
+            let lighting = rules.super_weapon(id).unwrap().npatch_lighting;
+            assert_eq!(lighting.profile(), expected, "{id}");
+            assert!(lighting.enabled(), "{id}");
+        }
+    } else {
+        for id in ["D", "N", "S", "L"] {
+            let lighting = rules.super_weapon(id).unwrap().npatch_lighting;
+            assert_eq!(lighting.profile(), [0; 7]);
+            assert!(!lighting.enabled());
+        }
+    }
+}
+
+#[test]
+fn npatch_superweapon_lighting_type_gate_survives_registry_save_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |red| {
+        let layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[SuperWeaponTypes]\n0=C\n1=W\n\
+             [C]\nType=ChronoSphere\nLightRed={red}\n\
+             [W]\nType=ChronoWarp\nLightRed=42\nLighting=no\n"
+        )));
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let next = RulesLayerStack::new(IniFile::from_str(
+            "[C]\nType=PsychicDominator\n[W]\nType=PsychicDominator\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&next).unwrap()
+    };
+    let a = continued(71);
+    let b = continued(72);
+    assert_eq!(a.source_ini_hash(), b.source_ini_hash());
+    assert_eq!(
+        a.simulation_config_hash() != b.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED
+    );
+    if crate::rules::NPATCH_ENABLED {
+        let c = a.super_weapon("C").unwrap().npatch_lighting;
+        assert_eq!(c.profile(), [0, 71, 0, 0, 0, 0, 0]);
+        assert!(!c.enabled());
+        let w = a.super_weapon("W").unwrap().npatch_lighting;
+        assert_eq!(w.profile(), [150, 85, 20, 30, 0, 0, 1]);
+        assert!(w.enabled());
+    } else {
+        for id in ["C", "W"] {
+            assert_eq!(
+                a.super_weapon(id).unwrap().npatch_lighting.profile(),
+                [0; 7]
+            );
+        }
+    }
+}
+
+#[test]
 fn npatch_aa_combat_retains_aircraft_layers_and_saved_registry() {
     use crate::rules::ruleset::RuleSet;
     let continued = |enabled| {

@@ -306,3 +306,33 @@ follow.
 
 The build capability is recorded per combination: a save from one combination cannot load in
 another, so a mixed build never reads a save written by a single-extension build.
+
+## Superweapon lighting reader (runtime integration still open)
+
+NPAE174 SuperWeaponType constructorB97600 zeroes the extension. ReadINI6CED28
+enters B97080 after AuxBuilding. First initialization shares byte+126 across
+all stock kinds: Type0/2/7 seed their seven integers from Scenario+3560/+3548/
++357C; Type1/3/5/6/8/9/10/11 initialize without a lighting seed; Type4 retains
+its inverted C288D0 gate. Changing Type in a later layer must not reset the gate.
+The ordered ProcessedType is the sole retained reader; runtime definitions only
+receive its projection. The initialization field is mandatory on registry restore.
+
+Normal FullInit6851F0/RulesReset6686C0 recreates the registry before map lighting
+is parsed at687853. Even a map-introduced SW therefore seeds from Scenario reset,
+not final map effect profiles. The six reset values have one shared constant owner
+for the new reader and Scenario defaults. Storm's seventh copied dword crosses
+into the following Nuke Ambient, so its default rate is200, not1.
+
+Common B970C0 reads LightAmbient/Red/Green/Blue/Ground/Level/
+LightAmbientChangeRate as retained native integers, then Lighting as a retained
+bool, even when disabled. No map-double scale or clamp is applied.
+
+This reader does not yet apply NP lighting to gameplay/presentation. Remaining
+integration needs separate last-Nuke/Storm/Dominator type identities (writes
+6CDA5B/6CCD33/6CCDB1 precede admission), immutable map profiles, three distinct
+selection priorities, literal Ground/Level for full NP relights, fade and restore.
+The55B3D6 rate branch is nuclear phases or TAction127 chrono screen, not storm
+and not Chronosphere SW; it reads the last nuclear profile even for that screen.
+Storm alone uses the ordinary Rules rate; Dominator's rate ignores Lighting.
+A screen with no previous nuclear identity has an unproven null-pointer domain;
+do not silently attribute a Chronosphere profile or native crash policy to it.

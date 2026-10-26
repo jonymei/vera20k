@@ -5000,6 +5000,16 @@ impl RuleSet {
                 super_weapon.aux_building = aux_building.map(str::to_owned);
             }
         }
+        #[cfg(feature = "npatch")]
+        for (name, lighting) in processed.super_weapon_lighting_states() {
+            if let Some(super_weapon) = rules
+                .super_weapons
+                .values_mut()
+                .find(|super_weapon| super_weapon.id.eq_ignore_ascii_case(name))
+            {
+                super_weapon.npatch_lighting = lighting;
+            }
+        }
         for (name, requirements) in processed.super_weapon_building_requirements() {
             if let Some(super_weapon) = rules
                 .super_weapons
@@ -6392,6 +6402,12 @@ impl RuleSet {
         b"rules-simulation-config-v34".hash(&mut hasher);
         self.source_ini_hash.hash(&mut hasher);
         if crate::rules::NPATCH_ENABLED {
+            b"npatch-superweapon-lighting-v1".hash(&mut hasher);
+            self.super_weapons
+                .values()
+                .map(|weapon| (&weapon.id, weapon.npatch_lighting))
+                .collect::<BTreeMap<_, _>>()
+                .hash(&mut hasher);
             b"npatch-rewards-v1".hash(&mut hasher);
             self.npatch_rewards.hash(&mut hasher);
             self.object_list

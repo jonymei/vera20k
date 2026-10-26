@@ -24,6 +24,78 @@ use crate::rules::ini_value::truncate_native_bytes;
 /// at `0x006CE5E9`.
 const CTOR_RECHARGE_FRAMES: i32 = 4500;
 
+/// ScenarioClass::SetDefaults683610, effect profiles at68390B..6839B7.
+pub const NATIVE_ION_LIGHT_PROFILE: [i32; 6] = [87, 30, 40, 75, 0, 0];
+pub const NATIVE_NUKE_LIGHT_PROFILE: [i32; 6] = [200, 175, 150, 125, 100, 100];
+pub const NATIVE_DOMINATOR_LIGHT_PROFILE: [i32; 6] = [150, 85, 20, 30, 0, 0];
+
+/// NPAE174 SuperWeaponType extension, constructorB97600 and retained ReadINI B97080.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct NpatchSuperWeaponLighting {
+    profile: [i32; 7],
+    enabled: bool,
+    initialized: bool,
+}
+
+impl NpatchSuperWeaponLighting {
+    pub fn profile(self) -> [i32; 7] {
+        self.profile
+    }
+    pub fn enabled(self) -> bool {
+        self.enabled
+    }
+
+    #[cfg(feature = "npatch")]
+    pub(crate) fn read(&mut self, raw: &IniSection, kind: SuperWeaponKind) {
+        // B97D60/B977EF/B97B59 share +126 with the non-lighting kinds.
+        // C288C8's inverted ChronoWarp gate cannot initialize a false flag.
+        if !self.initialized {
+            let seed = match kind {
+                SuperWeaponKind::MultiMissile => Some((NATIVE_NUKE_LIGHT_PROFILE, 1)),
+                // C28810 copies seven dwords: the seventh storm value is
+                // adjacent Scenario+3560, constructor nuclear Ambient.
+                SuperWeaponKind::LightningStorm => {
+                    Some((NATIVE_ION_LIGHT_PROFILE, NATIVE_NUKE_LIGHT_PROFILE[0]))
+                }
+                SuperWeaponKind::PsychicDominator => Some((NATIVE_DOMINATOR_LIGHT_PROFILE, 1)),
+                _ => None,
+            };
+            if let Some((profile, rate)) = seed {
+                self.profile[..6].copy_from_slice(&profile);
+                self.profile[6] = rate;
+                self.enabled = true;
+            }
+            // C28831/8C, C28914/58/A8/E8, B98343 set the same flag
+            // without touching constructor-zero lighting fields.
+            self.initialized = !matches!(
+                kind,
+                SuperWeaponKind::ChronoWarp
+                    | SuperWeaponKind::NoEffect
+                    | SuperWeaponKind::GenericWarhead
+                    | SuperWeaponKind::UnitDelivery
+            );
+        }
+        // B970F5..B971BF: current-default ReadInt5276D0 then ReadBool5295F0.
+        for (slot, key) in [
+            "LightAmbient",
+            "LightRed",
+            "LightGreen",
+            "LightBlue",
+            "LightGround",
+            "LightLevel",
+            "LightAmbientChangeRate",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            self.profile[slot] = raw.read_int(key, self.profile[slot]);
+        }
+        self.enabled = raw.read_bool("Lighting", self.enabled);
+    }
+}
+
 /// Maps the INI `Type=` string to an enum for launch dispatch.
 ///
 /// Stock values match gamemd.exe's SuperWeaponType enum (0x006CEA20).
@@ -65,6 +137,15 @@ pub enum SuperWeaponKind {
 }
 
 impl SuperWeaponKind {
+    /// ReadINI6CEC2D..6CEC7E: rejected Type strings retain the previous kind.
+    pub(crate) fn read(section: &IniSection) -> Self {
+        section
+            .read_string_with("Type", 0x28, None, |current, value| {
+                Self::from_ini_str(value).or(current)
+            })
+            .unwrap_or(Self::NoEffect)
+    }
+
     /// Retail Type value; extensions use identifiers outside 0..12.
     pub const fn native_index(self) -> i32 {
         match self {
@@ -144,6 +225,8 @@ pub struct SuperWeaponType {
     pub ui_name: Option<String>,
     /// Launch dispatch type (determines what happens on fire).
     pub kind: SuperWeaponKind,
+    /// Retained NPAE section lighting, projected by the ordered rules processor.
+    pub npatch_lighting: NpatchSuperWeaponLighting,
     /// `Range=` (`SuperWeaponTypeClass+0xF8`), a stored native float. The
     /// constructor initializes it to `0.0` (`0x006CE5B0`); `ReadINI @
     /// 0x006CEA20` reads the current value with `ReadDouble @ 0x005283D0`
@@ -243,15 +326,7 @@ impl SuperWeaponType {
         // owns the zero defaults; keep the same current-value defaults here.
         let range = section.read_float("Range", 0.0);
         let line_multiplier = section.read_int("LineMultiplier", 0);
-        // ReadINI6CEC2D..6CEC7E: each 0x28-byte ReadString is compared
-        // against the kind names; a rejected name leaves the prior field.
-        let kind = section
-            .read_string_with("Type", 0x28, None, |current, value| {
-                SuperWeaponKind::from_ini_str(value).or(current)
-            })
-            // Ctor6CE5B0 initializes Type to -1; rejected/missing reads do
-            // not remove the registered type or skip its other fields.
-            .unwrap_or(SuperWeaponKind::NoEffect);
+        let kind = SuperWeaponKind::read(section);
         #[cfg(feature = "ares")]
         let extension_kind = matches!(
             kind,
@@ -264,6 +339,7 @@ impl SuperWeaponType {
             // AbstractTypeClass `UIName=`, ReadString 0x20 (`0x00410AFB`).
             ui_name: section.read_name("UIName", 0x20).map(str::to_string),
             kind,
+            npatch_lighting: NpatchSuperWeaponLighting::default(),
             range,
             line_multiplier,
             // `0x006CED6E` ReadDouble(0.0): zero keeps the field, anything

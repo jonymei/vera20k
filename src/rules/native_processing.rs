@@ -1599,6 +1599,20 @@ impl ProcessedRulesLayers {
         })
     }
 
+    #[cfg(feature = "npatch")]
+    pub(crate) fn super_weapon_lighting_states(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &str,
+            crate::rules::superweapon_type::NpatchSuperWeaponLighting,
+        ),
+    > {
+        self.member_states(RulesTypeFamily::SuperWeapon, |member| {
+            member.super_weapon_lighting
+        })
+    }
+
     pub(crate) fn super_weapon_building_requirements(
         &self,
     ) -> impl Iterator<Item = (&str, Option<&SuperWeaponBuildingRequirements>)> {
@@ -3535,6 +3549,9 @@ struct ProcessedType {
     /// ParticleSystemType+294, the bound ParticleType's index: constructor -1
     /// (`0x006440B3`), rebound by every reached ReadINI (`0x0064430F..0x00644323`).
     holds_what: Option<usize>,
+    /// NPAE174 retained SuperWeaponType light reader B97080.
+    #[cfg(feature = "npatch")]
+    super_weapon_lighting: crate::rules::superweapon_type::NpatchSuperWeaponLighting,
     /// SuperWeaponType+9C `WeaponType=`, the stored ID of its WeaponType:
     /// constructor null (`0x006CE5CB`); ReadINI (`0x006CEA4A..0x006CEA8C`)
     /// keeps it on an empty ReadString128 and otherwise stores
@@ -3972,6 +3989,8 @@ impl ProcessedType {
             emp_type: None,
             armor_id: ArmorId::NONE,
             holds_what: None,
+            #[cfg(feature = "npatch")]
+            super_weapon_lighting: Default::default(),
             super_weapon_weapon: None,
             super_weapon_aux_building: None,
             unit_delivery: None,
@@ -5348,6 +5367,13 @@ impl RulesPassProcessor {
                 {
                     self.family_mut(RulesTypeFamily::SuperWeapon)[index]
                         .super_weapon_aux_building = building;
+                }
+                #[cfg(feature = "npatch")]
+                {
+                    let kind = crate::rules::superweapon_type::SuperWeaponKind::read(&effective);
+                    self.family_mut(RulesTypeFamily::SuperWeapon)[index]
+                        .super_weapon_lighting
+                        .read(&raw, kind);
                 }
                 #[cfg(feature = "phobos")]
                 {

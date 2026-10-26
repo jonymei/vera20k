@@ -21,7 +21,7 @@ pub(crate) use countdown::ScenarioTimerAction;
 
 /// NukeLevel (`ScenarioClass+0x3574`): Set_Defaults stores 100 (`0x00683920`,
 /// the binary's only store to it) and no INI key reads it.
-pub const NUKE_LEVEL_UNITS: i32 = 100;
+pub const NUKE_LEVEL_UNITS: i32 = crate::rules::superweapon_type::NATIVE_NUKE_LIGHT_PROFILE[5];
 
 /// ScenarioClass Set_Defaults68375F..68378E anchors both map-regrowth
 /// timers at the current frame, zero on a fresh start, with zero duration.
@@ -56,27 +56,13 @@ impl ScenarioLightProfileUnits {
     }
 
     pub const fn ion_default() -> Self {
-        Self {
-            ambient_percent: 87,
-            red_percent: 30,
-            green_percent: 40,
-            blue_percent: 75,
-            ground_units: 0,
-            level_units: 0,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_ION_LIGHT_PROFILE)
     }
 
     /// `ScenarioClass::Set_Defaults @ 0x00683610` (`0x00683991..
     /// 0x006839B7`).
     pub const fn dominator_default() -> Self {
-        Self {
-            ambient_percent: 150,
-            red_percent: 85,
-            green_percent: 20,
-            blue_percent: 30,
-            ground_units: 0,
-            level_units: 0,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_DOMINATOR_LIGHT_PROFILE)
     }
 
     /// The nuke flash's profile (`ScenarioClass+0x3560..+0x3574`): only
@@ -84,16 +70,20 @@ impl ScenarioLightProfileUnits {
     /// `0x0068396D..0x00683987`, Ground and Level 100 at `0x0068391A`/
     /// `0x00683920`), and no INI key reads it.
     pub const fn nuke() -> Self {
-        Self {
-            ambient_percent: 200,
-            red_percent: 175,
-            green_percent: 150,
-            blue_percent: 125,
-            ground_units: 100,
-            level_units: NUKE_LEVEL_UNITS,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_NUKE_LIGHT_PROFILE)
     }
 
+    /// Scenario reset and the NPatch first-read seed share these six values.
+    const fn from_native_default(values: [i32; 6]) -> Self {
+        Self {
+            ambient_percent: values[0],
+            red_percent: values[1],
+            green_percent: values[2],
+            blue_percent: values[3],
+            ground_units: values[4],
+            level_units: values[5],
+        }
+    }
     /// The RGB `ScenarioClass::UpdateLighting @ 0x0053C280` hands
     /// RecalcLighting for an alternate profile: each percentage times 10.
     pub fn alternate_rgb(&self) -> [i32; 3] {

@@ -260,7 +260,28 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：A04原生连通复算排除算法分区差异（2026-10-26）
+### 当前检查点：F11光照规则前置已接，完整效果未完成（2026-10-26）
+
+- 工作树`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`，本批基于`62e3cd133`；
+  无PR/推送，无运行中Cargo。整体PLAN不变，海军地形类别/FNPC、V01供电政策与其余F/V/A项仍开放。
+- 完成NpatchSuperWeaponLighting的逐物理层七整数/末尾Lighting读取、共享首次初始化门、
+  注册表保存恢复、RuleSet投影和配置hash。默认值来源与Scenario现有三组默认函数共用；
+  不从最终地图取seed、不因Lighting=no跳过读取、不把Type3先初始化后改Type7误当首次Domi。
+  Type4的反常门保留。新增保留字段会改变保存layout，仍按原门禁拒绝旧布局，不伪造兼容。
+- 2项生产回归覆盖root/mode/map与迟注册、坏Type保留、exact-case/原生整数、disabled读取、
+  Type3/4→7、保存/hash；NP NativeProcessing98、SuperWeaponType4、ScenarioLighting2通过；
+  无NP新增2与SuperWeaponType4通过。无NP新字段保持constructor零且不消费扩展键。
+- 原生复读纠正两个容易误写的细节：Storm第七值实际跨读核爆Ambient，默认200；
+  55B3D6的rate分支没有Storm，包含两个核爆阶段与TAction127屏幕效果（不是Chronosphere SW）。
+  规则实现/必要运行时边界见[npatch.md](npatch.md#superweapon-lighting-reader-runtime-integration-still-open)。
+- 此批没有把profile接到launch/ambient/cell/palette，所以F11仍不兼容完成，不构建新玩家版。
+  下一步在既有ScenarioLightingState/light_sources owners接三份最近SW身份及其immutable配置快照，
+  不改写map profile；分别处理global/constructor/cell优先级、Lighting=false回落、status5、rate与保存恢复，
+  再用真实AY普通发射/逐帧lighting_events及既有TMP GPU探针验收、做完整链只读critic。
+- 本轮未修改Python工具；上一检查点记录的Windows symlink权限和hashbrown特性测试异常仍未解决，
+  不将Rust局部通过称为Python全套或整个MOD通过。已有保留玩家构建和原始存档均未改。
+
+### 已定位批次：A04原生连通复算排除算法分区差异（2026-10-26）
 
 - 工作树/分支仍为`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`；
   本批基于`65e821929`，只修改诊断/测试/说明，不改游戏玩法/保存布局、MOD配置或保留玩家构建。
@@ -412,7 +433,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
 | F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
-| F11 / P2 | 心灵终结器独立光照：超武 section 的 NP 光照覆盖未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
+| F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
 | F12 / P2 | 扩展遭遇战 UI：8色大厅/战场错配本轮已修；科技等级滑条与完整16色界面仍开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 
