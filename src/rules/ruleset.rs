@@ -4595,6 +4595,7 @@ impl RuleSet {
             em_effect,
             causes_delay_kill,
             penetration,
+            doesnt_affect_enemies,
             anim_list,
             debris_types,
             verses,
@@ -4611,6 +4612,7 @@ impl RuleSet {
                 warhead.causes_delay_kill = causes_delay_kill;
                 if crate::rules::NPATCH_ENABLED {
                     warhead.project_npatch_bunker_penetration(penetration);
+                    warhead.doesnt_affect_enemies = doesnt_affect_enemies;
                 }
                 warhead.anim_list = anim_list.to_vec();
                 warhead.debris_types = debris_types.to_vec();
@@ -6459,6 +6461,12 @@ impl RuleSet {
             self.warheads
                 .values()
                 .map(|warhead| (&warhead.id, warhead.bunker_penetration_level()))
+                .collect::<BTreeMap<_, _>>()
+                .hash(&mut hasher);
+            b"npatch-doesnt-affect-enemies-v1".hash(&mut hasher);
+            self.warheads
+                .values()
+                .map(|warhead| (&warhead.id, warhead.doesnt_affect_enemies))
                 .collect::<BTreeMap<_, _>>()
                 .hash(&mut hasher);
         }

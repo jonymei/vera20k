@@ -1800,6 +1800,7 @@ impl ProcessedRulesLayers {
             bool,
             bool,
             i8,
+            bool,
             &[String],
             &[String],
             &[NativeF64Bits; 11],
@@ -1819,6 +1820,7 @@ impl ProcessedRulesLayers {
                     member.warhead_anim.em_effect,
                     member.warhead_anim.causes_delay_kill,
                     member.npatch_bunker_penetration,
+                    member.npatch_doesnt_affect_enemies,
                     member.warhead_anim.anim_list.as_slice(),
                     member.warhead_anim.debris_types.as_slice(),
                     &member.warhead_verses,
@@ -3551,6 +3553,8 @@ struct ProcessedType {
     /// NPAE174 replaces stock Fire's +14C reader at75D5DE..75D5F2;
     /// Warhead ctor75CF83 initializes this byte to zero.
     npatch_bunker_penetration: i8,
+    /// NPAE174 Warhead ctor75CF25 clears +129; ReadINI C2E90D retains it.
+    npatch_doesnt_affect_enemies: bool,
     weapon_slots: WeaponSlots,
     techno_references: TechnoTypeReferences,
     weapon: WeaponReadState,
@@ -4008,6 +4012,7 @@ impl ProcessedType {
             npatch_aa_combat: false,
             npatch_bunker_protection: 0,
             npatch_bunker_penetration: 0,
+            npatch_doesnt_affect_enemies: false,
             weapon_slots: WeaponSlots::default(),
             weapon: WeaponReadState::default(),
             warhead_anim: WarheadAnimReadState::default(),
@@ -6455,6 +6460,13 @@ impl RulesPassProcessor {
             if let Some((_id, raw, _effective)) =
                 self.begin_rules_member_read(RulesTypeFamily::Warhead, index, pass)
             {
+                if crate::rules::NPATCH_ENABLED {
+                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
+                    // ReadINI75D3F1 -> C2E90D precedes IsFlatExplosion;
+                    // ReadBool5295F0 uses the live +129 byte as default.
+                    member.npatch_doesnt_affect_enemies =
+                        raw.read_bool("DoesntAffectEnemies", member.npatch_doesnt_affect_enemies);
+                }
                 // NPAE174 ReadINI75D3F1 -> C2EF94 reads IsFlatExplosion
                 // into +130 first; stock75D42F..75D443 then reads
                 // CausesDelayKill into that SAME byte. Fold each raw pass,

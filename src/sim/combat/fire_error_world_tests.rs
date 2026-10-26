@@ -31,6 +31,51 @@ fn rules() -> RuleSet {
     .expect("fire-error fixture rules")
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_friendly_only_warhead_uses_the_firers_alliance_direction() {
+    use crate::sim::combat::TargetKind;
+    use crate::sim::combat::fire_error::FireError;
+    use crate::sim::combat::fire_error_world::FireSubject;
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[VehicleTypes]\n0=TANK\n[Warheads]\n0=W\n\
+         [TANK]\nStrength=300\nPrimary=Gun\n\
+         [Gun]\nDamage=50\nRange=6\nWarhead=W\nOmniFire=yes\n\
+         [W]\nDoesntAffectEnemies=yes\n",
+    ))
+    .unwrap();
+    let mut sim = bridge_scene("TANK");
+    let error = |sim: &crate::sim::world::Simulation, target| {
+        FireSubject {
+            world: sim,
+            rules: &rules,
+            overlay_registry: None,
+            fog: None,
+            firer: sim.substrate.entities.get(1).unwrap(),
+            obj: rules.object("TANK").unwrap(),
+            target: Some(target),
+            weapon_index: 0,
+        }
+        .fire_error(false)
+    };
+    assert_eq!(error(&sim, TargetKind::Entity(2)), FireError::Illegal);
+    assert_eq!(error(&sim, TargetKind::Entity(1)), FireError::Ok);
+    assert_eq!(error(&sim, TargetKind::Cell(12, 10)), FireError::Ok);
+    // The reverse ally bit is not the predicate at NPAE C2EA34.
+    sim.house_alliances
+        .as_map_mut_for_test()
+        .entry("AMERICANS".into())
+        .or_default()
+        .insert("SOVIET".into());
+    assert_eq!(error(&sim, TargetKind::Entity(2)), FireError::Illegal);
+    sim.house_alliances
+        .as_map_mut_for_test()
+        .entry("SOVIET".into())
+        .or_default()
+        .insert("AMERICANS".into());
+    assert_eq!(error(&sim, TargetKind::Entity(2)), FireError::Ok);
+}
+
 fn spawn(
     store: &mut EntityStore,
     id: u64,

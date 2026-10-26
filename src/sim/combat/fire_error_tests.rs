@@ -147,6 +147,7 @@ fn weapon(slot: &Value, input: &Value) -> Option<WeaponFacts> {
             temporal: flag(&warhead["temporal"]),
             is_locomotor: flag(&warhead["is_locomotor"]),
             psychedelic: flag(&warhead["psychedelic"]),
+            doesnt_affect_enemies: false,
             bomb_disarm: flag(&warhead["bomb_disarm"]),
             // `FCOMP` then `TEST AH,0x40`: C3 is set for equal and unordered.
             armor_rejects_fire: verses == 0.0 || verses.is_nan(),
@@ -403,6 +404,9 @@ impl FireQuery for RowQuery<'_> {
     }
     fn allied(&mut self) -> bool {
         flag(self.verdict("allied"))
+    }
+    fn firer_allied_with_target(&mut self) -> bool {
+        flag(self.verdict("firer_allied_with_target"))
     }
     fn bridge_for_firing(&mut self) -> bool {
         flag(self.verdict("bridge_for_firing"))

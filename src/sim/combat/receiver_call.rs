@@ -431,7 +431,9 @@ pub(super) fn resolve_receive_damage_with_input(
             interner.resolve(other),
         )
     };
-    let attacker_is_allied = source_house.is_some_and(|owner| allied(owner, target.owner()));
+    // ReceiveDamage701CB3/C2D651 ask the actual attacker's House, not
+    // the separately supplied SourceHouse used by Psychedelic/attribution.
+    let attacker_is_allied = source.is_some_and(|source| allied(source.owner(), target.owner()));
     let source_house_is_allied = source_house.is_some_and(|owner| allied(target.owner(), owner));
 
     let target_view = damage::TargetDamageView {
@@ -464,7 +466,7 @@ pub(super) fn resolve_receive_damage_with_input(
     });
     let gates = damage::ImmunityInputs {
         ignore_defenses: receiver_flags.ignore_defenses,
-        attacker_present: event.attacker_id != RAD_NO_ATTACKER,
+        attacker_present: source.is_some(),
         type_immune,
         // IC/FS checks original sign and precedes WarpingOut. Warping does not
         // share the negative/healing exemption; both honor ignoreDefenses.
@@ -481,6 +483,7 @@ pub(super) fn resolve_receive_damage_with_input(
             && target_type.is_some_and(|object| object.immune_to_psionic_weapons),
         poison_immune: warhead.poison && target_type.is_some_and(|object| object.immune_to_poison),
         affects_allies: warhead.affects_allies,
+        doesnt_affect_enemies: warhead.doesnt_affect_enemies,
         attacker_is_allied,
         source_house_is_allied,
         psychedelic: warhead.psychedelic,

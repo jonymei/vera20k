@@ -219,6 +219,7 @@ impl<'a> FireSubject<'a> {
                 temporal: warhead.temporal,
                 is_locomotor: warhead.is_locomotor,
                 psychedelic: warhead.psychedelic,
+                doesnt_affect_enemies: warhead.doesnt_affect_enemies,
                 bomb_disarm: warhead.bomb_disarm,
                 armor_rejects_fire: armor.is_some_and(|armor| {
                     // Ares 3.0 hook100542A0 admits ForceFire OR nonzero
@@ -819,6 +820,18 @@ impl FireQuery for WorldQuery<'_, '_> {
         self.target
             .entity
             .is_some_and(|target| self.house_allied(target.owner(), subject.firer.owner()))
+    }
+
+    fn firer_allied_with_target(&mut self) -> bool {
+        let subject = self.subject;
+        self.target.entity.is_some_and(|target| {
+            combat_weapon::is_ally_by_object(
+                Some(subject.world.house_alliances.as_map()),
+                &subject.world.interner,
+                subject.firer.owner(),
+                target.owner(),
+            )
+        })
     }
 
     fn bridge_for_firing(&mut self) -> bool {

@@ -110,6 +110,9 @@ pub struct WarheadType {
     /// `WarheadTypeClass+0x179` (ReadINI `0x0075d9f2`, key string
     /// `0x00847cc8`).
     pub affects_allies: bool,
+    /// NPAE174 +129, constructor75CF25 clears it; retained readerC2E90D.
+    /// Independent of the Phobos AffectsEnemies key and its default.
+    pub(crate) doesnt_affect_enemies: bool,
     /// Phobos `AffectsOwner`; `None` falls back to [`Self::affects_allies`].
     pub affects_owner: Option<bool>,
     /// Phobos `AffectsEnemies`, default true.
@@ -473,6 +476,8 @@ impl WarheadType {
             },
             penetrates_bunker: section.read_bool("PenetratesBunker", false),
             affects_allies: section.read_bool("AffectsAllies", true),
+            // Published from the ordered native reader, not the merged INI.
+            doesnt_affect_enemies: false,
             affects_owner: section
                 .is_present("AffectsOwner")
                 .then(|| section.read_bool("AffectsOwner", false)),

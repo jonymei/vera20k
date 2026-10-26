@@ -253,6 +253,45 @@ fn npatch_flat_explosion_alias_keeps_layer_order_saved_state_and_hash() {
 }
 
 #[test]
+fn npatch_enemy_filter_retains_exact_key_across_layers_save_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |value| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[Warheads]\n0=W\n1=Default\n2=Case\n\
+             [W]\nDoesntAffectEnemies={value}\n\
+             [Default]\nAffectsEnemies=no\n[Case]\ndoesntaffectenemies=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[W]\nDoesntAffectEnemies=invalid\n"),
+        );
+        let processed = layers.process().unwrap();
+        let rules = RuleSet::from_processed_rules(&processed).unwrap();
+        assert!(!rules.warhead("Default").unwrap().doesnt_affect_enemies);
+        assert!(!rules.warhead("Case").unwrap().doesnt_affect_enemies);
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let resumed = RulesLayerStack::new(IniFile::from_str("[W]\nDoesntAffectEnemies=\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&resumed).unwrap()
+    };
+    let yes = continued("yes");
+    let no = continued("no");
+    assert_eq!(yes.source_ini_hash(), no.source_ini_hash());
+    assert_eq!(
+        yes.warhead("W").unwrap().doesnt_affect_enemies,
+        crate::rules::NPATCH_ENABLED
+    );
+    assert!(!no.warhead("W").unwrap().doesnt_affect_enemies);
+    assert_eq!(
+        yes.simulation_config_hash() != no.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED,
+    );
+}
+
+#[test]
 fn npatch_bunker_bytes_keep_layers_fire_alias_and_saved_registry() {
     use crate::rules::ruleset::RuleSet;
     let continued = |penetration| {

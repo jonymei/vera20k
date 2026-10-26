@@ -93,6 +93,59 @@ fn arena(rules: &RuleSet) -> Simulation {
     crate::sim::arena_fixture::rival_arena(rules, 0x7438F0)
 }
 
+#[test]
+fn friendly_only_damage_reads_the_attacker_not_the_attribution_house() {
+    use crate::rules::ini_parser::IniFile;
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[VehicleTypes]\n0=TANK\n[Warheads]\n0=W\n1=NoAllies\n\
+         [TANK]\nStrength=300\nArmor=heavy\n\
+         [W]\nDoesntAffectEnemies=yes\n[NoAllies]\nAffectsAllies=no\n",
+    ))
+    .unwrap();
+    let mut sim = arena(&rules);
+    let victim = spawn(&mut sim, &rules, "TANK", "Americans", (10, 10));
+    let enemy = spawn(&mut sim, &rules, "TANK", "Russians", (12, 10));
+    let friend = spawn(&mut sim, &rules, "TANK", "Americans", (10, 12));
+    let victim_house = sim.substrate.entities.get(victim).unwrap().owner();
+    let enemy_house = sim.substrate.entities.get(enemy).unwrap().owner();
+    let mut hit = |attacker, source_house, warhead: &str| {
+        let before = sim.substrate.entities.get(victim).unwrap().health.current();
+        let warhead = sim.interner.intern(warhead);
+        sim.commit_direct_damage_receiver(
+            &rules,
+            None,
+            EntityDamageEvent::direct_receiver(
+                victim,
+                20,
+                0,
+                attacker,
+                source_house,
+                warhead,
+                ReceiverCallFlags {
+                    ignore_defenses: true,
+                    arg6: false,
+                },
+            ),
+            crate::sim::world::FrameEffects::default(),
+        );
+        before - sim.substrate.entities.get(victim).unwrap().health.current()
+    };
+    // NPAE C2D651 asks the attacker even when SourceHouse disagrees.
+    assert_eq!(
+        hit(enemy, Some(victim_house), "W") == 0,
+        crate::rules::NPATCH_ENABLED
+    );
+    assert!(hit(friend, Some(enemy_house), "W") > 0);
+    assert!(
+        hit(0, Some(enemy_house), "W") > 0,
+        "null attacker skips the NP gate"
+    );
+    // Stock701CB3 uses this same attacker-owned predicate, independently
+    // of the reverse SourceHouse query reserved for Psychedelic.
+    assert_eq!(hit(friend, Some(enemy_house), "NoAllies"), 0);
+    assert!(hit(enemy, Some(victim_house), "NoAllies") > 0);
+}
+
 fn spawn(sim: &mut Simulation, rules: &RuleSet, kind: &str, owner: &str, cell: (u16, u16)) -> u64 {
     sim.spawn_object(kind, owner, cell.0, cell.1, 0, rules)
         .unwrap_or_else(|| panic!("{kind} spawns"))

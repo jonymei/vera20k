@@ -82,6 +82,8 @@ pub(crate) struct ImmunityInputs {
     pub poison_immune: bool,
     /// Warhead AffectsAllies (warhead+0x179, default TRUE).
     pub affects_allies: bool,
+    /// NPAE174 +129: C2D62A, after AffectsAllies and before Psychedelic.
+    pub doesnt_affect_enemies: bool,
     /// Attacker owner IsAlliedWith target owner (AffectsAllies operand).
     pub attacker_is_allied: bool,
     /// Target owner IsAlliedWith sourceHouse (Psychedelic operand).
