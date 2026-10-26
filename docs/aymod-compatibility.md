@@ -4,6 +4,31 @@
 完整执行顺序见 [全面适配 PLAN](aymod-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
 不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
+## 当前检查点（2026-10-26）
+
+- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于3df291bf2。
+  本批仅SecretLab启动分配及其原生小型对照/文档；未改MOD数值、AI权重、供电政策或F11接线。
+- V10秘密实验室现沿既有assign_secret_lab_production接入实际#174：完整候选池抽样、环扫未用项、
+  用尽后清零并返回本次起点但不标记；允许实验室多于候选数。stock分支保留原缩短范围/数量门禁。
+  不新增持久状态或保存布局；只在既有fresh-only/noncampaign Post_Map调用，restore不重抽奖励。
+- 修复前原生对照回归在full_pool失败（Scenario raw draws 3 vs 4）；修复后NP实验室及直接消费者9项、
+  无NP相同范围9项通过，含生产reader、战役跳过、夺取、付款队列、快照恢复与失去奖励。
+  三例13.7KB原生对照复用can_build_oracle现有完整分配/getter/RNG owner；--npatch-secret-lab --check通过。
+- 一次独立只读critic未发现玩法/owner缺陷，指出六实验室例未区分重置时错误标记；已将同一例扩到七座，
+  第七次实际building0与错误标记的unit0可区分，重生成/check和NP九项回归通过。
+  最终Python工具套件936项：1失败、6错误、49跳过，与本轮前已知失败同名；6项为Windows符号链接
+  权限WinError1314，1项为core/workspace依赖feature闭包不一致。未改Cargo依赖/runner/cache/seed测试，
+  不宣称全套通过；完整日志仅留本机target/aymod-save-analysis/python-tests-secret-lab-final.log。
+- 实际Return Dubai本轮报告没有CASLAB，此修复不是该地图弱攻势的解释。真实AY多实验室玩家画面和
+  各种地图载入仍待验。可玩构建保持aymod-playtest-20261026-explosion-crate（源e3e05ec46），未自动启动。
+- 仍需明确批准：V01作者独立供电/禁止离线移动与原生共享计数/Drive可重下令的取舍；F11跨模块接线。
+  禁止把自动续接当批准。下一安全动作：A09实际NP攻城直升机集结/部署链、海军地形/FNPC与实际多AI恢复；
+  其他F/V/A和完整16色/科技滑条仍按PLAN开放，没有发布/PR/推送授权。
+- A09只读前置：实际NP Unit736D5C→7E0C89对DeployToFire单位新增Unit+6E0已部署门：
+  未部署返回true736D66，已部署转入736D6D的DeploysInto/TickTank分支；不是stock无条件保留Unload。
+  54BD30..54BE3A与Coordinate_Move6EBDA2/6EBED5..6EBF13相关悬停集结门未见此补丁变化。
+  当前Coordinate_Attack仍未调用该共享资格函数；实际AY SCHP typed配置/脚本生命周期尚待复现，
+  不据此强改BalloonHover或宣布攻城直升机已修。
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -260,7 +285,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：1v1持续进攻已观察，继续区分集结与行军（2026-10-26）
+### 机制证据：1v1持续进攻已观察，继续区分集结与行军（2026-10-26）
 
 - 本批无玩法/MOD/AI权重改动。正式Return Dubai/Battle，美国被动人类对苏联困难，默认选项、
   seed=0x00C0FFEE，分别观察9000与18000次调用；两报告到tick9000的House/工厂/编队/开火计数前缀完全相同。
@@ -286,7 +311,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   从所抽位置环扫未用项；用尽后清零标记并返回本次起点。当前secret_lab.rs仍为stock缩短范围算法，
   npatch尚无分支。不能简单替换为均匀洗牌；应沿现有owner补此算法与RNG/超过候选数边界回归。
   此处为后续机制调查，不把原生指令读取说成已适配或已运行验证。
-### 当前检查点：多AI诊断与结局边界（2026-10-26）
+### 机制证据：多AI诊断与结局边界（2026-10-26）
 
 - 本批只完善既有telemetry-serve诊断与文档，未修改MOD配置、AI权重、兵种数值或玩法。
   新增trace-skirmish模式复用正式Battle启动/load_session，显式指定1–7家困难电脑与重复阵营；
@@ -307,7 +332,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 玩家版仍为aymod-playtest-20261026-explosion-crate；manifest源e3e05ec46已核对包含372af3d64颜色修复。
   入口D:/Workshop/vera20k/target/AYMOD-test-20261026-explosion-crate.cmd；新大厅按显示蓝色色块选择，
   AY当前蓝色为MPC05（第5色），不是旧stock第3色。尚需玩家GUI确认，不自动启动游戏。
-### 当前检查点：V08玩家BFRT与磁暴充能对照通过（2026-10-26）
+### 机制证据：V08玩家BFRT与磁暴充能对照通过（2026-10-26）
 
 - 当前任务树/分支不变，本批基于`9b4ca8c96`；仅新增两项真实AY场景功能测试和海军诊断断言，
   没有玩法、MOD数值、AI权重或被拒绝的F11跨模块接线改动。无运行中Cargo、PR/推送或新玩家构建。
@@ -603,9 +628,10 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 
 作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、
 铁幕目标的自动攻击准入、船厂维修伤害归属、红血碉堡进驻、Alt 飞机误入维修厂/船厂、
-秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已确认实际#174修改：
-68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零；
-`src/sim/secret_lab.rs`仍为stock缩短范围算法，该项明确缺失，后续沿现有owner适配。
+秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已按实际#174修改接入：
+68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零但不标记返回项；
+`src/sim/secret_lab.rs`沿原owner保留NP/stock分支，原生RNG三例和直接消费者NP/无NP各九项通过。
+不改变既有保存fallback/夺取/授权owner；真实AY多实验室/GUI场景仍待验。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 

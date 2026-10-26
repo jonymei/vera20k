@@ -63,7 +63,9 @@ impl Simulation {
         });
         let lists = rules.general.secret_lab_choices();
         let total: usize = lists.iter().map(Vec::len).sum();
-        if labs.is_empty() || total < labs.len() {
+        // NPatch AssignSecretLabProduction68C077..68C07E removes only the
+        // labs > choices gate; the positive-count gate68C06F stays intact.
+        if labs.is_empty() || total == 0 || (!cfg!(feature = "npatch") && total < labs.len()) {
             return;
         }
         let choices: Vec<_> = [
@@ -75,14 +77,32 @@ impl Simulation {
         .zip(lists)
         .flat_map(|(category, list)| list.iter().map(move |name| (category, name)))
         .collect();
-        // Native removes a slot from a temporary index vector but then uses
-        // the drawn POSITION, not its value, against the original type arrays
-        // (68C112..68C1B5). Thus only the shrinking count matters, and duplicate
-        // grants are possible. Override types still spend this startup draw.
+        #[cfg(feature = "npatch")]
+        let mut used = vec![false; total];
+        // Stock68C112..68C1B5 uses a shrinking position against the original
+        // lists. NPatch68C11B..68C149 draws from the full pool instead, then
+        // C2E5FC scans cyclically for an unused slot. Once all are used it
+        // clears the flags and returns the drawn slot WITHOUT marking it.
+        // Source: original gamemd.exe / NPAE instructions. Overrides still draw.
         for (index, lab) in labs.into_iter().enumerate() {
-            let high =
-                u32::try_from(total - index - 1).expect("secret production list fits native count");
+            let last = if cfg!(feature = "npatch") {
+                total - 1
+            } else {
+                total - index - 1
+            };
+            let high = u32::try_from(last).expect("secret production list fits native count");
             let drawn = scenario_rng.next_range_u32_inclusive(0, high) as usize;
+            #[cfg(feature = "npatch")]
+            let drawn = if let Some(free) = (0..total)
+                .map(|offset| (drawn + offset) % total)
+                .find(|&slot| !used[slot])
+            {
+                used[free] = true;
+                free
+            } else {
+                used.fill(false);
+                drawn
+            };
             let (category, name) = choices[drawn];
             let id = interner.intern(name);
             substrate
@@ -118,6 +138,7 @@ mod tests {
         sim
     }
 
+    #[cfg(not(feature = "npatch"))]
     #[test]
     fn secret_lab_assignment_matches_original_rewards_and_all_three_full_rng_states() {
         let corpus = native();
@@ -261,6 +282,84 @@ mod tests {
                 );
                 assert_eq!(
                     production(&sim, &rules, lab).map(|(_, name)| name),
+                    row["getters"][index].as_str(),
+                    "{} lab{index}",
+                    row["name"]
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_assignment_matches_native_full_pool_reset_and_rng() {
+        let corpus: Value = serde_json::from_str(crate::test_fixture::text(
+            "tools/can_build_secret_lab_npatch.json",
+        ))
+        .unwrap();
+        for row in corpus["cases"].as_array().unwrap() {
+            let mut ini =
+                String::from("[BuildingTypes]\n0=LAB\n[LAB]\nStrength=100\nSecretLab=yes\n");
+            let families = [
+                ("SecretInfantry", "infantry"),
+                ("SecretUnits", "unit"),
+                ("SecretBuildings", "building"),
+            ];
+            if let Some(overridden) = row["override"].as_array() {
+                let family = overridden[0].as_u64().unwrap() as usize;
+                let key = ["SecretInfantry", "SecretUnit", "SecretBuilding"][family];
+                ini += &format!("{key}={}{}\n", families[family].1, overridden[1]);
+            }
+            ini += "[General]\n";
+            for (family, (key, prefix)) in families.into_iter().enumerate() {
+                let names: Vec<_> = (0..row["counts"][family].as_u64().unwrap())
+                    .map(|n| format!("{prefix}{n}"))
+                    .collect();
+                ini += &format!("{key}={}\n", names.join(","));
+            }
+            let rules = RuleSet::from_ini(&IniFile::from_str(&ini)).unwrap();
+            let mut sim = world(&rules, &[]);
+            let labs: Vec<_> = (0..row["lab_count"].as_u64().unwrap())
+                .map(|n| {
+                    sim.spawn_object("LAB", "H", 10 + n as u16, 10, 0, &rules)
+                        .unwrap()
+                })
+                .collect();
+            sim.techno_limbo_with_rules(labs[0], &rules, None);
+            sim.scenario_rng =
+                SimRng::from_native_state_hex_for_test(row["scenario_before"].as_str().unwrap());
+            let (_, draws) = trace_draws(|| {
+                Simulation::assign_secret_lab_production(
+                    &mut sim.interner,
+                    &mut sim.scenario_rng,
+                    &mut sim.substrate,
+                    &rules,
+                )
+            });
+            assert_eq!(
+                draws.len() as u64,
+                row["raw_store_count"].as_u64().unwrap(),
+                "{}",
+                row["name"]
+            );
+            assert_eq!(
+                sim.scenario_rng.native_state_hex(),
+                row["scenario_after"],
+                "{}",
+                row["name"]
+            );
+            for (index, lab) in labs.into_iter().enumerate() {
+                let entity = sim.entities().get(lab).unwrap();
+                assert_eq!(
+                    entity
+                        .secret_lab_fallback()
+                        .map(|(_, id)| sim.interner.resolve(id)),
+                    row["assignments"][index].as_str(),
+                    "{} lab{index}",
+                    row["name"]
+                );
+                assert_eq!(
+                    production(&sim, &rules, entity).map(|(_, name)| name),
                     row["getters"][index].as_str(),
                     "{} lab{index}",
                     row["name"]

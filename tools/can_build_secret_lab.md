@@ -113,3 +113,30 @@ production-reader integration coverage.
 
 The metadata identifies the original binary, replay command, entry points,
 substitutions and canonical payload. It pins no repository source hashes.
+
+
+## NPatch assignment controls
+
+With `VERA20K_GAMEMD_EXE` selecting the AY NPAE executable, run:
+
+```sh
+python -m tools.can_build_oracle --npatch-secret-lab --check
+```
+
+This separate three-case corpus reuses `secret_assignment` and its original
+assignment/getter/RNG execution. It does not replace the retail corpus. Only
+inputs and Rust-asserted outputs are retained, without call traces or addresses.
+The sidecar records the reproduction command. The cases cover a full pool,
+seven labs over three mixed-family choices with an explicit reward override, and the
+single-choice no-raw-RNG boundary. The seventh assignment distinguishes clearing without marking the reset result.
+The first lab is also limbo in the Rust
+production test, matching global registry rather than on-map-only admission.
+
+NPatch removes the lab-count upper gate at68C077 and initializes zero usage
+flags through68C0F1/C2E5E8. Each lab draws from the complete `[0,total-1]` pool
+at68C11B..68C149. C2E5FC searches cyclically for an unused slot, marking it;
+if all slots are used it clears the flags and returns the drawn slot without
+marking it. This is not a uniform shuffle or a shrinking list. No extra RNG
+is drawn for scanning, reset, limbo membership or explicit reward overrides.
+The existing fresh-only Post_Map caller and retained per-building fallback
+remain authoritative; restore does not rerun assignment.
