@@ -1800,12 +1800,12 @@ pub(super) fn emit_admitted_fire(
 
     // `TechnoClass::FireAt @ 0x006FF031..0x006FF085`, right after
     // `BulletClass::Fire`: an occupied building advances its firing occupant,
-    // `(+0x69C + 1) % occupants`. Everything after reads the new index: the
-    // rearm below (`GetROF` at `0x006FF289` takes the building's weapon
+    // `(+0x69C + 1) % occupants`. Rearm reads that new index (`GetROF` at
+    // `0x006FF289` takes the building's weapon
     // through `BuildingClass::GetWeapon @ 0x004526F0`, i.e. the NEXT
-    // occupant's ROF and Burst) and the shot's own kill credit, since its
-    // Inviso bullet detonates later in its own AI (possibly this frame's
-    // Logic tail, once its impact/fuse admits it).
+    // occupant's ROF and Burst). Stock kill credit also uses the live current
+    // index; NPAE RecordKill702FBB decrements it at impact. Neither retains a
+    // shot's original occupant when other shots or roster edits intervene.
     if is_garrison && let Some(building) = world.substrate.entities.get_mut(snap.stable_id) {
         building.passenger_role.occupants_mut().advance_fire_index();
     }

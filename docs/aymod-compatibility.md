@@ -6,30 +6,25 @@
 
 ## 当前检查点（2026-10-26）
 
-- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于0aec578bf。
-  仅新增真实AY逐物理层前置回归与台账；未改玩法、MOD数值、AI权重、供电政策或F11接线。
-- A09新证据：用AssetManager/RetailRulesSources实际选择RULESMD、可选LANGRULE、MPBattleMD与Return Dubai，
-  逐层确认SCHP均未写DeployFacing、TrueConversion、DeployToFire；不是仅检查根文件或合并空值。
-  随后正式NativeRulesProcessOwner重建场景：SCHP IsSimpleDeployer/DeployToLand为true、BalloonHover=false、
-  DeploysInto=None、UnloadingClass=SCHD、DeployFire=true。DeployFire不同于另外两个开关。
-- 原生默认已读：710F93/构造链给Techno DeployFacing byteFF（signed -1），7113A7给TrueConversion=false，
-  Unit ctor7470E9清EBX、747127给DeployToFire=false。所以上述当前SCHP新发现的NP分支回到默认路径，
-  不能将它们当成已找到的集结停滞原因；不代表全引擎/其他类型已支持这两个扩展。
-- SMIN生产结果：IsSimpleDeployer=false、DeploysInto=YAREFN，YAREFN BuildingType部署朝向0。
-  原生739AC0在739AD4拒绝非simple；MissionUnload73D694先转MCV，7395C0取DeploysInto后7395C6→465D70
-  读取建筑+EDC。故根SMIN的同名Techno键不消费于本次NP简易部署转向点，不能为它新增重复方向owner。
-- 新测试aymod_siege_chopper_deploy_hooks_are_unset_in_every_battle_layer显式ignored实际资源1项通过。
-  上轮两机自然编队测试仍证明：发展1500帧后补足SCHP、实际Team07C3092C-G/Script07C48DBC-G，
-  观察第499..1500帧精确到达/State2/moving/NavCom、停action54；测试seek到action9后两机Unload、
-  未部署并到Attack。不是随机触发/玩家重放或自然通过集结，更不是已修好这条战术。
-- 原生相关State2、CoordinateMove、IsMoving、ScriptDeploy及有界SetDestination路径保持原门禁；
-  目前排除了三个具体NP开关遗漏解释，但仍不把整个原MOD行为认证为同样卡住，或静默改BalloonHover/跳脚本。
-  下一安全动作是确定这条原生等待的兼容政策/其余必要状态来源，或继续其他已证活跃功能；V11不再当已证必需缺失。
-- b1bd77720实验室修复已提交，NP/stock相关消费者各9项及原生三例通过；Python已知1依赖闭包失败、
-  6符号链接权限错误、49跳过仍未解决，本批未改Python。本批无玩法改动，无需玩法critic或新玩家构建。
-  可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未自动启动。
-- V01独立供电/离线禁移动政策、被拒绝的F11跨模块接线仍待明确批准，自动续接不是批准。
-  海军地形/FNPC、多AI恢复、完整16色/科技滑条及其他F/V/A继续按PLAN开放；没有发布/PR/推送授权。
+- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于62a329d5d。
+  本批V05驻军击杀经验索引修复；未改MOD数值、AI权重、供电政策或被拒绝的F11接线。
+- 实际NPAE RecordKill702FB5..702FD1读取当前建筑fire_index后DEC，负值加当前驻军数一次。
+  已沿award_kill_experience原owner接入NP分支；stock仍用当前索引。GetWeapon/ROF的共享
+  firing_occupant_id保持不变，装填仍读取下一名武器。Trainable建筑自身、BFRT/子机/控制者的优先级不改。
+  不新增“真正射手”缓存，不新增保存/hash状态、RNG draw、timer或detach；命中时仍用活索引，不跨多发保留身份。
+- 先改既有生产开火回归，NP修复前start0失败（首发射手未获XP）；现starts0/1覆盖普通减一和零回绕。
+  NP gsi_08_定向23项通过，无NP相同23项通过，含下一名武器装填；NP其他奖励消费者5项通过。
+  实际AY XMP03T4/Battle的CAHSE01/E1双驻军，生产入驻、正常人类Attack与普通帧首杀真实E2：
+  首发者XP>0、下一名和建筑0；该显式ignored资源测试1项通过。仅预先将受害者实例HP置1以隔离首发，未改规则/武器或直接调用经验。
+- 一次独立只读critic无可操作发现；明确覆盖残余：延迟多发与驻军变动尚无本批场景验证；无效选择槽
+  保留不支付而非原生越界读取的安全差异。真实场景不等于每栋建筑/多AI或Return Dubai进攻验收。
+- 前一批62a329d5d已核SCHP各实际规则层不写DeployFacing/TrueConversion/DeployToFire，默认分支不解释集结停滞；
+  SMIN走YAREFN建筑朝向owner，见V11/C06。A09两机到点仍moving/停54的真实诊断仍开放，不改悬停参数掩盖。
+- b1bd77720实验室修复保留；Python工具套件既有1依赖闭包失败/6符号链接权限错误/49跳过未解决，
+  本批未改Python或依赖。可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未生成/启动新版。
+- V01独立供电/离线禁移动取舍、F11跨模块接线仍待明确批准；自动续接不是批准。下一安全动作：
+  按PLAN继续实际驻军/其他高频功能生命周期与多AI恢复，A09状态来源/兼容策略、海军地形/FNPC保持开放。
+  完整16色/科技滑条及其他F/V/A仍在全目标内；没有发布/PR/推送授权。
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -621,7 +616,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | V02 / P2 | 医疗建筑：GAROBO、NARADR 的 `Hospital`。已有 `src/sim/docking/hospital.rs:18` 的进驻/治疗/退出owner及radio/app准入；不是Hospital未实现 | 受伤步兵 Enter、排队/满员、治疗、离开、失电/毁楼、换主；与驻军 F04 区分 |
 | V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM四项值9在实际Building开火链不消费，见C05，不擅自推广到建筑。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
-| V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
+| V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
 | V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
 | V07 / P1 / 己方辐射束救船已验，其余仍开放 | AY RadBeamWarhead的Sonic=yes已走既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 真实乌贼缠玩家DEST→己方DESO开火→双方存活释放/动画对象回收→船实际移动通过；辐射场/部署武器、再次捕获、自动选敌和存档仍待验 |
 | V08 / P1 / 玩家BFRT与TTNK充能对照已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑BFRT/载员/存读等未覆盖，不把线圈充能当V01中心供电 |
@@ -640,6 +635,10 @@ V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开�
 SMIN实际非simple、DeploysInto=YAREFN，实际转换消费YAREFN的建筑+EDC朝向，已有owner覆盖；见C06。
 `TrueConversion`是另外的部署变型开关，不能凭SCHP的`DeployFire`认成它。缺少独立扩展实现不等于当前场景必需缺失；
 其他模式/地图或未来重新启用仍须重审。两类扩展尚未移植，不以默认未启用声称全引擎支持。
+原生读取/默认：Techno DeployFacing71385F..713873 current-default ReadInt截byte，710F93 seedFF；
+TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false。
+消费：739B0E→C2DE77/C2DF74等待停止/转向，739B6A/739B98→7E0D3C/6B仅在TrueConversion与UnloadingClass俱有时变型。
+实际层前置测试复用RetailRulesSources和NativeRulesProcessOwner，不以根文件grep取代层次验证。
 
 ## 5. AI 专项清单：优先于纯画面项目
 

@@ -2481,6 +2481,90 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY garrison shot awards previous-index XP"]
+    fn aymod_garrison_first_kill_awards_the_firing_occupant() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scenario, building, target) = aymod_nearby_pair("CAHSE01", "E2", false);
+        let riders = {
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let object = rules.object("CAHSE01").unwrap();
+            assert!(object.can_be_occupied && !object.trainable);
+            assert!(rules.object("E1").unwrap().occupy_weapon.is_some());
+            let owner = sim.entities().get(building).unwrap().owner();
+            let at = sim.entities().get(building).unwrap().position;
+            let riders = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["E1"; 2],
+            );
+            for &rider in &riders {
+                assert!(crate::sim::passenger::add_garrison_occupant(
+                    sim,
+                    rules,
+                    rider,
+                    building,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default()
+                ));
+                assert_eq!(sim.entities().get(rider).unwrap().veterancy.raw().bits(), 0);
+            }
+            // A wounded target isolates the first actual shot, without changing
+            // authored types/weapons or supplying a kill/experience callback.
+            sim.substrate
+                .entities
+                .get_mut(target)
+                .unwrap()
+                .health
+                .set_for_test(1);
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: target,
+                },
+            ));
+            riders
+        };
+        let occupants = scenario
+            .sim()
+            .entities()
+            .get(building)
+            .unwrap()
+            .passenger_role
+            .occupants();
+        let shooter = occupants.ids()[occupants.fire_index() as usize];
+        let next = *riders.iter().find(|&&id| id != shooter).unwrap();
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scenario);
+            if scenario
+                .sim()
+                .entities()
+                .get(target)
+                .is_none_or(|e| e.health.current() <= 0)
+            {
+                break;
+            }
+        }
+        let sim = scenario.sim();
+        assert!(
+            sim.entities()
+                .get(target)
+                .is_none_or(|e| e.health.current() <= 0)
+        );
+        assert!(sim.entities().get(shooter).unwrap().veterancy.raw().bits() > 0);
+        assert_eq!(sim.entities().get(next).unwrap().veterancy.raw().bits(), 0);
+        assert_eq!(
+            sim.entities().get(building).unwrap().veterancy.raw().bits(),
+            0
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY sniper and MiG garrison penetration"]
     fn aymod_sniper_respects_bunker_protection_and_boris_sortie_clears_it() {
         use crate::sim::command::{Command, CommandEnvelope};

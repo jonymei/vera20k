@@ -32,9 +32,11 @@ mod npatch_rewards_tests;
 ///    the key, so every garrison kill lands here: its occupants promote, the
 ///    building never does. FireAt has already advanced the index past the
 ///    shooter (`0x006FF031..0x006FF085`) when its bullet kills, so with
-///    several occupants the NEXT one in line is paid.
-///    RESIDUAL: native reads that slot unchecked; VERA pays nobody when the
-///    index is past the occupant count ([`combat_weapon::firing_occupant_id`]).
+///    several occupants stock pays the NEXT one. NPAE702FBB..702FCB instead
+///    decrements the live index and adds the live count if negative. This is
+///    kill-time selection, not retained attribution to the original shot.
+///    RESIDUAL: native reads the selected slot unchecked; VERA pays nobody
+///    when that slot is invalid for the current occupant list.
 ///    Trigger: occupants leaving, but not all of them, between the shot and
 ///    the kill. Effect: native reads a stale slot. Frequency: rare.
 /// 5. else nobody.
@@ -104,8 +106,29 @@ fn award_kill_experience(
         // Branch 3: a spawned missile pays its launcher.
         killer.spawn_owner_id.owner().and_then(trainable_cost)
     } else {
-        // Branch 4: an occupied building pays the occupant at its fire index.
-        combat_weapon::firing_occupant_id(killer, killer_type).and_then(|occupant| {
+        // NPAE RecordKill702FB5..702FD1: select the previous live index,
+        // wrapping once when negative. GetWeapon/ROF still use the current
+        // index; do not change their shared firing_occupant_id owner.
+        let occupant = if crate::rules::NPATCH_ENABLED {
+            combat_weapon::is_occupied(killer, killer_type)
+                .then(|| {
+                    let occupants = killer.passenger_role.occupants();
+                    let previous = occupants.fire_index().wrapping_sub(1);
+                    let previous = if previous < 0 {
+                        previous.wrapping_add(occupants.ids().len() as i32)
+                    } else {
+                        previous
+                    };
+                    usize::try_from(previous)
+                        .ok()
+                        .and_then(|index| occupants.ids().get(index))
+                        .copied()
+                })
+                .flatten()
+        } else {
+            combat_weapon::firing_occupant_id(killer, killer_type)
+        };
+        occupant.and_then(|occupant| {
             let occupant_type = interner.object_type(entities.get(occupant)?.type_ref(), rules)?;
             Some((occupant, cost_of(occupant_type)))
         })
