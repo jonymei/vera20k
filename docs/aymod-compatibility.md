@@ -260,6 +260,32 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
+### 当前检查点：1v1持续进攻已观察，继续区分集结与行军（2026-10-26）
+
+- 本批无玩法/MOD/AI权重改动。正式Return Dubai/Battle，美国被动人类对苏联困难，默认选项、
+  seed=0x00C0FFEE，分别观察9000与18000次调用；两报告到tick9000的House/工厂/编队/开火计数前缀完全相同。
+  该启动出生点为Player(102,180)、Computer1(118,40)，不是原玩家存档的出生位置或玩家操作重放。
+- 电脑资金410000→448508，tick9000时跟踪建筑计数15；不能将全部实体/已付款limbo产品当作已在地图上的建筑。
+  Team3（12名E2/SHK/FLAKT）在4500/6000/7500采样为53，9000已进入action0攻击玩家MTNK2201，
+  成员在(108..110,155..157)，持实际Attack与导航，不能把此前四千余帧的集结/行军认定为永久停滞。
+  Team0脚本05C77DBC-G是来回基地建筑/等待的防御巡逻，不用其未向玩家推进证明出击损坏。
+- 到tick10500，电脑有18次开火（17次移动单位对可解析非盟友、16次formed成员）；
+  tick11518人类战败，工具以outcome_ready终止，累计211/205/202次。Team21由53推进到脚本
+  0CA1FDBC-G的cursor2/action3。由此证明本1v1能成队、移动并持续接敌，不证明原局弱攻势全部解决，
+  也不替代多AI长局、主动玩家抗压和失厂/矿枯恢复验收。
+- 新的V01/A06关联现象：9000帧House powered_unit_centers=0、没有在场NARADR；
+  Team21两辆和Team65四辆DRON为deactivated=true，仍有Move/NavCom及远离基地的位置。
+  10500时中心计数为1，末次已有NARADR4392。不能靠提前建雷达或改兵种/权重掩盖原生失联Drive可移动；
+  独立供电/禁移动的作者预期与原补丁行为冲突仍需既定政策批准，不能静默裁决。
+- 独立只读复核实际NPAE action53的6EF943..6EF98A、54的6EFBEE..6EFC3A：
+  FNPC15参数与现有共享team_assign_gather_cell一致，zone=-1、MovementZone=Normal、3x3、
+  allowBridge=1，其余限制为0；原seed先复制再清零，最终targetCell指针确为(0,0)，不是seed。
+  现有None/按帧候选选择不能改为“最近seed”。只排除调用参数错配，地形来源/FNPC最终点仍待闭环。
+- 独立V10原生调查发现明确后续缺口：实际68C077..7E移除“lab数不能超过choices”门禁；
+  68C0F1→C2E5E8把候选标记置0，68C11B..149每次按完整total抽样并调用C2E5FC，
+  从所抽位置环扫未用项；用尽后清零标记并返回本次起点。当前secret_lab.rs仍为stock缩短范围算法，
+  npatch尚无分支。不能简单替换为均匀洗牌；应沿现有owner补此算法与RNG/超过候选数边界回归。
+  此处为后续机制调查，不把原生指令读取说成已适配或已运行验证。
 ### 当前检查点：多AI诊断与结局边界（2026-10-26）
 
 - 本批只完善既有telemetry-serve诊断与文档，未修改MOD配置、AI权重、兵种数值或玩法。
@@ -567,7 +593,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | --- | --- | --- |
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 | 医疗建筑：GAROBO、NARADR 的 `Hospital`。已有 `src/sim/docking/hospital.rs:18` 的进驻/治疗/退出owner及radio/app准入；不是Hospital未实现 | 受伤步兵 Enter、排队/满员、治疗、离开、失电/毁楼、换主；与驻军 F04 区分 |
-| V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM建筑四项BurstDelay物理值均9，但是否为#174建筑扩展或无效配置待核。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
+| V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM四项值9在实际Building开火链不消费，见C05，不擅自推广到建筑。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
 | V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
@@ -577,10 +603,10 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 
 作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、
 铁幕目标的自动攻击准入、船厂维修伤害归属、红血碉堡进驻、Alt 飞机误入维修厂/船厂、
-秘密实验室单位选择概率、火箭飞行兵坠落目标层。特别是 `src/sim/secret_lab.rs:78`
-明确保留stock的缩短范围位置回原数组抽签缺陷，值得优先对照作者的概率修复；
-没有证据时不能直接重写RNG算法。这些项目有对应 retail owner，
-本轮未逐条追 #174 补丁和实际运行，因此既不算已兼容，也不统一判缺失。
+秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已确认实际#174修改：
+68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零；
+`src/sim/secret_lab.rs`仍为stock缩短范围算法，该项明确缺失，后续沿现有owner适配。
+其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 
 ## 5. AI 专项清单：优先于纯画面项目
@@ -616,6 +642,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C03 / P2 | 短行 AITrigger `0C8C51BC-G` / `FFFFFF12-G` 的对象类型字段为空；顺序token读取跳过空字段，移读后multiplayer=false，当前遭遇战不具资格（FixedAimd的enabled仍为true） | 两条原配置战术尚未恢复，但不是enabled=false或新的加载回归；reader `src/rules/team_ai_ini.rs:625`、空项读取`src/rules/ini_value.rs:804`、拒绝入口`src/sim/ai_team_creation.rs:393`。先核作者意图与原生读取，不加占位值擅自启用 |
 | C04 / P3 | Sapper/SapperE物理配置含AntiNaval=yes、AntiUnderwater=yes；实际已检查NPAE174 Weapon reader不读取两键 | 已逐分支追772080..7729E2，以及772901→B937F8/B96950/B96AC8→772907和7729AA→B94D06..B94EB1→7729B0，固定key读入无这两项或外部reader调用；字节/根DLL字面值检查只是补充证据，不单凭搜不到作结论。谭雅对舰由现有NavalTargeting4解释且已实测，不添加无原生定义的默认值/字段。换目标补丁/有运行时注入证据时重审；不宣称排除了任意外部注入 |
 
+| C05 / P3 | NASAM的BurstDelay0..3=9不参与实际#174建筑开火ROF，不是遗漏建筑扩展 | Building构造43B71F的vtable7E3EBC，+2C=459EC0返回类号6；Mission_Attack44B6C4..D0经+3CC=6FDD50进入FireAt，6FF274..289经+318=6FCFA0进入GetROF。6FD03E取得类号后只保留Unit1，Building6成为null，6FD067..69跳过delay数组。Unit reader747B03..47才读取四个单数键。另有复数字符串BurstDelays不建立活跃消费者或别名，不能凭字面值扩展NASAM射速 |
 ## 6. 已交付机制和有意政策：不重复“修复”
 
 以下是交接分支已有实现，不再列为纯缺失。macOS 的已有覆盖不冒称 Windows 重跑。
