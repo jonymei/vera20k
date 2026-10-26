@@ -1837,8 +1837,8 @@ fn a_retail_bio_reactor_takes_infantry_only() {
 
 /// House+0xE0 holds only a buildable occupiable (`TechLevel=` above -1); of
 /// two the nearest takes the infantryman, which leaves on Capture toward it
-/// with the latch set. A vehicle (NULL to CanBeOccupiedBy), a full bunker
-/// and a red bunker are refused, which clears the latch.
+/// with the latch set. A vehicle and a full bunker are refused. Stock
+/// refuses the remaining red bunker; NPAE174 admits that same-House one.
 #[test]
 fn the_nearest_own_bunker_with_room_takes_an_occupier() {
     let rules = rules();
@@ -1868,7 +1868,7 @@ fn the_nearest_own_bunker_with_room_takes_an_occupier() {
     ));
     assert!(!entity(&sim, tank).building_entry.seeking());
 
-    // Full, then red: neither admits, and the latch clears.
+    // Full near bunker: only the farther, red bunker remains available.
     for id in 1000..1005 {
         sim.substrate
             .entities
@@ -1884,8 +1884,21 @@ fn the_nearest_own_bunker_with_room_takes_an_occupier() {
         .unwrap()
         .health
         .set_for_test(100);
-    assert!(!garrison_seek(&mut sim, &rules, infantry));
-    assert!(!entity(&sim, infantry).building_entry.seeking());
+    assert_eq!(
+        garrison_seek(&mut sim, &rules, infantry),
+        crate::rules::NPATCH_ENABLED
+    );
+    assert_eq!(
+        entity(&sim, infantry).building_entry.seeking(),
+        crate::rules::NPATCH_ENABLED
+    );
+    if crate::rules::NPATCH_ENABLED {
+        // CanBeOccupiedBy457D8D -> 7E0712 permits the same-House red alternative.
+        assert_eq!(
+            entity(&sim, infantry).navigation.nav_com(),
+            Some(NavTargetRef::Object { id: far })
+        );
+    }
 }
 
 /// Script action 63 (`0x006E9EC8`) through the team pass: the occupier a

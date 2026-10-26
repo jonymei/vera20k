@@ -3511,6 +3511,76 @@ mod retail_construction_tests {
         }
     }
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; player infantry enters a same-House red bunker"]
+    fn aymod_red_bunker_admits_infantry_and_keeps_the_garrison() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scene, bunker, infantry) = aymod_nearby_pair("NABNKR", "E1", true);
+        let runtime = &mut scene.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let object = rules.object("NABNKR").unwrap();
+        assert!(object.can_be_occupied && sim.object_tech_level(object) >= 0);
+        assert!(rules.general.condition_red > 0.1);
+        sim.substrate
+            .entities
+            .get_mut(bunker)
+            .unwrap()
+            .health
+            .set_for_test((object.strength / 10).max(1));
+        assert!(crate::sim::passenger::can_enter_transport(
+            sim, rules, infantry, bunker
+        ));
+        let owner = sim.entities().get(infantry).unwrap().owner();
+        assert_eq!(sim.entities().get(bunker).unwrap().owner(), owner);
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::CaptureBuilding {
+                engineer_id: infantry,
+                target_building_id: bunker,
+            },
+        ));
+        let entered = (0..360).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(bunker)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .ids()
+                .contains(&infantry)
+        });
+        assert!(
+            entered,
+            "actual Capture order must reach garrison admission"
+        );
+        for _ in 0..60 {
+            tick_with_due_commands(&mut scene);
+        }
+        let sim = scene.sim();
+        assert!(
+            sim.entities()
+                .get(bunker)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .ids()
+                .contains(&infantry)
+        );
+        assert_eq!(
+            sim.entities()
+                .get(infantry)
+                .unwrap()
+                .passenger_role
+                .inside_transport_id(),
+            Some(bunker)
+        );
+        assert!(sim.entities().get(bunker).unwrap().health.current() > 0);
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
         target_type: &str,
