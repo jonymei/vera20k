@@ -2721,14 +2721,9 @@ mod retail_construction_tests {
             let ship = sim
                 .spawn_object("DEST", &enemy_name, water.0, water.1, 0, rules)
                 .unwrap();
-            sim.queue_command(CommandEnvelope::new(
-                owner,
-                sim.session.tick() + 1,
-                Command::Attack {
-                    attacker_id: squid,
-                    target_id: ship,
-                },
-            ));
+            // Execute_DoList64C4FB excludes an ordinary AI House. Let its
+            // actual Guard scan acquire the player ship; do not queue fake input.
+            assert!(!sim.houses.get(&owner).unwrap().event_dispatch_eligible());
             (squid, ship, land)
         };
         let mut grabbed = false;

@@ -260,12 +260,12 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：V07实际辐射束救船链通过（2026-10-26）
+### 当前检查点：V07自主缠船已验，电脑输入探针误报已排除（2026-10-26）
 
-- 任务树/分支不变，本批基于`b585ae348`；只增加实际MOD场景测试并纠正一个过时注释，
+- 任务树/分支不变，本批基于`be390424d`；收敛既有实际MOD场景测试并纠正诊断结论，
   未改玩法、MOD配置、AI权重或被拒绝的F11跨模块接线。无运行中Cargo、PR/推送或新玩家版。
 - 正式加载实际AYMOD、Return Dubai、Battle/1v1困难，选择合法空水面与邻近Clear岸地；
-  正常出生电脑SQD、玩家DEST，以普通Attack和逐帧实际SquidGrab建立存活寄生及grapple动画，
+  正常出生电脑SQD、玩家DEST，由电脑真实Guard选敌/开火和逐帧实际SquidGrab建立存活寄生及grapple动画，
   再由岸上的己方DESO普通Attack触发真实RadBeamWeapon，而非直接调用伤害/Detach或杀死乌贼。
 - typed RadBeamWarhead同时Radiation/Sonic=true；实际NPAE FootReceiveDamage4D7345..4D7364
   的Sonic前缀在普通Techno伤害/免疫之前调用Parasite ExitUnit62A4A0。当前生产前缀已接；
@@ -277,12 +277,19 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 纠正parasite.rs旧残余：当前app/input/context_order.rs已通过选中武器warhead.sonic与
   FootParasite::is_infested允许己方被寄生Foot的攻击入口；本轮普通友军Attack已通过，
   但未做Windows鼠标/光标或GPU画面验收，不称GUI通过。
-- 调试中首个电脑host探针的Move目标被释放乌贼占用，确为夹具错误；换成空闲且经Foot4D3810
-  门禁可达的格后，该电脑host/敌方DESO持续交战版本仍60帧无位移（AreaGuard、NavCom空）。
-  最终通过版本是玩家host/己方DESO，敌友和控制方均不同，不能把整个差异只归因于占格、AI或寄生。
-  该残留转A04继续：实际同seed/map初始场景中SQD=Americans、DEST=Russians(Computer1)、
-  DESO=Americans，先缠绕再敌对束击并给DEST Move；本机日志v07-radiation-probe.log在忽略target目录。
-  尚无受击/剥离前后同控制方对照，不能定为新引擎bug，也不抹掉这个AI风险。
+- 上轮电脑host探针仍无位移的根因已查明：它把玩家Move输入排入普通Computer1的DoList，
+  但实际NPAE Execute_DoList64C4FB..64C50D仅派发IsHuman或PlayerControl House；
+  生产WorldCommandHost::house_is_eligible→HouseState::event_dispatch_eligible保持此门禁。
+  原Move根本未执行，不能据此断言AI覆盖命令、麻痹未清或海军运动卡死；该探针移出A04故障候选。
+  最初一处目的格被释放乌贼占用亦是夹具问题，但不能用占格独自解释后续空格版本。
+- 同一门禁意味着原测试排给电脑SQD的Attack也未执行；已移除无效输入并断言正式载入的电脑
+  House确实不具玩家事件资格。最终实际AY测试重新通过，证明这一个邻近敌舰场景中SQD能自行选敌、
+  使用真实SquidGrab缠船，再由己方DESO救出玩家DEST；不是手动把电脑伪装成玩家来凑通过。
+  既有synchronized_tail_admits_human_or_player_controlled_houses_only定向回归亦通过，
+  覆盖Human/Computer/PlayerControl/未注册House；不放宽队列门禁。
+- 真正电脑编队的任务命令直接经现有Team/mission/destination owners，并非上述玩家输入队列。
+  AI控制下的恢复仍需走真实Team/Hunt或明确的组件payload边界验证；本次不声称全部海军/AI恢复正常。
+  先前本机诊断日志保留在忽略target目录，不将无效探针结果提交为原生golden或已知引擎缺陷。
 - V07尚未关闭辐射场/部署普通精英武器、乌贼自主选敌、释放后再次捕获、保存/换主和多AI等边界。
   F11接线批准和V01作者设计/原生政策问题仍开放；下一安全动作按PLAN继续独立调查/测试，
   不把自动goal续接当作跨模块批准，不缩小整个AYMOD可玩的目标。
