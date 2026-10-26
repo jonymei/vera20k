@@ -2661,6 +2661,205 @@ mod retail_construction_tests {
         }));
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY radiation releases a live grappling squid"]
+    fn aymod_radiation_beam_releases_a_live_squid_from_its_ship() {
+        use crate::rules::terrain_rules::LandType;
+        use crate::sim::command::{Command, CommandEnvelope};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+        );
+        let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let (squid, ship, land) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let terrain = sim.resolved_terrain().unwrap();
+            let free = |cell: &crate::map::resolved_terrain::ResolvedTerrainCell| {
+                !cell.outside_playfield
+                    && !cell.bridge_facts.has_structural_bridge()
+                    && sim.occupancy().get(cell.rx, cell.ry).is_none()
+            };
+            let (water, other, land) = terrain
+                .cells()
+                .iter()
+                .find_map(|cell| {
+                    let other = terrain.cell(cell.rx.checked_add(1)?, cell.ry)?;
+                    if ![cell, other].into_iter().all(|c| {
+                        free(c)
+                            && c.land_type == LandType::Water.as_index()
+                            && c.level == cell.level
+                    }) {
+                        return None;
+                    }
+                    let land = (-3i16..=3)
+                        .flat_map(|dx| (-3i16..=3).map(move |dy| (dx, dy)))
+                        .find_map(|(dx, dy)| {
+                            let land = terrain.cell(
+                                cell.rx.checked_add_signed(dx)?,
+                                cell.ry.checked_add_signed(dy)?,
+                            )?;
+                            (free(land)
+                                && land.land_type == LandType::Clear.as_index()
+                                && land.level == cell.level)
+                                .then_some((land.rx, land.ry))
+                        })?;
+                    Some(((cell.rx, cell.ry), (other.rx, other.ry), land))
+                })
+                .expect("a legal clear shore beside two free water cells");
+            // Player-owned host, hostile squid; the later friendly DESO can rescue it.
+            let owner = house_of(sim, "Russians");
+            let enemy = house_of(sim, "Americans");
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            let squid = sim
+                .spawn_object("SQD", &owner_name, other.0, other.1, 0, rules)
+                .unwrap();
+            let ship = sim
+                .spawn_object("DEST", &enemy_name, water.0, water.1, 0, rules)
+                .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: squid,
+                    target_id: ship,
+                },
+            ));
+            (squid, ship, land)
+        };
+        let mut grabbed = false;
+        let held_anim = (0..240)
+            .find_map(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output.fire_events.iter().filter(|e| e.attacker_id == squid) {
+                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), "SquidGrab");
+                    grabbed = true;
+                }
+                let sim = scene.sim();
+                let state = sim.entities().get(squid)?.parasite.class()?;
+                (state.victim() == Some(ship))
+                    .then(|| state.grapple_anim())
+                    .flatten()
+            })
+            .expect("actual SquidGrab must attach and create a live grapple animation");
+        assert!(grabbed);
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            Some(squid)
+        );
+        let beam = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let wh = rules.warhead("RadBeamWarhead").unwrap();
+            assert!(
+                wh.radiation && wh.sonic,
+                "AY uses the stock Sonic ejection prefix"
+            );
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let actor = sim
+                .spawn_object("DESO", &owner_name, land.0, land.1, 0, rules)
+                .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: ship,
+                },
+            ));
+            actor
+        };
+        let mut fired = false;
+        let released = (0..240).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            for event in output.fire_events.iter().filter(|e| e.attacker_id == beam) {
+                assert_eq!(
+                    scene.sim().interner.resolve(event.weapon_id),
+                    "RadBeamWeapon"
+                );
+                fired = true;
+            }
+            scene
+                .sim()
+                .entities()
+                .get(ship)
+                .is_some_and(|e| e.parasite.eater().is_none())
+        });
+        assert!(
+            fired && released,
+            "ordinary radiation Attack must release, not merely damage"
+        );
+        let sim = scene.sim();
+        let source = sim
+            .entities()
+            .get(squid)
+            .expect("ejection must not substitute squid death");
+        assert!(source.health.current() > 0 && !source.lifecycle.in_limbo());
+        assert_eq!(source.parasite.class().unwrap().victim(), None);
+        assert_eq!(source.parasite.class().unwrap().grapple_anim(), None);
+        let host = sim.entities().get(ship).unwrap();
+        assert!(
+            host.health.current() > 0 && !host.parasite.is_paralyzed(sim.session.binary_frame())
+        );
+        // ExitUnit may place the squid on its old square. Do not order the
+        // host onto that occupied square and mistake refusal for paralysis.
+        let ship_goal =
+            cells_nearest((i32::from(host.position.rx()), i32::from(host.position.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let cell = sim.resolved_terrain().unwrap().cell(x, y)?;
+                    if cell.outside_playfield
+                        || cell.bridge_facts.has_structural_bridge()
+                        || cell.land_type != LandType::Water.as_index()
+                        || sim.occupancy().get(x, y).is_some_and(|c| {
+                            !c.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        })
+                    {
+                        return None;
+                    }
+                    sim.foot_path_zone_precheck(
+                        ship,
+                        crate::sim::components::DriveCoord::cell(x, y, 0),
+                        &scene.runtime.resources.rules,
+                    )
+                    .unwrap()
+                    .then_some((x, y))
+                })
+                .expect("an empty reachable water cell for the released ship");
+        let before = crate::sim::movement::ground_pose::position_world_xy(&host.position);
+        let owner = host.owner();
+        let order_tick = sim.session.tick() + 1;
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            order_tick,
+            Command::Move {
+                entity_id: ship,
+                target_rx: ship_goal.0,
+                target_ry: ship_goal.1,
+            },
+        ));
+        for _ in 0..60 {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            assert!(
+                sim.anim(held_anim).is_none(),
+                "old grapple animation must be collected"
+            );
+            if sim.entities().get(ship).is_some_and(|e| {
+                crate::sim::movement::ground_pose::position_world_xy(&e.position) != before
+            }) {
+                return;
+            }
+        }
+        panic!("released player ship never resumed ordinary movement toward {ship_goal:?}");
+    }
+
     /// AY's elite initial fire rates are authored in EliteWeapon1, not an
     /// NPatch stage jump. Keep the native6F3436 stage-pair selection intact.
     #[cfg(feature = "npatch")]

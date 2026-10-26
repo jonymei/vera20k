@@ -260,7 +260,34 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：V06精英盖特首发由现有配置实现（2026-10-26）
+### 当前检查点：V07实际辐射束救船链通过（2026-10-26）
+
+- 任务树/分支不变，本批基于`b585ae348`；只增加实际MOD场景测试并纠正一个过时注释，
+  未改玩法、MOD配置、AI权重或被拒绝的F11跨模块接线。无运行中Cargo、PR/推送或新玩家版。
+- 正式加载实际AYMOD、Return Dubai、Battle/1v1困难，选择合法空水面与邻近Clear岸地；
+  正常出生电脑SQD、玩家DEST，以普通Attack和逐帧实际SquidGrab建立存活寄生及grapple动画，
+  再由岸上的己方DESO普通Attack触发真实RadBeamWeapon，而非直接调用伤害/Detach或杀死乌贼。
+- typed RadBeamWarhead同时Radiation/Sonic=true；实际NPAE FootReceiveDamage4D7345..4D7364
+  的Sonic前缀在普通Techno伤害/免疫之前调用Parasite ExitUnit62A4A0。当前生产前缀已接；
+  因此此功能由原生Sonic语义和MOD弹头配置构成，不是缺一个Radiation专用NP状态。
+- 新增aymod_radiation_beam_releases_a_live_squid_from_its_ship最终候选显式实际资源1项通过：
+  捕获两种真实开火事件，SQD/DEST均存活，源脱离limbo且双方寄生关联清空，grapple引用清空，
+  旧动画对象在后续普通帧回收，host麻痹结束并对空闲可达水面Move产生真实XY位移。
+  位置判断不使用船体摇摆/渲染偏移代替移动，不用死亡回调冒充剥离。
+- 纠正parasite.rs旧残余：当前app/input/context_order.rs已通过选中武器warhead.sonic与
+  FootParasite::is_infested允许己方被寄生Foot的攻击入口；本轮普通友军Attack已通过，
+  但未做Windows鼠标/光标或GPU画面验收，不称GUI通过。
+- 调试中首个电脑host探针的Move目标被释放乌贼占用，确为夹具错误；换成空闲且经Foot4D3810
+  门禁可达的格后，该电脑host/敌方DESO持续交战版本仍60帧无位移（AreaGuard、NavCom空）。
+  最终通过版本是玩家host/己方DESO，敌友和控制方均不同，不能把整个差异只归因于占格、AI或寄生。
+  该残留转A04继续：实际同seed/map初始场景中SQD=Americans、DEST=Russians(Computer1)、
+  DESO=Americans，先缠绕再敌对束击并给DEST Move；本机日志v07-radiation-probe.log在忽略target目录。
+  尚无受击/剥离前后同控制方对照，不能定为新引擎bug，也不抹掉这个AI风险。
+- V07尚未关闭辐射场/部署普通精英武器、乌贼自主选敌、释放后再次捕获、保存/换主和多AI等边界。
+  F11接线批准和V01作者设计/原生政策问题仍开放；下一安全动作按PLAN继续独立调查/测试，
+  不把自动goal续接当作跨模块批准，不缩小整个AYMOD可玩的目标。
+
+### 已有覆盖：V06精英盖特首发由现有配置实现（2026-10-26）
 
 - 任务树/分支不变，本批基于`e85e073df`；仅新增真实MOD headless测试和台账，无游戏逻辑、
   MOD数值或跨模块光照接线改动。无运行中Cargo/PR/推送；已有玩家构建保留，不需要换版本。
@@ -489,7 +516,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
 | V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
-| V07 / P1 | 作者170601：辐射剥离缠船乌贼、乌贼自动选敌修复；已有 parasite 和 combat 关系 | 船被寄生后受辐射、释放/死亡/再捕获、双方归属和目标扫描；不要只用普通伤害击杀乌贼冒充剥离 |
+| V07 / P1 / 己方辐射束救船已验，其余仍开放 | AY RadBeamWarhead的Sonic=yes已走既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 真实乌贼缠玩家DEST→己方DESO开火→双方存活释放/动画对象回收→船实际移动通过；辐射场/部署武器、再次捕获、自动选敌和存档仍待验 |
 | V08 / P1 | 作者170601：BFRT不自动冲敌坦克碾压、TTNK不再给磁暴塔充电 | 核当前 `AutoCrush`/充电资格及生产消费者；分别观察自动 Guard 和显式 Attack，不能从作者旧版说明推定当前行为 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 

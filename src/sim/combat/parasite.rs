@@ -67,9 +67,9 @@
 //!   Miner's warp: 180 frames). Effect: such a released owner can be given a
 //!   new destination at once. Frequency: rare. Risk: movement timing only.
 //!   Owner: those locomotors' ports.
-//! - Sonic weapons may target an allied infected Foot (What_Action_OnObject
-//!   `0x00700377`); the Sonic hit already ejects any eater (`0x004D7345`), but
-//!   the order needs the cursor/command legality VERA does not port yet.
+//! Sonic friendly-target admission (What_Action_OnObject700377) now lives in
+//! app/input/context_order.rs and queries FootParasite::is_infested. The
+//! ordinary hit uses this module's existing4D7345 release prefix.
 
 use crate::map::entities::EntityCategory;
 use crate::map::resolved_terrain::NativeCellQuery;
