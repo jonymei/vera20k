@@ -260,7 +260,26 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：F11光照规则前置已接，完整效果未完成（2026-10-26）
+### 当前检查点：F11来源状态已验证，跨模块接线未执行（2026-10-26）
+
+- 当前任务树/分支不变，本批基于`359b83b58`。仅ScenarioLightingState新增private三来源owner，
+  对应BA91E0/E4/EC，保留SWType ID与同一不可变Rules配置快照；新局None，效果结束不清来源。
+  map normal/ion/dominator未改写；NP profile/rate/RGB/top-Level查询和保存/hash已由这一个owner承担。
+- NP来源存在时RGB按53C3A4 wrapping*1000再signed/100；NP full relight Level跳过stock Domi的NukeLevel。
+  Lighting=false不抹掉profile/rate；未绑定来源仍走既有map路径，这是direct-native夹具和未证明null域
+  的安全fallback，不宣称原生会安全处理空SW指针。当前尚无生产发射调用新来源setter。
+- 验证：新owner两项NP生产reader→state/save/hash通过；既有lighting默认/计时/hash两项NP和无NP均通过。
+  新增临时`npatch_dominator_launch_remembers_type_even_when_not_charged`走真实未充能launch，
+  在“Start准入前应记住类型”断言上按预期失败，证明尚缺6CCDB1生产接线，不是只缺GPU测试。
+  测试补丁保存在忽略的`D:/Workshop/vera20k/target/aymod-save-analysis/f11-before-admission-regression.patch`；
+  临时红测已移出正常源码，原文件git diff为空；后续实现前先恢复该回归，不能把它算作通过。
+- 批量跨发射/事件/呈现模块的修改请求被安全审批拒绝，命令未执行；不得拆命令或改由agent绕过。
+  本轮仅完成更窄的单文件状态验证与失败前回归。下一步影响超武发射、全局光照和绘制消费者，
+  需知情用户明确批准该跨模块变更后再实施；仍需三条优先级/disabled回落、status5/rate/保存恢复、
+  实际AY逐帧事件/GPU与完整链critic。没有新玩家构建/PR/推送，无运行中Cargo，F11和整体目标保持开放。
+- 海军地形来源/FNPC、无人单位供电设计政策和其余PLAN项照旧保留；不因本次前置或授权门禁缩小目标。
+
+### 已完成前置：F11光照规则读取，完整效果未完成（2026-10-26）
 
 - 工作树`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`，本批基于`62e3cd133`；
   无PR/推送，无运行中Cargo。整体PLAN不变，海军地形类别/FNPC、V01供电政策与其余F/V/A项仍开放。
