@@ -260,7 +260,27 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：F11来源状态已验证，跨模块接线未执行（2026-10-26）
+### 当前检查点：V06精英盖特首发由现有配置实现（2026-10-26）
+
+- 任务树/分支不变，本批基于`e85e073df`；仅新增真实MOD headless测试和台账，无游戏逻辑、
+  MOD数值或跨模块光照接线改动。无运行中Cargo/PR/推送；已有玩家构建保留，不需要换版本。
+  F11跨模块接线仍等待知情用户批准，不能将自动goal续接当作这项明确批准或交给agent绕过。
+- 重读作者更新日志170601（Windows ANSI解码）：写的是精英机炮“最高射速”、坦克“中级射速”，
+  不是把Techno+140初始化为高档。根配置YTNK EliteWeapon1=AGGattlingE、
+  YAGGUN EliteWeapon1=AGGattCannE；两者仍有普通Stage/EliteStage阈值。
+- 实读实际NPAE What_Weapon_Should_I_Use6F3428..6F3474：Gattling按当前+140 stage选择2*s/2*s+1；
+  该已达分支没有额外精英跳stage，精英武器替换由既有GetWeapon/rank owner完成。
+  不从作者短句推定另缺NP状态或修改平衡值。
+- 新增aymod_elite_gattling_first_shots_use_authored_faster_weapons，正式加载实际AY规则/模式/地图，
+  分别正常出生YTNK/YAGGUN与APOC，以真实GAPOWR和House电力更新支持机炮；
+  fixture边界仅将射手rank设elite。通过普通Attack命令和逐帧fire_events捕获首次实际发射，
+  武器分别为AGGattlingE/AGGattCannE，首发后stage仍0；typed ROF分别等于普通中/高档武器，
+  且快于各自普通第一槽。NP显式实际资源测试1项通过（覆盖两条单位/建筑链）。
+- 这证明精英首发射速不是当前纯缺失；不认证自然击杀晋升回调、完整射击间隔/所有ROF倍率、
+  对空槽、Stop/Guard退档、保存换主或GPU画面。V06保留这些边界，下一功能核查按PLAN继续，
+  不因一个已有功能通过而缩小“完整AYMOD可玩”的目标。
+
+### 已完成前置：F11来源状态已验证，跨模块接线未执行（2026-10-26）
 
 - 当前任务树/分支不变，本批基于`359b83b58`。仅ScenarioLightingState新增private三来源owner，
   对应BA91E0/E4/EC，保留SWType ID与同一不可变Rules配置快照；新局None，效果结束不清来源。
@@ -468,7 +488,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM建筑四项BurstDelay物理值均9，但是否为#174建筑扩展或无效配置待核。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
-| V06 / P1 | 作者170601：精英盖特炮从高档/盖特坦克从中档开始；已有 gattling owner | YAGGUN/YTNK 实际晋升、初始档位、停火退档、换主/存档；用当前配置与补丁消费者定语义 |
+| V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
 | V07 / P1 | 作者170601：辐射剥离缠船乌贼、乌贼自动选敌修复；已有 parasite 和 combat 关系 | 船被寄生后受辐射、释放/死亡/再捕获、双方归属和目标扫描；不要只用普通伤害击杀乌贼冒充剥离 |
 | V08 / P1 | 作者170601：BFRT不自动冲敌坦克碾压、TTNK不再给磁暴塔充电 | 核当前 `AutoCrush`/充电资格及生产消费者；分别观察自动 Guard 和显式 Attack，不能从作者旧版说明推定当前行为 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |

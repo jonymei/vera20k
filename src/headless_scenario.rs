@@ -2661,6 +2661,69 @@ mod retail_construction_tests {
         }));
     }
 
+    /// AY's elite initial fire rates are authored in EliteWeapon1, not an
+    /// NPatch stage jump. Keep the native6F3436 stage-pair selection intact.
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY elite Gattling first-shot rates"]
+    fn aymod_elite_gattling_first_shots_use_authored_faster_weapons() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        for (actor_type, expected, reference) in [
+            ("YTNK", "AGGattlingE", "AGGattling2"),
+            ("YAGGUN", "AGGattCannE", "AGGattCann3"),
+        ] {
+            let (mut scenario, actor, target) = aymod_nearby_pair(actor_type, "APOC", false);
+            {
+                let runtime = &mut scenario.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let owner = sim.entities().get(actor).unwrap().owner();
+                // The actual powered cannon needs a real plant and House power pass.
+                let sites = cells_nearest(aymod_anchor(sim, owner));
+                spawn_on_free_cells(sim, rules, owner, sites, &["GAPOWR"]);
+                let kind = rules.object(actor_type).unwrap();
+                let first = rules.weapon(kind.weapon_at(0).unwrap()).unwrap();
+                let elite = rules.weapon(expected).unwrap();
+                assert_eq!(elite.rof, rules.weapon(reference).unwrap().rof);
+                assert!(
+                    elite.rof < first.rof,
+                    "authored elite rate exceeds the base first slot"
+                );
+                let entity = sim.substrate.entities.get_mut(actor).unwrap();
+                assert_eq!(entity.gattling.stage(), 0);
+                assert_eq!(entity.gattling.value(), 0);
+                // Rank is the explicit fixture boundary; kill-to-promotion is separate.
+                entity.veterancy.set_elite();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: actor,
+                        target_id: target,
+                    },
+                ));
+            }
+            let first = (0..240)
+                .find_map(|_| {
+                    tick_with_due_commands(&mut scenario)
+                        .fire_events
+                        .into_iter()
+                        .find(|event| event.attacker_id == actor)
+                })
+                .expect("actual elite Gattling Attack must produce its first shot");
+            assert_eq!(scenario.sim().interner.resolve(first.weapon_id), expected);
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .gattling
+                    .stage(),
+                0,
+                "faster first fire is an elite weapon definition, not stage promotion"
+            );
+        }
+    }
     #[cfg(feature = "npatch")]
     fn aymod_nearby_pair(
         actor_type: &str,
