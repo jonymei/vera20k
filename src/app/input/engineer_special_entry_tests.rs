@@ -7,19 +7,21 @@ use crate::sim::mission::MissionType;
 use crate::sim::world::Simulation;
 
 fn scene(hospital: bool) -> (Simulation, RuleSet, u64, HoverTargetKindWithId) {
-    scene_with_repair_step(hospital, 20)
+    scene_with_repair_step(hospital, 20, true)
 }
 
 fn scene_with_repair_step(
     hospital: bool,
     repair_step: i32,
+    engineer: bool,
 ) -> (Simulation, RuleSet, u64, HoverTargetKindWithId) {
     let ini = crate::sim::arena_fixture::clear_ground_ini(&format!(
         "[General]\nIRepairStep={repair_step}\nIRepairRate=.001\n\
          [Countries]\n0=Americans\n[InfantryTypes]\n0=ENGINEER\n[BuildingTypes]\n0=FACILITY\n\
-         [ENGINEER]\nImage=GI\nStrength=75\nEngineer=yes\nSpeed=4\nCost=500\nSoylent=500\n\
+         [ENGINEER]\nImage=GI\nStrength=75\nEngineer={}\nSpeed=4\nCost=500\nSoylent=500\n\
          Locomotor={{4A582744-9839-11D1-B709-00A024DDAFD1}}\n\
          [FACILITY]\nStrength=1000\nRepairable=yes\nHospital={}\nGrinding={}\n",
+        if engineer { "yes" } else { "no" },
         if hospital { "yes" } else { "no" },
         if hospital { "no" } else { "yes" },
     ));
@@ -129,6 +131,97 @@ fn ordinary_and_planned_grinder_clicks_consume_engineers_and_refund_once() {
             step(&mut sim, &rules);
         }
         assert_eq!(sim.houses()[&owner].economy().credits(), before + 500);
+    }
+}
+
+#[test]
+fn nonengineer_hospital_actions_produce_normal_and_planned_entry_orders() {
+    use crate::sim::world::EntryClickAction;
+    for planning in [false, true] {
+        let (mut sim, rules, actor, hover) = scene_with_repair_step(true, 20, false);
+        assert!(!rules.object("ENGINEER").unwrap().engineer);
+        assert_eq!(rules.object("FACILITY").unwrap().passengers, 0);
+        for modifier in [OrderModifier::Normal, OrderModifier::ForceMove] {
+            assert_eq!(
+                entry_action(&sim, &rules, actor, hover.stable_id, modifier, false, None),
+                Some(EntryClickAction::Enter)
+            );
+        }
+        assert_eq!(
+            entry_action(
+                &sim,
+                &rules,
+                actor,
+                hover.stable_id,
+                OrderModifier::ForceFire,
+                false,
+                None
+            ),
+            None
+        );
+        sim.entities_mut_for_test()
+            .get_mut(actor)
+            .unwrap()
+            .health
+            .set_for_test(75);
+        assert_eq!(
+            entry_action(
+                &sim,
+                &rules,
+                actor,
+                hover.stable_id,
+                OrderModifier::Normal,
+                false,
+                None
+            ),
+            Some(EntryClickAction::NoEnter)
+        );
+        sim.entities_mut_for_test()
+            .get_mut(actor)
+            .unwrap()
+            .health
+            .set_for_test(30);
+        let owner = sim.entities().get(actor).unwrap().owner();
+        let orders = entry_orders(
+            &sim,
+            &rules,
+            &[actor],
+            &mut vec![actor],
+            &hover,
+            OrderModifier::Normal,
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(orders.len(), 1);
+        let record = if planning {
+            sim.encode_planning_order_record(owner, &orders[0], None)
+        } else {
+            sim.encode_megamission_record(owner, &orders[0])
+        }
+        .unwrap();
+        let command = sim
+            .decode_native_command_record(&record, sim.session().tick())
+            .unwrap();
+        assert!(sim.apply_command("Americans", &command.payload, Some(&rules)));
+        if planning {
+            let record = sim.encode_plan_commit_record(owner).unwrap();
+            let command = sim
+                .decode_native_command_record(&record, sim.session().tick())
+                .unwrap();
+            assert!(sim.apply_command("Americans", &command.payload, Some(&rules)));
+        }
+        let (mut entered, mut released) = (false, false);
+        for _ in 0..1000 {
+            step(&mut sim, &rules);
+            let entity = sim.entities().get(actor).unwrap();
+            entered |= entity.in_limbo();
+            if entered && !entity.in_limbo() && entity.health.current() == 75 {
+                released = true;
+                break;
+            }
+        }
+        assert!(entered && released, "planning={planning}");
     }
 }
 
@@ -342,7 +435,7 @@ fn infantry_repair_tick_clamps_nonpositive_steps_to_one() {
 
     // Techno6F4D1C clamps the virtual InfantryType524790 getter result to1.
     for repair_step in [0, -3] {
-        let (mut sim, rules, actor, hover) = scene_with_repair_step(true, repair_step);
+        let (mut sim, rules, actor, hover) = scene_with_repair_step(true, repair_step, true);
         let owner = sim.entities().get(actor).unwrap().owner();
         let before = sim.houses()[&owner].economy().credits();
         assert_eq!(rules.general.infantry_repair_step, repair_step);

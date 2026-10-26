@@ -49,7 +49,13 @@ fn a_carrier_in_a_team_turns_infantry_away() {
     };
     let (mut sim, ifv, gi, tank) = scene(&rules);
     let action = |sim: &Simulation, actor| {
-        sim.entry_click_action(actor, ifv, EntryBaseAction::Select, &rules)
+        sim.entry_click_action(
+            actor,
+            ifv,
+            EntryBaseAction::Select,
+            &rules,
+            Default::default(),
+        )
     };
     assert_eq!(action(&sim, gi), Some(EntryClickAction::Enter));
     assert_eq!(action(&sim, tank), Some(EntryClickAction::NoEnter));
@@ -88,7 +94,7 @@ fn a_moving_carrier_turns_passengers_away() {
     }
     assert!(moving(&sim));
     assert_eq!(
-        sim.entry_click_action(gi, ifv, EntryBaseAction::Select, &rules),
+        sim.entry_click_action(gi, ifv, EntryBaseAction::Select, &rules, Default::default()),
         Some(EntryClickAction::NoEnter)
     );
     for _ in 0..300 {
@@ -98,7 +104,99 @@ fn a_moving_carrier_turns_passengers_away() {
         sim.advance_tick(&[], Some(&rules), None, None, 67);
     }
     assert_eq!(
-        sim.entry_click_action(gi, ifv, EntryBaseAction::Select, &rules),
+        sim.entry_click_action(gi, ifv, EntryBaseAction::Select, &rules, Default::default()),
         Some(EntryClickAction::Enter)
+    );
+}
+
+#[test]
+fn hospital_health_gate_precedes_deployed_infantry_move_refusal() {
+    let patch = crate::rules::ini_parser::IniFile::from_str("[GAPOWR]\nHospital=yes\n");
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules_for_map_with_patch(
+        "XMP03T4.MAP",
+        &patch,
+    ) else {
+        return;
+    };
+    let rules = retail.rules;
+    let (mut sim, carrier, patient, _) = scene(&rules);
+    let hospital = sim
+        .entities()
+        .values()
+        .find(|e| sim.interner().resolve(e.type_ref()) == "GAPOWR")
+        .unwrap()
+        .stable_id();
+    let strength = rules.object("E1").unwrap().strength;
+    assert!(rules.object("E1").unwrap().deployer);
+    let actor = sim.substrate.entities.get_mut(patient).unwrap();
+    actor.mission_leaf.set_infantry_doing_verified(27).unwrap();
+    actor.health.set_for_test(strength);
+    assert_eq!(
+        sim.entry_click_action(
+            patient,
+            hospital,
+            EntryBaseAction::Move,
+            &rules,
+            Default::default()
+        ),
+        Some(EntryClickAction::NoEnter),
+        "HP check precedes deployed Move"
+    );
+    sim.substrate
+        .entities
+        .get_mut(patient)
+        .unwrap()
+        .health
+        .set_for_test(strength - 1);
+    assert_eq!(
+        sim.entry_click_action(
+            patient,
+            hospital,
+            EntryBaseAction::Move,
+            &rules,
+            Default::default()
+        ),
+        None,
+        "wounded Doing27 skips Hospital then takes deployed Move refusal"
+    );
+    assert_eq!(
+        sim.entry_click_action(
+            patient,
+            carrier,
+            EntryBaseAction::Move,
+            &rules,
+            Default::default()
+        ),
+        None,
+        "deployed Move must not enter a carrier either"
+    );
+    assert_eq!(
+        sim.entry_click_action(
+            patient,
+            carrier,
+            EntryBaseAction::Select,
+            &rules,
+            Default::default()
+        ),
+        Some(EntryClickAction::Enter),
+        "the native refusal is Move-specific, not a blanket deployed prohibition"
+    );
+    sim.substrate
+        .entities
+        .get_mut(patient)
+        .unwrap()
+        .mission_leaf
+        .set_infantry_doing_verified(0)
+        .unwrap();
+    assert_eq!(
+        sim.entry_click_action(
+            patient,
+            hospital,
+            EntryBaseAction::Move,
+            &rules,
+            Default::default()
+        ),
+        Some(EntryClickAction::Enter),
+        "standing wounded infantry can enter even under Move"
     );
 }

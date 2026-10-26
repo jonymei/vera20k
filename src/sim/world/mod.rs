@@ -114,7 +114,7 @@ pub use frame_error::FrameAdvanceError;
 pub(crate) use world_orders::CapturedInfantryType;
 pub use world_orders::EngineerBuildingAction;
 pub use world_orders::UnitRepairAction;
-pub use world_orders::{EntryBaseAction, EntryClickAction};
+pub use world_orders::{EntryBaseAction, EntryClickAction, EntryModifiers};
 mod projectile_collision;
 mod shroud_refresh;
 mod fog_objects;

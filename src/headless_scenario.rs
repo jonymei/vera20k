@@ -2481,6 +2481,198 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY hospitals power/Enter/heal/exit"]
+    fn aymod_hospital_admits_heals_and_releases_wounded_infantry() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        for hospital_type in ["GAROBO", "NARADR"] {
+            let (mut scenario, hospital, patient) = aymod_nearby_pair(hospital_type, "E1", true);
+            let strength = {
+                let runtime = &mut scenario.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let object = rules.object(hospital_type).unwrap();
+                assert!(object.hospital && !object.armory());
+                let owner = sim.entities().get(hospital).unwrap().owner();
+                let at = sim.entities().get(hospital).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["GAPOWR"],
+                );
+                let strength = rules.object("E1").unwrap().strength;
+                sim.substrate
+                    .entities
+                    .get_mut(patient)
+                    .unwrap()
+                    .health
+                    .set_for_test(strength - 1);
+                eprintln!(
+                    "AY {hospital_type} hospital: typeAmmo={} liveAmmo={:?} repairStep={} repairRate={}",
+                    object.ammo,
+                    sim.entities()
+                        .get(hospital)
+                        .unwrap()
+                        .ammo()
+                        .map(|a| a.current()),
+                    rules.general.infantry_repair_step,
+                    rules.general.infantry_repair_rate
+                );
+                strength
+            };
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scenario);
+            }
+            let sim = &mut scenario.runtime.simulation;
+            assert_eq!(
+                sim.building_operational_state(hospital, &scenario.runtime.resources.rules),
+                Some(true)
+            );
+            let owner = sim.entities().get(patient).unwrap().owner();
+            assert_eq!(
+                sim.entry_click_action(
+                    patient,
+                    hospital,
+                    crate::sim::world::EntryBaseAction::Select,
+                    &scenario.runtime.resources.rules,
+                    Default::default()
+                ),
+                Some(crate::sim::world::EntryClickAction::Enter),
+                "ordinary wounded infantry must offer the real hospital entry action"
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::SetBuildingOnLine {
+                    entity_id: hospital,
+                    on: false,
+                },
+            ));
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scenario);
+            }
+            let sim = &mut scenario.runtime.simulation;
+            assert_eq!(
+                sim.building_operational_state(hospital, &scenario.runtime.resources.rules),
+                Some(false)
+            );
+            assert_eq!(
+                sim.entry_click_action(
+                    patient,
+                    hospital,
+                    crate::sim::world::EntryBaseAction::Select,
+                    &scenario.runtime.resources.rules,
+                    Default::default()
+                ),
+                Some(crate::sim::world::EntryClickAction::NoEnter)
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+            for _ in 0..45 {
+                tick_with_due_commands(&mut scenario);
+                let patient = scenario.sim().entities().get(patient).unwrap();
+                assert!(
+                    !patient.in_limbo(),
+                    "offline {hospital_type} admitted a patient"
+                );
+                assert_eq!(patient.health.current(), strength - 1);
+            }
+            let sim = &mut scenario.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::SetBuildingOnLine {
+                    entity_id: hospital,
+                    on: true,
+                },
+            ));
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scenario);
+            }
+            let sim = &mut scenario.runtime.simulation;
+            assert_eq!(
+                sim.building_operational_state(hospital, &scenario.runtime.resources.rules),
+                Some(true)
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+            let mut entered = false;
+            let mut completed = false;
+            for _ in 0..600 {
+                tick_with_due_commands(&mut scenario);
+                let sim = scenario.sim();
+                let entity = sim
+                    .entities()
+                    .get(patient)
+                    .expect("the patient remains alive");
+                entered |= entity.in_limbo();
+                if entered && !entity.in_limbo() && entity.health.current() == strength {
+                    completed = true;
+                    break;
+                }
+            }
+            let sim = scenario.sim();
+            eprintln!(
+                "AY {hospital_type} hospital entered={entered} completed={completed} patient={:?} cargo={:?}",
+                sim.entities().get(patient).map(|p| (
+                    p.health.current(),
+                    p.in_limbo(),
+                    p.mission.current()
+                )),
+                sim.entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .map(|cargo| cargo.count())
+            );
+            assert!(entered, "normal Enter never admitted the wounded patient");
+            assert!(
+                completed,
+                "{hospital_type} did not heal and release the patient"
+            );
+            assert_eq!(
+                sim.entry_click_action(
+                    patient,
+                    hospital,
+                    crate::sim::world::EntryBaseAction::Select,
+                    &scenario.runtime.resources.rules,
+                    Default::default()
+                ),
+                Some(crate::sim::world::EntryClickAction::NoEnter)
+            );
+            assert_eq!(
+                sim.entities()
+                    .get(hospital)
+                    .unwrap()
+                    .ammo()
+                    .unwrap()
+                    .current(),
+                -1
+            );
+            assert_eq!(
+                sim.entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .count(),
+                0
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY garrison shot awards previous-index XP"]
     fn aymod_garrison_first_kill_awards_the_firing_occupant() {
         use crate::sim::command::{Command, CommandEnvelope};

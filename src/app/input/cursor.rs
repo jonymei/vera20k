@@ -899,7 +899,7 @@ pub(super) fn capability_cursor_for_hover(
 
         // 5. Entry: a Unit's Select over a friendly building it may enter
         //    (refinery, Service Depot, Tank Bunker, Grinder), an Infantryman's
-        //    over a Grinding= building, either's over a friendly passenger
+        //    over Hospital=/Grinding= buildings, either's over a friendly passenger
         //    carrier, Alt's Move included, and an Aircraft's NoEnter over a
         //    UnitRepair= building (`context_order::entry_action`).
         if let Some(action) = rules

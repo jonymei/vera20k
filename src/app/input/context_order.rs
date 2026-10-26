@@ -3275,23 +3275,11 @@ fn garrison_entry_orders(
         .collect()
 }
 
-/// [`Simulation::entry_click_action`] under the base action the modifier and
-/// [`attack_action`] give:
-/// - Shift's ToggleSelect (8) returns first (`0x0051E453`), and Ctrl+Alt's
-///   GuardArea (0x1A) skips every entry row;
-/// - Alt answers Move (1) first (`0x007001E9`), in the Ctrl+Shift+Alt chord
-///   too, which only the passenger rows take. A player's deployed `Deployer=`
-///   infantryman (Doing 27..30) answers NoMove (2) for it before them
-///   (`0x0051EB81..0x0051EBD7`);
-/// - otherwise [`attack_action`], forced under Ctrl: Select (7) takes every
-///   row, and Attack (5) none. Every other answer takes only the passenger
-///   rows: an armed player's object over another house's object (0,
-///   `0x0070056C`) or a selected one. Ctrl leaves the attack rung to the
-///   tail for an actor neither armed nor `Infiltrate=`
-///   (`0x00700444..0x00700474`), so an Engineer's Ctrl over a carrier still
-///   asks it.
-///
-/// [`Simulation::entry_click_action`]: crate::sim::world::Simulation::entry_click_action
+/// Resolve entry through the shared WhatAction owner with the actual base
+/// action and independent Ctrl state. Shift51E453 and GuardArea finish first.
+/// Hospital51E85A can replace Select, Move or Attack unless Ctrl is held;
+/// its health gate precedes the deployed-infantry Move refusal51EB81.
+/// Passenger entry retains its own later ordering and is not Ctrl-filtered.
 pub(super) fn entry_action(
     sim: &crate::sim::world::Simulation,
     rules: &crate::rules::ruleset::RuleSet,
@@ -3304,8 +3292,8 @@ pub(super) fn entry_action(
     use crate::sim::world::EntryBaseAction;
     let base = match modifier {
         OrderModifier::Shift | OrderModifier::GuardArea => return None,
-        OrderModifier::ForceMove => EntryBaseAction::Other,
-        OrderModifier::AttackMove if force_move_key => EntryBaseAction::Other,
+        OrderModifier::ForceMove => EntryBaseAction::Move,
+        OrderModifier::AttackMove if force_move_key => EntryBaseAction::Move,
         OrderModifier::Normal | OrderModifier::AttackMove | OrderModifier::ForceFire => {
             match attack_action(
                 sim,
@@ -3316,27 +3304,21 @@ pub(super) fn entry_action(
                 overlay_registry,
             ) {
                 AttackAction::Select => EntryBaseAction::Select,
-                AttackAction::Attack => return None,
+                AttackAction::Attack => EntryBaseAction::Attack,
+                AttackAction::Move => EntryBaseAction::Move,
                 _ => EntryBaseAction::Other,
             }
         }
     };
-    let alt = modifier == OrderModifier::ForceMove
-        || (modifier == OrderModifier::AttackMove && force_move_key);
-    if alt
-        && sim.entities().get(actor_id).is_some_and(|actor| {
-            actor.category() == EntityCategory::Infantry
-                && sim.house_is_human_player(actor.owner())
-                && actor.infantry_deploy_doing()
-                && sim
-                    .interner()
-                    .object_type(actor.type_ref(), rules)
-                    .is_some_and(|object| object.deployer)
-        })
-    {
-        return None;
-    }
-    sim.entry_click_action(actor_id, target_id, base, rules)
+    sim.entry_click_action(
+        actor_id,
+        target_id,
+        base,
+        rules,
+        crate::sim::world::EntryModifiers {
+            force_fire: modifier == OrderModifier::ForceFire,
+        },
+    )
 }
 
 /// The selected objects whose action over a friendly object is Enter, Grind

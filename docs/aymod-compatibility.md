@@ -6,25 +6,28 @@
 
 ## 当前检查点（2026-10-26）
 
-- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于62a329d5d。
-  本批V05驻军击杀经验索引修复；未改MOD数值、AI权重、供电政策或被拒绝的F11接线。
-- 实际NPAE RecordKill702FB5..702FD1读取当前建筑fire_index后DEC，负值加当前驻军数一次。
-  已沿award_kill_experience原owner接入NP分支；stock仍用当前索引。GetWeapon/ROF的共享
-  firing_occupant_id保持不变，装填仍读取下一名武器。Trainable建筑自身、BFRT/子机/控制者的优先级不改。
-  不新增“真正射手”缓存，不新增保存/hash状态、RNG draw、timer或detach；命中时仍用活索引，不跨多发保留身份。
-- 先改既有生产开火回归，NP修复前start0失败（首发射手未获XP）；现starts0/1覆盖普通减一和零回绕。
-  NP gsi_08_定向23项通过，无NP相同23项通过，含下一名武器装填；NP其他奖励消费者5项通过。
-  实际AY XMP03T4/Battle的CAHSE01/E1双驻军，生产入驻、正常人类Attack与普通帧首杀真实E2：
-  首发者XP>0、下一名和建筑0；该显式ignored资源测试1项通过。仅预先将受害者实例HP置1以隔离首发，未改规则/武器或直接调用经验。
-- 一次独立只读critic无可操作发现；明确覆盖残余：延迟多发与驻军变动尚无本批场景验证；无效选择槽
-  保留不支付而非原生越界读取的安全差异。真实场景不等于每栋建筑/多AI或Return Dubai进攻验收。
-- 前一批62a329d5d已核SCHP各实际规则层不写DeployFacing/TrueConversion/DeployToFire，默认分支不解释集结停滞；
-  SMIN走YAREFN建筑朝向owner，见V11/C06。A09两机到点仍moving/停54的真实诊断仍开放，不改悬停参数掩盖。
-- b1bd77720实验室修复保留；Python工具套件既有1依赖闭包失败/6符号链接权限错误/49跳过未解决，
-  本批未改Python或依赖。可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未生成/启动新版。
-- V01独立供电/离线禁移动取舍、F11跨模块接线仍待明确批准；自动续接不是批准。下一安全动作：
-  按PLAN继续实际驻军/其他高频功能生命周期与多AI恢复，A09状态来源/兼容策略、海军地形/FNPC保持开放。
-  完整16色/科技滑条及其他F/V/A仍在全目标内；没有发布/PR/推送授权。
+- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于8af5e940d。
+  V02普通步兵医院入口修复；未改MOD数值、AI权重、无人单位供电取舍或被拒绝的F11接线。
+- 实际AY/stock的InfantryWhatAction51E85A..51E901另有普通步兵Hospital行，不需Engineer/Passengers；
+  原port只有工程师特例/普通passenger，导致GAROBO/NARADR受伤E1无Enter鼠标动作，尽管直接载荷能治疗。
+  已在world_orders::entry_click_action原owner补齐，光标和下单共用；API显式传基础Move/Attack及无保留Ctrl输入，
+  所有消费者迁移，不另建医院/前端权威状态。满血先NoEnter，Doing27..30跳Hospital；其后的Move限制不再由前端抢先执行。
+- 医院CAN_LOAD及Ammo语义未改：43C607仍要求非零，Building442C81..92按InitialAmmo/Ammo覆盖基类零。
+  两个真实医院类型/实例Ammo均-1，IRepairStep=20、IRepairRate约0.001；旧“总是零”注释已纠正，非新增无限弹药政策。
+- 修复前真实资源测试的共享动作None vs Enter失败；修复后AY XMP03T4/Battle两医院/E1：
+  普通Off命令后共享NoEnter且45帧不进入/不治疗；On后共享Enter、普通Enter载荷入内、治疗、离开，cargo0且Ammo仍-1。
+  满血恢复共享NoEnter。该显式ignored实际资源测试1项通过；不是实际GUI操作或Return Dubai AI进攻验收。
+- 前端普通非工程师+Passengers0：Normal/Alt Enter、Ctrl不进、满血NoEnter，正常/计划记录编码解码后入内治疗离开通过。
+  NP context_order整组145项通过；NP/无NP工程师/医院相关各12项通过，含既有工程师保存/毁楼基线。
+  乘员入口筛选已纠正初次0匹配：NP/无NP各3项通过；新增部署边界覆盖满血医院优先NoEnter、受伤Doing27跳Hospital，
+  部署者Move不能进运兵车但Select仍可、站立受伤者Move可进医院。未跑全库或Python（无Python改动）。
+- 一次独立只读critic无确认缺陷，提出的部署边界测试已补上并通过。输入查询不新增RNG/timer/detach或保存/hash字段。
+  较早负伤医疗武器步兵前缀的完整Attack/Select改写、Hospital+Armory双标志后覆盖仍是残余；当前医院断言Armory=false，
+  新行避免把负武器/无Passengers的前置终止路径错误改成Enter。非工程师保存/治疗中EMP/毁楼换主、多家联盟和自动AI治疗仍待验。
+- 前次8af5e940d驻军经验、b1bd77720实验室修复保留；A09/海军/多AI恢复、完整16色/科技滑条及其他F/V/A按PLAN继续。
+  V01独立供电/离线禁移动、F11接线仍待明确批准，自动续接不是批准；未发布/PR/推送。
+  当前旧可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46）；准备独立新标签，不覆盖或启动旧版。
+  Python既有1依赖闭包失败/6符号链接权限错误/49跳过未解决，不宣称全绿。
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -613,7 +616,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | ID / 优先级 | 类别与当前边界 | 下一次验收 |
 | --- | --- | --- |
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
-| V02 / P2 | 医疗建筑：GAROBO、NARADR 的 `Hospital`。已有 `src/sim/docking/hospital.rs:18` 的进驻/治疗/退出owner及radio/app准入；不是Hospital未实现 | 受伤步兵 Enter、排队/满员、治疗、离开、失电/毁楼、换主；与驻军 F04 区分 |
+| V02 / P2 / 普通步兵入口已修，基础流程已验 | GAROBO/NARADR Hospital治疗owner原已有，但普通步兵WhatAction51E85A缺行；现共用医院鼠标动作，不再仅工程师可访问。Ammo=-1正常准入，不另改治疗或弹药 | 实际两医院E1：Off拒绝、On进驻治疗离开、满血拒绝通过；正常/计划下单与部署Move顺序通过。满员/联盟、治疗中失效、普通步兵保存/换主、自动AI仍开放；不是占领科技医院后的全军被动自愈 |
 | V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM四项值9在实际Building开火链不消费，见C05，不擅自推广到建筑。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
