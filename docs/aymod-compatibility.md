@@ -26,7 +26,11 @@
   新行避免把负武器/无Passengers的前置终止路径错误改成Enter。非工程师保存/治疗中EMP/毁楼换主、多家联盟和自动AI治疗仍待验。
 - 前次8af5e940d驻军经验、b1bd77720实验室修复保留；A09/海军/多AI恢复、完整16色/科技滑条及其他F/V/A按PLAN继续。
   V01独立供电/离线禁移动、F11接线仍待明确批准，自动续接不是批准；未发布/PR/推送。
-  当前旧可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46）；准备独立新标签，不覆盖或启动旧版。
+  新玩家构建aymod-playtest-20261026-hospital-xp已从干净c18d21958构建（fast、no-default-features+npatch），
+  manifest已读、通过保存标签resolve/hash校验，并核对包含8af5e940d、b1bd77720与372af3d64。
+  入口D:/Workshop/vera20k/target/AYMOD-test-20261026-hospital-xp.cmd；未执行游戏。
+  含普通步兵医院入口、驻军XP、实验室抽取及旧版已有海豚/电弧/颜色/陆海生产与Walk修复，不声称所有AI问题已修。
+  旧aymod-playtest-20261026-explosion-crate、旧入口与玩家原始存档均保留；这次测试请新开局，旧布局门禁不放松。
   Python既有1依赖闭包失败/6符号链接权限错误/49跳过未解决，不宣称全绿。
 ## 1. 基线、状态和优先级
 
