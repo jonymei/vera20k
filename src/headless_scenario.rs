@@ -4339,6 +4339,126 @@ mod retail_construction_tests {
         assert!(!held, "the second bunker was taken");
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Siege Chopper gather/deploy diagnostic"]
+    fn aymod_siege_chopper_team_gather_and_deploy_boundaries() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::movement::jumpjet_movement::jumpjet_flight::STATE_HOLD;
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "重返迪拜.yrm";
+        let launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+        );
+        let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        for _ in 0..1500 {
+            scenario.tick();
+        }
+        let (owner, choppers, team) = {
+            let (sim, resources) = (
+                &mut scenario.runtime.simulation,
+                &scenario.runtime.resources,
+            );
+            let object = resources.rules.object("SCHP").unwrap();
+            eprintln!(
+                "AY SCHP: simple={} deploy_to_land={} balloon={} deploys_into={:?}",
+                object.is_simple_deployer,
+                object.deploy_to_land,
+                object.balloon_hover,
+                object.deploys_into
+            );
+            assert!(object.is_simple_deployer && object.deploy_to_land);
+            assert!(!object.balloon_hover && object.deploys_into.is_none());
+            let (owner, choppers) =
+                spawn_beside_base(sim, &resources.rules, "Russians", &["SCHP", "SCHP"]);
+            let type_id = sim.interner.get("07C3092C-G").unwrap();
+            let team = sim
+                .create_team(type_id, Some(owner), &resources.rules)
+                .unwrap();
+            (owner, choppers, team)
+        };
+        let mut held = None;
+        for frame in 1..=1500 {
+            scenario.tick();
+            let sim = scenario.sim();
+            let line = sim.team_script_vm.team(team).expect("the team lives");
+            assert_eq!(sim.interner.resolve(line.script_id()), "07C48DBC-G");
+            assert!(line.cursor() <= 0, "the team unexpectedly left regroup");
+            let both = choppers.iter().all(|&id| {
+                let entity = sim.entities().get(id).unwrap();
+                let at = crate::sim::movement::ground_pose::position_world_coord(&entity.position);
+                line.members().any(|member| member == id)
+                    && entity.mission.current().known() == Some(MissionType::Move)
+                    && entity.navigation.nav_com().is_some()
+                    && entity
+                        .locomotor
+                        .as_ref()
+                        .and_then(|l| l.jumpjet_runtime())
+                        .is_some_and(|j| {
+                            j.phase() == STATE_HOLD
+                                && j.moving()
+                                && (j.destination().x, j.destination().y) == (at.x, at.y)
+                        })
+            });
+            match held {
+                None if both => {
+                    held = Some(frame);
+                }
+                Some(_) => assert!(both, "a member left its arrived hover hold"),
+                None => {}
+            }
+            if frame == 1500 {
+                eprintln!(
+                    "AY SCHP owner={owner:?} team={team} cursor={} held_since={held:?}",
+                    line.cursor()
+                );
+                assert_eq!(
+                    line.cursor(),
+                    0,
+                    "native54BE09/6EBDA2 keeps the gather action"
+                );
+                assert!(held.is_some(), "no actual jumpjet hold was observed");
+            }
+        }
+        // Component boundary only: skip the demonstrated native gather hold
+        // to inspect the authored action9; this is NOT an autonomous team pass.
+        scenario
+            .runtime
+            .simulation
+            .team_script_vm
+            .seek_line_for_test(team, 2);
+        let (mut unloading, mut deployed, mut attacking) = ([false; 2], [false; 2], false);
+        for _ in 0..600 {
+            scenario.tick();
+            let sim = scenario.sim();
+            for (index, &id) in choppers.iter().enumerate() {
+                let entity = sim.entities().get(id).unwrap();
+                unloading[index] |= entity.mission.current().known() == Some(MissionType::Unload);
+                deployed[index] |= entity.is_deployed();
+            }
+            attacking |= choppers.iter().all(|&id| {
+                sim.entities().get(id).unwrap().mission.current().known()
+                    == Some(MissionType::Attack)
+            });
+        }
+        eprintln!(
+            "AY SCHP action9 component: unloading={unloading:?}, deployed={deployed:?}, attacking={attacking}"
+        );
+        assert!(
+            unloading.into_iter().all(|seen| seen),
+            "action9 did not unload both members"
+        );
+        assert!(
+            !deployed.into_iter().any(|seen| seen),
+            "the component unexpectedly deployed a member"
+        );
+        assert!(
+            attacking,
+            "authored attack actions never followed deployment request"
+        );
+    }
+
     /// "Soviet SChop vs All" (`07C3092C-G`: two Siege Choppers, script
     /// `54 / 53 / 47,131072 / 9 / 0,9 / 49 / 0,2 / 0,1`) for a Normal Soviet
     /// AI against an idle America on XMP03T4, with two Siege Choppers spawned

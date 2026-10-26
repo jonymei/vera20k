@@ -6,29 +6,32 @@
 
 ## 当前检查点（2026-10-26）
 
-- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于3df291bf2。
-  本批仅SecretLab启动分配及其原生小型对照/文档；未改MOD数值、AI权重、供电政策或F11接线。
-- V10秘密实验室现沿既有assign_secret_lab_production接入实际#174：完整候选池抽样、环扫未用项、
-  用尽后清零并返回本次起点但不标记；允许实验室多于候选数。stock分支保留原缩短范围/数量门禁。
-  不新增持久状态或保存布局；只在既有fresh-only/noncampaign Post_Map调用，restore不重抽奖励。
-- 修复前原生对照回归在full_pool失败（Scenario raw draws 3 vs 4）；修复后NP实验室及直接消费者9项、
-  无NP相同范围9项通过，含生产reader、战役跳过、夺取、付款队列、快照恢复与失去奖励。
-  三例13.7KB原生对照复用can_build_oracle现有完整分配/getter/RNG owner；--npatch-secret-lab --check通过。
-- 一次独立只读critic未发现玩法/owner缺陷，指出六实验室例未区分重置时错误标记；已将同一例扩到七座，
-  第七次实际building0与错误标记的unit0可区分，重生成/check和NP九项回归通过。
-  最终Python工具套件936项：1失败、6错误、49跳过，与本轮前已知失败同名；6项为Windows符号链接
-  权限WinError1314，1项为core/workspace依赖feature闭包不一致。未改Cargo依赖/runner/cache/seed测试，
-  不宣称全套通过；完整日志仅留本机target/aymod-save-analysis/python-tests-secret-lab-final.log。
-- 实际Return Dubai本轮报告没有CASLAB，此修复不是该地图弱攻势的解释。真实AY多实验室玩家画面和
-  各种地图载入仍待验。可玩构建保持aymod-playtest-20261026-explosion-crate（源e3e05ec46），未自动启动。
-- 仍需明确批准：V01作者独立供电/禁止离线移动与原生共享计数/Drive可重下令的取舍；F11跨模块接线。
-  禁止把自动续接当批准。下一安全动作：A09实际NP攻城直升机集结/部署链、海军地形/FNPC与实际多AI恢复；
-  其他F/V/A和完整16色/科技滑条仍按PLAN开放，没有发布/PR/推送授权。
-- A09只读前置：实际NP Unit736D5C→7E0C89对DeployToFire单位新增Unit+6E0已部署门：
-  未部署返回true736D66，已部署转入736D6D的DeploysInto/TickTank分支；不是stock无条件保留Unload。
-  54BD30..54BE3A与Coordinate_Move6EBDA2/6EBED5..6EBF13相关悬停集结门未见此补丁变化。
-  当前Coordinate_Attack仍未调用该共享资格函数；实际AY SCHP typed配置/脚本生命周期尚待复现，
-  不据此强改BalloonHover或宣布攻城直升机已修。
+- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于b1bd77720。
+  仅新增真实AY攻城直升机诊断测试与台账，未改玩法、MOD数值、AI权重、供电政策或F11接线。
+- A09正式加载Return Dubai/Battle，美国被动人类对苏联困难，seed=0x00C0FFEE；发展1500帧后，
+  在电脑基地旁补足两架真实SCHP，创建实际Team07C3092C-G，确认Script07C48DBC-G。
+  这复用正式编队/招募/普通帧，是受控补兵场景，不是随机AI触发全流程或玩家存档重放。
+- 生产typed配置确认SCHP IsSimpleDeployer=true、DeployToLand=true、BalloonHover=false、DeploysInto=None。
+  两机从观察第499帧起均为已加入队伍、Move、NavCom非空、State2且moving=true、精确XY等于目的地；
+  之后直到1500帧持续保持该状态，cursor始终0/action54。不是只凭某次State2或离目标很近判定。
+- 另在明确组件边界seek到script line2/action9，后续600普通帧两机都曾进入Unload、都未deployed、
+  随后均到Attack。不是自然通过action54，不把这个测试钩子说成实际出击修复或部署成功。
+  加强后真实资源测试aymod_siege_chopper_team_gather_and_deploy_boundaries显式ignored运行1项通过。
+- 原生局部证据：实际NP54BD30..54BE3A与Coordinate_Move6EBAD0..6EBF6F相关逻辑保持零售，
+  Jumpjet IsMoving54AE50仍返回+48；ScriptDeploy6ED4D0的simple-deployer也只排Unload即推进。
+  但NP另改UpdateSimpleDeploy739B0E/C2DE77、739B6A/7E0D3C等前置消费者，不能只据相同局部字节
+  宣布整个原MOD必然同样卡住，或直接改BalloonHover/跳过集结。作者说明未专门承诺SCHP部署战术。
+- 新调查V11：TechnoType DeployFacing+5A4（默认signed byte -1）不同于已实现BuildingType+EDC；
+  71385F..713873逐层ReadInt后截byte，739B0E/C2DE77调用C2DF74等待停止/转向并写134。
+  TrueConversion+C92默认false，714C02..714C1D读Bool，739B6A/739B98经7E0D3C/6B在配UnloadingClass时变型。
+  TrueConversion不是DeployFire。根文件只见前者注释、SCHP未设DeployFacing；最终仍需用生产读取核全部层
+  和活跃消费者，不凭grep宣布休眠，也不把有字符串当成当前必需缺口。当前没有移植这两个独立机制。
+- 已提交b1bd77720实验室分配修复仍保留：NP/stock直接消费者各9项通过，原生三例/check通过、critic问题已修。
+  Python936项仍有已知1依赖闭包失败/6符号链接权限错误/49跳过，不宣称全绿；本批未改Python工具。
+  可玩构建仍aymod-playtest-20261026-explosion-crate（e3e05ec46），未生成/启动新玩家版。
+- V01独立供电/离线禁移动政策、被拒绝的F11跨模块接线仍待明确批准；自动续接不是批准。
+  下一安全动作：核实际全部层SCHP可达门与NP状态写入后再选修复；V11适用性、海军地形/FNPC、多AI恢复继续开放。
+  未发布/PR/推送；完整16色/科技滑条及其他F/V/A仍按PLAN，不以本次诊断缩小目标。
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -634,6 +637,10 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 不改变既有保存fallback/夺取/授权owner；真实AY多实验室/GUI场景仍待验。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
+本轮新增 **V11 / P2 待核**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门，
+不同于已有BuildingType同名键。根SMIN/YAREFN有作者值，但仍需确认实际消费者/全部生效层及默认路径；
+先核影响，不根据同名键复用错误字段。`TrueConversion`是另外的部署变型开关，根只有注释，
+尚未证明当前实际模式/地图启用，不能凭SCHP的`DeployFire`认成它。二者原生证据见当前检查点。
 
 ## 5. AI 专项清单：优先于纯画面项目
 
@@ -654,7 +661,7 @@ V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开�
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
-| A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 两架 SCHP 执行 `54 → 5 → 9 → 0...`，移动、落地部署、开火和再次移动；不是只加载成功。现有 TickTank DeployToFire/DeploysInto 注释残留不能直接归罪 SCHP |
+| A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。原生部分门同样保留，但NP部署前置/所有层尚未核完，不能擅改悬停参数或把问题归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
 | A10 / P1 / 待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 盟军AI实际建巨炮/裂缝，实际使用超级裂缝相关单位/能力；核当前生效配置和消费者，不把旧作者 bug 当当前引擎必然存在 |
 
 A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](npatch.md)；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
