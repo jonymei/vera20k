@@ -157,7 +157,7 @@ impl GuardScene {
 /// Successful Guard FireAt records its argument and performs the real class
 /// NULL setter. Next scans exclude fired targets until all have been visited.
 #[test]
-fn distributed_guard_normal_and_elite_cycle_live_targets_and_reset_only_burst() {
+fn distributed_guard_cycles_targets_with_the_profile_burst_policy() {
     for elite in [false, true] {
         let Some(mut scene) = GuardScene::new(elite) else {
             return;
@@ -180,8 +180,12 @@ fn distributed_guard_normal_and_elite_cycle_live_targets_and_reset_only_burst() 
             );
             assert_eq!(
                 source.weapon_burst.index(),
-                0,
-                "changed NULL target resets elite Burst2 too"
+                if crate::rules::NPATCH_ENABLED && elite {
+                    (index + 1) % 2
+                } else {
+                    0
+                },
+                "NPAE1746FCF5B preserves Burst2; stock clears it"
             );
             assert_eq!(
                 source.weapon_burst.radial_index(),

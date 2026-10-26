@@ -1381,6 +1381,29 @@ impl ProcessedRulesLayers {
             })
     }
 
+    /// NPAE174 TechnoType+D20 after each reached ReadINI714AF3 pass.
+    #[cfg(feature = "npatch")]
+    pub(crate) fn use_rof_as_burst_delays_states(
+        &self,
+    ) -> impl Iterator<Item = (ObjectCategory, &str, bool)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .iter()
+            .filter_map(|(family, members)| {
+                family.object_category().map(|category| (category, members))
+            })
+            .flat_map(|(category, members)| {
+                members.iter().map(move |member| {
+                    (
+                        category,
+                        member.native_stored_id.as_str(),
+                        member.npatch_use_rof_as_burst_delays,
+                    )
+                })
+            })
+    }
+
     /// TechnoType+3DC after each reached ReadInt714145..714159.
     pub(crate) fn lepton_mind_control_offset_states(
         &self,
@@ -3515,6 +3538,10 @@ struct ProcessedType {
     /// AYMod NPAE174 TechnoType ctor710F93 seeds FF; ReadINI713879..71388D
     /// passes the retained byte to ReadInt5276D0 and stores only AL.
     npatch_turret_rot: u8,
+    /// NPAE174 TechnoType ctor7114BE clears +D20; ReadINI714AF3..714B0E
+    /// reads UseROFAsBurstDelays through current-default ReadBool5295F0.
+    #[cfg(feature = "npatch")]
+    npatch_use_rof_as_burst_delays: bool,
     /// NPAE174 AircraftType ctor41C8D0 clears E4C; ReadINI41CD68 ->
     /// B95875..B95889 uses ReadBool5295F0 with the retained current default.
     npatch_aa_combat: bool,
@@ -3976,6 +4003,8 @@ impl ProcessedType {
             // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
             ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
             npatch_turret_rot: u8::MAX,
+            #[cfg(feature = "npatch")]
+            npatch_use_rof_as_burst_delays: false,
             npatch_aa_combat: false,
             npatch_bunker_protection: 0,
             npatch_bunker_penetration: 0,
@@ -6229,6 +6258,13 @@ impl RulesPassProcessor {
         let member = &mut self.family_mut(family)[index];
         member.radial_fire_segments =
             raw.read_int("RadialFireSegments", member.radial_fire_segments);
+        #[cfg(feature = "npatch")]
+        {
+            // NPAE174 ReadINI714AF3..714B0E, after RadialFireSegments.
+            // This is the literal BA4A6F, not stock's NoAutoFire key.
+            member.npatch_use_rof_as_burst_delays =
+                raw.read_bool("UseROFAsBurstDelays", member.npatch_use_rof_as_burst_delays);
+        }
     }
 
     /// A reference read from the fixed ART section the type's Image names; a

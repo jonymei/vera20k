@@ -10939,10 +10939,17 @@ fn gsi_08_05_rearm_frames_match_the_original() {
     for row in rows {
         let field = |name: &str| row["input"][name].as_i64().unwrap() as i32;
         assert_eq!(
-            i64::from(super::world_fire::fireat_rearm_frames(
-                field("rof"),
-                field("berserk") != 0
-            )),
+            i64::from(
+                super::world_fire::fireat_rearm_frames(
+                    super::rof::RofDurations {
+                        reload: field("rof"),
+                        burst_delay: None
+                    },
+                    field("berserk") != 0,
+                    false,
+                )
+                .reload
+            ),
             row["duration"].as_i64().unwrap(),
             "{row}"
         );

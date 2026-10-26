@@ -1102,7 +1102,8 @@ fn fireat_get_rof(
     weapon: &WeaponType,
     rof_weapon: Option<&WeaponType>,
     next_index: i32,
-) -> i32 {
+    npatch: bool,
+) -> super::rof::RofDurations {
     let live = super::rof::LiveParticles {
         spark: substrate
             .entities
@@ -1121,6 +1122,7 @@ fn fireat_get_rof(
         rof_weapon,
         live,
         next_index,
+        npatch,
     )
 }
 
@@ -1139,7 +1141,8 @@ pub(crate) fn snapshot_get_rof(
     rof_weapon: Option<&WeaponType>,
     live: super::rof::LiveParticles,
     burst_index: i32,
-) -> i32 {
+    npatch: bool,
+) -> super::rof::RofDurations {
     let firer = substrate.entities.get(snap.stable_id);
     super::rof::get_rof(
         &super::rof::RofQuery {
@@ -1176,6 +1179,7 @@ pub(crate) fn snapshot_get_rof(
             bunker_rof_multiplier: rules.garrison_rules.bunker_rof_multiplier,
         },
         scenario_rng,
+        npatch,
     )
 }
 
@@ -1432,9 +1436,10 @@ pub(super) fn emit_admitted_fire(
             weapon,
             rof_weapon,
             burst.next_index(),
+            crate::rules::NPATCH_ENABLED,
         );
         if let Some(entity) = world.substrate.entities.get_mut(snap.stable_id) {
-            entity.rearm_after_fire(binary_frame as i32, rof);
+            entity.rearm_after_fire(binary_frame as i32, rof.reload, rof.reload);
             entity.weapon_burst.complete_shot(weapon.burst.max(1));
         }
         let weapon_id = world.interner.intern(selected.weapon_id);
@@ -1880,6 +1885,7 @@ pub(super) fn emit_admitted_fire(
         weapon,
         rof_weapon,
         next_index,
+        crate::rules::NPATCH_ENABLED,
     );
 
     // `0x006FF274..0x006FF2CB`, all on the firer: the burst step around GetROF,
@@ -1892,8 +1898,16 @@ pub(super) fn emit_admitted_fire(
     // The remainder (`0x006FF2C5`) divides by the Burst of the weapon fired,
     // where GetROF's mid-burst test read the (next) weapon GetWeapon answers.
     if let Some(entity) = world.substrate.entities.get_mut(snap.stable_id) {
-        let rearm = fireat_rearm_frames(rof, entity.berserk.is_active());
-        entity.rearm_after_fire(binary_frame as i32, rearm);
+        let rearm = fireat_rearm_frames(
+            rof,
+            entity.berserk.is_active(),
+            crate::rules::NPATCH_ENABLED,
+        );
+        entity.rearm_after_fire(
+            binary_frame as i32,
+            rearm.reload,
+            rearm.burst_delay.unwrap(),
+        );
         entity.weapon_burst.complete_shot(weapon.burst.max(1));
         entity.last_fire_frame.record(binary_frame);
     }
@@ -2177,8 +2191,31 @@ fn fireat_estimate_debit(
 /// (`TechnoClass+0x298`) halves it, signed and toward zero
 /// (`0x006FF28F..0x006FF29C`). Native execution:
 /// `tools/spatial_oracle/rearm_timer.py` (`fire` rows).
-pub(crate) fn fireat_rearm_frames(get_rof: i32, berserk: bool) -> i32 {
-    if berserk { get_rof / 2 } else { get_rof }
+pub(crate) fn fireat_rearm_frames(
+    get_rof: super::rof::RofDurations,
+    berserk: bool,
+    npatch: bool,
+) -> super::rof::RofDurations {
+    let reload = if berserk {
+        get_rof.reload / 2
+    } else {
+        get_rof.reload
+    };
+    // NPAE1746FF29E stores EDX; berserk6FF299 CDQ replaces the short
+    // interval with sign(EAX), before the signed divide-by-two.
+    let saved = if npatch {
+        if berserk {
+            get_rof.reload >> 31
+        } else {
+            get_rof.burst_delay.unwrap_or(get_rof.reload)
+        }
+    } else {
+        reload
+    };
+    super::rof::RofDurations {
+        reload,
+        burst_delay: Some(saved),
+    }
 }
 
 fn commit_fire_bookkeeping(

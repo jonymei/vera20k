@@ -91,7 +91,7 @@ pub(crate) fn navigation_snapshot(
     })
 }
 
-pub(super) fn restored_retail(
+pub(crate) fn restored_retail(
     scenario: &crate::headless_scenario::HeadlessScenario,
     pristine: &crate::map::resolved_terrain::ResolvedTerrainGrid,
     bytes: &[u8],
@@ -128,7 +128,7 @@ pub(super) fn restored_retail(
     restored
 }
 
-pub(super) fn save_scene(
+pub(crate) fn save_scene(
     scene: &crate::headless_scenario::HeadlessScenario,
     name: &str,
 ) -> Vec<u8> {

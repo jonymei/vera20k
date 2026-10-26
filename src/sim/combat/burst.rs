@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 /// GetROF and6FF2C5 stores the signed remainder afterwards. Target assignment
 /// to another non-null target does not reset it. Assign_Target6FCF5B clears
 /// it on a changed assignment to null (the same-target early exit does not).
+/// NPAE1746FCF5B..60 remove that reset, retaining the burst across orders.
 /// A spawn manager's missile launch whose GetWeapon(0) has `Burst > 1` sets
 /// it to the slot's parity around its GetFLH and stores 0 after the child's
 /// Unlimbo (`0x006B73F6`, `0x006B7585`).
@@ -140,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn player_orders_cancel_the_previous_burst_through_target_assignment() {
+    fn player_orders_apply_the_profile_target_clear_burst_policy() {
         use crate::rules::{ini_parser::IniFile, ruleset::RuleSet};
         use crate::sim::command::Command;
         use crate::sim::pathfinding::PathGrid;
@@ -186,11 +187,19 @@ mod tests {
             let entity = sim.substrate.entities.get_mut(id).unwrap();
             assert!(entity.attack_target.target().is_none(), "{command:?}");
             assert!(!entity.passive_scan.acquired(), "{command:?}");
-            assert_eq!(entity.weapon_burst.index(), 0, "{command:?}");
+            assert_eq!(
+                entity.weapon_burst.index(),
+                i32::from(crate::rules::NPATCH_ENABLED),
+                "{command:?}"
+            );
             // A later non-null assignment preserves the reset value, so FLH
             // and GetROF start the new burst at its first shot.
             represented_assign_target(entity, Some(TargetKind::Cell(6, 4)));
-            assert_eq!(entity.weapon_burst.index(), 0, "{command:?}");
+            assert_eq!(
+                entity.weapon_burst.index(),
+                i32::from(crate::rules::NPATCH_ENABLED),
+                "{command:?}"
+            );
         }
     }
 
@@ -295,14 +304,14 @@ mod tests {
                 assert!(!actor.passive_scan.acquired(), "{command:?}");
                 assert_eq!(
                     actor.weapon_burst.index(),
-                    i32::from(!had_target),
+                    i32::from(crate::rules::NPATCH_ENABLED || !had_target),
                     "{command:?}"
                 );
                 // The next non-null assignment must retain the observed index.
                 represented_assign_target(actor, Some(TargetKind::Cell(7, 4)));
                 assert_eq!(
                     actor.weapon_burst.index(),
-                    i32::from(!had_target),
+                    i32::from(crate::rules::NPATCH_ENABLED || !had_target),
                     "{command:?}"
                 );
             }
@@ -332,7 +341,11 @@ mod tests {
             represented_assign_target(&mut entity, target(&row["requested"]));
             assert_eq!(
                 entity.weapon_burst.index(),
-                row["next_index"].as_i64().unwrap() as i32,
+                if crate::rules::NPATCH_ENABLED {
+                    row["index"].as_i64().unwrap() as i32
+                } else {
+                    row["next_index"].as_i64().unwrap() as i32
+                },
                 "{row}"
             );
             assert_eq!(

@@ -56,11 +56,24 @@ impl GameEntity {
         self.turret_selection.current_turret_index = object.gunner_turrets.turret_for_weapon(mode);
     }
 
-    /// FireAt6FE4A4/6FF29E retains GetROF's final duration in +2F8 as well
-    /// as starting +2EC. Other rearm writers do not change this saved word.
-    pub(crate) fn rearm_after_fire(&mut self, frame: i32, duration: i32) {
-        self.turret_selection.charge_turret_delay = duration;
+    /// FireAt6FE4A4/6FF29E starts +2EC and writes +2F8. Under NPAE174
+    /// these durations can differ. Other rearm writers leave +2F8 alone.
+    pub(crate) fn rearm_after_fire(&mut self, frame: i32, duration: i32, saved_delay: i32) {
+        self.turret_selection.charge_turret_delay = saved_delay;
         self.rearm_timer.start(frame, duration);
+    }
+
+    /// NPAE174 GetFireError C2C167..C2C18C reuses +2EC's start with +2F8.
+    pub(crate) fn burst_rearm_remaining(&self, frame: i32) -> i32 {
+        crate::sim::timer::CdTimer::from_raw(
+            self.rearm_timer.start_frame(),
+            self.saved_rearm_delay(),
+        )
+        .remaining(frame)
+    }
+
+    pub(crate) fn saved_rearm_delay(&self) -> i32 {
+        self.turret_selection.charge_turret_delay
     }
 
     /// TechnoAI6FA4FB..6FA5BE, after target validity and before missions.

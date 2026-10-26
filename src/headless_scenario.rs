@@ -2084,6 +2084,134 @@ mod retail_construction_tests {
         panic!("the cloaked Tanya never damaged her target through the actual Attack mission");
     }
 
+    // NPAE174 Assign_Target6FCF5B and GetFireErrorC2C649 preserve the
+    // burst across player orders and gate it on the saved short interval.
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY TTNK burst orders and validated save/resume"]
+    fn aymod_tesla_burst_survives_stop_guard_and_save_resume() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for guard in [false, true] {
+            let (mut scene, actor, target) = aymod_nearby_pair("TTNK", "APOC", false);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let rules = &scene.runtime.resources.rules;
+            let kind = rules.object("TTNK").unwrap();
+            let weapon = rules.weapon(kind.primary().unwrap()).unwrap();
+            assert_eq!(
+                (weapon.id.as_str(), weapon.burst, weapon.rof),
+                ("TankBolt", 2, 50)
+            );
+            assert_eq!(&kind.burst_delays[..2], &[15, 45]);
+            assert!(!kind.use_rof_as_burst_delays());
+            let queue = |scene: &mut HeadlessScenario, command| {
+                let sim = &mut scene.runtime.simulation;
+                let owner = sim.entities().get(actor).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+            };
+            let attack = || Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            };
+            queue(&mut scene, attack());
+            (0..240)
+                .find(|_| {
+                    tick_with_due_commands(&mut scene)
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == actor)
+                })
+                .expect("actual TTNK Attack must fire");
+            let first = scene.sim().entities().get(actor).unwrap();
+            let first_frame = first.rearm_timer.start_frame();
+            assert_eq!(
+                (first.rearm_timer.duration(), first.saved_rearm_delay()),
+                (50, 15)
+            );
+            assert_eq!(first.weapon_burst.index(), 1);
+            queue(
+                &mut scene,
+                if guard {
+                    Command::Guard {
+                        entity_id: actor,
+                        target: None,
+                    }
+                } else {
+                    Command::Stop { entity_id: actor }
+                },
+            );
+            for _ in 0..2 {
+                assert!(
+                    !tick_with_due_commands(&mut scene)
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == actor)
+                );
+            }
+            let stopped = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(
+                stopped.weapon_burst.index(),
+                1,
+                "player order must retain mid-burst state"
+            );
+            assert_eq!(stopped.rearm_timer.start_frame(), first_frame);
+            let bytes = save_scene(&scene, "TTNK mid-burst");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let loaded = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(
+                (
+                    loaded.rearm_timer.start_frame(),
+                    loaded.rearm_timer.duration(),
+                    loaded.saved_rearm_delay(),
+                    loaded.weapon_burst.index()
+                ),
+                (first_frame, 50, 15, 1)
+            );
+            assert!(loaded.burst_rearm_remaining(scene.sim().session.binary_frame() as i32) > 0);
+            queue(&mut scene, attack());
+            let mut shots = 1;
+            let mut previous = first_frame;
+            for _ in 0..240 {
+                let output = tick_with_due_commands(&mut scene);
+                if !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == actor)
+                {
+                    continue;
+                }
+                shots += 1;
+                let fired = scene.sim().entities().get(actor).unwrap();
+                let frame = fired.rearm_timer.start_frame();
+                assert!(frame - previous >= if shots == 2 { 15 } else { 50 });
+                if shots == 2 {
+                    assert!(
+                        frame - first_frame < 50,
+                        "second shot must use short, not full reload"
+                    );
+                    assert_eq!(
+                        (fired.weapon_burst.index(), fired.saved_rearm_delay()),
+                        (0, 50)
+                    );
+                } else {
+                    assert_eq!(
+                        (fired.weapon_burst.index(), fired.saved_rearm_delay()),
+                        (1, 15)
+                    );
+                }
+                assert_eq!(fired.rearm_timer.duration(), 50);
+                previous = frame;
+                if shots == 3 {
+                    break;
+                }
+            }
+            assert_eq!(
+                shots, 3,
+                "restored Attack must complete a burst and start the next"
+            );
+        }
+    }
+
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY TankBolt normal/elite and explicit-weapon colors"]

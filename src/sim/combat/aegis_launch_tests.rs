@@ -239,7 +239,10 @@ fn target_replacement_and_null_preserve_the_next_radial_shot() {
             )
             .is_ok()
     );
-    assert_eq!((scene.radial_index(), scene.burst_index()), (1, 0));
+    assert_eq!(
+        (scene.radial_index(), scene.burst_index()),
+        (1, i32::from(crate::rules::NPATCH_ENABLED))
+    );
     assert!(
         scene
             .world
@@ -253,7 +256,10 @@ fn target_replacement_and_null_preserve_the_next_radial_shot() {
             .is_ok()
     );
     scene.fire(140);
-    assert_eq!((scene.radial_index(), scene.burst_index()), (2, 1));
+    assert_eq!(
+        (scene.radial_index(), scene.burst_index()),
+        (2, if crate::rules::NPATCH_ENABLED { 0 } else { 1 })
+    );
 }
 
 /// Unit's native Size746DD0 includes +43C and Load70BF50 does not reset it.

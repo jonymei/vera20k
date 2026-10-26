@@ -1331,10 +1331,11 @@ fn rearm_transferred_gunner(
         weapon,
         live,
         burst_index,
+        crate::rules::NPATCH_ENABLED,
     );
     let frame = session.binary_frame() as i32;
     if let Some(actor) = substrate.entities.get_mut(receiver) {
-        actor.rearm_timer.start(frame, rof);
+        actor.rearm_timer.start(frame, rof.reload);
     }
 }
 

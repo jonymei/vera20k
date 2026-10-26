@@ -2089,7 +2089,11 @@ fn hash_entity(entity: &GameEntity, frame: u32, hasher: &mut StateHasher) {
         entity.prism_support_count.count().hash(hasher);
     }
     // One native weapon owner replaces last-shot/transport copies.
-    // The turret index and saved charge duration only drive drawing.
+    // The turret index only drives drawing. NPAE174 C2C167 reads +2F8
+    // for gameplay with the main timer's start frame.
+    if crate::rules::NPATCH_ENABLED {
+        entity.saved_rearm_delay().hash(hasher);
+    }
     entity.current_weapon_number().hash(hasher);
 
     // Slot-indexed fold: capacity + each slot's Option (null holes and

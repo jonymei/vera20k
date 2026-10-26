@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "unicorn_binding": "2.1.4",
+  "unicorn_core": [
+    2,
+    1,
+    33621247
+  ],
+  "scope": "NPatch temporal gunner callback timers, retained managers and exact Scenario RNG",
+  "assumptions": [
+    "Reuse the existing physical retail FV/CLEG reader VM and explicit retained actor/House inputs; no whole archive load, boarding or full FireAt admission claim.",
+    "Real startup52BB02/B97000 allocation and52BB07/B99000 ctor run with original EBX0; real extensionB98000 reads each supplied physical layer in EDI before type readers. No extension scalar default is supplied.",
+    "Cases are active rookie, signed burst overflow and the real FireAt rearm-tail boundary. Outputs retain only fields asserted by Rust; Main/MapGen unchanged is measured against their native initial bytes, with full Scenario state and ordered raw draws.",
+    "The FireAt tail is imported as a native boundary for subsequent callbacks, not counted as a Rust whole-shot comparison."
+  ],
+  "substitutions": [
+    "Inherited BulletReader lexical INI/file transport, allocator/TLS/Windows helpers and setup visual sinks. CRT malloc7C9430 delegates to that same allocator transport; original strdup/strlen/strcpy execute. No gameplay, RNG or ROF answer or instruction replacement."
+  ],
+  "entry_points": {
+    "bootstrap": "0x00B97000",
+    "extension_ctor": "0x00B99000",
+    "extension_reader": "0x00B98000",
+    "receive": "0x00746420",
+    "remove": "0x007464E0",
+    "get_rof": "0x006FCFA0",
+    "fire_rearm": "0x006FF274",
+    "fire_rearm_end": "0x006FF2D1"
+  },
+  "replay_command": "python -m tools.spatial_oracle.ifv_turret_switching --temporal-gunner-npatch",
+  "payload_sha256": "2647b7a4e04cab58e13fbb5b232e0549404da4a467230e336be637f84c553ac2"
+}

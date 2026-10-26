@@ -334,6 +334,47 @@ fn npatch_turret_rot_survives_registry_save_and_hashes_retained_speed() {
     );
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_use_rof_as_burst_delays_retains_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |enabled| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=TANK\n1=STOCK\n\
+             [TANK]\nUseROFAsBurstDelays={enabled}\n\
+             [STOCK]\nNoAutoFire=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[TANK]\nUseROFAsBurstDelays=\n"),
+        );
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str("[TANK]\nuserofasburstdelays=no\nNoAutoFire=no\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[TANK]\nROT=6\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let enabled = continued("yes");
+    let disabled = continued("no");
+    assert!(enabled.object("TANK").unwrap().use_rof_as_burst_delays());
+    assert!(!disabled.object("TANK").unwrap().use_rof_as_burst_delays());
+    assert!(!enabled.object("STOCK").unwrap().use_rof_as_burst_delays());
+    assert_eq!(enabled.source_ini_hash(), disabled.source_ini_hash());
+    assert_ne!(
+        enabled.simulation_config_hash(),
+        disabled.simulation_config_hash()
+    );
+}
+
 #[test]
 fn airburst_retained_flag_matches_native_reads_and_registry_restore() {
     let native = crate::test_fixture::json("tools/projectile_oracle/airburst_retained.json");

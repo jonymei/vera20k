@@ -194,7 +194,14 @@ fn stand_in(sim: &mut Simulation, id: u64, building: u64) {
 /// the stream after them.
 fn expected_draws(sim: &Simulation, scatters: bool) -> (i32, crate::sim::rng::SimRngLogicalState) {
     let mut rng = sim.scenario_rng.clone();
-    let rof = rng.next_range_u32_inclusive(3, 5) as i32;
+    let delay = rng.next_range_u32_inclusive(3, 5) as i32;
+    let rof = if crate::rules::NPATCH_ENABLED {
+        // Sapper ROF100; NPAE174 continues the full ROF draw after burst0.
+        rng.next_range_u32_inclusive(0, 2);
+        100
+    } else {
+        delay
+    };
     if scatters {
         rng.next_range_u32_inclusive(0, 4);
     }
@@ -339,7 +346,11 @@ fn a_tanya_ordered_to_sabotage_walks_in_and_plants_the_charge() {
     assert!((12..=13).contains(&flash), "flash {flash}");
     let planter = sim.substrate.entities.get(tanya).unwrap();
     assert_eq!(planter.rearm_timer.start_frame(), planted as i32);
-    assert!((3..=5).contains(&planter.rearm_timer.duration()));
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(planter.rearm_timer.duration(), 100);
+    } else {
+        assert!((3..=5).contains(&planter.rearm_timer.duration()));
+    }
     assert_eq!(planter.navigation.nav_com(), None, "the planter stopped");
     assert!(
         (16..18).contains(&planter.position.rx()) && (10..12).contains(&planter.position.ry()),

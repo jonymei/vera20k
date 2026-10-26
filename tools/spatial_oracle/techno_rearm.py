@@ -4,6 +4,7 @@ Original arithmetic, veteran predicates, Scenario RNG and ftol execute. Supplied
 queries expose class, weapon slot, type, garrison flag/count; their producers are
 outside this fixture. This is not FireAt scheduling or weapon-selection parity.
 """
+import argparse
 import hashlib
 import struct
 from pathlib import Path
@@ -162,5 +163,74 @@ def metadata():
     return out
 
 
+def npatch_inputs():
+    # Two mid-burst cases distinguish explicit delays from the RNG fallback;
+    # the final shot and removed continuous-effect shortcuts share this owner.
+    common = dict(rof=120, burst=2, burst_index=1, seed=31, **{'class': 1})
+    return [
+        dict(common, unit_delays=[9, -1, -1, -1]),
+        dict(common),
+        dict(common, burst_index=2),
+        dict(common, direct=1),
+        dict(common, spark=[1, 1]),
+        dict(common, unit_delays=[9, -1, -1, -1], veterancy=2,
+             veteran_ability=1, house_bits='3fe8000000000000'),
+    ]
+
+
+def generate_npatch():
+    fixture = Fixture()
+    rows = []
+    for row in npatch_inputs():
+        result = fixture.execute(row)
+        short = struct.unpack('<i', dwords(fixture.u.reg_read(UC_X86_REG_EDX)))[0]
+        if not rows:
+            writers = []
+            full = result['output']
+            short = struct.unpack('<i', dwords(fixture.u.reg_read(UC_X86_REG_EDX)))[0]
+            for disk, berserk in ((False, False), (False, True), (True, True)):
+                u = fixture.u
+                u.mem_write(OWNER + 0x298, bytes([berserk]))
+                u.mem_write(0xA8ED84, dwords(200))
+                u.reg_write(UC_X86_REG_ESP, SP)
+                u.reg_write(UC_X86_REG_ESI, OWNER)
+                u.reg_write(UC_X86_REG_EAX, full & 0xffffffff)
+                u.reg_write(UC_X86_REG_EDX, short & 0xffffffff)
+                begin, end = (0x6FE4A4, 0x6FE4C8) if disk else (0x6FF28F, 0x6FF2BE)
+                run_checked(u, begin, end, count=1000)
+                signed = lambda offset: struct.unpack('<i', u.mem_read(OWNER + offset, 4))[0]
+                writers.append(dict(disk=disk, berserk=berserk, frame=200,
+                                    start=signed(0x2EC), reload=signed(0x2F4), saved_delay=signed(0x2F8)))
+            result['fire_writers'] = writers
+        rows.append(dict(
+            input=row,
+            output=dict(full_rof=result['output'],
+                        burst_delay=short,
+                        rng_before=result['rng_before'],
+                        rng_after=result['rng_after'],
+                        **({'fire_writers': result['fire_writers']} if 'fire_writers' in result else {}))))
+    return rows
+
+
+def npatch_metadata():
+    return provenance(
+        scope='NPatch GetROF dual rearm durations and Scenario RNG',
+        assumptions=[
+            'Supplied virtual queries expose class, weapon, type and garrison; actual GetROF, RNG, rank predicates and ftol execute',
+            'Full reload and short burst interval are sampled immediately after GetROF returns',
+            'First case also executes original ordinary normal/berserk and Disk writer fragments after supplied GetROF results; no whole FireAt scheduling, Stop/Guard dispatch, INI parsing or undefined-short early-return claim'],
+        substitutions=['Scratch-owned virtual query table only; executable instructions are not replaced'],
+        entry_points={'get_rof': 0x6FCFA0})
+
+
 if __name__=='__main__':
-    finish_vectors(generate,Path(__file__).with_suffix('.json'),provenance=metadata)
+    profile = argparse.ArgumentParser(add_help=False)
+    profile.add_argument('--npatch', action='store_true')
+    args, remaining = profile.parse_known_args()
+    if args.npatch:
+        finish_vectors(generate_npatch,
+                       Path(__file__).with_name('techno_rearm_npatch.json'),
+                       provenance=npatch_metadata, argv=remaining)
+    else:
+        finish_vectors(generate, Path(__file__).with_suffix('.json'),
+                       provenance=metadata, argv=remaining)

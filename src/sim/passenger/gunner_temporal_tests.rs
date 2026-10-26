@@ -72,7 +72,10 @@ fn retail_unload_and_snapshot_resume_preserve_the_gunners_rearm() {
         let mut first_shot = None;
         for _ in 0..240 {
             let frame = sim.session.binary_frame() as i32;
-            let waiting = entity(&sim, passenger).rearm_timer.remaining(frame);
+            let before = entity(&sim, passenger);
+            let waiting = before.rearm_timer.remaining(frame);
+            let short_waiting = before.burst_rearm_remaining(frame);
+            let burst_index = before.weapon_burst.index();
             sim.fire_events.clear_for_test();
             sim.advance_tick(&[], Some(rules), Some(&grid), None, 67);
             if let Some(shot) = sim
@@ -80,7 +83,16 @@ fn retail_unload_and_snapshot_resume_preserve_the_gunners_rearm() {
                 .iter()
                 .find(|event| event.attacker_id == passenger)
             {
-                assert_eq!(waiting, 0, "the returned gunner cannot fire during rearm");
+                if crate::rules::NPATCH_ENABLED && burst_index != 0 {
+                    // RemoveGunner74656C increments the burst but only starts
+                    // the full timer; C2C167 still reads the existing +2F8.
+                    assert!(
+                        waiting == 0 || short_waiting == 0,
+                        "both rearm intervals still active"
+                    );
+                } else {
+                    assert_eq!(waiting, 0, "the returned gunner cannot fire during rearm");
+                }
                 assert_eq!(sim.interner.resolve(shot.weapon_id), "NeutronRifle");
                 first_shot.get_or_insert(frame);
             }

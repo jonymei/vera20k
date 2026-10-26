@@ -977,6 +977,7 @@ fn original_live_spark_rof_and_fireat_rearm_use_the_retained_link_and_exact_rng(
                 &weapon,
                 Some(&weapon),
                 int(&row["input"]["queried_burst"]),
+                false, // This oracle records the stock live-Spark shortcut.
             );
             let tail_rof = fireat_get_rof(
                 &mut sim.scenario_rng,
@@ -988,12 +989,15 @@ fn original_live_spark_rof_and_fireat_rearm_use_the_retained_link_and_exact_rng(
                 &weapon,
                 Some(&weapon),
                 1,
+                false,
             );
-            let rearm = fireat_rearm_frames(tail_rof, row["input"]["berserk"].as_bool().unwrap());
+            let rearm =
+                fireat_rearm_frames(tail_rof, row["input"]["berserk"].as_bool().unwrap(), false)
+                    .reload;
             let actor = sim.substrate.entities.get_mut(owner).unwrap();
-            actor.rearm_after_fire(int(&row["input"]["frame"]), rearm);
+            actor.rearm_after_fire(int(&row["input"]["frame"]), rearm, rearm);
             actor.weapon_burst.complete_shot(weapon.burst.max(1));
-            (rof, rearm)
+            (rof.reload, rearm)
         });
         assert_eq!(rof, int(&row["get_rof"]));
         assert_eq!(rearm, int(&row["rearm"]["rof"]));

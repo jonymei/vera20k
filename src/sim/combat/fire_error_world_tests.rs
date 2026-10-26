@@ -145,3 +145,96 @@ fn a_mapless_fire_gate_takes_the_shared_range_answer() {
     assert_ne!(error(2, "ART", 4), FireError::Range, "5 cells away");
     assert_eq!(error(2, "ART", 5), FireError::Range, "beyond Range");
 }
+
+/// NPAE1746FC972/C2C649/C2C167 use +2F8 only inside a continuing burst;
+/// clearing a target at6FCF5B no longer turns Stop/Guard into a fresh burst.
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_stop_guard_use_short_interval_then_require_the_full_reload() {
+    use crate::sim::combat::TargetKind;
+    use crate::sim::combat::fire_error::FireError;
+    use crate::sim::combat::fire_error_world::FireSubject;
+    use crate::sim::command::Command;
+    for use_full in [false, true] {
+        let rules = RuleSet::from_ini(&IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=TANK\n[TANK]\nStrength=300\nPrimary=Gun\nUseROFAsBurstDelays={use_full}\n\
+             [Gun]\nDamage=10\nROF=120\nBurst=2\nRange=8\nOmniFire=yes\nWarhead=AP\n\
+             [AP]\nVerses=100%,100%,100%,100%,100%,100%,100%,100%,100%,100%,100%\n"
+        ))).unwrap();
+        let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 31);
+        let id = sim
+            .spawn_object("TANK", "Americans", 10, 10, 0, &rules)
+            .unwrap();
+        let target = sim
+            .spawn_object("TANK", "Russians", 12, 10, 0, &rules)
+            .unwrap();
+        sim.assign_target_represented(
+            id,
+            Some(TargetKind::Entity(target)),
+            &rules,
+            None,
+            crate::sim::world::FrameEffects::default(),
+        )
+        .unwrap();
+        let actor = sim.substrate.entities.get_mut(id).unwrap();
+        actor.weapon_burst.complete_shot(2);
+        actor.rearm_after_fire(100, 120, 9);
+        let error = |sim: &crate::sim::world::Simulation| {
+            FireSubject {
+                world: sim,
+                rules: &rules,
+                overlay_registry: None,
+                fog: None,
+                firer: sim.substrate.entities.get(id).unwrap(),
+                obj: rules.object("TANK").unwrap(),
+                target: Some(TargetKind::Entity(target)),
+                weapon_index: 0,
+            }
+            .fire_error(false)
+        };
+        sim.session.set_binary_frame_for_test(108);
+        assert_eq!(error(&sim), FireError::Rearm);
+        for command in [
+            Command::Stop { entity_id: id },
+            Command::Guard {
+                entity_id: id,
+                target: None,
+            },
+        ] {
+            assert!(sim.apply_command("Americans", &command, Some(&rules)));
+            let actor = sim.substrate.entities.get_mut(id).unwrap();
+            assert_eq!(actor.weapon_burst.index(), 1);
+            sim.assign_target_represented(
+                id,
+                Some(TargetKind::Entity(target)),
+                &rules,
+                None,
+                crate::sim::world::FrameEffects::default(),
+            )
+            .unwrap();
+            assert_eq!(error(&sim), FireError::Rearm, "{command:?}");
+        }
+        sim.session.set_binary_frame_for_test(109);
+        assert_eq!(
+            error(&sim),
+            if use_full {
+                FireError::Rearm
+            } else {
+                FireError::Ok
+            }
+        );
+        sim.substrate
+            .entities
+            .get_mut(id)
+            .unwrap()
+            .weapon_burst
+            .complete_shot(2);
+        assert_eq!(
+            error(&sim),
+            FireError::Rearm,
+            "burst0 must not reuse the short clock"
+        );
+        sim.session.set_binary_frame_for_test(220);
+        assert_eq!(error(&sim), FireError::Ok);
+    }
+}

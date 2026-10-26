@@ -294,11 +294,18 @@ impl<'a> FireSubject<'a> {
             wave_live: self.world.active_wave_id(firer.stable_id()).is_some(),
             // FireError6FC6D5/6FC9C7 reads the actual Techno+308 pointer.
             spark_particles_live: firer.spark_particle_system.system().is_some(),
+            burst_index: firer.weapon_burst.index(),
             // T45: the object's own rearm countdown (`+0x2EC`).
             rearming: firer
                 .rearm_timer
                 .remaining(self.world.session.binary_frame() as i32)
-                != 0,
+                != 0
+                // C2C649/C2C14E: only a continuing burst may use +2F8.
+                // T45 still applies this fact after its FiringSyncFrame bypass.
+                && (!crate::rules::NPATCH_ENABLED
+                    || obj.use_rof_as_burst_delays()
+                    || firer.weapon_burst.index() == 0
+                    || firer.burst_rearm_remaining(self.world.session.binary_frame() as i32) != 0),
             ammo: firer.ammo().map_or(-1, |ammo| ammo.current()),
             firing_frame: firer.unit_firing_counter.get(),
             cloak_state: firer.cloak.as_ref().map_or(0, |cloak| cloak.state()),

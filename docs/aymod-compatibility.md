@@ -6,32 +6,54 @@
 
 ## 当前检查点（2026-10-26）
 
-- 工作目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume，本批基于8af5e940d。
-  V02普通步兵医院入口修复；未改MOD数值、AI权重、无人单位供电取舍或被拒绝的F11接线。
-- 实际AY/stock的InfantryWhatAction51E85A..51E901另有普通步兵Hospital行，不需Engineer/Passengers；
-  原port只有工程师特例/普通passenger，导致GAROBO/NARADR受伤E1无Enter鼠标动作，尽管直接载荷能治疗。
-  已在world_orders::entry_click_action原owner补齐，光标和下单共用；API显式传基础Move/Attack及无保留Ctrl输入，
-  所有消费者迁移，不另建医院/前端权威状态。满血先NoEnter，Doing27..30跳Hospital；其后的Move限制不再由前端抢先执行。
-- 医院CAN_LOAD及Ammo语义未改：43C607仍要求非零，Building442C81..92按InitialAmmo/Ammo覆盖基类零。
-  两个真实医院类型/实例Ammo均-1，IRepairStep=20、IRepairRate约0.001；旧“总是零”注释已纠正，非新增无限弹药政策。
-- 修复前真实资源测试的共享动作None vs Enter失败；修复后AY XMP03T4/Battle两医院/E1：
-  普通Off命令后共享NoEnter且45帧不进入/不治疗；On后共享Enter、普通Enter载荷入内、治疗、离开，cargo0且Ammo仍-1。
-  满血恢复共享NoEnter。该显式ignored实际资源测试1项通过；不是实际GUI操作或Return Dubai AI进攻验收。
-- 前端普通非工程师+Passengers0：Normal/Alt Enter、Ctrl不进、满血NoEnter，正常/计划记录编码解码后入内治疗离开通过。
-  NP context_order整组145项通过；NP/无NP工程师/医院相关各12项通过，含既有工程师保存/毁楼基线。
-  乘员入口筛选已纠正初次0匹配：NP/无NP各3项通过；新增部署边界覆盖满血医院优先NoEnter、受伤Doing27跳Hospital，
-  部署者Move不能进运兵车但Select仍可、站立受伤者Move可进医院。未跑全库或Python（无Python改动）。
-- 一次独立只读critic无确认缺陷，提出的部署边界测试已补上并通过。输入查询不新增RNG/timer/detach或保存/hash字段。
-  较早负伤医疗武器步兵前缀的完整Attack/Select改写、Hospital+Armory双标志后覆盖仍是残余；当前医院断言Armory=false，
-  新行避免把负武器/无Passengers的前置终止路径错误改成Enter。非工程师保存/治疗中EMP/毁楼换主、多家联盟和自动AI治疗仍待验。
-- 前次8af5e940d驻军经验、b1bd77720实验室修复保留；A09/海军/多AI恢复、完整16色/科技滑条及其他F/V/A按PLAN继续。
-  V01独立供电/离线禁移动、F11接线仍待明确批准，自动续接不是批准；未发布/PR/推送。
-  新玩家构建aymod-playtest-20261026-hospital-xp已从干净c18d21958构建（fast、no-default-features+npatch），
-  manifest已读、通过保存标签resolve/hash校验，并核对包含8af5e940d、b1bd77720与372af3d64。
-  入口D:/Workshop/vera20k/target/AYMOD-test-20261026-hospital-xp.cmd；未执行游戏。
-  含普通步兵医院入口、驻军XP、实验室抽取及旧版已有海豚/电弧/颜色/陆海生产与Walk修复，不声称所有AI问题已修。
-  旧aymod-playtest-20261026-explosion-crate、旧入口与玩家原始存档均保留；这次测试请新开局，旧布局门禁不放松。
-  Python既有1依赖闭包失败/6符号链接权限错误/49跳过未解决，不宣称全绿。
+- 2026-10-26用户明确批准了V03原生乘员初始化/对照和实际TTNK连发/保存集成测试，两项现均已执行并通过；此前这两项缺授权的阻塞已解除，不重复申请。
+  批准不包括V01独立供电/失联Drive政策或F11跨模块接线；这两个既有门禁不变。未启动GUI、改MOD数值/原始存档、替换稳定玩家版或推送/PR/发布。
+- 任务目录D:/Workshop/vera20k-aymod-audit，feature/aymod-integration-resume；本批基于55a78acce，V03为一条本地完整普通连发链。
+  实现包括retained UseROFAsBurstDelays、GetROF双结果、普通/狂暴/Disk写入、FireError短门、空目标保留burst、既有+2F8的保存及NP hash。
+  共享内核保留stock分支；C4/Receive/RemoveGunner仅写主timer，未新存第二短clock、未改SpawnManager自己的reset。
+- 原生GetROF六例+三种FireAt writer通过write/check及Rust消费，stock535未改。新ifv_temporal_gunner_npatch三个案例/81085bytes：
+  active_rookie、signed burst overflow、actual FireAt rearm-tail；原生bootstrap52BB02→B97000与ctor52BB07→B99000按EBX0运行，
+  B98000按每个物理INI/EDI执行，不写猜测默认。所缺CRT malloc7C9430复用既有allocator transport，原strdup/strlen/strcpy仍执行，无指令或ROF/RNG结果替换。
+  NP乘员receive主timer实测80、remove120；旧stock81含jitter，本次NP取真实新期望而非机械重写或跳过。三例含12个真实回调及1个测量的FireAt边界，完整Scenario RNG/原始draw顺序通过。
+  该原生fixture使用物理retail FV/CLEG输入隔离NP指令差异，最终字段由生产retail reader逐项核对，不冒称全AY对局。
+- 已批准的实际AYMOD测试aymod_tesla_burst_survives_stop_guard_and_save_resume显式ignored运行通过：普通TTNK/TankBolt的typed Burst2/ROF50、delays15/45，
+  真正Attack首发保留50/15/index1；Stop和Guard各走普通玩家事件，随后验证内存存档及完整生产恢复，重获目标后第二发不早于短间隔且早于完整装填，
+  第二发50/50/index0，第三发至少等完整50后回50/15/index1。仅扩大既有两个test helper的crate可见范围，无另造保存/恢复逻辑，无原文件写入。
+- 最终NP定向覆盖全部通过：native_processing99、ROF2（含stock535）、burst5、FireError9、gunner owner5、C4 11、乘员gunner25、Aegis14、焊接原生1、主timer算术1；实际AY TTNK1另显式运行通过。
+  stock无NP定向覆盖全部通过：native_processing96、ROF1/535、burst5、乘员gunner25（含原12例45回调）、C4 11。
+  NP新corpus重放check通过；工具stock的12条逻辑历史、全部RNG状态/draw与最终物理reader字段重执行保持不变。
+  原版整份raw记录曾因换用物理地图导致临时scratch指针trace不等，后按Rust消费的逻辑字段/RNG核对；不把地址trace差异重基线为玩法差异，旧stock corpus未写。
+- 既有一次只读critic未发现确定生产缺陷，指出的真实TTNK链与NP乘员对照缺口本轮已补；没有重复critic。
+  building-ammo>1/空武器早返的EDX仍未建立语义，显式None→完整reload安全fallback继续记录；三例/普通TTNK不覆盖该same-frame域，不以此宣称所有NP/所有武器等价。
+  Python工具最终936项：1失败/6错误/49跳过，仍为core/workspace依赖feature闭包差异与Windows symlink WinError1314；没有新增失败身份。
+  本机日志target/aymod-save-analysis/python-tests-v03-approved-validation.log；未改依赖、缓存或权限工具来抹掉失败。未跑全仓库/clippy。
+- 最近AI证据仍为现有WIP的Return Dubai/Battle、seed0x00C0FFEE、闲置美国人类：困难1v1于11203结束，有发展/补员/陆军接敌，18栋存活非limbo建筑、2重工2船厂；
+  美/苏/尤里/第二苏联四电脑于6598结束，末帧22队/100成员/11生产头无跨House归属或重复入队，不能当多AI长局验收。
+  旧team184跨水区FNPC、SCHP集结hold、主动玩家抗压/损耗恢复仍开放；不靠重复闲置人类败局或调权重宣布修好。
+- 最新稳定玩家版仍是干净c18d21958的aymod-playtest-20261026-hospital-xp，入口D:/Workshop/vera20k/target/AYMOD-test-20261026-hospital-xp.cmd；本轮没有新玩家构建。
+  原始两份旧布局存档/旧构建保留，不强读新布局。整体PLAN与F09/F11/F12及其余F/V/A项不缩小；普通V03验证通过不等于整个AYMOD完成。
+  本轮Cargo/Python/native/trace均已结束；后续按当前Git状态保存已验证本地增量，再继续下一条功能/AI链，不擅自发布。
+
+### 本轮独立只读调查：F09
+
+- 以下F09是先前等待V03批准期间的独立只读调查；当时没有重试或绕过被拒操作。V03本轮已获用户明确批准并完成这两项验证。
+  该F09调查没有Rust/Python生产或测试代码修改、Cargo构建、原生代码执行、新玩家构建、存档写入或发布。
+- 通过既有native_inspect只读原始字节定位唯一字面值DoesntAffectEnemies=BA4C63、reader引用C2E914，
+  再沿75D3F1原活跃跳转确认C2E853先读IsLocalShake到WH+128，C2E90D..927随后按当前WH+129读该键，
+  再跳既有IsFlatExplosion readerC2EF94。ctor75CED0 EBX0，75CF25一次清+128..12B，故默认false。
+- 两处实际消费者均已沿原入口确认，不单凭field扫命中断言：
+  GetFireError6FC3F4读取当前Weapon+AC，6FC3FE进C2E94E；无Techno目标直接回原路径。
+  C2EA23..41置于相应免疫检查后，按firer House与target House调用IsAlly4F9A50，非盟友进入C2E930返回FireError5。
+  TechnoReceiveDamage701C97先保留AffectsAllies门，701CD7进C2D62A；标志开且stack+D4攻击者非空时，
+  按攻击者/受击者House比较，非盟友令[damage]=0并返回0；攻击者空则不因SourceHouse单独过滤。
+  该检查在现有Psychedelic路径之前，不是全局通用Phobos AffectsEnemies语义。
+- 已复用现有asset工具并按其manifest校验工具二进制：Return Dubai/Battle实际根yes、LANGRULE缺省、MPBattleMD/地图无该键覆盖。
+  ini-expand确认规则根无include和诊断；生产accessor另确认MGTK.Primary=MirageGun、FV.Weapon11=CRNeutronRifle，
+  TankMakeupKit/CRMakeupKit.Warhead=TankSnapshot。根文本只有上述两武器定义使用此弹头，尚未找到有效挂载，
+  这只是需继续查的可达性线索，不据此宣称所有模式/地图都不可达，也不把该键缺失归为原对局弱AI原因。
+- 只更新本台账F09；后续实现须沿现有retained warhead reader和FireError/damage gates owners完整处理两个消费者，
+  不改MOD数值、不创建第二套敌我判定。原生执行与实际场景验证仍未做，F09和整个PLAN保持开放。
+
 ## 1. 基线、状态和优先级
 
 - 引擎基线：`feature/aymod-integration-resume`，`8675048ba`。不能用 `main` 代替；
@@ -606,7 +628,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK | 远距移动目标截击、精英武器对空、玩家GUI与持续AI战术尚未单独验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。仍需单验感知/未感知潜艇、Hover/Organic主武器例外与GUI，不扩大为所有海军行为通过 |
 | F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
-| F09 / P2 | 敌我过滤：`DoesntAffectEnemies` 没有对应 NPAE reader/消费者 | `[TankSnapshot]`；`warhead_type.rs:459` 读的是另一个键 `AffectsEnemies`；Ares 同类过滤也不等价 | 追发射者/受益者/目标 House 和效果类型，覆盖敌、己、盟；不直接把值取反映射到另一个扩展 |
+| F09 / P2 / 原生读写及两个消费者已定位，未适配 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | VERA的AffectsEnemies为另一个Phobos键，不能取反别名；须在现有FireError和伤害late-gates接两处、保留源缺失/顺序边界。根仅定义TankMakeupKit/CRMakeupKit使用此WH，尚未建立实际挂载闭包；MGTK/FV常见配置不走这两武器，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
 | F12 / P2 | 扩展遭遇战 UI：8色大厅/战场错配本轮已修；科技等级滑条与完整16色界面仍开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
@@ -621,7 +643,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | --- | --- | --- |
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 / 普通步兵入口已修，基础流程已验 | GAROBO/NARADR Hospital治疗owner原已有，但普通步兵WhatAction51E85A缺行；现共用医院鼠标动作，不再仅工程师可访问。Ammo=-1正常准入，不另改治疗或弹药 | 实际两医院E1：Off拒绝、On进驻治疗离开、满血拒绝通过；正常/计划下单与部署Move顺序通过。满员/联盟、治疗中失效、普通步兵保存/换主、自动AI仍开放；不是占领科技医院后的全军被动自愈 |
-| V03 / P1 | 连发时序：`BurstDelay0..3`、精英武器、Stop/Guard。`src/rules/object_type.rs:3108` 已读取，`src/sim/combat/rof.rs:183` 已消费；`src/sim/combat/world_fire.rs:1155` 只给Unit传值 | TTNK是已有链；NASAM四项值9在实际Building开火链不消费，见C05，不擅自推广到建筑。实际多发射击及S/G打断不能绕过ROF，存档不重置burst |
+| V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
 | V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |

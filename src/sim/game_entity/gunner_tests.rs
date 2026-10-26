@@ -176,9 +176,17 @@ fn fireat_rearm_copy_matches_original_normal_and_disk_writers() {
         let duration = if row["disk_laser"].as_bool().unwrap() {
             supplied_get_rof
         } else {
-            fireat_rearm_frames(supplied_get_rof, entity.berserk.is_active())
+            fireat_rearm_frames(
+                crate::sim::combat::rof::RofDurations {
+                    reload: supplied_get_rof,
+                    burst_delay: None,
+                },
+                entity.berserk.is_active(),
+                false,
+            )
+            .reload
         };
-        entity.rearm_after_fire(int(row, "frame"), duration);
+        entity.rearm_after_fire(int(row, "frame"), duration, duration);
         assert_eq!(
             entity.turret_selection.charge_turret_delay,
             int(row, "charge_delay"),
@@ -203,4 +211,41 @@ fn fireat_rearm_copy_matches_original_normal_and_disk_writers() {
             "FireAt does not update the draw index: {row}"
         );
     }
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_saved_short_interval_roundtrips_and_distinguishes_world_hashes() {
+    let mut sim = crate::sim::world::Simulation::new();
+    let mut actor = GameEntity::test_default(1, "FV", "Americans", 5, 5);
+    actor.weapon_burst.complete_shot(2);
+    actor.rearm_after_fire(100, 120, 9);
+    sim.substrate.entities.insert(actor);
+    let first = sim.state_hash();
+    let bytes = crate::sim::snapshot::GameSnapshot::save(&sim, 0, 0, "short-rearm", 0);
+    let loaded = crate::sim::snapshot::GameSnapshot::load(&bytes)
+        .unwrap()
+        .sim;
+    let actor = loaded.substrate.entities.get(1).unwrap();
+    assert_eq!(
+        (
+            actor.rearm_timer.start_frame(),
+            actor.rearm_timer.duration(),
+            actor.saved_rearm_delay(),
+            actor.weapon_burst.index()
+        ),
+        (100, 120, 9, 1)
+    );
+    assert_eq!(actor.burst_rearm_remaining(108), 1);
+    assert_eq!(actor.burst_rearm_remaining(109), 0);
+    sim.substrate
+        .entities
+        .get_mut(1)
+        .unwrap()
+        .rearm_after_fire(100, 120, 10);
+    assert_ne!(
+        sim.state_hash(),
+        first,
+        "short interval now affects gameplay"
+    );
 }

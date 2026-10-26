@@ -930,6 +930,9 @@ pub struct ObjectType {
     /// NPAE174 TechnoType byte +5A5, projected by the ordered Rules reader.
     /// UnitCtor735584 -> C2DEB6 uses FF as the ROT fallback, not a speed.
     npatch_turret_rot: u8,
+    /// NPAE174 TechnoType+D20, projected from the ordered current-default reader.
+    #[cfg(feature = "npatch")]
+    npatch_use_rof_as_burst_delays: bool,
     /// NPAE174 TechnoType +5A3; compared as a signed byte by C2E7E5.
     npatch_bunker_protection: i8,
     /// Retained TechnoType recoil reader; shared by every voxel turret.
@@ -2285,6 +2288,24 @@ impl ObjectType {
         self.npatch_turret_rot = rot;
     }
 
+    /// NPAE174 TechnoType+D20 selects ROF as each inter-shot burst delay.
+    /// Constructor7114BE defaults false; ReadINI714AF3 retains omitted keys.
+    pub fn use_rof_as_burst_delays(&self) -> bool {
+        #[cfg(feature = "npatch")]
+        {
+            self.npatch_use_rof_as_burst_delays
+        }
+        #[cfg(not(feature = "npatch"))]
+        {
+            false
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    pub(super) fn project_use_rof_as_burst_delays(&mut self, enabled: bool) {
+        self.npatch_use_rof_as_burst_delays = enabled;
+    }
+
     pub(crate) fn bunker_protection_level(&self) -> i8 {
         self.npatch_bunker_protection
     }
@@ -3379,6 +3400,8 @@ impl ObjectType {
             // but ROT= remains the parsed TechnoType +0x71C facing-rate field.
             turret_rot: section.read_int("ROT", 0),
             npatch_turret_rot: u8::MAX,
+            #[cfg(feature = "npatch")]
+            npatch_use_rof_as_burst_delays: false,
             npatch_bunker_protection: 0,
             // Constructor values. Recoil, Airstrike and RadialFireSegments
             // are read only by the ordered Process owner (`native_processing`),

@@ -4771,6 +4771,16 @@ impl RuleSet {
                 object.project_npatch_turret_rot(rot);
             }
         }
+        #[cfg(feature = "npatch")]
+        for (category, name, enabled) in processed.use_rof_as_burst_delays_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == category && object.id == name)
+            {
+                object.project_use_rof_as_burst_delays(enabled);
+            }
+        }
         for (name, enabled) in processed.aircraft_aa_combat_states() {
             if let Some(object) = rules
                 .object_list
@@ -6423,6 +6433,15 @@ impl RuleSet {
                 .map(|object| (&object.id, object.unit_turret_rot()))
                 .collect::<Vec<_>>()
                 .hash(&mut hasher);
+            #[cfg(feature = "npatch")]
+            {
+                b"npatch-use-rof-as-burst-delays-v1".hash(&mut hasher);
+                self.object_list
+                    .iter()
+                    .map(|object| (&object.id, object.use_rof_as_burst_delays()))
+                    .collect::<Vec<_>>()
+                    .hash(&mut hasher);
+            }
             b"npatch-aircraft-aa-combat-v1".hash(&mut hasher);
             self.object_list
                 .iter()
