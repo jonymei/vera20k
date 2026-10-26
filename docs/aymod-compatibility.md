@@ -260,7 +260,34 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
-### 当前检查点：V07自主缠船已验，电脑输入探针误报已排除（2026-10-26）
+### 当前检查点：V08玩家BFRT与磁暴充能对照通过（2026-10-26）
+
+- 当前任务树/分支不变，本批基于`9b4ca8c96`；仅新增两项真实AY场景功能测试和海军诊断断言，
+  没有玩法、MOD数值、AI权重或被拒绝的F11跨模块接线改动。无运行中Cargo、PR/推送或新玩家构建。
+- BFRT实际配置CanRetaliate=no；Unit Approach741603..741635在human+passive50C时跳过OmniCrusher，
+  不是新增AutoCrush全局开关或彻底取消Crusher。测试通过原生payload边界提供敌MTNK的攻击意图
+  （明确组件边界，不伪称自主AI），之后普通帧实际受击/被动扫描开火90帧仍无XY移动；
+  显式玩家Attack同一可压目标后真实移动且passive标志清除，保留手动进攻/碾压能力。
+  初始天启对照有OmniCrushResistant=yes，已换灰熊并断言其无此抗性；未改防碾压规则来凑结果。
+  逐帧记录受击，避免BFRT自愈使末帧HP掩盖命中。新增实际资源测试1项通过。
+- TTNK/TESLA真实同House相邻构造，使用正常GAPOWR和House电力更新；普通/精英各90普通帧
+  不进charger列表、不持自动充能标志，typed TTNK确无Secondary。随后同一有电TESLA旁SHK
+  自主Guard选中并实际发射AssaultBolt，列表包含SHK不含TTNK、overpowered=true且不扣线圈HP。
+  新增实际资源测试1项通过；这沿用既有secondary ElectricAssault/BuildingCharge owners，
+  不是新增NP供电状态，亦不是V01三类无人单位的中心供电验收。
+- BFRT验证限定玩家空载场景、普通攻击与近距可压目标，不认证电脑BFRT、六载员复杂目标、全退档/
+  保存/换主。TTNK验证自动充能否定及SHK正对照，不认证所有强制友军攻击、低电/三步兵重叠或精英线圈。
+  V08保留这些边界，不用两个场景关闭整个MOD。
+- 独立只读A04调查：loose Return Dubai Basic的GameMode=standard,navalwar是菜单标签，
+  Battle仍明确加载MPBattleMD.ini；IgnoreGlobalAITriggers=no已由现有reader/触发门消费。
+  没有据此猜出一个缺失的Basic Naval/NavalTargeting开关。实际NPAE TeamType derive6F1FA0/6F1FE7
+  遇Naval且Passengers=0成员清base-zone约束，AITrigger gate41FEEE在false时直接返回true。
+  正式地图现有舰队FFFFFFFE-G的base_zone_relation_enforced=false、combined_movement_zone=Water
+  新增断言已通过（原真实地图/原生连通/Foot门禁测试1项重跑通过）。不能新增“同水区才准造海军”来冒充修复。
+- 下一步仍按PLAN继续功能/AI边界：真正海军集结的原生地形来源/FNPC未闭环，F11接线批准与V01
+  作者设计/原生供电政策仍开放；不将自动goal续接当批准，也不改目标完成定义。
+
+### 已有覆盖：V07自主缠船已验，电脑输入探针误报已排除（2026-10-26）
 
 - 任务树/分支不变，本批基于`be390424d`；收敛既有实际MOD场景测试并纠正诊断结论，
   未改玩法、MOD配置、AI权重或被拒绝的F11跨模块接线。无运行中Cargo、PR/推送或新玩家版。
@@ -524,7 +551,7 @@ F06–F09、F11 的“缺失”指扩展读取/接线缺口；**原生效果定�
 | V05 / P1 | 驻军与建筑经验、子机经验。Building已支持Trainable/击杀XP，交接已覆盖BFRT和母子机部分生命周期；`src/sim/combat/record_kill.rs:33` 仍保留stock的NEXT occupant获XP顺序 | 对照作者“驻军经验计算修正”是否要求真正射手获XP；建筑/驻军经验、死亡/弹出、子机再生分别验，避免把BFRT政策复制成建筑驻军算法 |
 | V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
 | V07 / P1 / 己方辐射束救船已验，其余仍开放 | AY RadBeamWarhead的Sonic=yes已走既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 真实乌贼缠玩家DEST→己方DESO开火→双方存活释放/动画对象回收→船实际移动通过；辐射场/部署武器、再次捕获、自动选敌和存档仍待验 |
-| V08 / P1 | 作者170601：BFRT不自动冲敌坦克碾压、TTNK不再给磁暴塔充电 | 核当前 `AutoCrush`/充电资格及生产消费者；分别观察自动 Guard 和显式 Attack，不能从作者旧版说明推定当前行为 |
+| V08 / P1 / 玩家BFRT与TTNK充能对照已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑BFRT/载员/存读等未覆盖，不把线圈充能当V01中心供电 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、

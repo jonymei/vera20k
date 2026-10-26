@@ -1817,6 +1817,16 @@ fn aymod_return_dubai_saved_naval_focus_fails_the_live_zone_precheck() {
     let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
     let runtime = &mut scenario.runtime;
     let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+    let guard = sim.interner.get("FFFFFFFE-G").unwrap();
+    let definition = sim.team_script_vm.team_type_definition(guard).unwrap();
+    assert!(
+        !definition.base_zone_relation_enforced,
+        "pure naval TaskForces intentionally bypass the native base-zone gate"
+    );
+    assert_eq!(
+        definition.combined_movement_zone,
+        crate::rules::locomotor_type::MovementZone::Water
+    );
     if let Some(path) = std::env::var_os("VERA20K_AYMOD_NAVIGATION_EXPORT") {
         let mut navigation = crate::sim::world::bridge_test_evidence::navigation_snapshot(
             sim,

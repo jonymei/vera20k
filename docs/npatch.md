@@ -276,6 +276,12 @@ picker's candidate set/random range can differ. DisableAIParallelProduction's op
 are separate; the target Return Dubai Battle layers leave that key absent and native default is false.
 The dual-slot regression is not a claim that the full AI or its attack strength is now equivalent.
 
+Pure combat naval TaskForces deliberately bypass the two-base zone gate:
+TeamType derive6F1FA0/6F1FE7 clears its relation flag for any Naval member with
+Passengers=0, and AITrigger41FEEE returns true for that flag. The actual AY
+FFFFFFFE-G retained metadata is covered by the Return Dubai reachability test.
+Do not add a same-water-region team-creation restriction as a supposed NPatch
+fix for its later action53 gather stall; map menu tags do not choose a new mode INI.
 ## Multiplayer dropdown colors
 
 Startup `52D144 -> B98800 -> C2ADE9` reads root RULESMD[UISettings] UseDropDownColors with

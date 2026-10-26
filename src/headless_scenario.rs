@@ -2855,6 +2855,194 @@ mod retail_construction_tests {
         panic!("released player ship never resumed ordinary movement toward {ship_goal:?}");
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; BFRT passive fire versus explicit crush approach"]
+    fn aymod_fortress_passive_fire_does_not_charge_but_manual_attack_still_moves() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scene, actor, target) = aymod_nearby_pair("BFRT", "MTNK", false);
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let enemy = sim
+                .interner
+                .resolve(sim.entities().get(target).unwrap().owner())
+                .to_owned();
+            // Supplied opponent intent at the real payload boundary, not an
+            // inert player event for an AI House. AI planning is not under test.
+            assert!(sim.apply_command(
+                &enemy,
+                &Command::Attack {
+                    attacker_id: target,
+                    target_id: actor,
+                },
+                Some(rules)
+            ));
+        }
+        let initial = {
+            let sim = scene.sim();
+            assert!(
+                !scene
+                    .runtime
+                    .resources
+                    .rules
+                    .object("BFRT")
+                    .unwrap()
+                    .can_retaliate
+            );
+            crate::sim::movement::ground_pose::position_world_xy(
+                &sim.entities().get(actor).unwrap().position,
+            )
+        };
+        assert!(
+            !scene
+                .runtime
+                .resources
+                .rules
+                .object("MTNK")
+                .unwrap()
+                .omni_crush_resistant
+        );
+        let before_hp = scene.sim().entities().get(actor).unwrap().health.current();
+        let mut passive_fire = false;
+        let mut took_hit = false;
+        for _ in 0..90 {
+            let output = tick_with_due_commands(&mut scene);
+            passive_fire |= output.fire_events.iter().any(|e| e.attacker_id == actor);
+            let fortress = scene.sim().entities().get(actor).unwrap();
+            took_hit |= fortress.health.current() < before_hp;
+            assert_eq!(
+                crate::sim::movement::ground_pose::position_world_xy(&fortress.position),
+                initial,
+                "human passive acquisition must not become an OmniCrusher charge"
+            );
+        }
+        let sim = scene.sim();
+        let fortress = sim.entities().get(actor).unwrap();
+        assert!(
+            passive_fire,
+            "actual passive scan must acquire and fire at the nearby enemy tank"
+        );
+        assert!(took_hit, "enemy actually hit the non-retaliating fortress");
+        assert!(fortress.health.current() > 0 && fortress.passive_scan.acquired());
+        let owner = fortress.owner();
+        let order_tick = sim.session.tick() + 1;
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            order_tick,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            let fortress = scene
+                .sim()
+                .entities()
+                .get(actor)
+                .expect("manual approach keeps a live fortress");
+            if crate::sim::movement::ground_pose::position_world_xy(&fortress.position) != initial {
+                assert!(
+                    !fortress.passive_scan.acquired(),
+                    "explicit order clears the passive marker"
+                );
+                return;
+            }
+        }
+        panic!(
+            "explicit BFRT Attack must retain the native crush approach instead of disabling all movement"
+        );
+    }
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; TTNK refuses automatic coil charging while SHK charges"]
+    fn aymod_tesla_tank_does_not_charge_a_coil_but_the_trooper_does() {
+        let mut scene = aymod_battle(0);
+        let (tank, coil) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let sites = cells_nearest(aymod_anchor(sim, owner));
+            spawn_on_free_cells(sim, rules, owner, sites, &["GAPOWR"]);
+            let sites = cells_nearest(aymod_anchor(sim, owner));
+            let coil = spawn_on_free_cells(sim, rules, owner, sites, &["TESLA"])[0];
+            let at = sim.entities().get(coil).unwrap().position;
+            let adjacent = crate::util::direction::DIRECTION_DELTAS
+                .into_iter()
+                .map(|(dx, dy)| {
+                    (
+                        i32::from(at.rx()) + i32::from(dx),
+                        i32::from(at.ry()) + i32::from(dy),
+                    )
+                });
+            let tank = spawn_on_free_cells(sim, rules, owner, adjacent, &["TTNK"])[0];
+            assert!(rules.object("TESLA").unwrap().overpowerable);
+            assert!(rules.object("TTNK").unwrap().secondary().is_none());
+            (tank, coil)
+        };
+        for elite in [false, true] {
+            if elite {
+                scene
+                    .runtime
+                    .simulation
+                    .substrate
+                    .entities
+                    .get_mut(tank)
+                    .unwrap()
+                    .veterancy
+                    .set_elite();
+            }
+            for _ in 0..90 {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                assert!(
+                    sim.entities()
+                        .get(coil)
+                        .unwrap()
+                        .tesla_charge
+                        .chargers()
+                        .is_empty()
+                );
+                assert!(!sim.entities().get(tank).unwrap().tesla_charger.is_active());
+            }
+        }
+        let trooper = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert_eq!(sim.building_operational_state(coil, rules), Some(true));
+            let owner = sim.entities().get(coil).unwrap().owner();
+            let at = sim.entities().get(coil).unwrap().position;
+            let adjacent = crate::util::direction::DIRECTION_DELTAS
+                .into_iter()
+                .map(|(dx, dy)| {
+                    (
+                        i32::from(at.rx()) + i32::from(dx),
+                        i32::from(at.ry()) + i32::from(dy),
+                    )
+                });
+            spawn_on_free_cells(sim, rules, owner, adjacent, &["SHK"])[0]
+        };
+        let before_hp = scene.sim().entities().get(coil).unwrap().health.current();
+        let mut fired = false;
+        for _ in 0..240 {
+            let output = tick_with_due_commands(&mut scene);
+            fired |= output.fire_events.iter().any(|e| {
+                e.attacker_id == trooper
+                    && scene.sim().interner.resolve(e.weapon_id) == "AssaultBolt"
+            });
+            let charge = &scene.sim().entities().get(coil).unwrap().tesla_charge;
+            assert!(!charge.chargers().contains(&tank));
+            if fired && charge.chargers().contains(&trooper) && charge.is_overpowered() {
+                assert_eq!(
+                    scene.sim().entities().get(coil).unwrap().health.current(),
+                    before_hp
+                );
+                return;
+            }
+        }
+        panic!("real SHK Guard acquisition and AssaultBolt must charge the powered coil");
+    }
     /// AY's elite initial fire rates are authored in EliteWeapon1, not an
     /// NPatch stage jump. Keep the native6F3436 stage-pair selection intact.
     #[cfg(feature = "npatch")]
