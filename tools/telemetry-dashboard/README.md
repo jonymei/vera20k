@@ -258,3 +258,28 @@ The JSON records the selected map, normal parsed-INI map content hash, effective
 rules hash, seed, dimensions and tick0. When comparing with a save, first check
 map/rules identity and compare whether endpoints share a zone within each run;
 zone numbers alone need not stay identical across sessions or graph changes.
+
+
+## Trace a fresh AI skirmish
+
+Use the same fast `telemetry-dashboard,npatch` build and resolved executable:
+
+```text
+telemetry-serve --trace-skirmish <map> --ra2-dir <root> --ai-country 0 --ai-country 1 --ai-country 2 --ai-country 1 --ticks 12000 --seed 0x00C0FFEE
+```
+
+Country indices are zero-based; one to seven explicit opponents are required.
+This uses the normal Battle launch and effective defaults with Hard opponents,
+including repeated countries, and an idle human who issues no orders. Reports
+include the actual options, seed, map/rules hashes, complete retained Houses,
+factories and teams every 1500 calls, and complete entities at the final sample.
+The default is 12000 calls, capped at 24000. A pending or ready human outcome
+stops the trace immediately; inspect `stop_reason` and actual sample `tick`, not
+just requested frames. It neither acknowledges an outcome nor continues past it.
+
+Fire counters observe the source House, target and formed-team membership after
+the frame. Missing or changed entities can undercount or reattribute shots; these
+are not authoritative fire-tick identities or proof of an offensive team. A passive
+human can be defeated early, so this is not long-game recovery acceptance or a
+player replay. No server, GUI, save writes, balance overrides or outcome resets
+are involved. Save inspection/tracing and map inspection remain separate modes.

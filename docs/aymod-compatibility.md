@@ -260,6 +260,27 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   `aymod-playtest-20261026-explosion-crate`不变，本次仅增加诊断保护，不需要换游戏构建。
   下一AI动作仍为海军184的目标/交战/水路链及新版多AI长局，不再优先追此默认不可选分支。
 
+### 当前检查点：多AI诊断与结局边界（2026-10-26）
+
+- 本批只完善既有telemetry-serve诊断与文档，未修改MOD配置、AI权重、兵种数值或玩法。
+  新增trace-skirmish模式复用正式Battle启动/load_session，显式指定1–7家困难电脑与重复阵营；
+  记录实际选项、seed、map/rules hash、完整House/工厂/编队及末次实体。用法和边界见
+  [telemetry README](../tools/telemetry-dashboard/README.md#trace-a-fresh-ai-skirmish)。
+- 实际Return Dubai，美国被动人类对美国/苏联/尤里/第二家苏联，seed=0x00C0FFEE，默认Battle选项：
+  6000逻辑帧时四家电脑已有10/11/7/8栋建筑，3/2/7/3支formed队，资金均高于40万；
+  美国电脑累计70次移动单位对可解析非盟友开火，均观察到formed成员。其余三家尚无此类开火记录。
+  这排除该运行中“完全不发展/完全不能编队”，不证明整体进攻强度，也不代替原1v1玩家复盘。
+- 同时刻苏联两家有队停在53/54集结动作，但尤里已有4队进入action0攻击，另有守卫/等待动作；
+  不能把所有formed队、守卫队或单次光标不动都当作出击卡死。继续优先调查实际集结/出击链，
+  已证海军184的跨水区集结仍待原生地形来源/FNPC闭环，不擅加可达fallback或禁止建队。
+- 旧12000次调用报告实际tick在6621停止，人类已is_defeated/has_lost；7500以后停产不是新AI缺陷。
+  工具现遇正常outcome_wait/ready即停止，不确认/重置结局。复跑同seed实际在第6622次调用、tick6621
+  以outcome_ready结束，保留末次完整实体；没有继续推进或用假状态保活。
+- fast+npatch诊断构建通过；模式互斥、无trace时AI参数拒绝、24001上限拒绝通过。
+  旧存档布局门禁保持不变。开火归属在帧后观察，可能漏计/重归属，不冒称权威开火历史。
+- 玩家版仍为aymod-playtest-20261026-explosion-crate；manifest源e3e05ec46已核对包含372af3d64颜色修复。
+  入口D:/Workshop/vera20k/target/AYMOD-test-20261026-explosion-crate.cmd；新大厅按显示蓝色色块选择，
+  AY当前蓝色为MPC05（第5色），不是旧stock第3色。尚需玩家GUI确认，不自动启动游戏。
 ### 当前检查点：V08玩家BFRT与磁暴充能对照通过（2026-10-26）
 
 - 当前任务树/分支不变，本批基于`9b4ca8c96`；仅新增两项真实AY场景功能测试和海军诊断断言，
