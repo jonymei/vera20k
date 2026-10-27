@@ -41,8 +41,9 @@ mod npatch_rewards_tests;
 ///    the kill. Effect: native reads a stale slot. Frequency: rare.
 /// 5. else nobody.
 ///
-/// Every cost on both sides is the type's Cost_Of for the VICTIM's house
-/// (`victim_house`; `0x00702ED1`, `0x00702F13`, `0x00702F77`, `0x00702FD4`).
+/// Transporter/self/missile Cost_Of uses the killer's house (`EDI+21C`
+/// at702ED1,702F13,702F77). The garrison arm instead uses the victim's
+/// house (`ESI+21C` at702FD4). The victim's own cost determines `points`.
 fn award_kill_experience(
     entities: &mut EntityStore,
     rules: &RuleSet,
@@ -50,15 +51,18 @@ fn award_kill_experience(
     killer_id: u64,
     victim_id: u64,
     points: i32,
-    victim_house: Option<&HouseCostFactors>,
+    houses: &crate::sim::houses::Houses,
 ) {
     if killer_id == RAD_NO_ATTACKER || killer_id == victim_id {
         return;
     }
-    let cost_of = |object: &ObjectType| rules.cost_of(object, victim_house);
     let Some(killer) = entities.get(killer_id) else {
         return;
     };
+    let killer_house = houses
+        .get(&killer.owner())
+        .map(crate::sim::house_state::HouseState::cost_factors);
+    let cost_of = |object: &ObjectType| rules.cost_of(object, killer_house.as_ref());
     let Some(killer_type) = interner.object_type(killer.type_ref(), rules) else {
         return;
     };
@@ -77,25 +81,26 @@ fn award_kill_experience(
             .and_then(|id| entities.get(id))
             .and_then(|carrier| interner.object_type(carrier.type_ref(), rules))
             .is_some_and(|carrier| carrier.npatch_rewards.train_passengers);
-    let spawn_parent = if crate::rules::NPATCH_ENABLED && killer_type.spawned {
-        killer
-            .spawn_owner_id
-            .owner()
-            .filter(|&id| {
-                entities
-                    .get(id)
-                    .is_some_and(|parent| parent.is_object_alive() && parent.health.current() > 0)
-            })
-            .and_then(trainable_cost)
-            .filter(|&(_, cost)| cost > 0)
+    // NPAE RecordKill702FF0 -> C2C49F..C2C50F: an Aircraft with a
+    // trainable SpawnOwner keeps the ordinary award AND pays its parent.
+    // The +2C0 controller arm takes a different continuation, not this bonus.
+    let spawn_parent = if crate::rules::NPATCH_ENABLED
+        && killer.category() == EntityCategory::Aircraft
+        && killer.mind_control.controller().is_none()
+    {
+        killer.spawn_owner_id.owner().and_then(|id| {
+            let parent = entities.get(id)?;
+            let kind = interner.object_type(parent.type_ref(), rules)?;
+            let house = houses
+                .get(&parent.owner())
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            kind.trainable
+                .then(|| (id, rules.cost_of(kind, house.as_ref())))
+        })
     } else {
         None
     };
-    let recipient = if let Some(parent) = spawn_parent {
-        // Disposable, trainable AY missiles must not swallow the launcher's
-        // XP; reusable children use the same mother-ship reward owner.
-        Some(parent)
-    } else if trains_passenger {
+    let recipient = if trains_passenger {
         Some((killer_id, cost_of(killer_type)))
     } else if let Some(transporter) = open_transporter.and_then(trainable_cost) {
         Some(transporter)
@@ -130,7 +135,12 @@ fn award_kill_experience(
         };
         occupant.and_then(|occupant| {
             let occupant_type = interner.object_type(entities.get(occupant)?.type_ref(), rules)?;
-            Some((occupant, cost_of(occupant_type)))
+            //702FD4 deliberately reads ESI (victim), not EDI (killer).
+            let house = entities
+                .get(victim_id)
+                .and_then(|victim| houses.get(&victim.owner()))
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            Some((occupant, rules.cost_of(occupant_type, house.as_ref())))
         })
     };
     let Some((recipient_id, recipient_cost)) = recipient else {
@@ -147,7 +157,16 @@ fn award_kill_experience(
                     && entity.veterancy.rank() < 200
             })
         })
-        .and_then(trainable_cost)
+        // NPAE C2C269..C2C289 costs the controller through its own House.
+        .and_then(|id| {
+            let controller = entities.get(id)?;
+            let kind = interner.object_type(controller.type_ref(), rules)?;
+            let house = houses
+                .get(&controller.owner())
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            kind.trainable
+                .then(|| (id, rules.cost_of(kind, house.as_ref())))
+        })
         .filter(|&(_, cost)| cost > 0);
     let shared = if controller.is_some() {
         rules.npatch_rewards.controller_points(points)
@@ -173,26 +192,16 @@ fn award_kill_experience(
             );
         }
     }
-    if crate::rules::NPATCH_ENABLED {
-        let synchronized = entities.get(recipient_id).and_then(|parent| {
-            parent.spawn_manager.as_ref().map(|manager| {
-                (
-                    parent.veterancy.clone(),
-                    manager
-                        .slots()
-                        .iter()
-                        .filter_map(crate::sim::spawn_manager::SpawnSlot::spawn)
-                        .collect::<Vec<_>>(),
-                )
-            })
-        });
-        if let Some((veterancy, children)) = synchronized {
-            for child in children {
-                if let Some(child) = entities.get_mut(child) {
-                    child.veterancy.inherit(&veterancy);
-                }
-            }
-        }
+    if let Some((parent, cost)) = spawn_parent
+        && let Some(parent) = entities.get_mut(parent)
+    {
+        parent.veterancy.award_kill(
+            cost,
+            points,
+            true,
+            rules.general.veteran_ratio,
+            rules.general.veteran_cap,
+        );
     }
 }
 
@@ -226,9 +235,10 @@ impl KillSource {
 /// `TechnoClass::Record_The_Kill @ 0x00702D40` for `victim_id`, destroyed by
 /// `killer_id` (none for a death without an attacker) and credited to
 /// `killer_owner`: the kill/score record and the experience award
-/// ([`award_kill_experience`]). Every cost it reads is Cost_Of for the victim's
-/// house. The victim's base cost is captured before Tag callbacks at702D61;
-/// recipient costs reread the victim's current House at702ED1/702F13/702FD4.
+/// ([`award_kill_experience`]). The victim's base cost is captured through
+/// its House before Tag callbacks at702D61. Recipient costing uses the
+/// killer's current House at702ED1/702F13/702F77, except the garrison arm's
+/// victim House at702FD4; NP parent/controller bonuses use their own House.
 /// One award feeds both the score
 /// (`0x0070300F`) and the experience: the victim's cost, zero when the
 /// killer's house is allied with the victim, else doubled for a veteran or
@@ -288,9 +298,6 @@ fn record_the_kill(
         KillSource::House(house) => house,
     };
     let victim_owner = victim.owner();
-    let victim_house = houses
-        .get(&victim_owner)
-        .map(crate::sim::house_state::HouseState::cost_factors);
     let victim_type = interner.object_type(victim.type_ref(), rules);
     let insignificant_building = victim.category() == EntityCategory::Structure
         && victim_type.is_some_and(|object| object.insignificant);
@@ -334,13 +341,7 @@ fn record_the_kill(
     let location = crate::sim::movement::ground_pose::position_world_coord(&victim.position);
     if let Some(killer_id) = killer_id {
         award_kill_experience(
-            entities,
-            rules,
-            interner,
-            killer_id,
-            victim_id,
-            points,
-            victim_house.as_ref(),
+            entities, rules, interner, killer_id, victim_id, points, houses,
         );
     }
     let paid = killer_owner

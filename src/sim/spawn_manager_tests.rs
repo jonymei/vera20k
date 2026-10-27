@@ -358,65 +358,170 @@ fn v3_launcher_gets_a_missile_pool_on_spawn() {
 }
 
 #[test]
-fn npatch_regenerated_child_inherits_parent_veterancy() {
+fn npatch_parent_rank_sample_raises_children_without_lowering_the_expert() {
     let rules = make_spawner_rules();
-    let mut sim = Simulation::new();
+    let mut sim = missile_sim();
     let parent = sim
-        .spawn_object("V3", "Russians", 10, 10, 0, &rules)
+        .spawn_object("CARRIER", "Russians", 10, 10, 0, &rules)
         .unwrap();
-    let child = sim
+    let children = sim
         .entities()
         .get(parent)
         .unwrap()
         .spawn_manager
         .as_ref()
         .unwrap()
-        .slots()[0]
-        .spawn()
-        .unwrap();
+        .slots()
+        .iter()
+        .map(|s| s.spawn().unwrap())
+        .collect::<Vec<_>>();
+    sim.substrate
+        .entities
+        .get_mut(parent)
+        .unwrap()
+        .veterancy
+        .set_veteran();
+    sim.substrate
+        .entities
+        .get_mut(children[0])
+        .unwrap()
+        .veterancy
+        .set_elite();
+    sim.substrate
+        .entities
+        .get_mut(children[0])
+        .unwrap()
+        .veterancy
+        .set_rank_cache_for_test(0);
+    sim.substrate
+        .entities
+        .get_mut(children[1])
+        .unwrap()
+        .veterancy
+        .set_rank_cache_for_test(2);
+    // The first parent sample is silent, but the NPatch hook still runs.
+    sim.advance_tick(&[], Some(&rules), None, None, 67);
+    assert_eq!(
+        sim.entities().get(children[0]).unwrap().veterancy.rank(),
+        200
+    );
+    assert_eq!(
+        sim.entities()
+            .get(children[0])
+            .unwrap()
+            .veterancy
+            .rank_cache(),
+        0
+    );
+    assert_eq!(
+        sim.entities().get(children[1]).unwrap().veterancy.rank(),
+        if crate::rules::NPATCH_ENABLED { 100 } else { 0 }
+    );
+    assert_eq!(
+        sim.entities()
+            .get(children[1])
+            .unwrap()
+            .veterancy
+            .rank_cache(),
+        if crate::rules::NPATCH_ENABLED { -1 } else { 2 }
+    );
+    sim.substrate
+        .entities
+        .get_mut(children[1])
+        .unwrap()
+        .veterancy
+        .set_rookie();
+    sim.advance_tick(&[], Some(&rules), None, None, 67);
+    assert_eq!(
+        sim.entities().get(children[1]).unwrap().veterancy.rank(),
+        0,
+        "unchanged parent rank is not a per-frame synchronization trigger"
+    );
     sim.substrate
         .entities
         .get_mut(parent)
         .unwrap()
         .veterancy
         .set_elite();
-    sim.uninit_with_context(child, crate::sim::world::UninitContext::with_rules(&rules));
-    let now = sim.session.binary_frame();
-    {
-        let manager = sim
-            .substrate
+    sim.advance_tick(&[], Some(&rules), None, None, 67);
+    assert_eq!(
+        sim.entities().get(children[1]).unwrap().veterancy.rank(),
+        if crate::rules::NPATCH_ENABLED { 200 } else { 0 }
+    );
+}
+
+#[test]
+fn npatch_regenerated_child_inherits_parent_veterancy() {
+    for trainable in [false, true] {
+        let mut ini = crate::sim::arena_fixture::clear_ground_ini(spawner_rules_text());
+        ini.merge(&crate::rules::ini_parser::IniFile::from_str(&format!(
+            "[V3ROCKET]\nTrainable={}\n",
+            if trainable { "yes" } else { "no" }
+        )));
+        let rules = RuleSet::from_ini(&ini).unwrap();
+        assert_eq!(rules.object("V3ROCKET").unwrap().trainable, trainable);
+        let mut sim = Simulation::new();
+        let parent = sim
+            .spawn_object("V3", "Russians", 10, 10, 0, &rules)
+            .unwrap();
+        let child = sim
+            .entities()
+            .get(parent)
+            .unwrap()
+            .spawn_manager
+            .as_ref()
+            .unwrap()
+            .slots()[0]
+            .spawn()
+            .unwrap();
+        sim.substrate
             .entities
             .get_mut(parent)
             .unwrap()
+            .veterancy
+            .set_elite();
+        sim.uninit_with_context(child, crate::sim::world::UninitContext::with_rules(&rules));
+        let now = sim.session.binary_frame();
+        {
+            let manager = sim
+                .substrate
+                .entities
+                .get_mut(parent)
+                .unwrap()
+                .spawn_manager
+                .as_mut()
+                .unwrap();
+            manager.set_rates_for_test(0, 0);
+            manager.set_update_timer_for_test(CdTimer::started(now as i32, 0));
+            manager.slots[0].timer = CdTimer::started(now as i32, 0);
+        }
+        spawn_manager_ai(
+            &mut sim,
+            &rules,
+            parent,
+            None,
+            crate::sim::world::FrameEffects::default(),
+        );
+        let replacement = sim
+            .entities()
+            .get(parent)
+            .unwrap()
             .spawn_manager
-            .as_mut()
+            .as_ref()
+            .unwrap()
+            .slots()[0]
+            .spawn()
             .unwrap();
-        manager.set_rates_for_test(0, 0);
-        manager.set_update_timer_for_test(CdTimer::started(now as i32, 0));
-        manager.slots[0].timer = CdTimer::started(now as i32, 0);
+        assert_ne!(replacement, child);
+        assert_eq!(
+            sim.entities().get(replacement).unwrap().veterancy.rank(),
+            if crate::rules::NPATCH_ENABLED && trainable {
+                200
+            } else {
+                0
+            }
+        );
     }
-    spawn_manager_ai(
-        &mut sim,
-        &rules,
-        parent,
-        None,
-        crate::sim::world::FrameEffects::default(),
-    );
-    let replacement = sim
-        .entities()
-        .get(parent)
-        .unwrap()
-        .spawn_manager
-        .as_ref()
-        .unwrap()
-        .slots()[0]
-        .spawn()
-        .unwrap();
-    assert_ne!(replacement, child);
-    assert_eq!(
-        sim.entities().get(replacement).unwrap().veterancy.rank(),
-        if crate::rules::NPATCH_ENABLED { 200 } else { 0 }
-    );
 }
 
 #[test]

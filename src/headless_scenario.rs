@@ -5271,6 +5271,292 @@ mod retail_construction_tests {
         );
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; carrier child kill, saved regeneration and relaunch"]
+    fn aymod_carrier_child_keeps_experience_and_regenerates_after_real_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let mut launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+        );
+        launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
+        launch.options.unit_count = 0;
+        let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (carrier, victim, target_cell, children) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let terrain = sim.resolved_terrain().unwrap();
+            let free = |cell: &crate::map::resolved_terrain::ResolvedTerrainCell| {
+                !cell.outside_playfield
+                    && !cell.bridge_facts.has_structural_bridge()
+                    && sim.occupancy().get(cell.rx, cell.ry).is_none()
+            };
+            let (water, land) = terrain
+                .cells()
+                .iter()
+                .find_map(|cell| {
+                    if !free(cell)
+                        || cell.land_type != crate::rules::terrain_rules::LandType::Water.as_index()
+                    {
+                        return None;
+                    }
+                    (-3i16..=3)
+                        .flat_map(|dx| (-3i16..=3).map(move |dy| (dx, dy)))
+                        .find_map(|(dx, dy)| {
+                            let land = terrain.cell(
+                                cell.rx.checked_add_signed(dx)?,
+                                cell.ry.checked_add_signed(dy)?,
+                            )?;
+                            (free(land)
+                                && land.level == cell.level
+                                && land.land_type
+                                    == crate::rules::terrain_rules::LandType::Clear.as_index())
+                            .then_some(((cell.rx, cell.ry), (land.rx, land.ry)))
+                        })
+                })
+                .expect("a clear land target near a legal water carrier site");
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            let carrier = sim
+                .spawn_object("CARRIER", &owner_name, water.0, water.1, 0, rules)
+                .unwrap();
+            let victim = sim
+                .spawn_object("APOC", &enemy_name, land.0, land.1, 0, rules)
+                .unwrap();
+            sim.substrate
+                .entities
+                .get_mut(victim)
+                .unwrap()
+                .health
+                .set(1);
+            sim.mission_queue_exact(
+                victim,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            assert!(rules.object("HORNET").unwrap().trainable);
+            let parent = sim.entities().get(carrier).unwrap();
+            assert_eq!(parent.veterancy.raw().bits(), 0);
+            let children = parent
+                .spawn_manager
+                .as_ref()
+                .unwrap()
+                .slots()
+                .iter()
+                .map(|slot| slot.spawn().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                children.len(),
+                rules.object("CARRIER").unwrap().spawns_number as usize
+            );
+            (carrier, victim, land, children)
+        };
+        let attack = |scene: &mut HeadlessScenario, target_id| {
+            let sim = &mut scene.runtime.simulation;
+            let owner = sim.entities().get(carrier).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: carrier,
+                    target_id,
+                },
+            ));
+        };
+        attack(&mut scene, victim);
+        let mut child_fired = false;
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                child_fired |= output.fire_events.iter().any(|event| {
+                    children.contains(&event.attacker_id)
+                        && event.target == crate::sim::combat::TargetKind::Entity(victim)
+                });
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .veterancy
+                    .raw()
+                    .bits()
+                    > 0
+            }),
+            "normal Hornet weapons must kill and award the carrier"
+        );
+        assert!(child_fired);
+        let parent_xp = scene.sim().entities().get(carrier).unwrap().veterancy.raw();
+        assert!(
+            children.iter().any(|child| scene
+                .sim()
+                .entities()
+                .get(*child)
+                .is_some_and(|child| child.veterancy.raw().bits() > parent_xp.bits())),
+            "a trainable Hornet must keep its own larger award, not be overwritten by carrier XP"
+        );
+        let slot = 0;
+        let lost = children[slot];
+        let regen_rate = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = sim.entities().get(carrier).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Stop { entity_id: carrier },
+            ));
+            // Explicit fatal damage at the production receiver boundary. A
+            // healthy child's UnInit is not a death: PointerExpired6B7C60
+            // deliberately preserves a living, untracked reusable child.
+            let hp = sim.entities().get(lost).unwrap().health.current();
+            let warhead = sim.interner.intern(
+                rules
+                    .weapon("HornetBomb")
+                    .unwrap()
+                    .warhead
+                    .as_deref()
+                    .unwrap(),
+            );
+            let hit = EntityDamageEvent::direct_receiver(
+                lost,
+                hp,
+                0,
+                RAD_NO_ATTACKER,
+                None,
+                warhead,
+                ReceiverCallFlags {
+                    ignore_defenses: true,
+                    arg6: true,
+                },
+            );
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                hit,
+                Default::default(),
+            );
+            let manager = sim
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .spawn_manager
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                manager.regen_rate(),
+                rules.object("CARRIER").unwrap().spawn_regen_rate
+            );
+            manager.regen_rate()
+        };
+        assert!(
+            (0..300).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .slots()[slot]
+                    .spawn()
+                    .is_none()
+            }),
+            "the child's real death must release its manager slot"
+        );
+        for _ in 0..20 {
+            tick_with_due_commands(&mut scene);
+        }
+        let pending = scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .spawn_manager
+            .clone()
+            .unwrap();
+        assert!(pending.slots()[slot].spawn().is_none());
+        assert!(
+            pending.slots()[slot]
+                .timer()
+                .remaining(scene.sim().session.binary_frame() as i32)
+                > 0
+        );
+        let bytes = save_scene(&scene, "AY carrier pending Hornet regeneration");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .spawn_manager
+                .as_ref(),
+            Some(&pending)
+        );
+        let replacement = (0..regen_rate + 60)
+            .find_map(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)?
+                    .spawn_manager
+                    .as_ref()?
+                    .slots()[slot]
+                    .spawn()
+            })
+            .expect(
+                "the actual configured regeneration timer must produce a replacement after load",
+            );
+        assert_ne!(replacement, lost);
+        let child = scene.sim().entities().get(replacement).unwrap();
+        assert_eq!(child.spawn_owner_id.owner(), Some(carrier));
+        assert_eq!(child.veterancy.raw(), parent_xp);
+        let next = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let enemy = house_of(sim, "Russians");
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            let target = sim
+                .spawn_object("APOC", &enemy_name, target_cell.0, target_cell.1, 0, rules)
+                .unwrap();
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            target
+        };
+        attack(&mut scene, next);
+        assert!(
+            (0..900).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == replacement
+                        && event.target == crate::sim::combat::TargetKind::Entity(next)
+                })
+            }),
+            "the regenerated Hornet must relaunch and fire through the ordinary carrier Attack"
+        );
+    }
+
     /// Whether `entity` aims at an object of another house.
     fn aims_at_another_house(
         sim: &Simulation,

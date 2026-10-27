@@ -201,7 +201,7 @@ use crate::map::resolved_terrain::ResolvedTerrainGrid;
 use crate::rules::animation_sequence::SequenceSet;
 use crate::rules::object_type::ObjectType;
 use crate::rules::overlay_types::OverlayTypeRegistry;
-use crate::rules::ruleset::{HouseCostFactors, RuleSet};
+use crate::rules::ruleset::RuleSet;
 use crate::rules::warhead_type::WarheadType;
 use crate::rules::weapon_type::WeaponType;
 use crate::sim::bridge_state::BridgeDamageEvent;

@@ -1049,12 +1049,28 @@ fn veterancy_promotion_step(
     let Some(entity) = substrate.entities.get_mut(id) else {
         return;
     };
-    let Some(promotion) = entity
+    let previous = entity.veterancy.rank_cache();
+    let promotion = entity
         .veterancy
-        .sample_promotion(&mut entity.flashing, rules.general.elite_flash_timer)
-    else {
+        .sample_promotion(&mut entity.flashing, rules.general.elite_flash_timer);
+    let rank_changed = entity.veterancy.rank_cache() != previous;
+    // NPAE6FA13E -> C2D825 runs this even on the silent first sample,
+    // before the rest of the common Techno AI, not at Record_The_Kill.
+    if crate::rules::NPATCH_ENABLED && rank_changed {
+        crate::sim::spawn_manager::synchronize_spawn_promotion(
+            &mut substrate.entities,
+            rules,
+            interner,
+            id,
+        );
+    }
+    let Some(promotion) = promotion else {
         return;
     };
+    let entity = substrate
+        .entities
+        .get(id)
+        .expect("promotion does not remove its owner");
     let owner = entity.owner();
     let world = crate::sim::movement::ground_pose::object_location(entity, terrain).into();
     let sound = match promotion {

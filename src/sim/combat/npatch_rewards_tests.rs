@@ -189,47 +189,77 @@ fn npatch_zero_cost_controller_does_not_swallow_experience() {
 }
 
 #[test]
-fn npatch_trainable_spawn_pays_parent_and_synchronizes_live_children() {
-    use crate::sim::spawn_manager::{SpawnManagerState, SpawnSlot, SpawnSlotState};
-    use crate::sim::timer::CdTimer;
-    let (mut sim, rules) = fixture("[GI]\nSpawned=yes\nMissileSpawn=yes\n");
+fn garrison_award_costs_the_occupant_through_the_victims_country() {
+    let (mut sim, rules) = fixture(
+        "[BuildingTypes]\n0=BUNKER\n[BUNKER]\nStrength=1000\nCanBeOccupied=yes\nCanOccupyFire=yes\nMaxNumberOccupants=1\n\
+         [Countries]\n0=Americans\n1=Russians\n[Americans]\nCostInfantryMult=.25\n",
+    );
+    let owner = sim.interner.get("Americans").unwrap();
+    sim.houses
+        .get_mut(&owner)
+        .unwrap()
+        .project_country_mults(&rules, &sim.interner);
+    let bunker = spawn(&mut sim, &rules, "BUNKER", "Americans", 10);
+    let occupant = spawn(&mut sim, &rules, "GI", "Americans", 12);
+    sim.substrate
+        .entities
+        .get_mut(bunker)
+        .unwrap()
+        .passenger_role
+        .occupants_mut()
+        .add(occupant);
+    sim.substrate
+        .entities
+        .get_mut(occupant)
+        .unwrap()
+        .passenger_role
+        .set_inside_transport(bunker, false);
+    assert!(!rules.object("BUNKER").unwrap().trainable);
+    let victim = spawn(&mut sim, &rules, "TARGET", "Russians", 20);
+    kill(&mut sim, &rules, bunker, victim, KillCallback::Terminal);
+    //702FD4 uses the victim's full infantry cost. The killer's .25
+    // factor would incorrectly make this single kill elite instead.
+    assert_eq!(sim.entities().get(occupant).unwrap().veterancy.rank(), 100);
+}
+
+#[test]
+fn npatch_aircraft_spawn_keeps_its_award_and_also_trains_the_parent() {
+    let (mut sim, rules) = fixture(
+        "[AircraftTypes]\n0=CHILD\n[CHILD]\nStrength=100\nCost=100\nTrainable=yes\nSpawned=yes\n\
+         [BFRT]\nCost=400\n[Countries]\n0=Americans\n1=Russians\n\
+         [Americans]\nCostUnitsMult=.25\nCostAircraftMult=.5\n",
+    );
+    let owner = sim.interner.get("Americans").unwrap();
+    sim.houses
+        .get_mut(&owner)
+        .unwrap()
+        .project_country_mults(&rules, &sim.interner);
     let parent = spawn(&mut sim, &rules, "BFRT", "Americans", 10);
-    let child = spawn(&mut sim, &rules, "GI", "Americans", 12);
-    let sibling = spawn(&mut sim, &rules, "GI", "Americans", 14);
-    let child_type = sim.interner.get("GI").unwrap();
+    let child = spawn(&mut sim, &rules, "CHILD", "Americans", 12);
     sim.substrate
         .entities
         .get_mut(child)
         .unwrap()
         .spawn_owner_id
         .set_for_test(Some(parent));
-    sim.substrate
-        .entities
-        .get_mut(parent)
-        .unwrap()
-        .spawn_manager = Some(SpawnManagerState::for_test(
-        child_type,
-        vec![
-            SpawnSlot::for_test(
-                Some(child),
-                SpawnSlotState::ReadyDocked,
-                CdTimer::default(),
-                true,
-            ),
-            SpawnSlot::for_test(
-                Some(sibling),
-                SpawnSlotState::ReadyDocked,
-                CdTimer::default(),
-                true,
-            ),
-        ],
-    ));
     let victim = spawn(&mut sim, &rules, "TARGET", "Russians", 20);
     kill(&mut sim, &rules, child, victim, KillCallback::Terminal);
-    let rank = sim.entities().get(parent).unwrap().veterancy.rank();
-    assert_eq!(rank > 0, crate::rules::NPATCH_ENABLED);
+    let child_xp = sim.entities().get(child).unwrap().veterancy.raw();
+    let parent_xp = sim.entities().get(parent).unwrap().veterancy.raw();
+    assert!(
+        child_xp.bits() > 0,
+        "the child's own award must not be redirected"
+    );
+    assert_eq!(parent_xp.bits() > 0, crate::rules::NPATCH_ENABLED);
     if crate::rules::NPATCH_ENABLED {
-        assert_eq!(sim.entities().get(child).unwrap().veterancy.rank(), rank);
-        assert_eq!(sim.entities().get(sibling).unwrap().veterancy.rank(), rank);
+        assert!(
+            child_xp.bits() > parent_xp.bits(),
+            "costlier parent earns its own smaller award"
+        );
+        assert_eq!(
+            sim.entities().get(parent).unwrap().veterancy.rank(),
+            100,
+            "recipient costs use the killer/parent house, not the victim's country"
+        );
     }
 }

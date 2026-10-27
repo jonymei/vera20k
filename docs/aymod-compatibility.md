@@ -6,17 +6,27 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于8e56a2f4e补V04移动探测/隐形步兵/电脑选敌与存读生命周期。仅测试/文档，无生产玩法改动，无需玩法critic，未推送/PR/发布；整体goal仍开放。
-- 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750保持不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
-- Return Dubai弱攻势线继续按用户要求暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，但跨水区FNPC、SCHP hold、抗压和多AI长局仍开放。非盟军巨炮本地修复b5a046558已通过三阵营计划回归；固定版不含，旧计划/已造巨炮不追溯删除，建造落地实战仍待验。
-- V01独立供电/失联Drive政策及F11跨模块光照接线的批准门禁不变，一般“继续功能”不解除这两项门禁。功能优先，UI随后，全部PLAN仍有效。
-- 本轮实际AY TANY自然隐形、电脑DOG正常移动带入/带出探测覆盖；同House电脑GAPILL共享探测并实际Guard开火。覆盖内/外两次正式GameSnapshot保存恢复，探测计数不丢/不残留，未直接写fog或cloak。
-- 受伤会按原生70281D显形，不能把“没有传感器”直接等同于“仍完全隐形”。正常Stop/Sleep暂隔离火力与DOG追咬，待TANY自然重新隐形后，普通Guard在无探测时不向她开火；DOG返回后经普通Stop清理其可能合法持有的其他目标，再由Guard重新射击。没有给AI增加发现即强制转火的政策。
-- 实际复合生命周期1项、techno_ai_cloak owner16项及既有TANY自身隐形开火1项通过。仅测试/文档，无玩法critic；无全仓库、stock或Python重复运行。历史V07三项/辐射owner4项及V06覆盖保留在各节。
-- 实读NPAE Evaluate_Candidate6F7DA9..7DEB用攻击者House查询目标GetCoords所在Cell的4870D0；GetFireError6FC24D..29D同样查该House；70281D→vt+FC/703850调用StartUncloaking(0)。沿现有传感器沉积、损伤、隐形、选敌和命令owners，无生产数值/状态更改。
-- 下一安全动作：继续V05驻军变化/子机再生的真实武器/经验归属生命周期，先确认既有spawn/veterancy owner与AY实际配置。V04移动目标本身/探测器死亡或换主/运输及多House叠加仍开放，不把本轮单探测器场景当全部侦测认证。V07换主/多AI/完整抗压及原鱿鱼-海豚闪退全面排除仍开放；本轮不是该闪退的完整回放。
-- V06地面晋升/热存读/退档已有覆盖，音效latch按原生Load清零，不更改serde skip；对空/换主/ROF倍率仍开放。铁幕已有目标/反击/脚本与ForceShield完整存读、V03空武器reload fallback、其余清单及真人验收仍开放。
-- 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于34fe5cffb修正V05飞机子机奖励、母体等级采样同步及再生继承门。生产和测试沿既有RecordKill/Veterancy/SpawnManager/Techno AI owners；无新增保存字段，未推送/PR/发布，整体goal仍开放。
+- 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；新修复不会自动进入该版。
+- Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放。非盟军巨炮修复b5a046558已通过三阵营计划回归；固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
+- V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
+- 原代码把可训练子机XP转给母体并在击杀时覆盖所有子机。实际NPAE702FF0→C2C49F保留飞机普通奖励并额外奖励母体；6FA13E→C2D825在母体rank cache变化（含初次采样）时才同步，只提高可训练子机XP并清其rank cache。再生6B78EF→C2D7F3按新子机Trainable门复制raw。旧即时同步已移除。
+- 真实AY CARRIER/HORNET普通Attack击杀预置1HP睡眠APOC，子机保留自己的更大XP、母体另获XP；经直接致死receiver边界损失一架子机，原配置再生等待中正式保存/恢复，替补继承母体raw XP并再次正常出击/开火。未直接设等级、经验、生成新子机或缩短实际再生计时；不是AA拦截或自然连续晋升实战。
+- 一次只读critic确认驻军计价例外：702FD4读ESI受害House，不能随702ED1/702F13/702F77改为EDI击杀House。已修并补不同国家步兵倍率回归；父机/控制者额外奖励各用自身House。最终NP/stock各RecordKill6、Veterancy12、SpawnManager37通过，慢速全翼strafe1项不涉及本次路径未跑；真实驻军首杀1及航母复合链1均在critic修正后通过，无第二轮critic。
+- 下一安全动作：继续V05实际驻军成员变化/死亡弹出及击杀时归属，先核实际武器弹道与当前活索引，不把瞬时命中伪造成在途测试。其余子机家族、母体实际连续晋升/更多载机战术、换主/运输/AA拦截仍开放。控制者指针选择等旧奖励残余未扩称修完。
+- V04移动单探测器/隐形步兵/电脑碉堡和覆盖内外存读已验，死亡/换主/运输与多House重叠仍开放；V07换主/多AI/完整抗压及原鱿鱼-海豚崩溃完整回放仍待验。历史证据各留原节，不把本轮当全MOD完成。
+- V06音效latch按原生Load清零，对空/换主/完整ROF倍率仍开放；铁幕已持有目标/反击/脚本与ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。上次Python936项的1失败/6错误/49跳过保留，本轮无Python工具改动、不重复全套。
+
+### V05飞机子机自身奖励、母体同步与再生（2026-10-28）
+
+- 实读实际NPAE RecordKill702FF0→C2C208：无+2C0控制者才落C2C49F..C2C50F，检查Aircraft RTTI2、SpawnOwner与母体Trainable；C2C4D9先给原接收者Add，C2C50A另给母体Add。不是把可训练飞机的奖励转走，也不要求类型Spawned字节作为额外门。旧GI步兵伪子机测试不能证明飞机分支，已换真实Aircraft类别回归；新测试修复前子机XP为0而失败。
+- 删除RecordKill末尾竞争性的全子机覆盖；唯一同步在Techno AI现有等级采样处。原6FA054..6FA078比较rank cache，初次采样也走6FA13E→C2D825；非Infantry且有manager才调用C2D851。C2D85F..865按count-1及JLE保留零/单槽跳过，随后倒序检查可训练子机，parent raw严格大于child raw才复制并置child cache=-1。不降级经验更高的子机、不每击杀/每帧强制复制。
+- raw和rank cache仍由Veterancy持有，SpawnManager仅沿正式slot访问子机，父对象沿现有Techno AI阶段触发。stored f32的纯比较跨平台精确，无新算术内核。再生C2D7F3只在新子机Trainable时复制parent+150，不复制cache；补齐原adopt缺少的门，复用现有inherit。
+- 计价按实际分支而非统一猜测：原transport/self/missile臂702ED1/702F13/702F77读EDI击杀House；驻军702FD4独读ESI受害House；NP parent/controller额外奖励用各自House。受害者cost仍在Tag前702D61获取，用于points；不是平衡调整。一轮critic发现本次错误推广到驻军的回归，已恢复该例外并用Americans .25步兵倍率、Russians受害方的等级边界回归保护；修正后NP/stock都通过。
+- 新真实aymod_carrier_child_keeps_experience_and_regenerates_after_real_load：正式Return Dubai/Battle、玩家CARRIER及自带四架HORNET，普通Attack与真实子机fire_event击杀仅预置1HP的睡眠APOC，母体有XP、至少射手保留更高自身XP。随后在正式直接致死receiver边界制造一架子机损失（不是AA武器实战），观察slot释放；正常推进后在再生等待中正式GameSnapshot保存/恢复，manager/slot/timer完整保持，按原SpawnRegenRate生成不同ID替补，SpawnOwner/raw XP正确，再次普通Attack让替补实际开火。
+- 初始夹具用健康子机UnInit模拟死亡，但PointerExpired6B7C60会保留活且未跟踪的可复用飞机；现改为真实致死receiver及实际死亡收尾，不为夹具改变该原生门。合成Trainable=no/yes用分层merge覆盖现有段，避免同文件重复段导致覆盖未生效；typed值另有断言。
+- 最终critic后NP/stock各RecordKill6、Veterancy12、SpawnManager37通过；实际AY驻军首杀1和航母复合链1通过。独立critic一次，确认的一项计价回归已修；不重复critic，慢速全翼strafe未改飞行/路径/每轮弹量而保留忽略。无新保存字段/独立XP状态，无新增RNG抽样、timer/Detach逻辑；实际击杀/升级、生成/死亡仍正常执行原owners的既有通知和计时。
+- 边界：实际母体首杀后仍为rookie、仅积累部分raw经验，不宣称真实连续晋升/精英全链；rank变化、强子机不降级和缓存失效另由受控生产tick回归覆盖。单槽同步与未训练现存子机暂无专项回归（分支已按指令保留），未把再生Trainable边界当作现存同步全覆盖。其他子机家族/换主/母体死亡/AA拦截、多AI与GUI仍开放；既有控制者指针选择等未在本条扩称修复。
 
 ### V04移动探测、隐形步兵与电脑选敌（2026-10-28）
 
@@ -743,7 +753,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V02 / P2 / 普通步兵入口已修，基础流程已验 | GAROBO/NARADR Hospital治疗owner原已有，但普通步兵WhatAction51E85A缺行；现共用医院鼠标动作，不再仅工程师可访问。Ammo=-1正常准入，不另改治疗或弹药 | 实际两医院E1：Off拒绝、On进驻治疗离开、满血拒绝通过；正常/计划下单与部署Move顺序通过。满员/联盟、治疗中失效、普通步兵保存/换主、自动AI仍开放；不是占领科技医院后的全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 / 单探测器移动/存读/AI开火已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。移动目标自身、探测器死亡/换主/运输、多House重叠、IFV/空艇/精英潜艇/幻影等其他路径及画面仍待验 |
-| V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
+| V05 / P1 / NP驻军索引、飞机奖励/同步/再生已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，驻军成本保留受害House例外；飞机子机保留普通奖励并额外训练母体，母体rank采样变化才向可训练弱子机同步；再生按Trainable继承raw | NP/stock聚焦奖励/等级/SpawnManager回归及真实双驻军首杀、航母普通子机击杀/部分XP/致死边界损失/原计时再生存读/替补再开火通过。非持久射手归属；多发在途/死亡弹出/驻军变动、其他子机家族和实际母体连续晋升/换主仍待验，不关闭全V05 |
 | V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射束、部署普通精英及独立场解缠已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；另验普通/精英DESO实际部署槽与创建场、独立残留场正式存读后周期伤害救船。各例边界见检查点；换主、多AI、完整抗压/长期场衰减及原鱿鱼-海豚崩溃回放仍待验 |
 | V08 / P1 / 玩家BFRT与TTNK充能对照已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑BFRT/载员/存读等未覆盖，不把线圈充能当V01中心供电 |
@@ -821,7 +831,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | 手动切电 | UseTogglePower、V/可重绑、鼠标与事件/BuildingOnline 链；已有 GUI 兵营Off/On与地图切换/手势回归 | Windows普通输入与存档；不另建客户端电力状态 |
 | EMP | 实际 TTNK → TankBolt/TankBoltE → ElectricbounceT/TE → TankBoltEMP → EMPulsWH；impact child 已接通，不能继续当作只引用未触发 | 时长/适用对象/算术为[明确可玩政策](npatch-emp.md)，不是完整 #174 等价；多AI见 A06 |
 | 已付款生产头暂停/恢复 | EMP不退款/重建，手动Off和用户Hold不被到期覆盖；已有实际MOD生产场景和保存状态回归 | Windows运行与多工厂/多House |
-| 乘员/母子机经验 | BFRT乘员先升、精英回退载具；子机训练母体、现存同步/再生继承；已有实际BFRT Enter场景 | 见 V05/F13；不是所有驻军链都已验 |
+| 乘员/母子机经验 | BFRT乘员先升、精英回退载具；飞机子机保留自身奖励并额外训练母体，母体等级采样时仅提高弱子机、再生按Trainable继承；已有实际BFRT Enter与航母再生存读场景 | 见 V05/F13；不是所有驻军链都已验 |
 | 控制者经验 | 有效非精英控制者分配既有XP，精英/无效回退普通受益者；实际尤里场景 | 比例限制与整数守恒为[政策](npatch.md)，不是所有 #174 算术已证 |
 | 英雄赏金 | Tanya实杀产生可支配金钱；敌对终结击杀只结一次，普通/精英击杀和去重有回归 | 默认值/钳制/比例是政策；动画外观未单独验，其他英雄未全部实际场景验 |
 | 永久控制/间谍劫车 | Spy登车成功消耗自身；精英尤里夺建筑后移除控制者仍保有建筑；拒绝/落空有回归 | Windows多AI换主/补员与存档；不创建临时manager竞争owner |
