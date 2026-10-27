@@ -3914,6 +3914,221 @@ mod retail_construction_tests {
         }
         panic!("real SHK Guard acquisition and AssaultBolt must charge the powered coil");
     }
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY Gattling kill promotion, hot save, Stop/Guard and resumed fire"]
+    fn aymod_gattling_promotes_through_fire_and_resumes_after_hot_save() {
+        use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for actor_type in ["YTNK", "YAGGUN"] {
+            let (mut scene, actor, first_victim) = aymod_nearby_pair(actor_type, "APOC", false);
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                if rules.object(actor_type).unwrap().powered {
+                    let owner = sim.entities().get(actor).unwrap().owner();
+                    let sites = cells_nearest(aymod_anchor(sim, owner));
+                    spawn_on_free_cells(sim, rules, owner, sites, &["GAPOWR"]);
+                }
+            }
+            let queue = |scene: &mut HeadlessScenario, command| {
+                let sim = &mut scene.runtime.simulation;
+                let owner = sim.entities().get(actor).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+            };
+            let spawn_near = |scene: &mut HeadlessScenario, kind: &str, enemy: bool| {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let owner = if enemy {
+                    house_of(sim, "Russians")
+                } else {
+                    sim.entities().get(actor).unwrap().owner()
+                };
+                let at = sim.entities().get(actor).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &[kind],
+                )[0]
+            };
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind(),
+                VeterancyRank::Rookie
+            );
+            // Only victim health is prepared. Every shot, death and XP award
+            // runs through ordinary Attack frames and Record_The_Kill702D40.
+            for round in 0..8 {
+                let victim = if round == 0 {
+                    first_victim
+                } else {
+                    spawn_near(&mut scene, "APOC", true)
+                };
+                scene
+                    .runtime
+                    .simulation
+                    .substrate
+                    .entities
+                    .get_mut(victim)
+                    .unwrap()
+                    .health
+                    .set_for_test(1);
+                let before = scene.sim().entities().get(actor).unwrap().veterancy.raw();
+                queue(
+                    &mut scene,
+                    Command::Attack {
+                        attacker_id: actor,
+                        target_id: victim,
+                    },
+                );
+                let mut fired = false;
+                let killed = (0..240).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == actor
+                            && event.target == crate::sim::combat::TargetKind::Entity(victim)
+                    });
+                    scene
+                        .sim()
+                        .entities()
+                        .get(victim)
+                        .is_none_or(|entity| entity.health.current() <= 0)
+                });
+                assert!(
+                    fired && killed,
+                    "ordinary Gattling fire must kill the wounded victim"
+                );
+                let promoted = scene.sim().entities().get(actor).unwrap();
+                assert_ne!(
+                    promoted.veterancy.raw(),
+                    before,
+                    "actual weapon kills must award experience"
+                );
+                if promoted.veterancy.rank_kind() == VeterancyRank::Elite {
+                    break;
+                }
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind(),
+                VeterancyRank::Elite
+            );
+            // A friendly unarmed building keeps the spin-up isolated from enemy
+            // retaliation. No stage/value/rank field is set by this test.
+            let target = spawn_near(&mut scene, "NACNST", false);
+            queue(
+                &mut scene,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            );
+            let hot = (0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().get(actor).unwrap().gattling.stage() > 0
+            });
+            assert!(hot, "actual firing must advance the Gattling stage");
+            let unit = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(unit.veterancy.rank_cache(), LEVEL_ELITE);
+            let saved = (
+                unit.veterancy.clone(),
+                unit.gattling.stage(),
+                unit.gattling.value(),
+                unit.gattling.report_latch(),
+            );
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY promoted hot Gattling");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let loaded = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(
+                (
+                    &loaded.veterancy,
+                    loaded.gattling.stage(),
+                    loaded.gattling.value()
+                ),
+                (&saved.0, saved.1, saved.2)
+            );
+            // Native TechnoLoad70BF61/70C20E clears the process-local report
+            // latch, so a future charge restarts its sound loop after loading.
+            assert!(saved.3);
+            assert!(!loaded.gattling.report_latch());
+            let rules = &scene.runtime.resources.rules;
+            let table = &rules.object(actor_type).unwrap().gattling_stages;
+            assert!(table.rate_down() > 0);
+            let cooldown =
+                saved.2 / table.rate_down() + rules.general.guard_area_targeting_delay + 64;
+            queue(&mut scene, Command::Stop { entity_id: actor });
+            for _ in 0..2 {
+                tick_with_due_commands(&mut scene);
+            }
+            queue(
+                &mut scene,
+                Command::Guard {
+                    entity_id: actor,
+                    target: None,
+                },
+            );
+            let cold = (0..cooldown).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let unit = scene.sim().entities().get(actor).unwrap();
+                unit.gattling.stage() == 0 && unit.gattling.value() == 0
+            });
+            assert!(cold, "normal Stop/Guard must wind the loaded Gattling down");
+            assert_eq!(
+                scene.sim().entities().get(actor).unwrap().veterancy,
+                saved.0
+            );
+            let victim = spawn_near(&mut scene, "APOC", true);
+            queue(
+                &mut scene,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: victim,
+                },
+            );
+            let mut resumed = false;
+            for _ in 0..240 {
+                let stage = scene.sim().entities().get(actor).unwrap().gattling.stage();
+                let expected = scene
+                    .runtime
+                    .resources
+                    .rules
+                    .object(actor_type)
+                    .unwrap()
+                    .elite_weapon_at((stage * 2) as usize)
+                    .unwrap()
+                    .to_owned();
+                let output = tick_with_due_commands(&mut scene);
+                if let Some(fire) = output
+                    .fire_events
+                    .iter()
+                    .find(|event| event.attacker_id == actor)
+                {
+                    assert_eq!(scene.sim().interner.resolve(fire.weapon_id), expected);
+                    resumed = true;
+                    break;
+                }
+            }
+            assert!(
+                resumed,
+                "{actor_type}: promoted Gattling never resumed fire after Stop/Guard and load"
+            );
+        }
+    }
+
     /// AY's elite initial fire rates are authored in EliteWeapon1, not an
     /// NPatch stage jump. Keep the native6F3436 stage-pair selection intact.
     #[cfg(feature = "npatch")]

@@ -6,15 +6,26 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；已保留V03 cfb479750、红血碉堡444b79f31、船厂a2bcda164、F09 58d9df4f3、基地巨炮b5a046558、F02实际链e40241dcc、飞机入口4e23f4e39。铁幕目标准入6f864d63f、光棱支援6476356ee也已保留；本轮完成NP的Arcing/SubjectToCliffs射程分支，下面记录覆盖与边界。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于f64857298补齐V06地面晋升/热存读/退档验证。此前飞机入口、铁幕、光棱、射程分支均已本地保存；本轮未改生产实现、未推送/PR/发布。
 - 玩家固定入口仍为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst、源cfb479750。未替换/重建该标签、未启动游戏、未改MOD或原始存档，未推送/PR/发布。后续代码不自动进入该构建。
 - Return Dubai弱攻势线按用户要求暂停。此前陆海双队列/Walk集结已有修复；旧team184跨水区FNPC、SCHP hold和主动抗压/长局仍未关闭；闲置人类败局不是多AI长局验收，不调权重/兵种数值补强。
 - V01独立供电/失联Drive政策和F11跨模块光照接线的既有门禁不变，不把一般“继续功能”当作已批准这两项设计选择。完整PLAN仍有效，功能优先、UI随后。
-- 本轮射程只改变同一InRange数值内核的分支选择，真实地图和mapless共用选择器；生产调用统一active profile，旧原生控制显式Stock，不改golden。没有新增保存字段、RNG抽样、timer/Detach写入，一次独立critic无可操作发现。
-- 本轮最终NP/stock InRange各32、GreatestThreat各43通过，NP line_of_fire原生控制1、输入context39通过；真实AY普通/精英巨炮typed配置+给定平面几何查询1项单独ignored运行通过。新增NPC桥面/射线组合边界已补入既有测试，不把Stock原生表重算为NP观测。
+- 本轮真实AY的YTNK与YAGGUN均通过普通Attack击杀预置残血APOC赚取XP至精英，不直接设rank；友军非武装建筑用于隔离蓄速。热状态正式保存/恢复后，Stop/Guard退至stage/value均0，随后仍按当前档位的精英武器正常开火。
+- 最终实际复合生命周期1项（含坦克/建筑两例）、既有两类精英首发1项、Gattling原生控制/帧回归7项、Veterancy12项通过。仅测试/文档修改，不重跑未影响的stock生产构建，也不为测试-only改动重复critic。
+- 最初错误期待循环音效report latch也持久；已实读原生TechnoLoad70BF61与70C20E，EBX0并清+4B8，现有serde skip是有意等价。保留rank/stage/value，另断言load清音效latch，不把夹具错误报成存档缺陷。没有改序列化或任何原始存档。
 - 原生/GUI并排、已持有目标受到铁幕后是否放弃、反击/脚本直接下达Attack、ForceShield完整运行时存读不在本轮结论内；不把新选敌/输入准入改成所有Attack总禁令。整体goal仍开放。
-- 下一安全动作：继续实际普通/精英武器及投射物闭包核查，区分作者“精英射程反降”的其他原因与本次具体分支；或沿PLAN补V06实杀晋升/退档/存读生命周期。不能把一次巨炮查询当作全武器射程、实际炮口或GUI验收。
+- 下一安全动作：按PLAN继续V07辐射场/部署武器解除寄生、再次捕获和存读生命周期，先确认实际弹头和既有Foot伤害owner；或继续普通/精英射程的其他适用类型。V06对空槽、换主及完整ROF倍率仍开放，不能把这两条地面链当作所有战术验收。
 - 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。V03空武器/建筑ammo早返短结果的完整reload fallback、其他F/V/A和真人验收仍开放。
+
+### V06盖特坦克/机炮地面生命周期（2026-10-28）
+
+- 新增aymod_gattling_promotes_through_fire_and_resumes_after_hot_save，正式AY规则/模式/地图加载，分别以YTNK与YAGGUN运行；需要电力的机炮使用真实GAPOWR，不伪造operational或工厂电力状态。
+- 经验阶段唯一准备边界是敌方APOC为残血1HP；每次普通Attack都捕获真实fire_event和实际死亡，再确认Record_The_Kill702D40确实增加射手经验，直至精英。没有直接ReceiveDamage补刀、set_elite/set_rank或修改VeteranRatio/兵种Cost/HP配置。
+- 以对友军非武装建筑的显式玩家Attack隔离蓄速阶段，原生IncreaseGattlingStage70DE70正常把stage提高；这不是敌方抗压/AI实战。随后保存真实精英缓存、stage/value、正式GameSnapshot内存保存/完整资源恢复，并验证它们保持。
+- 音效latch是明确例外：初次断言期望true而实际false；已有owner注释和原生Load入口70BF50/70BF61、尾70C20E证明正常Load清+4B8并重建声音handle。测试按此分别验证，未修改已有保存实现、RNG或音效owner来凑通过。
+- 读档后普通Stop及Guard事件让两者都退至stage0/value0，精英经验与缓存不丢；重新普通Attack时，真实fire_event武器匹配发射前当前stage对应的EliteWeapon槽。允许原生瞄准时继续蓄速，不凭作者短句硬设高档或假定所有首发都固定stage0。
+- 最终复合实际生命周期1项（坦克/机炮两例）、既有精英首发1项（两类普通/精英typed ROF关系）、Gattling7、Veterancy12通过。仅新增回归和台账，既有生产链无需修复，无新增状态/timer/Detach、无MOD/固定构建/原存档写入；未启动GUI，无发布或critic重复轮次。
+- 边界：对空槽、换主/登离载具、所有ROF倍率与连续间隔、完整强度敌军交战和GPU画面未扩称通过。这里证明普通武器击杀/晋升/蓄速/存读/退档/续战两条地面链，不关闭全部V06或整体目标。
 
 ### V10相关射程：Arcing与SubjectToCliffs联合分支（2026-10-28）
 
@@ -496,6 +507,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 - 这证明精英首发射速不是当前纯缺失；不认证自然击杀晋升回调、完整射击间隔/所有ROF倍率、
   对空槽、Stop/Guard退档、保存换主或GPU画面。V06保留这些边界，下一功能核查按PLAN继续，
   不因一个已有功能通过而缩小“完整AYMOD可玩”的目标。
+- 2026-10-28已另补两类地面实杀晋升/热存读/退档/续战，最新覆盖与未验边界见当前检查点及V06行。
 
 ### 已完成前置：F11来源状态已验证，跨模块接线未执行（2026-10-26）
 
@@ -705,7 +717,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
-| V06 / P1 / 精英首发已验，生命周期仍开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN在stage0首发已使用对应中/高速精英武器；实杀晋升、停火退档、换主/存档仍待验，不加额外NP跳档 |
+| V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 己方辐射束救船已验，其余仍开放 | AY RadBeamWarhead的Sonic=yes已走既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 真实乌贼缠玩家DEST→己方DESO开火→双方存活释放/动画对象回收→船实际移动通过；辐射场/部署武器、再次捕获、自动选敌和存档仍待验 |
 | V08 / P1 / 玩家BFRT与TTNK充能对照已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑BFRT/载员/存读等未覆盖，不把线圈充能当V01中心供电 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
