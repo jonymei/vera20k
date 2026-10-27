@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于6cf28ee4c补F02建筑本体/附属动画实际无窗口GPU输出。测试设备复用生产BUILDNGZ加载owner，无生产玩法修改，无需玩法critic；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；F02实际无窗口GPU增量a017102a2已提交，本轮接续补建筑换主后同一DOG的准入反转、显形中存读、普通Move移走后重新隐形。只增实际场景测试，无生产玩法修改，无需玩法critic；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
@@ -15,9 +15,16 @@
 - BuildingUnlimbo440E99..440EA7先要求NaturalParticleSystem非空才分配/调用62DC50并写30C；完全隐形454E7F..454E9E销毁旧30C；退隐到0的454F3D..454F6C先比较NaturalParticleLocation与空坐标，相同便在分配/构造前跳过。生产typed全Building列表在普通Battle/XMP03T4和Return Dubai均system=None、位置0，已新增正式场景回归，不把单个电厂或文本grep当全集证据。
 - 因此这两配置fresh场景的自然粒子链未启用，当前箱子隐形无需创建空壳粒子状态，也没有这条路径新增对象ID/抽样；其他模式/地图、自定义非空位置或历史带30C的外来存档仍保留未实现通用生命周期。NAWEAP的NaturalSmokeLocation不是此reader读取的NaturalParticleLocation，未擅加别名；字面字节检索不当作全局不可达证明。
 - 最终真实两图适用性1项、原Type空引用读取1项、实际移动/建筑/落地飞机箱子2项通过。未增加RNG、timer/Detach或保存字段，无全仓库/GUI/新游戏构建。缓存保留器Unsupported PE debug closure安全停止、删除0字节，不手动清理固定构建。
-- 下一安全动作：继续F02建筑换主/损坏与多House边界，优先通过已有生产场景补生命周期验证，不重复实现隐形owner。无窗口GPU已验证当前建筑/附属槽的显示门禁，不等于原生像素一致、完整战场或真人验收；启用NaturalParticleSystem配置仍开放。
+- 下一安全动作：继续F02损坏/联盟重叠或V07寄生换主边界，优先通过已有生产场景补生命周期验证，不重复实现owner。建筑换主的生产receiver组合已通过，不替代工程师完整点击/步行捕获；无窗口GPU不等于原生像素一致、完整战场或真人验收，启用NaturalParticleSystem配置仍开放。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F02建筑换主后的近邻传感器与过渡存读（2026-10-28）
+
+- 扩展既有实际AY移动拾箱/建筑与落地飞机存读回归：真实DOG放在GAPOWR基础矩形一格外，同House连续30帧不显形；经共享change_owner_with_rules生产receiver换给另一人类House，同一个DOG变为foreign，触发Building4578C0退隐，显形中正式保存/恢复后到stage0，并保持30帧不能重新隐形。
+- 原属方给DOG普通Move，离开接触范围后建筑自然重新隐形；再次正式存读仍保留新owner、crate能力与完全隐形状态。没有直接写cloak阶段/传感器计数、复制换主逻辑、改规则或原始存档；此组合不声称已验证工程师点击/步行捕获。
+- 初次使用电脑接收者时建筑正常走Building4492D7出售并消失；这是已有原生规则，不是cloak丢失。改为通过实际国家注册表构造新human House隔离本链，未关闭电脑出售或硬编码stock俄罗斯索引。损坏/联盟重叠、完整多AI、启用自然粒子及GUI仍开放；无新RNG调用、timer/Detach写入或保存字段。
+- 最终带零售INI强制门禁的core实际aymod_cloak_crate_两项通过（移动单位原回归、建筑/落地飞机扩展回归）；本增量仅测试与台账，未更改生产玩法或固定构建。
 
 ### F02建筑隐形箱实际无窗口GPU输出（2026-10-28）
 

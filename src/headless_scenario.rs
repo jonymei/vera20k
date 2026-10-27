@@ -2384,6 +2384,147 @@ mod retail_construction_tests {
                 "the class visual query must hide an unsensed recipient, including Building4544A0"
             );
         }
+
+        // Building CanAuto457770/Should4578C0 ignore own Sensors, but a
+        // change of House makes the same physical neighbour foreign.
+        let (dog, owner, destination) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            let actor = sim.entities().get(building).unwrap();
+            let owner = actor.owner();
+            let at = actor.position;
+            let (w, h) = rules.object("GAPOWR").unwrap().foundation.dimensions();
+            assert!(rules.object("DOG").unwrap().sensors);
+            let edge: Vec<_> = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    x == i32::from(at.rx()) + i32::from(w)
+                        && (i32::from(at.ry())..i32::from(at.ry()) + i32::from(h)).contains(&y)
+                })
+                .collect();
+            let dog = spawn_on_free_cells(sim, rules, owner, edge, &["DOG"])[0];
+            for id in [dog, tank] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let destination = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let distance = (i32::from(x) - i32::from(at.rx()))
+                        .abs()
+                        .max((i32::from(y) - i32::from(at.ry())).abs());
+                    ((6..=8).contains(&distance)
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                        && sim.occupancy().get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        }))
+                    .then_some((x, y))
+                })
+                .unwrap();
+            (dog, owner, destination)
+        };
+        let state = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .state()
+        };
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(
+                state(&scene),
+                2,
+                "own contact sensor must not reveal the building"
+            );
+        }
+        // Use a human recipient: an AI legitimately sells a foreign-initial
+        // building (Building4492D7), which is a separate lifecycle test.
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let enemy = scene.add_human_house(
+            "CloakRecipient",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.change_owner_with_rules(
+                building,
+                enemy,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        assert!(
+            granted(&scene, building),
+            "ChangeOwner must retain the instance ability"
+        );
+        assert!(
+            (0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 3
+            }),
+            "the now-foreign contact sensor must start Building's reveal ramp"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY captured crate-cloaked building revealing near old owner's DOG",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(scene.sim().entities().get(building).unwrap().owner(), enemy);
+        assert!(granted(&scene, building));
+        assert!(
+            (0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 0
+            }),
+            "saved reveal must reach stage zero with the neighbour still present"
+        );
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(state(&scene), 0);
+        }
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Move {
+                entity_id: dog,
+                target_rx: destination.0,
+                target_ry: destination.1,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 2
+            }),
+            "ordinary detector movement away must allow the new owner's building to recloak"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY captured building recloaked after old owner's detector left",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(granted(&scene, building));
+        assert_eq!(state(&scene), 2);
     }
 
     #[cfg(feature = "npatch")]
