@@ -6,16 +6,23 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于d99d51090补F08普通基洛夫实际飞行投弹/下落中存读/PostMortem引信存读与正常销毁。仅测试/文档，现有生产链通过，无需critic；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于2ec6ef833核F09在普通Battle/XMP03T4和Return Dubai正式加载后的全已分配武器族。仅测试/文档，无生产改动，无需critic；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 新aymod_kirov_bomb_flight_and_delayed_barrel_death_survive_load：实际ZEP与8格外CAMISC02，普通Attack真正接近、高飞并释放配置炸弹；确认目标尚未受伤、投射物非瞬时。保存原下落炸弹及下一帧Stop，恢复后禁止出现替代投弹，原弹实际命中并触发health1/原生PostMortem引信。
-- 不改血量/武器伤害/弹速/规则；命中后的alive/health1、无虚构C4AppliedBy在第二次正式存读保持，普通建筑AI使引信到期并销毁。原先直接receiver的BlimpHE例保留，不把它混称完整飞行；本新例才补玩家普通投弹到延迟销毁的链。
-- 最终新完整投弹1项、flat_explosion3项（含原实际直收伤）、postmortem4项通过。无生产逻辑/保存字段/直接RNG/timer/Detach变化，沿现有落弹/receiver/C4 owner执行；不运行全仓库/GUI或重复critic。上轮共用Unlimbo sensor修复及其只读复核结论保留原节。
-- 下一安全动作：F09 DoesntAffectEnemies的实际挂载闭包，沿现有生产规则/武器根及派生引用owner核TankMakeupKit/CRMakeupKit使用者，区分定义残留和可达功能；不凭单个MGTK/FV配置就认定全MOD无消费者。F08精英弹头/其他别名使用者、长连投/多目标、GUI仍开放，不把普通单发+两次存读认证成全基洛夫完成。
+- 新aymod_friendly_only_warhead_has_no_allocated_weapon_consumer_in_battle_maps在两套实际load_session规则中确认：DoesntAffectEnemies唯一typed弹头为TankSnapshot；全weapons_iter中没有任何武器使用该标志弹头，TankMakeupKit/CRMakeupKit均未分配。不是只看MGTK/FV当前Primary，也不强挂武器来制造实战。
+- 证据范围是这两局已分配WeaponType族：既有native-ordered processor纳入普通/精英/占楼/死亡/超武WeaponType/派生弹道等读到的引用，并保留早层孤立分配，供Action42按索引使用。未分配名字无法从这两局Weapon表索引选出；不把此结论扩大到其他地图/模式、未审的直接Warhead特殊消费者或所有未来运行时分配。
+- 实际两配置闭包1项、NP reader/保存/hash1项、friendly-only FireSubject1项、真实攻击者House伤害门1项、原生逐层武器读1项通过。现有F09支持保留，但这两配置不再列为“缺实际武器挂载待修”；无新RNG、timer/Detach或存档字段，无MOD/原始存档/固定构建变更。
+- 下一安全动作：F02隐形箱在建筑/落地飞机上的实例能力、持久化与正常生命周期。复用既有拾箱/半径与共用cloak owners，不按键名给建筑补另一套状态；F09其他地图/模式若实际引入消费者再验证，不以当前残留定义扩张无必要实装。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F09实际武器分配闭包：两个Battle配置无消费者（2026-10-28）
+
+- 两套正式加载：普通Battle/XMP03T4和Return Dubai。typed Warhead族中DoesntAffectEnemies只有TankSnapshot；遍历正式RuleSet的完整已分配WeaponType族，没有武器引用任一带此标志弹头。TankMakeupKit与CRMakeupKit两者weapon(name)均为None，不是仅当前单位没装备而仍保留可索引武器。
+- RuleSet/native_processing现有分配owner从所有到达reader的对象普通/精英槽、DeathWeapon/OccupyWeapon、超武WeaponType、General DeathWeapon、Projectile Airburst/ShrapnelWeapon等建族，早层孤立分配亦保留，Trigger Action42消费同一索引族。新回归消费此生产结果，不另写配置图解析器或复制闭包实现。
+- 这是“当前两配置无已分配武器消费者”的边界，不是全MOD所有模式/地图或所有直接Warhead路径的全局不可达证明。已有reader、FireError/ReceiveDamage支持仍保留，不改MGTK/FV武器去人为触发，不解释原局弱攻势。
+- 实际闭包1项、NP精确键/层次/保存/hash1项、FireSubject1项、真实攻击者House伤害门1项、逐层武器读1项通过。测试/文档-only，无RNG/计时/Detach/保存字段变化；未来其他配置添加引用会由此测试或对应场景暴露，需要重新验收。
 
 ### F08普通基洛夫完整投弹、在途存读与延迟引爆（2026-10-28）
 
@@ -230,7 +237,7 @@
 - 没有新增RNG调用、timer/Detach或保存字段；较短计划会自然改变原有炼厂/防御插入抽样范围，不伪装成原有错误计划的逐帧重放。
   原存档中已保留的错误计划和已经造好的巨炮不自动删除；此修复作用于后续新生成的计划，新局验证。尚未单跑完整三阵营建造/落地实战，不把计划回归当GUI验收。
 
-### F09：已接生产链，实际挂载待核
+### F09：已接生产链，当前两Battle武器闭包无消费者
 
 - NPAE WarheadType ctor75CF25清零+129；ReadINI75D3F1→C2E853→C2E90D..927按当前bool读取精确键DoesntAffectEnemies（字面值BA4C63），
   早于IsFlatExplosion。现由既有逐层registry保留，投影到WarheadType，覆盖空值/坏值回退、注册表保存恢复及NP配置hash。
@@ -246,7 +253,7 @@
 - --profile fast真实AYMOD加载及既有TTNK Attack→Stop/Guard→内存保存恢复→继续连发1项显式ignored通过；未启动GUI、修改MOD或原存档、重建/替换固定玩家版。
   一次只读critic无可操作发现。未新增RNG抽样、timer或Detach调用；保存测试是typed registry与现有实际场景，不冒称TankSnapshot完整实战存读档。
 - 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes；规则根无include，LANGRULE缺省，MPBattleMD/地图无该键覆盖。
-  TankMakeupKit/CRMakeupKit引用此弹头，但尚未建立有效单位挂载闭包；常见MGTK.Primary=MirageGun、FV.Weapon11=CRNeutronRifle不走它。
+  物理TankMakeupKit/CRMakeupKit段引用此弹头；最新正式类型分配闭包已证实两者均未分配，且全武器族没有TankSnapshot消费者，详见当前F09节；并非仅由MGTK/FV当前槽推断。
   因而本项不能当作原局弱AI原因或所有模式/地图实际可达的证明。伤害单向盟友/治疗输入、完整实战和GUI边界仍未另验。
 
 ## 1. 基线、状态和优先级
@@ -824,7 +831,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；玩家GUI、持续AI战术、返航重装/多目标和实际晋升过程仍待验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通SUB自然隐形/未探测拒绝、游近探测及两次存读/Sapper命中；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。精英潜艇、探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
 | F08 / P2 / 普通完整投弹/两次存读已验，画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。精英/其他别名弹头、长连投/多目标、GUI及全部既有引爆算术仍未逐项认证 |
-| F09 / P2 / 已接入，实际挂载待核 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。根仅定义TankMakeupKit/CRMakeupKit使用此WH，尚未建立实际挂载闭包；MGTK/FV常见配置不走这两武器，不能据此解释原局弱攻势 |
+| F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
 | F12 / P2 | 扩展遭遇战 UI：8色大厅/战场错配本轮已修；科技等级滑条与完整16色界面仍开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |

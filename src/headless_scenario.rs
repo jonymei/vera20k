@@ -2353,6 +2353,54 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real scenario weapon allocation closure for friendly-only warheads"]
+    fn aymod_friendly_only_warhead_has_no_allocated_weapon_consumer_in_battle_maps() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in [None, Some("重返迪拜.yrm")] {
+            let scene = if let Some(map) = map {
+                let mut launch = battle_session(
+                    map,
+                    &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+                );
+                launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                launch.options.unit_count = 0;
+                load_session(&root, map, 0x00C0_FFEE, launch).unwrap()
+            } else {
+                aymod_battle(0)
+            };
+            let rules = &scene.runtime.resources.rules;
+            let flagged = rules
+                .warheads_iter()
+                .filter(|wh| wh.doesnt_affect_enemies)
+                .map(|wh| wh.id.as_str())
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(flagged, std::collections::BTreeSet::from(["TankSnapshot"]));
+            // RuleSet's native-ordered weapon family retains every allocated
+            // reference, even orphaned prior-layer allocations (Action42 can
+            // index them). This is stronger than scanning current Primary.
+            let consumers = rules
+                .weapons_iter()
+                .filter(|weapon| {
+                    weapon
+                        .warhead
+                        .as_deref()
+                        .and_then(|id| rules.warhead(id))
+                        .is_some_and(|wh| wh.doesnt_affect_enemies)
+                })
+                .map(|weapon| weapon.id.as_str())
+                .collect::<Vec<_>>();
+            assert!(
+                consumers.is_empty(),
+                "{}: actual allocated friendly-only consumers {consumers:?}",
+                scene.sim().session.map_name()
+            );
+            assert!(rules.weapon("TankMakeupKit").is_none());
+            assert!(rules.weapon("CRMakeupKit").is_none());
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Kirov warhead and barrel delayed death"]
     fn aymod_flat_explosion_blimp_warhead_arms_and_expires_barrel_fuse() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
