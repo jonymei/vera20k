@@ -6,17 +6,23 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于6ca84e940修V04运输卸载漏恢复Foot传感器的生产缺口。已通过实际红/绿回归与一次只读critic，补边界回归；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于d99d51090补F08普通基洛夫实际飞行投弹/下落中存读/PostMortem引信存读与正常销毁。仅测试/文档，现有生产链通过，无需critic；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 新实际FV→LCRF正常Enter→运输中正式存读→普通Unload复现：FV已活体出车、inside清除，但sensor_deposit=None，附近实际TANY格的Russians计数仍0，电脑GAPILL不能重新准入隐形目标。不是距离、AI脚本或运输拒绝；诊断位置(25,88)距探测格(28,87)在实际9格覆盖内。
-- 根因为单位sensor add只放在5个world_spawn出生/部署调用处，通用Reveal缺少FootUnlimbo4D7318。现已在共享lifecycle的Foot邻居/威胁系数尾后调用既有sensor owner，移除5处重复add；放置失败、Consumed/AlreadyRevealed不经过该边界，不新增卸载专用逻辑。建筑独立sensor array无改动。
-- 修复后实际登船计数1→0，运输存读保持0；卸载立即恢复1与AI目标准入，二次存读保持1。新紧凑边界例保护出生仅1次、AlreadyRevealed及拒绝Reveal不改计数、重新Reveal回到1。没有新增保存字段、直接RNG、timer或Detach调用；sensor resident callbacks在原生Unlimbo阶段执行，非旧错误顺序逐帧承诺。
-- 最终实际运输1项、实际控制/归还/死亡1项、NP/stock sensor_lifecycle各7项、NP卸载35项、构造36项、重打包失败1项通过。只读critic无可操作发现；未运行全仓库/GUI/新游戏构建。一次world_spawn错误过滤器0项不计验证，已按真实techno_constructor_tests重跑36项。
-- 下一安全动作：F08实际基洛夫完整飞行/投弹/PostMortem链，已有直接BlimpHE receiver和fuse验证不是完整投弹。V04联盟/多House重叠、其他传感器/空艇/伪装族与完整运输战术仍开放；共享Unlimbo迁移未逐个认证所有间接调用者。不恢复弱攻势，不改AI权重/数值/MOD/固定构建。
+- 新aymod_kirov_bomb_flight_and_delayed_barrel_death_survive_load：实际ZEP与8格外CAMISC02，普通Attack真正接近、高飞并释放配置炸弹；确认目标尚未受伤、投射物非瞬时。保存原下落炸弹及下一帧Stop，恢复后禁止出现替代投弹，原弹实际命中并触发health1/原生PostMortem引信。
+- 不改血量/武器伤害/弹速/规则；命中后的alive/health1、无虚构C4AppliedBy在第二次正式存读保持，普通建筑AI使引信到期并销毁。原先直接receiver的BlimpHE例保留，不把它混称完整飞行；本新例才补玩家普通投弹到延迟销毁的链。
+- 最终新完整投弹1项、flat_explosion3项（含原实际直收伤）、postmortem4项通过。无生产逻辑/保存字段/直接RNG/timer/Detach变化，沿现有落弹/receiver/C4 owner执行；不运行全仓库/GUI或重复critic。上轮共用Unlimbo sensor修复及其只读复核结论保留原节。
+- 下一安全动作：F09 DoesntAffectEnemies的实际挂载闭包，沿现有生产规则/武器根及派生引用owner核TankMakeupKit/CRMakeupKit使用者，区分定义残留和可达功能；不凭单个MGTK/FV配置就认定全MOD无消费者。F08精英弹头/其他别名使用者、长连投/多目标、GUI仍开放，不把普通单发+两次存读认证成全基洛夫完成。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F08普通基洛夫完整投弹、在途存读与延迟引爆（2026-10-28）
+
+- 新实际测试使用正式AY ZEP和8格外CAMISC02，经普通Attack飞近、确认高飞、真实fire_events释放配置炸弹。不手工设置飞行高度、不调用直接receiver、不改目标血量或武器数值。放弹帧仍为初始目标HP，保证有真实在途窗口。
+- 正式保存/完整资源恢复下落中的原炸弹；下一帧普通Stop阻止新放弹，后续观察同时断言无替代fire_events，因此不能以另一发命中掩盖在途弹丢失。原弹真实伤害触发IsFlatExplosion/CausesDelayKill别名的既有PostMortem，目标alive/health1及引信挂起，C4AppliedBy仍为None。
+- 第二次在引信阶段正式存读，health1/引信保持；普通建筑AI到期销毁。覆盖Techno701E92..701F67的延迟恢复与既有C4 owner，未新增绘制或第二套爆炸逻辑。
+- 新完整飞行1、flat_explosion3、postmortem4通过。仅测试/文档，无新直接RNG/计时/Detach/保存字段，游戏自然落弹和延迟引信沿既有owner运行。未验证精英KTSTLEXP链、长连投/多目标或GUI/GPU；本例不是原版飞行/爆炸像素对照。
 
 ### V04探测器卸载立即恢复：共用Unlimbo缺口修复（2026-10-28）
 
@@ -817,7 +823,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；玩家GUI、持续AI战术、返航重装/多目标和实际晋升过程仍待验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通SUB自然隐形/未探测拒绝、游近探测及两次存读/Sapper命中；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。精英潜艇、探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
-| F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
+| F08 / P2 / 普通完整投弹/两次存读已验，画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。精英/其他别名弹头、长连投/多目标、GUI及全部既有引爆算术仍未逐项认证 |
 | F09 / P2 / 已接入，实际挂载待核 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。根仅定义TankMakeupKit/CRMakeupKit使用此WH，尚未建立实际挂载闭包；MGTK/FV常见配置不走这两武器，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |

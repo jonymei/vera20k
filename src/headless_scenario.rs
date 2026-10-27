@@ -2408,6 +2408,154 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Kirov flight, saved falling bomb and PostMortem expiry"]
+    fn aymod_kirov_bomb_flight_and_delayed_barrel_death_survive_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let (actor, barrel) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            let actor = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["ZEP"],
+            )[0];
+            let at = sim.entities().get(actor).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 8)
+                .collect::<Vec<_>>();
+            let barrel = spawn_on_free_cells(sim, rules, enemy, sites, &["CAMISC02"])[0];
+            (actor, barrel)
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (owner, expected, initial_health) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let primary = rules
+                .weapon(rules.object("ZEP").unwrap().primary().unwrap())
+                .unwrap();
+            assert!(
+                !rules
+                    .projectile(primary.projectile.as_deref().unwrap())
+                    .unwrap()
+                    .inviso
+            );
+            assert!(
+                rules
+                    .warhead(primary.warhead.as_deref().unwrap())
+                    .unwrap()
+                    .causes_delay_kill
+            );
+            assert!(rules.object("CAMISC02").unwrap().eligible_for_delay_kill);
+            let owner = sim.entities().get(actor).unwrap().owner();
+            let health = sim.entities().get(barrel).unwrap().health.current();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: barrel,
+                },
+            ));
+            (owner, primary.id.clone(), health)
+        };
+        assert!(
+            (0..900).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == actor
+                        && scene.sim().interner.resolve(event.weapon_id) == expected
+                        && event.target == TargetKind::Entity(barrel)
+                })
+            }),
+            "normal Kirov Attack must approach and release its authored bomb"
+        );
+        assert!(crate::sim::movement::air_movement::is_high_flying(
+            scene.sim().entities().get(actor).unwrap(),
+            scene.sim().resolved_terrain(),
+            Some((&scene.runtime.resources.rules, &scene.sim().interner)),
+        ));
+        assert_eq!(
+            scene.sim().entities().get(barrel).unwrap().health.current(),
+            initial_health,
+            "the bomb must still be falling, not a direct receiver or instant hit"
+        );
+        let tick = scene.sim().session.tick() + 1;
+        // Stop future releases without deleting or completing the existing
+        // projectile. Its normal fall and impact remain authoritative.
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            tick,
+            Command::Stop { entity_id: actor },
+        ));
+        let bytes = save_scene(&scene, "AY Kirov bomb before impact");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            (0..360).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == actor),
+                    "the saved falling bomb, not a replacement release, must cause the hit"
+                );
+                scene.sim().entities().get(barrel).is_some_and(|victim| {
+                    victim.health.current() == 1 && victim.pending_c4_detonation.pending().is_some()
+                })
+            }),
+            "the actual saved bomb must hit and arm the barrel's PostMortem fuse"
+        );
+        let victim = scene.sim().entities().get(barrel).unwrap();
+        assert!(victim.is_object_alive());
+        assert_eq!(
+            victim
+                .pending_c4_detonation
+                .pending()
+                .unwrap()
+                .source_entity_id(),
+            None,
+            "PostMortem does not invent a C4 planter from the bomb firer"
+        );
+        let bytes = save_scene(&scene, "AY barrel restored at health one on its fuse");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(barrel).unwrap().health.current(),
+            1
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(barrel)
+                .unwrap()
+                .pending_c4_detonation
+                .pending()
+                .is_some()
+        );
+        assert!(
+            (0..30).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(barrel)
+                    .is_none_or(|victim| !victim.is_object_alive() || victim.death.is_dying())
+            }),
+            "normal building AI must expire the restored fuse and destroy the barrel"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY bounty reader/kill-credit integration"]
     fn aymod_tanya_kill_receiver_pays_real_house_bounty() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
