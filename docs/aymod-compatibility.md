@@ -6,16 +6,24 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于b380d7ec2补F06精英ORCA远距追击移动空中目标及接敌前热存读。现有生产链通过，无玩法改动，无需critic；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于332c0edaf补F07实际潜艇感知/存读/Sapper攻击，以及Hover/Organic的先行零装甲倍率回退。仅测试/文档，现有生产链通过，无需critic；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 新aymod_orca_elite_intercepts_a_moving_air_target_after_load使用实际AY ORCA/ZEP；typed精英武器与普通武器不同、投射物AA=true，初始实际距离大于精英射程再加4格。设置精英与初始高空作为提供的先验，不改武器/速度；ZEP的正常Move payload与ORCA Attack进入既有owner。
-- 接敌前双方实际水平移动、ORCA仍锁定ZEP且没有开火时正式保存/完整资源恢复。随后实际fire_events校验精英武器/目标，ZEP真正掉血且仍高飞、Move未完成、存读后位置继续改变；不是靠ammo减少代替命中。普通近距空/地两例仍保留。
-- 实际aymod_orca_2项、AACombat reader/隐形准入2项、Aircraft attack_mission7项通过。复读NPAE414D36→C27C60..C27C78，AACombat只跳高飞清目标，不解除隐形/AA等其他准入。没有新增RNG、timer/Detach或保存字段；本轮无GUI/GPU/完整电脑战术或返回机场重装覆盖。
-- 下一安全动作：F07谭雅对已感知/未感知潜艇的真实Attack、海面/水下选槽边界及存读；先核既有传感器/隐形/海军选武器owners，沿实际水图复用现成海军fixture，不改Sapper键或猜AntiNaval/AntiUnderwater。F06电脑自主ORCA战术、GUI及持续返航重装仍开放；非吸收建筑Cargo顺序残余维持当前实际闭包无使用者分类。
+- F07抽取同一真实Return Dubai连续水道fixture供已有普通/精英HYD例与新潜艇/例外边界共用，不改变地图/MOD。实际SUB自然隐形，初始超出TANY自身SensorsSight，正常FireSubject（仅排除射程检查）拒绝；正式存读仍无感知。TANY普通Move游近后自身sensor发布，第二次正式存读仍感知，普通Attack真正使用Sapper命中。
+- 目标未探测的原生返回为Cant(6)，6FC24D..6FC29D；Cloaked(9)是攻击者自身DecloakToFire的另一门。没有把首次测试的错误期望当引擎缺陷。海军选择器对Hover LCRF/Organic DLPH均返回0，但实际AY HollowPoint2对heavy/light均0%，SelectWeapon6F3716..6F3751在进入海军分支前返回副武器；两者实际Attack均以Sapper命中。不能按NavalTargeting=4孤立宣称它们一定挨手枪。
+- 最终实际aymod_tanya_5项（新增两项、原HYD普通/精英及隐形/赏金相关）、combat_weapon3项、fire_error3项通过。无生产逻辑、MOD、RNG调用、timer/Detach或存档字段变化；不重复stock/全仓库/critic，无GUI/完整AI战术验证。
+- 下一安全动作：V04探测器死亡/换主的真实sensor撤销与重建、存读及AI准入；先沿已有sensor owner查事件和生产测试，避免再造visibility状态。F07精英潜艇、探测丢失后的续战/再潜、GUI和AI多目标战术仍开放；F06自主ORCA战术/返航重装亦未关闭。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04探测器死亡/换主/运输及多House重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F07潜艇感知/存读与实际海军例外（2026-10-28）
+
+- 复用新aymod_tanya_water_pair，实际Return Dubai连续清空水道，保证从未探测距离游近的合法水路。TANY/SUB使用正式规则，SUB在Sleep先验下正常隐形，不手动设置cloak/sensor；TANY的自身Sensors真实发布随Move变动。
+- 检查未探测时FireSubject拒绝攻击（排除射程，只测其他实际门），正式存读/完整资源恢复后仍无sensor且返回Cant。游近进入探测范围、第二次存读保留sensor；普通Attack真正发射Sapper并伤害SUB。并非验证玩家能在GUI点到未探测潜艇；Sleep仅隔离SUB反击。
+- 实读GetFireError6FC24D..6FC29D的未感知目标拒绝是Cant6（6FCD29），不是Cloaked9。NavalTargeting4分支6F38FC..6F3915保留Hover/Organic返回0，但实际AY TANY主武器HollowPoint2对LCRF heavy、DLPH light的typed interaction均为零；SelectWeapon6F3716..6F3751先行选择副武器。新增实际例同时断言海军leaf返回0、完整选择返回1、真实Sapper命中，避免按键名/单leaf误改规则。
+- 实际Tanya5项、选武器3项、GetFireError3项通过。新增两项测试，不新增玩法状态/随机抽样/计时/Detach或保存布局；未改MOD。原HYD普通/精英与其他TANY行为继续通过，无需玩法critic。
+- 保留精英潜艇完整链、探测离开后再潜与重获、换主/运输、多AI长局、GUI等边界；本例只证明玩家普通Attack在真实感知门后的实际效果。不是AntiNaval/AntiUnderwater新增键实现，它们原先的残留分类不变。
 
 ### F06精英ORCA远距移动目标追击与热存读（2026-10-28）
 
@@ -792,7 +800,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；玩家GUI、持续AI战术、返航重装/多目标和实际晋升过程仍待验；不将此链扩大为所有飞机行为通过 |
-| F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。仍需单验感知/未感知潜艇、Hover/Organic主武器例外与GUI，不扩大为所有海军行为通过 |
+| F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通SUB自然隐形/未探测拒绝、游近探测及两次存读/Sapper命中；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。精英潜艇、探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
 | F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
 | F09 / P2 / 已接入，实际挂载待核 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。根仅定义TankMakeupKit/CRMakeupKit使用此WH，尚未建立实际挂载闭包；MGTK/FV常见配置不走这两武器，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |

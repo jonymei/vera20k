@@ -3100,53 +3100,71 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_tanya_water_pair(target_type: &str, separation: u16) -> (HeadlessScenario, u64, u64) {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "重返迪拜.yrm";
+        let mut launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+        );
+        launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
+        launch.options.unit_count = 0;
+        let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let runtime = &mut scenario.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let site = {
+            let terrain = sim.resolved_terrain().unwrap();
+            terrain
+                .cells()
+                .iter()
+                .find_map(|first| {
+                    (0..=separation)
+                        .all(|dx| {
+                            first
+                                .rx
+                                .checked_add(dx)
+                                .and_then(|x| terrain.cell(x, first.ry))
+                                .is_some_and(|cell| {
+                                    cell.land_type
+                                        == crate::rules::terrain_rules::LandType::Water.as_index()
+                                        && !cell.outside_playfield
+                                        && !cell.bridge_facts.has_structural_bridge()
+                                        && cell.level == first.level
+                                        && sim.occupancy().get(cell.rx, cell.ry).is_none()
+                                })
+                        })
+                        .then_some((first.rx, first.ry))
+                })
+                .expect("a continuous empty water lane in actual Return Dubai")
+        };
+        let owner_name = sim.interner.resolve(house_of(sim, "Americans")).to_owned();
+        let enemy_name = sim.interner.resolve(house_of(sim, "Russians")).to_owned();
+        let actor = sim
+            .spawn_object("TANY", &owner_name, site.0, site.1, 0, rules)
+            .unwrap();
+        let target = sim
+            .spawn_object(
+                target_type,
+                &enemy_name,
+                site.0 + separation,
+                site.1,
+                0,
+                rules,
+            )
+            .unwrap();
+        (scenario, actor, target)
+    }
+
+    #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Tanya ordinary/elite naval weapons on Return Dubai"]
     fn aymod_tanya_uses_sapper_to_damage_mechanical_ships() {
         use crate::sim::combat::{TargetKind, combat_weapon};
         use crate::sim::command::{Command, CommandEnvelope};
-        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
-        let map = "重返迪拜.yrm";
         for (elite, expected) in [(false, "Sapper"), (true, "SapperE")] {
-            let mut launch = battle_session(
-                map,
-                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
-            );
-            launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
-            launch.options.unit_count = 0;
-            let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+            let (mut scenario, actor, ship) = aymod_tanya_water_pair("HYD", 1);
             let runtime = &mut scenario.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-            let site = {
-                let terrain = sim.resolved_terrain().unwrap();
-                terrain
-                    .cells()
-                    .iter()
-                    .find_map(|cell| {
-                        let x = cell.rx;
-                        let y = cell.ry;
-                        let next = terrain.cell(x.checked_add(1)?, y)?;
-                        ([cell, next].into_iter().all(|cell| {
-                            cell.land_type
-                                == crate::rules::terrain_rules::LandType::Water.as_index()
-                                && !cell.outside_playfield
-                                && !cell.bridge_facts.has_structural_bridge()
-                                && sim.occupancy().get(cell.rx, cell.ry).is_none()
-                        }) && cell.level == next.level)
-                            .then_some((x, y))
-                    })
-                    .expect("adjacent empty water cells in actual Return Dubai")
-            };
-            let owner = house_of(sim, "Americans");
-            let enemy = house_of(sim, "Russians");
-            let owner_name = sim.interner.resolve(owner).to_owned();
-            let enemy_name = sim.interner.resolve(enemy).to_owned();
-            let actor = sim
-                .spawn_object("TANY", &owner_name, site.0, site.1, 0, rules)
-                .unwrap();
-            let ship = sim
-                .spawn_object("HYD", &enemy_name, site.0 + 1, site.1, 0, rules)
-                .unwrap();
             if elite {
                 sim.substrate
                     .entities
@@ -3206,6 +3224,259 @@ mod retail_construction_tests {
                 fired && hit,
                 "actual {expected} Attack must fire and damage its naval target"
             );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Tanya senses and attacks a saved cloaked submarine"]
+    fn aymod_tanya_detects_a_cloaked_submarine_before_sapper_attack_after_load() {
+        use crate::sim::combat::{
+            TargetKind, fire_error::FireError, fire_error_world::FireSubject,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, actor, sub) = aymod_tanya_water_pair("SUB", 14);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (owner, sub_cell, health) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("TANY").unwrap();
+            assert!(kind.sensors && i32::from(kind.sensors_sight) < 12);
+            assert_eq!(kind.naval_targeting, 4);
+            assert!(rules.object("SUB").unwrap().underwater);
+            for id in [actor, sub] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let victim = sim.entities().get(sub).unwrap();
+            (
+                sim.entities().get(actor).unwrap().owner(),
+                (victim.position.rx(), victim.position.ry()),
+                victim.health.current(),
+            )
+        };
+        let sensed = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .fog
+                .has_sensor_for_house(owner, sub_cell.0, sub_cell.1)
+        };
+        let error = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let rules = &scene.runtime.resources.rules;
+            FireSubject {
+                world: sim,
+                rules,
+                overlay_registry: Some(&scene.runtime.resources.overlay_registry),
+                fog: Some(sim.fog.fire_view(sim.house_alliances())),
+                firer: sim.entities().get(actor).unwrap(),
+                obj: rules.object("TANY").unwrap(),
+                target: Some(TargetKind::Entity(sub)),
+                weapon_index: 1,
+            }
+            .fire_error(false)
+        };
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(sub)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .is_fully_cloaked()
+            }),
+            "the submarine must submerge through its ordinary cloak updates"
+        );
+        assert!(!sensed(&scene));
+        assert_eq!(
+            error(&scene),
+            FireError::Cant,
+            "without range checks the unsensed submarine must still be rejected"
+        );
+        let bytes = save_scene(&scene, "AY unsensed submarine outside Tanya sensors");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(!sensed(&scene));
+        // Techno6FC24D..6FC29D returns Cant(6) for an unsensed target;
+        // Cloaked(9) is the distinct firer's DecloakToFire refusal.
+        assert_eq!(error(&scene), FireError::Cant);
+        let tick = scene.sim().session.tick() + 1;
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            tick,
+            Command::Move {
+                entity_id: actor,
+                target_rx: sub_cell.0 - 3,
+                target_ry: sub_cell.1,
+            },
+        ));
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                sensed(&scene)
+            }),
+            "normal swimming movement must publish Tanya's real sensor footprint"
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(sub)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        );
+        let bytes = save_scene(&scene, "AY sensed submarine before Sapper attack");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(sensed(&scene));
+        assert_ne!(error(&scene), FireError::Cant);
+        let tick = scene.sim().session.tick() + 1;
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            tick,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: sub,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..600).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == actor)
+                {
+                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), "Sapper");
+                    assert_eq!(event.target, TargetKind::Entity(sub));
+                    fired = true;
+                }
+                scene
+                    .sim()
+                    .entities()
+                    .get(sub)
+                    .is_none_or(|victim| victim.health.current() < health)
+            }),
+            "Tanya must close and damage the detected submarine with Sapper; fired={fired}"
+        );
+        assert!(fired);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Tanya armor fallback precedes hover and organic naval exceptions"]
+    fn aymod_tanya_armor_fallback_precedes_hover_and_organic_naval_exceptions() {
+        use crate::sim::combat::{TargetKind, combat_weapon};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        for target_type in ["LCRF", "DLPH"] {
+            let (mut scene, actor, target) = aymod_tanya_water_pair(target_type, 1);
+            let (expected, health) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let victim_type = rules.object(target_type).unwrap();
+                assert!(
+                    victim_type.organic
+                        || victim_type.speed_type == crate::rules::locomotor_type::SpeedType::Hover
+                );
+                let tanya = sim.entities().get(actor).unwrap();
+                let kind = rules.object("TANY").unwrap();
+                let target_facts = combat_weapon::techno_target_facts(
+                    sim.entities().get(target).unwrap(),
+                    victim_type,
+                    sim.resolved_terrain(),
+                    false,
+                    rules,
+                    sim.interner(),
+                );
+                assert_eq!(
+                    combat_weapon::select_naval_targeting_weapon(kind, Some(&target_facts)),
+                    0
+                );
+                let primary = rules.weapon(kind.primary().unwrap()).unwrap();
+                let warhead = rules.warhead(primary.warhead.as_deref().unwrap()).unwrap();
+                assert!(!warhead.interaction(victim_type.armor_id()).can_fire());
+                let (slot, selected) = combat_weapon::select_weapon_against_in_query(
+                    rules,
+                    tanya,
+                    kind,
+                    &combat_weapon::attacker_facts(tanya, kind),
+                    Some(&TargetKind::Entity(target)),
+                    sim,
+                    sim.interner(),
+                    Some(&crate::map::resolved_terrain::NativeCellQuery::isolated(
+                        sim.resolved_terrain().unwrap(),
+                    )),
+                    Some(sim.house_alliances()),
+                )
+                .unwrap();
+                // SelectWeapon6F36E3..6F374F checks zero verses before the
+                // naval selector6F3754. Actual AY HollowPoint2 has zero
+                // against both heavy LCRF and light organic DLPH.
+                assert_eq!(
+                    slot, 1,
+                    "{target_type}: zero primary verses wins before naval exceptions"
+                );
+                let expected = kind.secondary().unwrap().to_owned();
+                assert_eq!(selected.unwrap().weapon.id, expected);
+                let health = sim.entities().get(target).unwrap().health.current();
+                let owner = tanya.owner();
+                // Isolate the attack from a dolphin's own retaliation without
+                // changing either weapon, verses or sensor flags.
+                sim.mission_queue_exact(
+                    target,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: actor,
+                        target_id: target,
+                    },
+                ));
+                (expected, health)
+            };
+            let mut fired = false;
+            assert!(
+                (0..300).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    for event in output
+                        .fire_events
+                        .iter()
+                        .filter(|event| event.attacker_id == actor)
+                    {
+                        assert_eq!(scene.sim().interner.resolve(event.weapon_id), expected);
+                        assert_eq!(event.target, TargetKind::Entity(target));
+                        fired = true;
+                    }
+                    scene
+                        .sim()
+                        .entities()
+                        .get(target)
+                        .is_none_or(|victim| victim.health.current() < health)
+                }),
+                "Tanya must damage {target_type} using the authored armor fallback; fired={fired}"
+            );
+            assert!(fired);
         }
     }
 
