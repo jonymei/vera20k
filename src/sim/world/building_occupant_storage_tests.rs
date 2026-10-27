@@ -15,6 +15,60 @@ use crate::sim::snapshot::GameSnapshot;
 
 struct Scene(SimRuntime);
 
+#[test]
+fn destroyed_garrison_stays_hidden_until_its_death_weapon_returns() {
+    use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+    let Some(mut scene) = Scene::new(
+        "[CAHSE01]\nExplodes=yes\nDeathWeapon=GarrisonDeath\n\
+         [GarrisonDeath]\nDamage=1000\nROF=1\nRange=4\nProjectile=Invisible\nSpeed=100\nWarhead=GarrisonBlast\n\
+         [Warheads]\n990=GarrisonBlast\n\
+         [GarrisonBlast]\nCellSpread=4\nPercentAtMax=1\nAffectsAllies=yes\n\
+         Verses=100%,100%,100%,100%,100%,100%,100%,100%,100%,100%,100%\n",
+    ) else {
+        return;
+    };
+    let building = scene.spawn("CAHSE01", "Russians", (16, 14));
+    let rider = scene.enter("E2", "Russians", building, true);
+    let witness = scene.spawn("E2", "Russians", (19, 14));
+    let health = scene.actor(rider).health.current();
+    let damage = scene.actor(building).health.current() + 1;
+    let warhead = scene.0.simulation.interner.intern("Super");
+    scene.0.simulation.commit_direct_damage_receiver(
+        &scene.0.resources.rules,
+        Some(&scene.0.resources.overlay_registry),
+        EntityDamageEvent::direct_receiver(
+            building,
+            damage,
+            0,
+            RAD_NO_ATTACKER,
+            None,
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        FrameEffects::default(),
+    );
+    assert!(
+        !scene.actor(witness).is_object_alive(),
+        "the exposed witness must actually receive the death blast"
+    );
+    // Building ReceiveDamage442425 returns from Techno's nested death
+    // weapon before SellBuilding44263B reveals occupants; DestructionEffects
+    // follows at442665. The hidden occupant is not a blast candidate.
+    assert!(
+        scene.actor(rider).is_object_alive(),
+        "garrison must not be exposed to its own building's death weapon"
+    );
+    assert_eq!(scene.actor(rider).health.current(), health);
+    assert!(!scene.actor(rider).lifecycle.in_limbo());
+    assert_eq!(
+        scene.actor(rider).passenger_role.inside_transport_id(),
+        None
+    );
+}
+
 #[cfg(feature = "npatch")]
 #[test]
 fn npatch_penetration_removes_last_garrison_without_damaging_immune_building() {

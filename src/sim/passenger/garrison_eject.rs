@@ -365,8 +365,8 @@ fn eject_garrison_passengers_at_edges(
 
 /// A `CanBeOccupied` building destroyed in combat with live occupants —
 /// gamemd routes this through `BuildingClass::SellBuilding @ 0x00457DE0`, the
-/// same occupant-eject helper used by sell. The world fatal prelude consumes
-/// this plan synchronously, before the nested death weapon and carrier UnInit.
+/// same occupant-eject helper used by sell. Building442625 consumes this
+/// plan after the Techno death weapon, before DestructionEffects and UnInit.
 pub struct DestroyedGarrisonBuilding {
     pub building_id: u64,
     pub rx: u16,
@@ -1435,7 +1435,7 @@ pub(crate) mod tests {
         let mut sim = garrison_map(&rules);
         let building_id = 50;
         insert_garrison_building(&mut sim, building_id);
-        // The fatal prelude ejects from a building still on the map.
+        // The fatal building postlude ejects while it is still on the map.
         assert!(matches!(
             sim.reveal_entity_with_rules(building_id, &rules),
             RevealOutcome::Revealed { .. }

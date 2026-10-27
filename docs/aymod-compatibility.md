@@ -6,16 +6,25 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于25741482e补V05建筑致死后活体驻军弹出、正式存读、步行重新入驻与再次存读。无生产改动；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于7a1daf5a6修V05建筑死亡武器之前过早弹出驻军的生产顺序。既有致死owner移交到Building postlude，不复制新owner；一次只读critic无新增可操作发现。未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- V08电脑BFRT两项、脚本运输9项和NP/stock卸载各35项结论保留在下节；本轮新增V05实际CAHSE01生产致死receiver弹出两名GGI，验证alive/非limbo、原House、无旧运输关系、位置离开旧foundation。正常帧后正式保存/完整资源恢复，再经普通Capture命令实际步行进入另一栋CAHSE01，二次存读保持新驻军关系。
-- 初次测试错用运输Enter；原生InfantryPerCell519675..51972D明确要求Capture(8)，已修测试输入，不改引擎去兼容错误payload。初次失败不认定为弹出后无法移动。
-- 最终实际aymod_garrison_4项、garrison_eject14项、building_entry43项通过；后者5个ignored未运行，本轮不触及其覆盖。仅测试/文档，无新增RNG、timer/Detach或保存字段，无需玩法critic。
-- 下一安全动作：核并修现有world::apply_fatal_lifecycle_stage中已记录的驻军弹出顺序残余：当前BeforeDeathEffects比原生Building442625..442665早，原生先返回Techno死亡臂，后SellBuilding弹出，再DestructionEffects。影响Scatter与死亡碎片/死亡武器的抽样和接触顺序；这轮CAHSE01存活/重新入驻通过不等于该顺序等价。先沿死亡效果与递归receiver既有owner定位接点，不复制另一套致死逻辑。
+- Building442425返回Techno后，原生442625..44263B弹出驻军、44264C关灯、442665 DestructionEffects。现有hook原先在handle_death前；已移至finish_concrete_death的Building分支，晚于死亡武器/携带炸弹及saved-contact回调，仍先于DestructionEffects。同步迁移app灯光测试和枚举消费者；未改单位载员死亡链。
+- 新回归以retail+内存诊断覆盖为CAHSE01设置死亡武器，楼外E2证明确实遭爆炸，楼内E2应保持隐藏直至返回。修复前驻军死亡断言红，修复后存活/满血/弹出/旧关系清除通过；不修改MOD文件。实际AY原场景毁楼存读/重新入驻等4项仍通过。
+- 最终NP/stock驻军存储各4/3项、garrison_eject14项、死亡效果20项及ignored实际Dustbowl1项、crew33项（2个运输ignored未触及）、ROF2项、客户端match_lighting7项、stock原生建筑致死2项通过。NP直伤原生例通过；把stock原生MTNK发射语料跑在NP上会在致死前因reload60对62失败，已定位既有NP6FD0CB不加jitter政策，不改黄金数据去掩盖。GPU图像/GUI未重跑；首次错误过滤器0项不计验证。
+- 既有分散抽样/死亡碎片/死亡武器顺序改回原生：没有新增RNG调用、timer写入、Detach或保存字段，但相关抽样会因顺序修正而重新分配，不能保证错误旧版本逐帧重放。释放仍沿SellBuilding/Scatter/Unlimbo/空间刷新原owner。
+- 下一安全动作：核非吸收建筑真实Cargo死亡链：现有KillPassengers仍在DestructionEffects前，原生441F1B SpawnSurvivors后441F27才KillPassengers；不把此次驻军vector修复扩大为全部Cargo/crew/RNG顺序完成。先查实际AY此组合与已有spawn_survivors owner，再决定同一receiver接点，保留吸收建筑和单位原链。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04探测器死亡/换主/运输及多House重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V05建筑死亡武器与驻军弹出顺序修复（2026-10-28）
+
+- 原生产hook在Techno死亡臂前运行，提前揭露驻军，使本楼死亡武器可以伤害本应仍在limbo的成员。新destroyed_garrison_stays_hidden_until_its_death_weapon_returns经正常E2步行入驻和生产致死receiver复现；楼外同House E2死亡证明blast真实执行。修复前楼内E2也死亡，修复后活着、满血弹出且运输关系清除。
+- 实读Building442425→Techno701900；Techno70266D FireDeathWeapon、70267F BombDetonate后返回。Building Alive门44242C、saved-contact链之后，442625..44263B才SellBuilding(0,0)，44264C关灯，442665 DestructionEffects。复用现有apply_fatal_lifecycle_stage，命名BeforeBuildingDestruction并移入finish_concrete_death的Building分支；完整迁移旧枚举消费者，移除过期提前释放注释，无第二份死亡/弹出owner。
+- 新回归为retail规则加内存诊断覆盖，不是未改规则AY实际自爆建筑报告；原实际AY四项驻军场景继续验证。NP/stock存储4/3、弹出14、死亡效果20+ignored1、crew33、ROF2、客户端灯光7、stock原生致死2通过。只读critic无新增可操作发现；GUI/GPU及复杂连锁炸弹未另验。
+- 无新增随机调用、timer写入、Detach或存档字段；既有Scatter抽样现晚于死亡碎片/武器、早于DestructionEffects，死亡相关随机流分配按原生纠正，不声称复现旧错误分配。灯光关闭也移到原生同一边界。
+- 独立残余：非吸收建筑真正Cargo仍过早KillPassengers（早于DestructionEffects；原生441F1B/441F27在SpawnSurvivors后）。吸收建筑已有对应owner，普通Unit链未改。不把garrison与Cargo混淆，也不因此关闭整个V05。
 
 ### V05建筑毁坏的活体弹出与存读后重新入驻（2026-10-28）
 
@@ -23,7 +32,7 @@
 - 正常tick处理延迟生命周期后，正式save_validated/load_validated及完整地图/资源恢复；存活者经普通Capture(8)命令实际步行入另一栋CAHSE01，不从入驻leaf直接添加。再次正式存读保持新楼名单、limbo与inside指针。原在途导弹允许沿其owner继续，不据此宣称原射手死亡后的XP政策已验。
 - 实读Building442625..44263B调用SellBuilding(0,0)，InfantryPerCell519675..51972D检查Capture(8)并调用522910。首轮误用Enter，改正输入后通过；不为错误测试修改游戏任务语义。
 - 实际驻军4项、弹出owner14项、建筑入口43项通过（5个ignored未运行）。无生产逻辑修改，无新增RNG、timer写入、Detach或保存状态；既有弹出Scatter/目标清除/Unlimbo/驻军重入的正常抽样与计时保持。
-- 仍开放：现有world/mod.rs明确记录BeforeDeathEffects提前弹出，而原生SellBuilding在Techno死亡臂返回后、DestructionEffects前；普通CAHSE01活体闭环不认证碎片/死亡武器/Scatter的完整顺序。继续沿原receiver边界核接点；无出口死亡、多House、复杂死亡武器及GUI仍不在本例结论内。
+- 本例原先保留的驻军提前弹出残余已由上节生产修复处理；本例本身仍不认证无出口死亡、多House、复杂连锁死亡武器及GUI，也不替代真实Cargo顺序复核。
 
 ### V08实际电脑BFRT装载、六人开火及解散后卸载（2026-10-28）
 

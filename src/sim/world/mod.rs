@@ -2097,20 +2097,12 @@ impl Simulation {
             crate::sim::combat::FatalLifecycleStage::MaintainDamageSmoke { state } => {
                 self.maintain_damage_smoke_after_receive(stable_id, state, rules);
             }
-            crate::sim::combat::FatalLifecycleStage::BeforeDeathEffects { attacker } => {
-                // A building's occupants. A unit's passengers stay for its own
-                // arms: an exploding unit kills them before its death weapon
-                // (`world_receiver::handle_death`), and the rest leave or die
-                // in its UnitClass arm
-                // (`crew_survival::release_dying_unit_passengers`).
-                //
-                // RESIDUAL: this runs before the Techno death arm (sounds,
-                // debris, death weapon). Natively that arm returns first, and
-                // the Building NowDead block then ejects the occupants
-                // (`0x00442625`) and turns the light off (`0x0044264C`) just
-                // before DestructionEffects (`0x00442665`), so an ejected
-                // garrison's Scatter draws follow the debris and death-weapon
-                // draws there and precede them here.
+            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction { attacker } => {
+                // Building ReceiveDamage442625..44264C, after Techno's
+                // death weapon and the saved-contact callbacks return:
+                // SellBuilding ejects garrison occupants, then light disable
+                // precedes DestructionEffects442665. True Cargo is separate
+                // from occupants; Unit's own fatal arms remain unchanged.
                 if category != EntityCategory::Structure {
                     return;
                 }

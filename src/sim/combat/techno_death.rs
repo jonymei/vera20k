@@ -146,8 +146,8 @@ pub(crate) fn death_weapon_detonation(
 }
 
 /// World-owned lifecycle work that brackets the native death helper for a
-/// concrete fatal receiver. Passenger teardown precedes the nested death
-/// weapon; represented UnInit follows it before the next outer receiver.
+/// concrete fatal receiver. Building garrison release follows the nested
+/// death weapon; represented UnInit follows the concrete death effects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FatalLifecycleStage {
     /// Surviving Techno ReceiveDamage postlude, before Infantry scatter and
@@ -156,9 +156,9 @@ pub enum FatalLifecycleStage {
     MaintainDamageSmoke {
         state: damage::DamageState,
     },
-    /// Before the death arm. `attacker` is the killing call's attacker, whom
-    /// a building's KillPassengers credits (`0x00441F27`).
-    BeforeDeathEffects {
+    /// Building442625..44264C, after the Techno death arm and contacts but
+    /// before DestructionEffects. `attacker` credits true Cargo deaths.
+    BeforeBuildingDestruction {
         attacker: Option<u64>,
     },
     AfterDeathEffects,

@@ -1592,20 +1592,6 @@ pub(crate) fn commit_entities(
             {
                 crate::sim::docking::bunker_link::clear_bunker(world, bunker, rules, run.effects());
             }
-            {
-                if callbacks_enabled(world) {
-                    let attacker = killing_attacker(world, std::slice::from_ref(event), target_id);
-                    world.apply_fatal_lifecycle_stage(
-                        rules,
-                        FatalLifecycleStage::BeforeDeathEffects { attacker },
-                        target_id,
-                        fatal_category,
-                        crate::sim::world::UninitContext::with_rules(rules)
-                            .with_registry(overlay_registry)
-                            .with_effects(run.effects()),
-                    );
-                };
-            }
             let mut nested = handle_death(
                 world,
                 run,
@@ -2153,10 +2139,6 @@ pub(crate) fn handle_death(
                 under_attack_events.extend(pings);
                 blast_effects.append(effects);
             }
-
-            // The world fatal prelude already owns garrison ejection before
-            // the nested death weapon. Callback-disabled receiver fixtures
-            // leave the cargo attached for their UnInit assertions.
         }
     }
 
@@ -2459,6 +2441,21 @@ fn finish_concrete_death(
                 postlude.commit(world, rules, effects, uninit);
             }
             ConcreteDeathSmudgePlan::Building => {
+                // Building ReceiveDamage442625..44264C: Techno's death
+                // weapon and the saved-contact callbacks have returned.
+                // Reveal garrison survivors and disable the light now, before
+                // DestructionEffects442665, not before the nested blast.
+                if callbacks_enabled(world) {
+                    let attacker = killing_attacker(world, damage_events, dead_id);
+                    world.apply_fatal_lifecycle_stage(
+                        rules,
+                        FatalLifecycleStage::BeforeBuildingDestruction { attacker },
+                        dead_id,
+                        category,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(frame_effects),
+                    );
+                }
                 // DestructionEffects (`0x004415F0`): the building's own anims,
                 // centre mark, death fuse and NoSurvivor, then SpawnSurvivors
                 // (`0x00441F1B`), which interleaves each foundation cell's
