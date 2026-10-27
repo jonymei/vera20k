@@ -181,8 +181,8 @@ fn stock_cloak_tick_facts(
         // CloakingTick6FB7FD..6FB823 applies this contact exclusion before
         // CanAutoCloak in state zero; the sensor callback has no such gate.
         state_zero_head_allows && !destination_is_weapons_factory,
-        can_auto_cloak,
-        should_uncloak,
+        can_auto_cloak && !building_has_foreign_sensor_neighbour(sim, id, rules),
+        should_uncloak || building_has_foreign_sensor_neighbour(sim, id, rules),
         health_strictly_above_condition_red(
             entity.health,
             object.strength,
@@ -196,6 +196,57 @@ fn stock_cloak_tick_facts(
         entity.discovery.owned_by_current_house(),
         entity.category() == EntityCategory::Structure,
     ))
+}
+
+/// Building CanAutoCloak457770/ShouldUncloak4578C0 scan the foundation
+/// rectangle with a one-cell margin. A different House (even an ally) with
+/// Sensors blocks it. If FindNearest returns self,47EC40 asks first Infantry.
+fn building_has_foreign_sensor_neighbour(sim: &Simulation, id: u64, rules: &RuleSet) -> bool {
+    let Some(building) = sim
+        .substrate
+        .entities
+        .get(id)
+        .filter(|e| e.category() == EntityCategory::Structure)
+    else {
+        return false;
+    };
+    let Some(kind) = sim.interner.object_type(building.type_ref(), rules) else {
+        return false;
+    };
+    let (w, h) = kind.foundation.dimensions();
+    for dx in -1..=i32::from(w) {
+        for dy in -1..=i32::from(h) {
+            let cell = (
+                (i32::from(building.position.rx()) + dx) as u16,
+                (i32::from(building.position.ry()) + dy) as u16,
+            );
+            let nearest = sim.nearest_cell_object(cell, MovementLayer::Ground, None);
+            let candidate = if nearest == Some(id) {
+                sim.substrate.occupancy.first_category_on_layer(
+                    cell.0,
+                    cell.1,
+                    MovementLayer::Ground,
+                    EntityCategory::Infantry,
+                    &sim.substrate.entities,
+                )
+            } else {
+                nearest
+            };
+            if candidate
+                .and_then(|id| sim.substrate.entities.get(id))
+                .is_some_and(|other| {
+                    other.owner() != building.owner()
+                        && sim
+                            .interner
+                            .object_type(other.type_ref(), rules)
+                            .is_some_and(|kind| kind.sensors)
+                })
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// `CellClass::IsVisibleToHouse @ 0x004870B0` for the object's own owner — the
@@ -700,12 +751,39 @@ pub(super) fn tick_stock_cloak_producer(
     let Some(facts) = stock_cloak_tick_facts(sim, id, rules, registry) else {
         return;
     };
+    let prior_stage = sim
+        .substrate
+        .entities
+        .get(id)
+        .and_then(|e| e.cloak.as_ref())
+        .map_or(0, |c| c.building_stage());
     let result = sim
         .substrate
         .entities
         .get_mut(id)
         .and_then(|entity| entity.cloak.as_mut())
-        .map(|cloak| cloak.tick(facts, &mut sim.scenario_rng));
+        .map(|cloak| {
+            if category == EntityCategory::Structure {
+                cloak.tick_building(facts)
+            } else {
+                cloak.tick(facts, &mut sim.scenario_rng)
+            }
+        });
+    if category == EntityCategory::Structure {
+        let stage = sim
+            .substrate
+            .entities
+            .get(id)
+            .and_then(|e| e.cloak.as_ref())
+            .map_or(0, |c| c.building_stage());
+        if prior_stage != stage {
+            //454E23/454EC4: the native byte also feeds all attached anims.
+            if matches!(stage, 0 | 1 | 5 | 6 | 10 | 11) {
+                Simulation::mark_entity_refresh(&sim.substrate, id);
+            }
+            sim.refresh_building_anim_cloak_ramps(id);
+        }
+    }
     if result.is_some_and(|result| result.began_cloaking) {
         start_cloaking_detach(sim, id, rules, registry, effects);
     }

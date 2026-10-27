@@ -2030,6 +2030,10 @@ fn hash_entity(entity: &GameEntity, frame: u32, hasher: &mut StateHasher) {
     entity.building_light.light().hash(hasher);
     entity.low_bridge_tube_state.hash(hasher);
     if let Some(cloak) = entity.cloak.as_ref() {
+        if cloak.building_stage() != 0 {
+            b"building-cloak-stage-v1".hash(hasher);
+            cloak.building_stage().hash(hasher);
+        }
         1u8.hash(hasher);
         if cloak.crate_granted() {
             b"cloak-crate-ability-v1".hash(hasher);

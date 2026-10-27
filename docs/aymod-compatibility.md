@@ -6,16 +6,26 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于2ec6ef833核F09在普通Battle/XMP03T4和Return Dubai正式加载后的全已分配武器族。仅测试/文档，无生产改动，无需critic；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于e258f0274修F02普通建筑箱子隐形卡过渡：独立stage/视觉查询/感知边界/存读/hash接入原owners。一次只读critic提出本地动画hash与中心格两处问题，已修并定向回归；未推送/PR/发布，整体goal仍开放，未认证完整建筑粒子FX。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 新aymod_friendly_only_warhead_has_no_allocated_weapon_consumer_in_battle_maps在两套实际load_session规则中确认：DoesntAffectEnemies唯一typed弹头为TankSnapshot；全weapons_iter中没有任何武器使用该标志弹头，TankMakeupKit/CRMakeupKit均未分配。不是只看MGTK/FV当前Primary，也不强挂武器来制造实战。
-- 证据范围是这两局已分配WeaponType族：既有native-ordered processor纳入普通/精英/占楼/死亡/超武WeaponType/派生弹道等读到的引用，并保留早层孤立分配，供Action42按索引使用。未分配名字无法从这两局Weapon表索引选出；不把此结论扩大到其他地图/模式、未审的直接Warhead特殊消费者或所有未来运行时分配。
-- 实际两配置闭包1项、NP reader/保存/hash1项、friendly-only FireSubject1项、真实攻击者House伤害门1项、原生逐层武器读1项通过。现有F09支持保留，但这两配置不再列为“缺实际武器挂载待修”；无新RNG、timer/Detach或存档字段，无MOD/原始存档/固定构建变更。
-- 下一安全动作：F02隐形箱在建筑/落地飞机上的实例能力、持久化与正常生命周期。复用既有拾箱/半径与共用cloak owners，不按键名给建筑补另一套状态；F09其他地图/模式若实际引入消费者再验证，不以当前残留定义扩张无必要实装。
+- 实际GAPOWR/落地ORCA箱子例先红：ORCA完成state2，建筑在360帧后仍state1/depth51。已改由Building454DB0推进独立+6ED到15，而非普通Techno progress timer；BuildingVisualCharacter4544A0的非零阶段进入共用可见性owner，不能只强置state2。实际坦克普通Move拾箱、两类对象获能力、两次正式存读及unsensed visual=5现均通过。
+- CloakRuntime私有i8 building_stage初始化0/保存/非零hash；Building CanAuto457770/Should4578C0的foundation外扩一格Sensors检查复用现有最近对象/首步兵查询，按不同House而非敌对联盟判断。21个附属Anim的+178阶段及出生旧槽刷新沿building_art/AnimClass原owner；不复制CloakGenerator场逻辑。
+- critic两项已处理：模拟只存确定性stage，屏幕本地15/16隐藏决定留在既有DrawDecision，附属动画的两个观察者hash相同；屏幕与presentation的sensor改查GetCoords中心，复用现有sensor_visible_to_player/ground_pose。紧凑回归包含stage14序列化、stage15完成、实际foreign Sensors触发退隐/移除后重隐；paired load先归一同一snapshot/process状态，避免把load RNG重置当同步差异。
+- 最终实际箱子2项、NP/stock cloak producer各17项、runtime各5项、crates各84项、NP建筑ART29项、客户端DrawState7项/helpers7项/动画透明4项通过。首次错误模块/ignored过滤0项未计验证。未运行全仓库/GUI/新游戏构建；新增保存字段不强读旧固定版或原始存档。
+- 下一安全动作：核Building+30C的真实粒子类型、创建/销毁owner：454E7F..454E9E完全隐形时销毁，454F3D..455012退隐到0时重建。Rust现有+308 Spark与+310 damage-Smoke都不是此字段，不能猜成同一系统。该先决状态未接，粒子/对象ID与抽样顺序仍有未核风险，不能据当前健康电厂例宣称完整建筑FX。随后再补新阶段的GPU/真人视觉验收、损坏/换主/多House边界。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F02建筑箱子独立隐形过渡修复，粒子/画面仍开放（2026-10-28）
+
+- 实际普通MTNK拾Cloak箱，GAPOWR与落地ORCA在正式半径内获实例能力；健康建筑原先卡state1/depth51，正确红回归保留了两类均需完成隐形与unsensed视觉5的要求，没有按一次错误的“建筑原生可见例外”判断关项。建筑首次选址过严的问题仅修测试坐标，不改半径/MOD。
+- 实读TechnoAI6FA946虚调用Building454DB0，而非6FB740。私有Building+6ED阶段加入既有CloakRuntime，454E11..454E85每次AI推进到15/state2，454EB2..454F35退到0/state0；CanAuto457770/Should4578C0及其前置base/foundation/Sensors门一起接入。BuildingVisual4544A0的非零阶段走原owner，stage0仍委托703860。
+- 附属Anim+178写入由building_art共用：454E55/454EFE过渡刷新、4519B9新槽出生前刷新旧21槽；AnimClass保留写入接口。Native本地hidden=16不进入确定性状态，现有parent-slot DrawDecision在presentation隐藏；typed舞台值15的序列化/hash与不同viewer一致性回归通过。
+- 只读critic确认两项：本地screen查询污染Anim hash、建筑查询anchor而非中心。已消除本地写入并用两个规范化load控制比较hash；原screen owner复用sensor_visible_to_player，presentation使用共享GetCoords，新增中心/anchor不同覆盖回归。未做第二轮critic，不把原有意见说成无发现。
+- 最终实际箱子2、NP/stock producer各17/runtime各5/crates各84、建筑ART29、客户端DrawState7/helpers7/动画透明4通过。新回归两类的能力/自然隐形/两次正式存读/视觉查询均过；未改MOD、原始存档或固定构建，无GUI/GPU输出认证。
+- 新状态改变保存布局；无新增直接RNG或Detach API，建筑不再错误走普通红血随机隐形概率/Techno完成Detach，沿原StartCloaking/Uncloaking/sound owner。原生+30C粒子创建/销毁尚无Rust状态/producer，与+308/+310不同；每次建筑进出隐形的FX、对象ID/抽样影响待核，不按NULL默认当原生完整。CloakGenerator既有场owner及损坏/换主/多House/最终像素边界保留。
 
 ### F09实际武器分配闭包：两个Battle配置无消费者（2026-10-28）
 
@@ -824,7 +834,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
-| F02 / P1 / 实际移动单位链已验，画面待验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY MTNK普通Move拾取、附近E1受益及正式保存恢复后双方隐形已通过；GUI、建筑/落地飞机完整生命周期仍待验；新字段改变保存布局 |
+| F02 / P1 / 移动/普通建筑/落地飞机链已验，粒子及画面开放 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY MTNK普通Move拾取、附近E1受益及正式保存恢复后双方隐形已通过；GAPOWR独立454DB0/+6ED过渡及4544A0视觉分支已修，落地ORCA与建筑两次存读/视觉5通过；建筑+30C粒子先决状态未接、GPU/GUI及完整生命周期仍开放。新字段改变保存布局 |
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |

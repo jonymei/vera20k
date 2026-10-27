@@ -2240,6 +2240,154 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; cloak crate building and landed aircraft ability and state"]
+    fn aymod_cloak_crate_cloaks_a_building_and_landed_aircraft_across_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, plane) = aymod_nearby_pair("GAPOWR", "ORCA", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let tank = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            let owner = sim.entities().get(building).unwrap().owner();
+            let at = sim.entities().get(building).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let tank = spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["MTNK"])[0];
+            for (id, kind) in [(building, "GAPOWR"), (plane, "ORCA")] {
+                assert!(!rules.object(kind).unwrap().cloakable);
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            assert_eq!(
+                crate::sim::movement::air_movement::current_fly_height(
+                    sim.entities().get(plane).unwrap(),
+                    sim.resolved_terrain()
+                ),
+                0
+            );
+            let recipients = [building, plane];
+            let cell = cells_nearest(center)
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let near = recipients.iter().all(|id| {
+                        let recipient = crate::sim::movement::ground_pose::position_world_coord(
+                            &sim.entities().get(*id).unwrap().position,
+                        );
+                        let ground = crate::sim::movement::ground_pose::position_world_coord(&at);
+                        crate::util::native_x87::distance_3d_leptons(
+                            [i32::from(x) * 256 + 128, i32::from(y) * 256 + 128, ground.z],
+                            [recipient.x, recipient.y, recipient.z],
+                        ) < rules.crate_rules.radius
+                    });
+                    (near
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                        && sim.occupancy().get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        })
+                        && sim
+                            .overlay_grid
+                            .as_ref()
+                            .unwrap()
+                            .cell(x, y)
+                            .overlay_id
+                            .is_none())
+                    .then_some((x, y))
+                })
+                .expect("an empty crate cell near the building, landed plane and picker");
+            assert!(crate::sim::crates::place_crate(
+                sim,
+                rules,
+                &resources.overlay_registry,
+                (cell.0 as i16, cell.1 as i16),
+                Some(3)
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            tank
+        };
+        let granted = |scene: &HeadlessScenario, id| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .is_some_and(|cloak| cloak.crate_granted())
+        };
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                granted(&scene, tank)
+            }),
+            "the tank must collect the real Cloak crate through ordinary movement"
+        );
+        assert!(
+            granted(&scene, building),
+            "the marked ground building must receive the instance ability"
+        );
+        assert!(
+            granted(&scene, plane),
+            "the landed aircraft must receive the instance ability"
+        );
+        let bytes = save_scene(&scene, "AY crate ability on building and landed aircraft");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(granted(&scene, building) && granted(&scene, plane));
+        assert!(
+            (0..360).any(|_| {
+                tick_with_due_commands(&mut scene);
+                [building, plane].iter().all(|id| {
+                    scene
+                        .sim()
+                        .entities()
+                        .get(*id)
+                        .unwrap()
+                        .cloak
+                        .as_ref()
+                        .unwrap()
+                        .is_fully_cloaked()
+                })
+            }),
+            "native Building454DB0 and Aircraft Techno AI must finish their own cloak transitions: {:?}",
+            [building, plane].map(|id| scene.sim().entities().get(id).map(|actor| &actor.cloak))
+        );
+        let bytes = save_scene(&scene, "AY fully cloaked building and landed aircraft");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for id in [building, plane] {
+            let actor = scene.sim().entities().get(id).unwrap();
+            let cloak = actor.cloak.as_ref().unwrap();
+            assert!(cloak.crate_granted() && cloak.is_fully_cloaked());
+            assert_eq!(
+                actor.visual_character(
+                    scene.runtime.resources.rules.general.cloaking_stages,
+                    false,
+                    crate::sim::cloak_disguise::VisualCharacterQuery::sensor(true, false, false)
+                ),
+                5,
+                "the class visual query must hide an unsensed recipient, including Building4544A0"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY fixed Explosion crate through ordinary Drive movement"]
     fn aymod_explosion_crate_uses_actual_rules_and_finishes_after_picker_damage() {
         use crate::sim::{

@@ -1091,14 +1091,20 @@ impl GameEntity {
 impl GameEntity {
     /// Native703860 base decision through the shared cloak owner. Accepted
     /// Technos have one real owner; retained +41A belongs to discovery, not cloak.
-    /// Building4544A0 delegates here only with its +6ED override stage zero.
-    /// The nonzero building override has no Rust producer and remains separate.
+    /// Building4544A0 delegates to Techno only at its override stage zero.
     pub fn visual_character(
         &self,
         cloaking_stages: i32,
         invisible: bool,
         query: crate::sim::cloak_disguise::VisualCharacterQuery,
     ) -> u8 {
+        if self.category == EntityCategory::Structure
+            && let Some(value) = self.cloak.as_ref().and_then(|cloak| {
+                cloak.building_visual_character(self.discovery.owned_by_current_house(), query)
+            })
+        {
+            return value;
+        }
         let (state, progress) = self
             .cloak
             .as_ref()
