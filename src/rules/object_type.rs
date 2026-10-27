@@ -2107,9 +2107,9 @@ pub struct ObjectType {
     // resolution against the particle-system registry is deferred (matches
     // the same deferred-typing decision used for ParticleType.warhead and
     // ParticleSystemType.holds_what's parse-side captures).
-    /// `NaturalParticleSystem=` — gap-generator / cloak-related particle
-    /// system. Live code path in YR (BuildingClass::UpdateGapGenerator_Tick),
-    /// but no retail INI sets the key, so the slot is normally null.
+    /// `NaturalParticleSystem=` (Type+764, reader713B9A) — Building+30C's
+    /// natural system. BuildingUnlimbo440E99 creates it; CloakingTick454E7F/
+    /// 454F3D removes/recreates it. This is distinct from damage-Smoke+310.
     pub natural_particle_system: Option<String>,
     /// `NaturalParticleLocation=` X,Y,Z offset paired with the system above.
     pub natural_particle_location: IVec3,

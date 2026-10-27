@@ -770,6 +770,10 @@ pub(super) fn tick_stock_cloak_producer(
             }
         });
     if category == EntityCategory::Structure {
+        // Residual: native +30C owns NaturalParticleSystem (Type+764),
+        // destroyed at454E7F and recreated at454F3D. It is not +308 Spark
+        // or +310 damage smoke. Current AY battle profiles leave both the
+        // type and location empty, so440EA7/454F6C skip those producers.
         let stage = sim
             .substrate
             .entities

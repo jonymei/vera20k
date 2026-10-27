@@ -2501,6 +2501,52 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; natural building particle slot applicability in actual scenarios"]
+    fn aymod_building_natural_particle_slot_is_dormant_in_battle_scenarios() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in [None, Some("重返迪拜.yrm")] {
+            let scene = if let Some(map) = map {
+                let mut launch = battle_session(
+                    map,
+                    &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+                );
+                launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                launch.options.unit_count = 0;
+                load_session(&root, map, 0x00C0_FFEE, launch).unwrap()
+            } else {
+                aymod_battle(0)
+            };
+            // BuildingUnlimbo440E99 requires NaturalParticleSystem; the
+            // uncloak recreation454F3D first rejects the empty location.
+            // No manual null slot or synthetic offset may hide a consumer.
+            let active = scene
+                .runtime
+                .resources
+                .rules
+                .all_objects()
+                .filter(|object| {
+                    object.category == crate::rules::object_type::ObjectCategory::Building
+                        && (object.natural_particle_system.is_some()
+                            || object.natural_particle_location != glam::IVec3::ZERO)
+                })
+                .map(|object| {
+                    (
+                        &object.id,
+                        &object.natural_particle_system,
+                        object.natural_particle_location,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                active.is_empty(),
+                "{}: natural particle profiles now require a live +30C owner: {active:?}",
+                scene.sim().session.map_name()
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real scenario weapon allocation closure for friendly-only warheads"]
     fn aymod_friendly_only_warhead_has_no_allocated_weapon_consumer_in_battle_maps() {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
