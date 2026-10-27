@@ -4225,6 +4225,132 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; destroyed garrison survivors resume after player load"]
+    fn aymod_garrison_destruction_releases_survivors_for_saved_reentry() {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags, TargetKind};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, attacker, riders, _) = aymod_garrison_missile_in_flight();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (owner, shelter) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let actor = sim.entities().get(building).unwrap();
+            let owner = actor.owner();
+            let at = actor.position;
+            let damage = actor.health.current() + 1;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (5..=7).contains(&(x - center.0).abs().max((y - center.1).abs())))
+                .collect::<Vec<_>>();
+            let shelter = spawn_on_free_cells(sim, rules, owner, sites, &["CAHSE01"])[0];
+            let attacker_owner = sim.entities().get(attacker).unwrap().owner();
+            let weapon = rules
+                .weapon(rules.object("APOC").unwrap().primary().unwrap())
+                .unwrap();
+            let warhead = sim.interner.intern(weapon.warhead.as_deref().unwrap());
+            // Enter the production lethal receiver, not the ejection helper.
+            // Building442625..44263B calls SellBuilding(0,0) for survivors.
+            let hit = EntityDamageEvent::direct_receiver(
+                building,
+                damage,
+                0,
+                attacker,
+                Some(attacker_owner),
+                warhead,
+                ReceiverCallFlags {
+                    ignore_defenses: true,
+                    arg6: false,
+                },
+            );
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                hit,
+                Default::default(),
+            );
+            assert!(sim.entities().get(building).is_none_or(|actor| {
+                actor.health.current() <= 0 && actor.passenger_role.occupants().is_empty()
+            }));
+            for &id in &riders {
+                let survivor = sim.entities().get(id).unwrap();
+                assert!(survivor.is_object_alive() && !survivor.lifecycle.in_limbo());
+                assert_eq!(survivor.owner(), owner);
+                assert_eq!(survivor.passenger_role.inside_transport_id(), None);
+                assert_eq!(survivor.passenger_role.open_transport_id(), None);
+                let (w, h) = rules.object("CAHSE01").unwrap().foundation.dimensions();
+                assert!(
+                    survivor.position.rx() < at.rx()
+                        || survivor.position.rx() >= at.rx() + w
+                        || survivor.position.ry() < at.ry()
+                        || survivor.position.ry() >= at.ry() + h,
+                    "a live occupant must leave the destroyed foundation"
+                );
+            }
+            (owner, shelter)
+        };
+        // Complete ordinary deferred retirement before serializing. The
+        // already-launched missile is allowed to finish through its own owner.
+        tick_with_due_commands(&mut scene);
+        let bytes = save_scene(&scene, "AY destroyed garrison with live survivors");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for &id in &riders {
+            let survivor = scene.sim().entities().get(id).unwrap();
+            assert!(survivor.is_object_alive() && !survivor.lifecycle.in_limbo());
+            assert_eq!(survivor.passenger_role.inside_transport_id(), None);
+            let tick = scene.sim().session.tick() + 1;
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                // Occupier PerCell519675 uses Capture, not transport Enter.
+                Command::clicked_mission(id, MissionType::Capture, TargetKind::Entity(shelter)),
+            ));
+        }
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let occupants = scene
+                    .sim()
+                    .entities()
+                    .get(shelter)
+                    .unwrap()
+                    .passenger_role
+                    .occupants();
+                riders.iter().all(|id| occupants.ids().contains(id))
+            }),
+            "restored survivors must walk and enter another building: {:?}",
+            riders
+                .iter()
+                .map(|id| scene.sim().entities().get(*id).map(|actor| (
+                    &actor.mission,
+                    &actor.position,
+                    &actor.passenger_role,
+                    &actor.navigation
+                )))
+                .collect::<Vec<_>>()
+        );
+        let bytes = save_scene(&scene, "AY survivors after entering a new garrison");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let occupants = scene
+            .sim()
+            .entities()
+            .get(shelter)
+            .unwrap()
+            .passenger_role
+            .occupants();
+        assert_eq!(occupants.ids().len(), riders.len());
+        assert!(riders.iter().all(|id| occupants.ids().contains(id)));
+        for id in riders {
+            let survivor = scene.sim().entities().get(id).unwrap();
+            assert!(survivor.is_object_alive() && survivor.lifecycle.in_limbo());
+            assert_eq!(survivor.passenger_role.inside_transport_id(), Some(shelter));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; live garrison changes before a saved missile impact"]
     fn aymod_garrison_missile_uses_the_live_occupants_after_unload_and_save() {
         use crate::sim::combat::TargetKind;

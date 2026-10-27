@@ -6,16 +6,24 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于136c7ed8b补V08实际电脑BFRT装载、存读、六乘员开火及解散后卸载。无生产改动，不把测试补齐说成新玩法修复；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于25741482e补V05建筑致死后活体驻军弹出、正式存读、步行重新入驻与再次存读。无生产改动；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- V08实际TeamType07C32EFC-G/TaskForce07C256DC-G（BFRT+5GGI+GHOST）通过生产脚本14/43装满6人；正式存读保持乘员顺序和team cursor，六人均实际开火。GHOST的HollowPoint对载具1%不允许被动选敌，提供合法步兵目标，不改武器/目标广播政策。
-- 不隔离的对照中，Priority500基地防御队08DA30EC-G合法从Priority40装载队招走两名GGI；留4人等待43不是乘员链接丢失，也未证明永久缺员。后续补员和多AI竞争仍待验，不借此恢复弱攻势调查。
-- 该waiter最后的11,11持续AreaGuard会覆盖外部Unload；原生DoMission6EDA25..6EDA71只让Guard(5)避让Unload(16)，不是AreaGuard。对照保留此行为；再经TAction5的既有队伍销毁owner解散，6人正常卸载、清除运输关系，空载存读仍保持清除。未声称本来没有卸载动作的脚本会自主卸载。
-- 最终验证：实际AI BFRT两项、team transport actions9项、NP/stock卸载模块各35项通过。旧卸载断言未跟随已实现的NP保留Burst2，两处存读对照漏掉player-load PlanMgr reset，已更新测试前提；不是新增引擎缺陷。一次编译期间文档变更触发runner source-changed拒绝验收，已在不改文件的情况下重新执行通过。没有新增RNG、timer/Detach或保存字段，无生产玩法改动，无需玩法critic。
-- 下一安全动作：V08重新装载/带队卸载，或V05建筑毁坏的活体弹出，先核既有owner和原生链。V05不同帧多弹交叉命中、原射手死亡/单人全局自动续火等仍开放；子机其他家族、实际母体连续晋升及旧控制者指针选择残余亦保留。
+- V08电脑BFRT两项、脚本运输9项和NP/stock卸载各35项结论保留在下节；本轮新增V05实际CAHSE01生产致死receiver弹出两名GGI，验证alive/非limbo、原House、无旧运输关系、位置离开旧foundation。正常帧后正式保存/完整资源恢复，再经普通Capture命令实际步行进入另一栋CAHSE01，二次存读保持新驻军关系。
+- 初次测试错用运输Enter；原生InfantryPerCell519675..51972D明确要求Capture(8)，已修测试输入，不改引擎去兼容错误payload。初次失败不认定为弹出后无法移动。
+- 最终实际aymod_garrison_4项、garrison_eject14项、building_entry43项通过；后者5个ignored未运行，本轮不触及其覆盖。仅测试/文档，无新增RNG、timer/Detach或保存字段，无需玩法critic。
+- 下一安全动作：核并修现有world::apply_fatal_lifecycle_stage中已记录的驻军弹出顺序残余：当前BeforeDeathEffects比原生Building442625..442665早，原生先返回Techno死亡臂，后SellBuilding弹出，再DestructionEffects。影响Scatter与死亡碎片/死亡武器的抽样和接触顺序；这轮CAHSE01存活/重新入驻通过不等于该顺序等价。先沿死亡效果与递归receiver既有owner定位接点，不复制另一套致死逻辑。
+- V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04探测器死亡/换主/运输及多House重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V05建筑毁坏的活体弹出与存读后重新入驻（2026-10-28）
+
+- 新aymod_garrison_destruction_releases_survivors_for_saved_reentry复用实际GGI导弹在途场景，保留正式MOD配置；从生产direct_receiver给CAHSE01致死伤害，不直接调用弹出helper或手工清Cargo/occupants。即时校验驻军楼名单已清、两名GGI活体离开foundation、原House不变、inside/open关系已清。
+- 正常tick处理延迟生命周期后，正式save_validated/load_validated及完整地图/资源恢复；存活者经普通Capture(8)命令实际步行入另一栋CAHSE01，不从入驻leaf直接添加。再次正式存读保持新楼名单、limbo与inside指针。原在途导弹允许沿其owner继续，不据此宣称原射手死亡后的XP政策已验。
+- 实读Building442625..44263B调用SellBuilding(0,0)，InfantryPerCell519675..51972D检查Capture(8)并调用522910。首轮误用Enter，改正输入后通过；不为错误测试修改游戏任务语义。
+- 实际驻军4项、弹出owner14项、建筑入口43项通过（5个ignored未运行）。无生产逻辑修改，无新增RNG、timer写入、Detach或保存状态；既有弹出Scatter/目标清除/Unlimbo/驻军重入的正常抽样与计时保持。
+- 仍开放：现有world/mod.rs明确记录BeforeDeathEffects提前弹出，而原生SellBuilding在Techno死亡臂返回后、DestructionEffects前；普通CAHSE01活体闭环不认证碎片/死亡武器/Scatter的完整顺序。继续沿原receiver边界核接点；无出口死亡、多House、复杂死亡武器及GUI仍不在本例结论内。
 
 ### V08实际电脑BFRT装载、六人开火及解散后卸载（2026-10-28）
 
