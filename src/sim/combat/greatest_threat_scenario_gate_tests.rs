@@ -21,6 +21,50 @@ fn guard_scene(rules: &RuleSet, target_type: &str) -> (Simulation, u64, u64) {
     (sim, tank, target)
 }
 
+#[test]
+fn npatch_target_scan_skips_active_protection_and_immune_types() {
+    use crate::sim::superweapon::invulnerability::{InvulnKind, InvulnerabilityState};
+    use crate::sim::timer::CdTimer;
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let (mut sim, tank, target) = guard_scene(&retail.rules, "HTNK");
+    let pick = |sim: &mut Simulation| {
+        sim.greatest_threat_represented(&retail.rules, None, tank, ScanMission::Guard, None)
+    };
+    for kind in [InvulnKind::IronCurtain, InvulnKind::ForceShield] {
+        sim.substrate
+            .entities
+            .get_mut(target)
+            .unwrap()
+            .invulnerability = Some(InvulnerabilityState::new(CdTimer::started(0, 2), kind));
+        sim.session.set_binary_frame_for_test(1);
+        assert_eq!(
+            pick(&mut sim),
+            (!crate::rules::NPATCH_ENABLED).then_some(target)
+        );
+        sim.session.set_binary_frame_for_test(2);
+        assert_eq!(
+            pick(&mut sim),
+            Some(target),
+            "expired protection is not a stale rejection"
+        );
+    }
+    let patch = crate::rules::ini_parser::IniFile::from_str("[HTNK]\nImmune=yes\n");
+    let retail = crate::rules::retail_ini_fixture::retail_battle_rules_for_map_with_patch(
+        "Hills.mmx",
+        &patch,
+    )
+    .unwrap();
+    assert!(retail.rules.object("HTNK").unwrap().immune);
+    let (mut sim, tank, target) = guard_scene(&retail.rules, "HTNK");
+    assert_eq!(
+        sim.greatest_threat_represented(&retail.rules, None, tank, ScanMission::Guard, None),
+        (!crate::rules::NPATCH_ENABLED).then_some(target),
+        "NPAE7E0B16 also rejects ObjectType Immune, independently of the timer"
+    );
+}
+
 /// Scenario bit `0x800` (`0x006F8009..0x006F8047`): while set, a guarding
 /// tank refuses an enemy harvester — retail `[General] HarvesterUnit=HARV`
 /// is the list the production reader resolves — and still takes an enemy

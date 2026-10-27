@@ -974,7 +974,8 @@ pub(super) fn capability_cursor_for_hover(
         }
 
         // Native garrison precedes C4, which precedes the late infiltration
-        // arm. C4 can terminate with ordinary Attack, not just Sabotage.
+        // arm. Infantry51E9F1/51EE62 require admitted base Attack5; C4 can
+        // terminate with ordinary Attack, not just Sabotage.
         let c4_action = rules.and_then(|rules| {
             super::context_order::infantry_c4_action(sim, rules, best_id, hover, false)
         });
@@ -987,7 +988,15 @@ pub(super) fn capability_cursor_for_hover(
                 HoverTargetKind::FriendlyStructure | HoverTargetKind::EnemyStructure
             )
             && rules.is_some_and(|rules| {
-                sim.infiltrator_building_action(best_id, hover.stable_id, rules)
+                super::context_order::attack_action(
+                    sim,
+                    rules,
+                    best_id,
+                    &combat::TargetKind::Entity(hover.stable_id),
+                    false,
+                    overlay_registry,
+                ) == super::context_order::AttackAction::Attack
+                    && sim.infiltrator_building_action(best_id, hover.stable_id, rules)
             })
         {
             return CursorFeedbackKind::Enter;

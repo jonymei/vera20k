@@ -289,6 +289,15 @@ pub(crate) fn attack_action(
     let admitted = match target {
         TargetKind::Entity(target_id) => {
             human
+                // NPAE174 What_Action_OnObject700444 -> 7E0B35 tests
+                // target vt160 before armed/control/range, even with Ctrl.
+                && !(crate::rules::NPATCH_ENABLED
+                    && sim.entities().get(*target_id).is_some_and(|target| {
+                        crate::sim::superweapon::invulnerability::is_invulnerable(
+                            target.invulnerability.as_ref(),
+                            sim.session().binary_frame(),
+                        )
+                    }))
                 && (armed || infiltrator)
                 && (forced
                     || (friendly_attack_is_admitted(sim, rules, actor_id, *target_id)
@@ -344,11 +353,8 @@ pub(crate) fn attack_action(
         // fallback below; a Unit's rejected object attack becomes NoMove,
         // whose click still moves near the object. Do not gate CanFire or
         // received simulation missions: auto-targeting/scripts bypass UI.
-        // RESIDUAL: Infantry's C4 and infiltration arms need this Attack
-        // (`cmp ebp,5` at 0x0051E9F1 and 0x0051EE62), but `infantry_c4_action`
-        // and `infiltrator_capture_orders` decide without it, so a
-        // NoManualFire Tanya or Spy still plants C4 or infiltrates. Only Ares
-        // builds read the key; retail rules never set it.
+        // The later C4/infiltration input arms consume this admitted Attack
+        // (Infantry51E9F1/51EE62), including protection/NoManualFire refusals.
         && !kind.no_manual_fire()
     {
         AttackAction::Attack
@@ -3619,6 +3625,20 @@ pub(super) fn infantry_c4_action(
     {
         return None;
     }
+    // Infantry51E9F1 rewrites only base Attack5. Admitted suffix callers
+    // have already asked it; cursor/ordinary click shortcuts have not.
+    if !admitted_attack
+        && attack_action(
+            sim,
+            rules,
+            actor_id,
+            &TargetKind::Entity(hover.stable_id),
+            false,
+            None,
+        ) != AttackAction::Attack
+    {
+        return None;
+    }
     let building = sim.interner().object_type(target.type_ref(), rules)?;
     // Building virtual+80: 457620 -> BuildingType465D40, not invulnerability.
     if building.is_1x1_with_undeploy() {
@@ -3636,6 +3656,7 @@ pub(super) fn infantry_c4_action(
 /// (0x0051F190) keeps action 9, and `FootClass::ClickedAction_Object`
 /// (0x004D74E0) queues it as it does an Engineer's capture. None when no
 /// selected object takes the arm.
+/// Infantry51EE62 requires the shared base Attack5 before this rewrite.
 fn infiltrator_capture_orders(
     sim: &crate::sim::world::Simulation,
     rules: &crate::rules::ruleset::RuleSet,
@@ -3653,6 +3674,14 @@ fn infiltrator_capture_orders(
     selected.retain(|&id| {
         if infantry_c4_action(sim, rules, id, hover, false).is_some()
             || crate::sim::passenger::can_enter_transport(sim, rules, id, hover.stable_id)
+            || attack_action(
+                sim,
+                rules,
+                id,
+                &TargetKind::Entity(hover.stable_id),
+                false,
+                None,
+            ) != AttackAction::Attack
             || !sim.infiltrator_building_action(id, hover.stable_id, rules)
         {
             return true;
@@ -5428,6 +5457,99 @@ mod tests {
         assert_eq!(action(own_wall_kirov), AttackAction::Move);
         assert_ne!(action(shrouded_kirov), AttackAction::Attack);
         assert_eq!(action(disc), AttackAction::NoMove);
+    }
+
+    #[test]
+    fn npatch_target_click_rejects_protection_even_under_force_fire() {
+        use crate::sim::superweapon::invulnerability::{InvulnKind, InvulnerabilityState};
+        use crate::sim::timer::CdTimer;
+        let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+            return;
+        };
+        let rules = retail.rules;
+        let mut sim = super::retail_entry_tests::arena(&rules);
+        let tank = sim
+            .spawn_object("MTNK", "Americans", 5, 4, 0, &rules)
+            .unwrap();
+        let target = sim
+            .spawn_object("HTNK", "Russians", 7, 4, 0, &rules)
+            .unwrap();
+        let building = sim
+            .spawn_object("NAREFN", "Russians", 20, 16, 0, &rules)
+            .unwrap();
+        let tanya = sim
+            .spawn_object("TANY", "Americans", 13, 19, 0, &rules)
+            .unwrap();
+        let spy = sim
+            .spawn_object("SPY", "Americans", 13, 21, 0, &rules)
+            .unwrap();
+        let hover = HoverTargetKindWithId {
+            kind: HoverTargetKind::EnemyStructure,
+            stable_id: building,
+        };
+        let cursor = |sim: &Simulation, actor| {
+            crate::app::input::cursor::capability_cursor_for_hover(
+                sim,
+                &[actor],
+                Some(actor),
+                &hover,
+                Some(&rules),
+                None,
+                OrderModifier::Normal,
+                false,
+                false,
+            )
+        };
+        for kind in [InvulnKind::IronCurtain, InvulnKind::ForceShield] {
+            sim.entities_mut_for_test()
+                .get_mut(target)
+                .unwrap()
+                .invulnerability = Some(InvulnerabilityState::new(CdTimer::started(0, 2), kind));
+            sim.entities_mut_for_test()
+                .get_mut(building)
+                .unwrap()
+                .invulnerability = Some(InvulnerabilityState::new(CdTimer::started(0, 2), kind));
+            sim.session_mut_for_test().set_binary_frame_for_test(1);
+            for forced in [false, true] {
+                assert_eq!(
+                    attack_action(
+                        &sim,
+                        &rules,
+                        tank,
+                        &TargetKind::Entity(target),
+                        forced,
+                        None
+                    ) == AttackAction::Attack,
+                    !crate::rules::NPATCH_ENABLED,
+                    "NPAE700444's protection gate is outside the Ctrl bypass"
+                );
+            }
+            assert_eq!(
+                infantry_c4_action(&sim, &rules, tanya, &hover, false).is_none(),
+                crate::rules::NPATCH_ENABLED
+            );
+            assert_eq!(
+                infiltrator_capture_orders(&sim, &rules, &mut vec![spy], &hover).is_none(),
+                crate::rules::NPATCH_ENABLED
+            );
+            for (actor, special) in [
+                (tanya, crate::app::types::CursorFeedbackKind::Demolish),
+                (spy, crate::app::types::CursorFeedbackKind::Enter),
+            ] {
+                assert_eq!(cursor(&sim, actor) != special, crate::rules::NPATCH_ENABLED);
+            }
+            sim.session_mut_for_test().set_binary_frame_for_test(2);
+            assert_eq!(
+                attack_action(&sim, &rules, tank, &TargetKind::Entity(target), false, None),
+                AttackAction::Attack,
+                "the target returns on the exact expiry frame"
+            );
+            assert_eq!(
+                infantry_c4_action(&sim, &rules, tanya, &hover, false),
+                Some(InfantryC4Action::Sabotage)
+            );
+            assert!(infiltrator_capture_orders(&sim, &rules, &mut vec![spy], &hover).is_some());
+        }
     }
 
     /// Unit (`0x0074041B..0x0074049A`) and Infantry

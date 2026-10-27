@@ -1773,6 +1773,87 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real Guard acquisition after restored Iron Curtain expiry"]
+    fn aymod_guard_waits_for_restored_iron_curtain_before_acquiring_a_target() {
+        use crate::sim::superweapon::invulnerability::{InvulnKind, apply_invulnerability};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, target) = aymod_nearby_pair("MTNK", "MTNK", false);
+        {
+            let runtime = &mut scene.runtime;
+            let rules = &runtime.resources.rules;
+            // A sleeping victim cannot trigger the scanner's distinct
+            // retaliation path before protection expires.
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    target,
+                    crate::sim::mission::MissionId::from_known(
+                        crate::sim::mission::MissionType::Sleep,
+                    ),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            assert_eq!(
+                runtime.simulation.greatest_threat_represented(
+                    rules,
+                    None,
+                    tank,
+                    crate::sim::combat::threat_range::ScanMission::Guard,
+                    None,
+                ),
+                Some(target),
+                "the unprotected target must be eligible before this test protects it"
+            );
+        }
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let expires = scene.sim().session.binary_frame() + 45;
+        let now = scene.sim().session.binary_frame();
+        apply_invulnerability(
+            scene
+                .runtime
+                .simulation
+                .substrate
+                .entities
+                .get_mut(target)
+                .unwrap(),
+            now,
+            45,
+            InvulnKind::IronCurtain,
+        );
+        for _ in 0..10 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == tank)
+            );
+        }
+        let bytes = save_scene(&scene, "AY protected target");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..180 {
+            let frame = scene.sim().session.binary_frame();
+            let output = tick_with_due_commands(&mut scene);
+            let fired = output.fire_events.iter().any(|event| {
+                event.attacker_id == tank
+                    && event.target == crate::sim::combat::TargetKind::Entity(target)
+            });
+            if frame < expires {
+                assert!(
+                    !fired,
+                    "Guard must not acquire the protected target after load"
+                );
+            } else if fired {
+                return;
+            }
+        }
+        panic!("Guard never reacquired the target after the saved protection expired");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual aircraft Alt move over a service depot"]
     fn aymod_aircraft_alt_move_does_not_enter_or_repair_at_a_depot() {
         use crate::sim::command::{Command, CommandEnvelope};
