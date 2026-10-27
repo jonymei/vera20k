@@ -2553,6 +2553,228 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual mind control transfers sensor coverage and death removes it"]
+    fn aymod_sensor_capture_return_and_death_update_ai_cloak_admission_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, cloaker, observer) = aymod_nearby_pair("TANY", "GAPILL", false);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            for id in [cloaker, observer] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+        }
+        assert!((0..360).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(cloaker)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        }));
+        let (sensor, controller, owner, enemy, cell) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = sim.entities().get(cloaker).unwrap().owner();
+            let enemy = sim.entities().get(observer).unwrap().owner();
+            let at = sim.entities().get(cloaker).unwrap().position;
+            assert!(rules.object("FV").unwrap().sensors);
+            assert!(!rules.object("GAPILL").unwrap().sensors);
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 3)
+                .collect::<Vec<_>>();
+            let sensor = spawn_on_free_cells(sim, rules, enemy, sites, &["FV"])[0];
+            let at_sensor = sim.entities().get(sensor).unwrap().position;
+            let center = (i32::from(at_sensor.rx()), i32::from(at_sensor.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (2..=3).contains(&(x - center.0).abs().max((y - center.1).abs())))
+                .collect::<Vec<_>>();
+            let controller = spawn_on_free_cells(sim, rules, owner, sites, &["YURI"])[0];
+            for id in [sensor, controller] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            (sensor, controller, owner, enemy, (at.rx(), at.ry()))
+        };
+        let count = |scene: &HeadlessScenario, house| {
+            let fog = &scene.sim().fog;
+            fog.sensors_by_house()
+                .get(&house)
+                .and_then(|values| {
+                    values.get(usize::from(cell.1) * usize::from(fog.width()) + usize::from(cell.0))
+                })
+                .copied()
+                .unwrap_or(0)
+        };
+        let scan = |scene: &mut HeadlessScenario| {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.greatest_threat_represented(
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                observer,
+                crate::sim::combat::threat_range::ScanMission::Guard,
+                None,
+            )
+        };
+        assert!((0..30).any(|_| {
+            tick_with_due_commands(&mut scene);
+            count(&scene, enemy) == 1
+        }));
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        let original_own_count = count(&scene, owner);
+        let tick = scene.sim().session.tick() + 1;
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            tick,
+            Command::Attack {
+                attacker_id: controller,
+                target_id: sensor,
+            },
+        ));
+        assert!(
+            (0..240).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().get(sensor).unwrap().owner() == owner
+            }),
+            "actual YURI firing must capture the IFV, not a raw owner store"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .unwrap()
+                .mind_control
+                .controller(),
+            Some(controller)
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .unwrap()
+                .sensor_deposit
+                .unwrap()
+                .owner(),
+            owner
+        );
+        assert_eq!(count(&scene, enemy), 0);
+        assert_eq!(count(&scene, owner), original_own_count + 1);
+        assert_ne!(scan(&mut scene), Some(cloaker));
+        let bytes = save_scene(&scene, "AY captured IFV sensor coverage");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(count(&scene, enemy), 0);
+        assert_eq!(count(&scene, owner), original_own_count + 1);
+        let kill = |scene: &mut HeadlessScenario, id| {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let damage = sim.entities().get(id).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    id,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        };
+        // The real Yuri can contribute its own sensor circle too. Removing
+        // that source must not mask a leaked IFV contribution on return.
+        let controller_circle = scene
+            .sim()
+            .entities()
+            .get(controller)
+            .unwrap()
+            .sensor_deposit;
+        let controller_contribution = i16::from(controller_circle.is_some_and(|deposit| {
+            scene
+                .sim()
+                .fog
+                .sensor_circle_cells(deposit.center(), deposit.add_radius())
+                .contains(&cell)
+        }));
+        let remaining_own_count = original_own_count - controller_contribution;
+        // Techno's normal death owner FreeAllCaptures releases the real
+        // manager link and invokes the ordinary Foot ChangeOwner receiver.
+        kill(&mut scene, controller);
+        assert_eq!(scene.sim().entities().get(sensor).unwrap().owner(), enemy);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .unwrap()
+                .mind_control
+                .controller(),
+            None
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .unwrap()
+                .sensor_deposit
+                .unwrap()
+                .owner(),
+            enemy
+        );
+        assert_eq!(count(&scene, enemy), 1);
+        assert_eq!(count(&scene, owner), remaining_own_count);
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        kill(&mut scene, sensor);
+        assert_eq!(
+            count(&scene, enemy),
+            0,
+            "UnInit must remove the last hostile sensor footprint"
+        );
+        assert_ne!(scan(&mut scene), Some(cloaker));
+        tick_with_due_commands(&mut scene);
+        let bytes = save_scene(&scene, "AY IFV detector removed after controller death");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(count(&scene, enemy), 0);
+        assert_eq!(count(&scene, owner), remaining_own_count);
+        assert!(scene.sim().entities().get(sensor).is_none());
+        assert_ne!(scan(&mut scene), Some(cloaker));
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; moving AI sensors, cloak acquisition and real load"]
     fn aymod_mobile_sensors_update_cloaked_infantry_ai_acquisition_after_load() {
         use crate::sim::command::Command;
