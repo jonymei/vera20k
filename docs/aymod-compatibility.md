@@ -6,17 +6,26 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于6e6857f69补V07部署普通/精英武器和独立残留辐射场救船。仅测试/文档，无生产玩法改动，无需玩法critic，未推送/PR/发布；整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于8e56a2f4e补V04移动探测/隐形步兵/电脑选敌与存读生命周期。仅测试/文档，无生产玩法改动，无需玩法critic，未推送/PR/发布；整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750保持不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续按用户要求暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，但跨水区FNPC、SCHP hold、抗压和多AI长局仍开放。非盟军巨炮本地修复b5a046558已通过三阵营计划回归；固定版不含，旧计划/已造巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策及F11跨模块光照接线的批准门禁不变，一般“继续功能”不解除这两项门禁。功能优先，UI随后，全部PLAN仍有效。
-- 本轮真实AY DESO正常部署分别发射普通/精英Secondary，自身Cell为目标，创建辐射场并解除AI鱿鱼缠绕；不是把原来的主武器辐射束重复当部署结果。精英rank为明确夹具边界，不声称本条覆盖晋升。
-- 另从实际普通部署武器的RadLevel/CellSpread生成独立场，没有DESO/子弹/直接伤害；正式保存/恢复仍保持缠绕和场，再由周期Foot伤害解除，双方存活、瘫痪结束、旧动画回收。该例从辐射服务生产边界注入，不冒称完整部署到残留场的一镜到底。
-- 最终aymod_radiation_三项通过（部署项含两个rank边界，并复跑既有辐射束/再次捕获/存读复合链），radiation owner4项通过。前轮Parasite25项与三阵营巨炮计划1项通过；本轮不重复未改生产实现的stock/全库测试。
-- 原生NPAE的Foot周期路径还经4DA5EB→B94CD0检查Cell有效辐射/站点，4DA603→B93248按绑定类型取因子/弹头或回退全局，再回4DA629虚调用具体ReceiveDamage；本轮仅证明AY当前默认类型的有效站点路径，未声称所有NP扩展辐射类型或无站点残留都已等价。
-- 下一安全动作：继续V04实际隐形/传感器移动、丢失/重发现和AI选敌生命周期，先确认当前配置与现有检测owner；或V05驻军变化/子机再生。V07换主/多AI/完整抗压及原鱿鱼-海豚闪退全面排除仍开放；本轮不是该闪退的完整回放。
+- 本轮实际AY TANY自然隐形、电脑DOG正常移动带入/带出探测覆盖；同House电脑GAPILL共享探测并实际Guard开火。覆盖内/外两次正式GameSnapshot保存恢复，探测计数不丢/不残留，未直接写fog或cloak。
+- 受伤会按原生70281D显形，不能把“没有传感器”直接等同于“仍完全隐形”。正常Stop/Sleep暂隔离火力与DOG追咬，待TANY自然重新隐形后，普通Guard在无探测时不向她开火；DOG返回后经普通Stop清理其可能合法持有的其他目标，再由Guard重新射击。没有给AI增加发现即强制转火的政策。
+- 实际复合生命周期1项、techno_ai_cloak owner16项及既有TANY自身隐形开火1项通过。仅测试/文档，无玩法critic；无全仓库、stock或Python重复运行。历史V07三项/辐射owner4项及V06覆盖保留在各节。
+- 实读NPAE Evaluate_Candidate6F7DA9..7DEB用攻击者House查询目标GetCoords所在Cell的4870D0；GetFireError6FC24D..29D同样查该House；70281D→vt+FC/703850调用StartUncloaking(0)。沿现有传感器沉积、损伤、隐形、选敌和命令owners，无生产数值/状态更改。
+- 下一安全动作：继续V05驻军变化/子机再生的真实武器/经验归属生命周期，先确认既有spawn/veterancy owner与AY实际配置。V04移动目标本身/探测器死亡或换主/运输及多House叠加仍开放，不把本轮单探测器场景当全部侦测认证。V07换主/多AI/完整抗压及原鱿鱼-海豚闪退全面排除仍开放；本轮不是该闪退的完整回放。
 - V06地面晋升/热存读/退档已有覆盖，音效latch按原生Load清零，不更改serde skip；对空/换主/ROF倍率仍开放。铁幕已有目标/反击/脚本与ForceShield完整存读、V03空武器reload fallback、其余清单及真人验收仍开放。
 - 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。
+
+### V04移动探测、隐形步兵与电脑选敌（2026-10-28）
+
+- 新aymod_mobile_sensors_update_cloaked_infantry_ai_acquisition_after_load以正式AY Battle资源加载，TANY为真人House、DOG与GAPILL属同一电脑House。先证明未隐形目标可被扫描，再让TANY自然完成Cloakable隐形，探测外不被选中；DOG真实移动带入范围后，TANY仍保持全隐形而电脑查询可选中。
+- DOG运动意图通过现有apply_command真实payload边界提供，不伪造会被忽略的AI玩家事件，不冒称团队/战略规划覆盖。覆盖内保存/恢复→撤离→不可新获取→返回→可新获取，随后电脑碉堡普通Guard实际向TANY开火，不直接AssignTarget或调用伤害。
+- 实际中弹后的显形与慢速重新隐形按已有原生伤害/隐形owner发生。为隔离该边界，正常Stop清目标、mission authority暂置碉堡和DOG为Sleep，DOG停在探测范围外，防止它正常完成Move后继续追咬可见步兵。无探测时再次正式存读、自然重新隐形，普通Guard连续60帧不向她开火；DOG返回、普通Stop清理碉堡可能已合法获取的其他目标后，再由Guard选敌/开火。未强行清cloak、改HP或取消正常伤害显形。
+- 最初的移动MTNK观察者在等待期间移至目标12格外，不能据其空扫描认定侦测坏了；使用固定防御建筑隔离这一变量。重发现也不意味着必须放弃已持有的其他目标，早期尾段实际持有起始MCV。以上均为夹具/错误期待修正，未据此更改AI政策、射程、兵种数值或弱攻势链。
+- 实读NPAE Evaluate_Candidate6F7DA9..6F7DEB、GetFireError6FC24D..6FC29D的攻击者House传感器查询，以及ReceiveDamage70281D→703850的StartUncloaking(0)。本轮沿现有沉积/移除、保存重建、CloakRuntime、GreatestThreat/GetFireError和任务/命令owners，无新状态、RNG/timer/Detach实现；正常调用仍消费原owner应有的抽样/延迟和隐形Detach。
+- 最终复合实际场景1项和techno_ai_cloak16项通过；测试-only，无玩法critic。单一探测器/固定电脑防御的受控链，不关闭目标自身移动、传感器死亡/换主/运输、多House重叠、潜艇/其他类型或GPU/GUI边界。
 
 ### V07部署普通/精英与独立残留场救船（2026-10-28）
 
@@ -733,7 +742,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 / 普通步兵入口已修，基础流程已验 | GAROBO/NARADR Hospital治疗owner原已有，但普通步兵WhatAction51E85A缺行；现共用医院鼠标动作，不再仅工程师可访问。Ammo=-1正常准入，不另改治疗或弹药 | 实际两医院E1：Off拒绝、On进驻治疗离开、满血拒绝通过；正常/计划下单与部署Move顺序通过。满员/联盟、治疗中失效、普通步兵保存/换主、自动AI仍开放；不是占领科技医院后的全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
-| V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
+| V04 / P1 / 单探测器移动/存读/AI开火已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。移动目标自身、探测器死亡/换主/运输、多House重叠、IFV/空艇/精英潜艇/幻影等其他路径及画面仍待验 |
 | V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
 | V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射束、部署普通精英及独立场解缠已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；另验普通/精英DESO实际部署槽与创建场、独立残留场正式存读后周期伤害救船。各例边界见检查点；换主、多AI、完整抗压/长期场衰减及原鱿鱼-海豚崩溃回放仍待验 |

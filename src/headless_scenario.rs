@@ -2551,6 +2551,349 @@ mod retail_construction_tests {
         panic!("the cloaked Tanya never damaged her target through the actual Attack mission");
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; moving AI sensors, cloak acquisition and real load"]
+    fn aymod_mobile_sensors_update_cloaked_infantry_ai_acquisition_after_load() {
+        use crate::sim::command::Command;
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, cloaker, observer) = aymod_nearby_pair("TANY", "GAPILL", false);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (sensor, home, near, enemy, target_cell) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            for id in [cloaker, observer] {
+                // Keep combat out of the sensor-edge probes; wake the actual
+                // computer observer on Guard only after rediscovery below.
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let at = sim.entities().get(cloaker).unwrap().position;
+            let enemy = sim.entities().get(observer).unwrap().owner();
+            assert!(!sim.houses.get(&enemy).unwrap().event_dispatch_eligible());
+            let radius = i32::from(rules.object("DOG").unwrap().sensors_sight);
+            assert!(radius > 0 && rules.object("DOG").unwrap().sensors);
+            assert!(!rules.object("GAPILL").unwrap().sensors);
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let far = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| {
+                    let distance = (x - center.0).abs().max((y - center.1).abs());
+                    (radius + 3..=radius + 5).contains(&distance)
+                })
+                .collect::<Vec<_>>();
+            let sensor = spawn_on_free_cells(sim, rules, enemy, far, &["DOG"])[0];
+            let home_at = sim.entities().get(sensor).unwrap().position;
+            let home = (home_at.rx(), home_at.ry());
+            let near = cells_nearest(center)
+                .into_iter()
+                .find_map(|(x, y)| {
+                    if (x - center.0).abs().max((y - center.1).abs()) != 3 {
+                        return None;
+                    }
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    if sim.occupancy().get(x, y).is_some_and(|cell| {
+                        !cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                    }) {
+                        return None;
+                    }
+                    sim.foot_path_zone_precheck(
+                        sensor,
+                        crate::sim::components::DriveCoord::cell(x, y, 0),
+                        rules,
+                    )
+                    .unwrap()
+                    .then_some((x, y))
+                })
+                .expect("a reachable sensor destination near the cloaked infantry");
+            (sensor, home, near, enemy, (at.rx(), at.ry()))
+        };
+        let sensed = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .fog
+                .has_sensor_for_house(enemy, target_cell.0, target_cell.1)
+        };
+        let scan = |scene: &mut HeadlessScenario| {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.greatest_threat_represented(
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                observer,
+                crate::sim::combat::threat_range::ScanMission::Guard,
+                None,
+            )
+        };
+        assert_eq!(
+            scan(&mut scene),
+            Some(cloaker),
+            "uncloaked fixture must be eligible before testing sensors"
+        );
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scene);
+            if scene
+                .sim()
+                .entities()
+                .get(cloaker)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+            {
+                break;
+            }
+        }
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(cloaker)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        );
+        assert!(!sensed(&scene));
+        assert_ne!(scan(&mut scene), Some(cloaker));
+        let move_sensor = |scene: &mut HeadlessScenario, goal: (u16, u16)| {
+            let runtime = &mut scene.runtime;
+            let owner = runtime.simulation.interner.resolve(enemy).to_owned();
+            // Supply the opponent's movement intent at the real command
+            // payload boundary; this does not claim AI planning coverage.
+            assert!(runtime.simulation.apply_command(
+                &owner,
+                &Command::Move {
+                    entity_id: sensor,
+                    target_rx: goal.0,
+                    target_ry: goal.1,
+                },
+                Some(&runtime.resources.rules)
+            ));
+        };
+        move_sensor(&mut scene, near);
+        assert!((0..480).any(|_| {
+            tick_with_due_commands(&mut scene);
+            sensed(&scene)
+        }));
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(cloaker)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked(),
+            "sensor deposits reveal to a house, not globally uncloak the infantry"
+        );
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        let bytes = save_scene(&scene, "AY moving sensor over hidden infantry");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(sensed(&scene));
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        move_sensor(&mut scene, home);
+        assert!((0..480).any(|_| {
+            tick_with_due_commands(&mut scene);
+            !sensed(&scene)
+        }));
+        assert_ne!(scan(&mut scene), Some(cloaker));
+        move_sensor(&mut scene, near);
+        assert!((0..480).any(|_| {
+            tick_with_due_commands(&mut scene);
+            sensed(&scene)
+        }));
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        let runtime = &mut scene.runtime;
+        runtime
+            .simulation
+            .mission_queue_exact(
+                observer,
+                MissionId::from_known(MissionType::Guard),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        assert!(
+            (0..180).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == observer
+                        && event.target == crate::sim::combat::TargetKind::Entity(cloaker)
+                })
+            }),
+            "the actual computer pillbox must acquire and fire after sensor rediscovery"
+        );
+        // ReceiveDamage70281D surfaces a damaged cloaker. Pause the observer
+        // through the mission owner so normal recloaking can happen; merely
+        // removing sensors does not make a damaged, visible target invisible.
+        let runtime = &mut scene.runtime;
+        let owner = runtime.simulation.interner.resolve(enemy).to_owned();
+        assert!(runtime.simulation.apply_command(
+            &owner,
+            &Command::Stop {
+                entity_id: observer
+            },
+            Some(&runtime.resources.rules),
+        ));
+        runtime
+            .simulation
+            .mission_queue_exact(
+                observer,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        move_sensor(&mut scene, home);
+        assert!((0..480).any(|_| {
+            tick_with_due_commands(&mut scene);
+            !sensed(&scene)
+        }));
+        // A normal AI dog resumes hunting visible infantry after reaching
+        // its destination. Park it outside the sensor radius while Tanya
+        // finishes her authored, slow recloak rather than letting it bite.
+        let runtime = &mut scene.runtime;
+        let owner = runtime.simulation.interner.resolve(enemy).to_owned();
+        assert!(runtime.simulation.apply_command(
+            &owner,
+            &Command::Stop { entity_id: sensor },
+            Some(&runtime.resources.rules),
+        ));
+        runtime
+            .simulation
+            .mission_queue_exact(
+                sensor,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        let bytes = save_scene(&scene, "AY sensor gone after passive acquisition");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            !sensed(&scene),
+            "load must not resurrect the old sensor deposit"
+        );
+        assert!(
+            (0..360).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|e| e.attacker_id == observer || e.attacker_id == sensor),
+                    "parked observer/detector must not interrupt natural recloaking"
+                );
+                scene
+                    .sim()
+                    .entities()
+                    .get(cloaker)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .is_fully_cloaked()
+            }),
+            "the damaged infantry must naturally recloak without continuing fire"
+        );
+        assert_ne!(
+            scene
+                .sim()
+                .entities()
+                .get(observer)
+                .unwrap()
+                .attack_target
+                .target(),
+            Some(crate::sim::combat::TargetKind::Entity(cloaker)),
+            "the stopped observer must not acquire the unsensed infantry"
+        );
+        let runtime = &mut scene.runtime;
+        runtime
+            .simulation
+            .mission_queue_exact(
+                observer,
+                MissionId::from_known(MissionType::Guard),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        for _ in 0..60 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == observer
+                        && event.target == crate::sim::combat::TargetKind::Entity(cloaker)),
+                "an unsensed full cloak must stop subsequent actual fire"
+            );
+        }
+        assert_ne!(scan(&mut scene), Some(cloaker));
+        move_sensor(&mut scene, near);
+        assert!(
+            (0..480).any(|_| {
+                tick_with_due_commands(&mut scene);
+                sensed(&scene)
+            }),
+            "parked sensor failed to return: {:?}",
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .map(|e| (&e.mission, &e.position, &e.attack_target))
+        );
+        assert_eq!(scan(&mut scene), Some(cloaker));
+        // Guard may have legitimately acquired the nearby starting MCV
+        // while Tanya was hidden. Clear that admitted target with Stop;
+        // rediscovery is not a rule forcing it to abandon an existing target.
+        let runtime = &mut scene.runtime;
+        let owner = runtime.simulation.interner.resolve(enemy).to_owned();
+        assert!(runtime.simulation.apply_command(
+            &owner,
+            &Command::Stop {
+                entity_id: observer
+            },
+            Some(&runtime.resources.rules),
+        ));
+        assert!(
+            (0..180).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == observer
+                        && event.target == crate::sim::combat::TargetKind::Entity(cloaker)
+                })
+            }),
+            "ordinary Stop/Guard failed after the mobile sensor returned: {:?}",
+            scene
+                .sim()
+                .entities()
+                .get(observer)
+                .map(|e| (&e.mission, &e.attack_target))
+        );
+    }
+
     // NPAE174 Assign_Target6FCF5B and GetFireErrorC2C649 preserve the
     // burst across player orders and gate it on the saved short interval.
     #[cfg(feature = "npatch")]
