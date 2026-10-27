@@ -3534,10 +3534,11 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; actual AY radiation releases a live grappling squid"]
+    #[ignore = "requires VERA20K_AYMOD_DIR; live squid release, recapture and save/resume"]
     fn aymod_radiation_beam_releases_a_live_squid_from_its_ship() {
         use crate::rules::terrain_rules::LandType;
         use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
         let launch = battle_session(
@@ -3545,6 +3546,7 @@ mod retail_construction_tests {
             &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
         );
         let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let (squid, ship, land) = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -3617,6 +3619,23 @@ mod retail_construction_tests {
             scene.sim().entities().get(ship).unwrap().parasite.eater(),
             Some(squid)
         );
+        let bytes = save_scene(&scene, "AY live squid grapple");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            Some(squid)
+        );
+        let state = scene
+            .sim()
+            .entities()
+            .get(squid)
+            .unwrap()
+            .parasite
+            .class()
+            .unwrap();
+        assert_eq!(state.victim(), Some(ship));
+        assert_eq!(state.grapple_anim(), Some(held_anim));
+        assert!(scene.sim().anim(held_anim).is_some());
         let beam = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -3672,6 +3691,109 @@ mod retail_construction_tests {
         assert!(
             host.health.current() > 0 && !host.parasite.is_paralyzed(sim.session.binary_frame())
         );
+        // The rescuer can now passively acquire and kill the released squid.
+        // Sleep both defenders through the mission owner to isolate recapture.
+        let runtime = &mut scene.runtime;
+        for defender in [beam, ship] {
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    defender,
+                    crate::sim::mission::MissionId::from_known(
+                        crate::sim::mission::MissionType::Sleep,
+                    ),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+        }
+        // Leave the hostile squid on its normal mission: release must not
+        // permanently consume its ability to acquire and grapple again.
+        let second_anim = (0..900)
+            .find_map(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|e| e.attacker_id == beam || e.attacker_id == ship),
+                    "rescuers fired during recapture isolation: {:?}",
+                    output.fire_events
+                );
+                let sim = scene.sim();
+                assert!(
+                    sim.entities().get(squid).is_some(),
+                    "released squid vanished at {}",
+                    sim.session.binary_frame()
+                );
+                let state = sim.entities().get(squid)?.parasite.class()?;
+                (state.victim() == Some(ship))
+                    .then(|| state.grapple_anim())
+                    .flatten()
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "released AI squid did not recapture: squid={:?}, ship={:?}",
+                    scene.sim().entities().get(squid).map(|e| (
+                        e.health.current(),
+                        &e.parasite,
+                        &e.mission,
+                        &e.attack_target
+                    )),
+                    scene.sim().entities().get(ship).map(|e| (
+                        e.health.current(),
+                        &e.parasite,
+                        &e.mission,
+                        &e.attack_target
+                    ))
+                )
+            });
+        assert_ne!(second_anim, held_anim);
+        assert!(scene.sim().anim(held_anim).is_none());
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            Some(squid)
+        );
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(beam).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: beam,
+                target_id: ship,
+            },
+        ));
+        let mut fired_again = false;
+        let released_again = (0..240).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            fired_again |= output
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == beam);
+            scene
+                .sim()
+                .entities()
+                .get(ship)
+                .is_some_and(|e| e.parasite.eater().is_none())
+        });
+        assert!(
+            fired_again && released_again,
+            "second normal beam must release the second grapple"
+        );
+        let bytes = save_scene(&scene, "AY released squid");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let sim = scene.sim();
+        let source = sim.entities().get(squid).unwrap();
+        assert!(source.health.current() > 0 && !source.lifecycle.in_limbo());
+        assert_eq!(source.parasite.class().unwrap().victim(), None);
+        assert_eq!(source.parasite.class().unwrap().grapple_anim(), None);
+        let host = sim.entities().get(ship).unwrap();
+        assert!(host.health.current() > 0 && host.parasite.eater().is_none());
+        assert!(!host.parasite.is_paralyzed(sim.session.binary_frame()));
         // ExitUnit may place the squid on its old square. Do not order the
         // host onto that occupied square and mistake refusal for paralysis.
         let ship_goal =
@@ -3714,7 +3836,7 @@ mod retail_construction_tests {
             tick_with_due_commands(&mut scene);
             let sim = scene.sim();
             assert!(
-                sim.anim(held_anim).is_none(),
+                sim.anim(held_anim).is_none() && sim.anim(second_anim).is_none(),
                 "old grapple animation must be collected"
             );
             if sim.entities().get(ship).is_some_and(|e| {
