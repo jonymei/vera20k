@@ -17,7 +17,7 @@
 
 use crate::assets::asset_manager::AssetManager;
 use crate::assets::shp_file::ShpFile;
-use crate::render::batch::{BatchRenderer, create_r8_texture_view};
+use crate::render::batch::{BatchRenderer, create_r8_texture_view_on_device};
 use crate::render::gpu::GpuContext;
 use crate::render::native_z::{ZSHAPE_TEXEL_BIAS, zshape_remap};
 
@@ -72,6 +72,16 @@ impl BuildingZShape {
         batch: &BatchRenderer,
         asset_manager: &AssetManager,
     ) -> Option<Self> {
+        Self::load_on_device(&gpu.device, &gpu.queue, batch, asset_manager)
+    }
+
+    /// Same loader for an offscreen device; no surface or window is needed.
+    pub(crate) fn load_on_device(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        batch: &BatchRenderer,
+        asset_manager: &AssetManager,
+    ) -> Option<Self> {
         let file = asset_manager.load_file_from_mix(BUILDNGZ_FILE)?;
         let shp = match ShpFile::from_bytes(&file.bytes) {
             Ok(shp) => shp,
@@ -81,14 +91,21 @@ impl BuildingZShape {
             }
         };
         let (width, height, texels) = decode_zshape_canvas(&shp)?;
-        let view = create_r8_texture_view(gpu, "BUILDNGZ ZShape", &texels, width, height);
+        let view = create_r8_texture_view_on_device(
+            device,
+            queue,
+            "BUILDNGZ ZShape",
+            &texels,
+            width,
+            height,
+        );
         log::info!(
             "BUILDNGZ.SHA z-shape: {width}x{height} from {} ({} frames)",
             file.source_archive,
             shp.frames.len()
         );
         Some(Self {
-            bind_group: batch.create_zshape_bind_group(gpu, &view),
+            bind_group: batch.create_zshape_bind_group_on_device(device, &view),
             width,
             height,
         })

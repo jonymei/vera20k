@@ -2848,3 +2848,15 @@ pub(crate) mod tests {
         assert_eq!(sim.scenario_rng.state(), replay.state());
     }
 }
+
+/// Client offscreen fixtures place crates through the existing owner.
+#[cfg(any(test, feature = "test-support"))]
+pub fn place_crate_for_test(
+    sim: &mut Simulation,
+    rules: &RuleSet,
+    overlay_registry: &OverlayTypeRegistry,
+    cell: (i16, i16),
+    powerup: Option<u8>,
+) -> bool {
+    place_crate(sim, rules, overlay_registry, cell, powerup)
+}

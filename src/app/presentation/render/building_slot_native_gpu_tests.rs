@@ -60,6 +60,7 @@ struct FormatEquipment {
     format: wgpu::TextureFormat,
     batch: BatchRenderer,
     atlas: SpriteAtlas,
+    zshape: crate::render::building_zshape::BuildingZShape,
 }
 
 struct SlotGpu {
@@ -67,6 +68,7 @@ struct SlotGpu {
     formats: Vec<FormatEquipment>,
     physical: ShpFile,
     light: CellLightGrid,
+    house_colors: HouseColorMap,
     differences: Vec<String>,
     transport_differences: Vec<String>,
     compared: usize,
@@ -74,7 +76,7 @@ struct SlotGpu {
 }
 
 impl SlotGpu {
-    fn new(fixture: &SlotScene, root: &Path, native: &Value) -> Self {
+    fn new(fixture: &SlotScene, root: &Path, native: Option<&Value>) -> Self {
         let mut assets = crate::assets::asset_manager::AssetManager::new(
             root,
             crate::assets::asset_manager::MediaArchiveMode::STOCK_DIGITAL,
@@ -108,7 +110,10 @@ impl SlotGpu {
             config.raw_shp_frame_count,
             Some(physical.frames.len() as i32)
         );
-        for case in native["cases"].as_array().unwrap() {
+        for case in native
+            .into_iter()
+            .flat_map(|value| value["cases"].as_array().unwrap())
+        {
             let reader = &case["anim_type_reader"];
             assert_eq!(reader["shadow"], false);
             assert_eq!(reader["flat"], false);
@@ -141,6 +146,9 @@ impl SlotGpu {
         .into_iter()
         .map(|format| {
             let batch = BatchRenderer::new_with_device(&gpu.device, &gpu.queue, format);
+            let zshape = crate::render::building_zshape::BuildingZShape::load_on_device(
+                &gpu.device, &gpu.queue, &batch, &assets,
+            ).expect("building body probe requires the real BUILDNGZ.SHA, not the neutral one-texel fallback");
             let atlas = build_sprite_atlas(
                 &gpu.device,
                 &gpu.queue,
@@ -166,6 +174,7 @@ impl SlotGpu {
                 format,
                 batch,
                 atlas,
+                zshape,
             }
         })
         .collect();
@@ -182,11 +191,190 @@ impl SlotGpu {
             formats,
             physical,
             light,
+            house_colors,
             differences: Vec::new(),
             transport_differences: Vec::new(),
             compared: 0,
             opaque_controls: 0,
         }
+    }
+
+    /// Presence/absence probe over current physical assets, not a new native
+    /// pixel golden. Both body and slots enter their production emitters.
+    fn check_cloak_visibility(
+        &mut self,
+        fixture: &SlotScene,
+        slot: u64,
+        visible: bool,
+        label: &str,
+    ) {
+        use crate::app::presentation::instances::{ShpInputs, build_shp_instances_from_inputs};
+        use crate::app::presentation::render::draw_plan_lowering::NativeDisplayOrder;
+        let sim = fixture.scene.sim();
+        let coord = sim.anim_absolute_coord(slot).unwrap();
+        let (rx, ry, sx, sy, _) = coord.to_cell_sub_z();
+        let projected = crate::util::lepton::lepton_to_screen_exact_z(rx, ry, sx, sy, coord.z);
+        let view_camera = [projected.0 - 80.0, projected.1 - 80.0];
+        let viewer = sim
+            .session()
+            .current_house()
+            .map(|id| sim.interner().resolve(id));
+        let before = (sim.state_hash(), sim.rng_state());
+        for FormatEquipment {
+            format,
+            batch,
+            atlas,
+            zshape,
+        } in &mut self.formats
+        {
+            let mut view = camera(SIZE);
+            view.camera_pos = view_camera;
+            batch.write_camera(&self.gpu.queue, view);
+            let fog = ShroudBuffer::fixture(
+                &self.gpu.device,
+                &self.gpu.queue,
+                SIZE,
+                view_camera,
+                &vec![0x7F; PIXELS],
+            );
+            batch.bind_shroud(&self.gpu.device, Some(&fog));
+            let mut parents = Vec::new();
+            build_shp_instances_from_inputs(
+                &ShpInputs {
+                    runtime: &fixture.scene.runtime,
+                    atlas: Some(atlas),
+                    overlay_atlas: None,
+                    unit_atlas: None,
+                    barrel_image_pitches: &Default::default(),
+                    interpolation:
+                        &crate::app::presentation::interpolation::RenderInterpolation::new(false),
+                    camera: view_camera,
+                    render_size: SIZE,
+                    zoom: 1.0,
+                    axis: crate::render::batch::DepthAxis::NONE,
+                    local_owner: viewer,
+                    ignore_visibility: true,
+                    lighting: &self.light,
+                    house_colors: &self.house_colors,
+                    building_zshape: true,
+                },
+                &mut parents,
+                &NativeDisplayOrder::from_display(sim.display_layers()),
+            );
+            parents.retain(|parent| parent.parent.id == fixture.plant);
+            let body_count = parents.len();
+            let slots = fixture.emit_slot(
+                atlas,
+                &self.light,
+                [
+                    view_camera[0],
+                    view_camera[1],
+                    SIZE[0] as f32,
+                    SIZE[1] as f32,
+                ],
+                &|_| 0,
+            );
+            assert_eq!(
+                body_count > 0,
+                visible,
+                "{label}: real building body admission"
+            );
+            assert_eq!(
+                !slots.is_empty(),
+                visible,
+                "{label}: real attached slot admission"
+            );
+            for (group, parents) in [("body", parents), ("slots", slots)] {
+                let layers = lower_object_instances(parents);
+                let color = self.gpu.target(SIZE, *format);
+                let background = encoded(0x8410, *format);
+                self.gpu.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &color,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &background.repeat(PIXELS),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(SIZE[0] * 4),
+                        rows_per_image: Some(SIZE[1]),
+                    },
+                    color.size(),
+                );
+                let cv = color.create_view(&Default::default());
+                let depth = self.gpu.target(SIZE, wgpu::TextureFormat::Depth32Float);
+                let dv = depth.create_view(&Default::default());
+                let mut terrain =
+                    TerrainDrawRenderer::new(&self.gpu.device, &self.gpu.queue, *format, batch);
+                terrain.prepare(&self.gpu.device, &color, &dv, batch.camera_uniform());
+                let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+                clear(&mut encoder, &cv, &dv, u16::MAX, wgpu::LoadOp::Load);
+                let mut pool = InstanceBufferPool::new();
+                for (index, layer) in layers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, layer)| !layer.instances.is_empty())
+                {
+                    let key = ["cloak0", "cloak1", "cloak2", "cloak3", "cloak4"][index];
+                    pool.upload_on_device(&self.gpu.device, &self.gpu.queue, key, &layer.instances);
+                    // Buildings6D9920 draws the base before Display6D916C;
+                    // slots use Display, but the body is not in those runs.
+                    for phase in [ObjectDrawPhase::BuildingBase, ObjectDrawPhase::Display] {
+                        draw_native_object_pass(
+                            &mut encoder,
+                            phase,
+                            &cv,
+                            &dv,
+                            &mut terrain,
+                            CLIP,
+                            batch,
+                            pool.get(key),
+                            layer,
+                            None,
+                            None,
+                            None,
+                            Some(atlas),
+                            None,
+                            &zshape.bind_group,
+                            None,
+                            None,
+                        );
+                    }
+                }
+                let read = self.gpu.read(&mut encoder, &color);
+                let output = self.gpu.finish(encoder, &[read], SIZE);
+                let changed = output[0]
+                    .chunks_exact(4)
+                    .filter(|pixel| *pixel != background.as_slice())
+                    .count();
+                if visible && changed == 0 {
+                    eprintln!(
+                        "GPU input camera={view_camera:?} layers={:?}",
+                        layers
+                            .iter()
+                            .map(|layer| (
+                                layer.runs.len(),
+                                layer.building_base_runs.len(),
+                                &layer.instances,
+                            ))
+                            .collect::<Vec<_>>()
+                    );
+                }
+                eprintln!("cloak GPU {label}/{group}/{format:?}: changed pixels={changed}");
+                assert_eq!(
+                    changed > 0,
+                    visible,
+                    "{label}/{group}/{format:?}: actual GPU changed {changed} pixels"
+                );
+            }
+        }
+        assert_eq!(
+            (sim.state_hash(), sim.rng_state()),
+            before,
+            "read-only local drawing must not mutate simulation"
+        );
     }
 
     fn compare_phase(
@@ -290,6 +478,7 @@ impl SlotGpu {
                     format,
                     batch,
                     atlas,
+                    ..
                 } = equipment;
                 let mut view = camera(SIZE);
                 view.camera_pos = view_camera;
@@ -485,6 +674,177 @@ impl SlotGpu {
     }
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires AYMOD assets and GPU; actual cloak crate building body/slots for owner and detected/undetected viewer"]
+fn aymod_cloak_crate_building_visibility_reaches_actual_gpu_output() {
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let mut fixture = SlotScene::load_registered_types(&root);
+    let slot = fixture.settled_playing_slot();
+    let mut gpu = SlotGpu::new(&fixture, &root, None);
+    gpu.check_cloak_visibility(&fixture, slot, true, "uncloaked control");
+    let tank = {
+        let runtime = &mut fixture.scene.runtime;
+        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+        let at = sim.entities().get(fixture.plant).unwrap().position;
+        let rules = &resources.rules;
+        assert!(
+            !rules.object("GAPOWR").unwrap().cloakable && !rules.object("MTNK").unwrap().cloakable
+        );
+        let candidates = (-3_i32..=3)
+            .flat_map(|dy| (-3_i32..=3).map(move |dx| (dx, dy)))
+            .map(|(dx, dy)| (i32::from(at.rx()) + dx, i32::from(at.ry()) + dy))
+            .filter_map(|(x, y)| u16::try_from(x).ok().zip(u16::try_from(y).ok()))
+            .filter(|&(x, y)| {
+                crate::sim::cell_rect::cell_is_in_playfield_height_aware(
+                    (i32::from(x), i32::from(y)),
+                    sim.playfield_bounds(),
+                    sim.resolved_terrain(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let tank = candidates
+            .iter()
+            .find_map(|&(x, y)| {
+                sim.spawn_object_with_overlay_registry(
+                    "MTNK",
+                    PLANT_OWNER,
+                    x,
+                    y,
+                    0,
+                    rules,
+                    &resources.overlay_registry,
+                )
+            })
+            .unwrap();
+        let center = crate::sim::movement::ground_pose::position_world_coord(&at);
+        let cell = candidates
+            .into_iter()
+            .find(|&(x, y)| {
+                crate::util::native_x87::distance_3d_leptons(
+                    [i32::from(x) * 256 + 128, i32::from(y) * 256 + 128, center.z],
+                    [center.x, center.y, center.z],
+                ) < rules.crate_rules.radius
+                    && sim
+                        .resolved_terrain()
+                        .unwrap()
+                        .cell(x, y)
+                        .is_some_and(|cell| cell.level == at.z())
+                    && sim.path_grid().unwrap().is_walkable_on_layer(
+                        x,
+                        y,
+                        crate::sim::movement::locomotor::MovementLayer::Ground,
+                    )
+                    && sim.occupancy().get(x, y).is_none_or(|cell| {
+                        cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                    })
+                    && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+            })
+            .unwrap();
+        assert!(crate::sim::crates::place_crate_for_test(
+            sim,
+            rules,
+            &resources.overlay_registry,
+            (cell.0 as i16, cell.1 as i16),
+            Some(3)
+        ));
+        assert!(runtime.apply_command_for_test(
+            PLANT_OWNER,
+            &Command::Move {
+                entity_id: tank,
+                target_rx: cell.0,
+                target_ry: cell.1,
+            }
+        ));
+        tank
+    };
+    fixture.wait_for(600, "real Drive pickup cloaks the plant", |fixture| {
+        [fixture.plant, tank].into_iter().all(|id| {
+            fixture
+                .scene
+                .sim()
+                .entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .is_some_and(|cloak| cloak.is_fully_cloaked())
+        })
+    });
+    assert!(
+        fixture
+            .scene
+            .sim()
+            .entities()
+            .get(tank)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .unwrap()
+            .is_fully_cloaked()
+    );
+    let owner = fixture
+        .scene
+        .sim()
+        .entities()
+        .get(fixture.plant)
+        .unwrap()
+        .owner();
+    let viewer = fixture.scene.sim().interner().get("Americans").unwrap();
+    assert_ne!(owner, viewer);
+    let set_viewer = |fixture: &mut SlotScene, viewer| {
+        let sim = &mut fixture.scene.runtime.simulation;
+        sim.session_mut_for_test()
+            .set_current_house_for_test(Some(viewer));
+        sim.entities_mut_for_test()
+            .get_mut(fixture.plant)
+            .unwrap()
+            .discovery
+            .set_owned_by_current_house_for_test(viewer == owner);
+    };
+    set_viewer(&mut fixture, owner);
+    gpu.check_cloak_visibility(&fixture, slot, true, "owner");
+    set_viewer(&mut fixture, viewer);
+    gpu.check_cloak_visibility(&fixture, slot, false, "unsensed enemy");
+    {
+        let runtime = &mut fixture.scene.runtime;
+        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+        let at = sim.entities().get(fixture.plant).unwrap().position;
+        let (w, h) = resources
+            .rules
+            .object("GAPOWR")
+            .unwrap()
+            .foundation
+            .dimensions();
+        let viewer_name = sim.interner().resolve(viewer).to_owned();
+        let detector = (-1_i32..=1)
+            .find_map(|dy| {
+                let y = i32::from(at.ry()) + i32::from(h / 2) + dy;
+                sim.spawn_object_with_overlay_registry(
+                    "DOG",
+                    &viewer_name,
+                    at.rx() + w + 1,
+                    u16::try_from(y).ok()?,
+                    0,
+                    &resources.rules,
+                    &resources.overlay_registry,
+                )
+            })
+            .expect("a normal detector outside the building's contact rectangle");
+        assert!(sim.entities().get(detector).unwrap().is_object_alive());
+        let center = crate::sim::movement::ground_pose::object_get_coords(
+            sim.entities().get(fixture.plant).unwrap(),
+            sim.resolved_terrain(),
+        );
+        assert!(sim.fog().has_sensor_for_house(
+            viewer,
+            crate::util::lepton::lepton_to_cell_packed(center.x) as u16,
+            crate::util::lepton::lepton_to_cell_packed(center.y) as u16
+        ));
+    }
+    gpu.check_cloak_visibility(&fixture, slot, true, "detected enemy");
+}
+
 #[test]
 #[ignore = "requires retail XMP03T4 assets and GPU; ordinary CLEG Attack/Stop slot states against full original GAPOWR_A planes"]
 fn retail_building_slot_matches_original_temporal_translucency() {
@@ -496,7 +856,7 @@ fn retail_building_slot_matches_original_temporal_translucency() {
     };
     let mut fixture = SlotScene::load(&root);
     let slot = fixture.settled_playing_slot();
-    let mut gpu = SlotGpu::new(&fixture, &root, &native);
+    let mut gpu = SlotGpu::new(&fixture, &root, Some(&native));
     gpu.compare_phase(&fixture, slot, "baseline", false, &native);
     let attacker = fixture.begin_attack();
     fixture.wait_for(240, "ordinary temporal shot links the plant", |fixture| {
