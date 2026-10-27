@@ -372,6 +372,8 @@ impl Simulation {
     ///   building (`+0x16A9`) and answers NoEnter; Aircraft ClickedAction
     ///   (`0x00417BD0`) orders nothing for it. Its other rows have their own
     ///   owners.
+    ///   NPAE174 changes417E24 from JZ to JMP417E7D, skipping this whole
+    ///   UnitRepair/Dock override; the original Select/Alt Move remains.
     ///
     /// Foot ClickedAction (`0x004D74E0`) turns Enter into mission Enter and
     /// Grind into mission Eaten, each with the object as Destination, for a
@@ -504,7 +506,8 @@ impl Simulation {
             }
             EntityCategory::Aircraft => {
                 let target_obj = self.object_type(target.type_ref(), rules)?;
-                (select
+                (!crate::rules::NPATCH_ENABLED
+                    && select
                     && self.house_is_human_player(actor.owner())
                     && target.category() == EntityCategory::Structure
                     && target_obj.unit_repair)

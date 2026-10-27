@@ -1773,6 +1773,149 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual aircraft Alt move over a service depot"]
+    fn aymod_aircraft_alt_move_does_not_enter_or_repair_at_a_depot() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::{EntryBaseAction, MoveAction};
+        for building_type in ["GADEPT", "GAYARD"] {
+            let mut scene = aymod_battle(0);
+            let (plane, depot) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let owner = house_of(sim, "Americans");
+                let anchor = aymod_anchor(sim, owner);
+                let mut sites = if rules.object(building_type).unwrap().naval {
+                    let terrain = sim.resolved_terrain().unwrap();
+                    let (width, height) =
+                        rules.object(building_type).unwrap().foundation.dimensions();
+                    terrain
+                        .cells()
+                        .iter()
+                        .filter(|cell| {
+                            (0..height).all(|dy| {
+                                (0..width).all(|dx| {
+                                    terrain
+                                        .cell(cell.rx + dx, cell.ry + dy)
+                                        .is_some_and(|part| {
+                                            !part.outside_playfield
+                                                && part.level == cell.level
+                                                && part.land_type
+                                                    == crate::rules::terrain_rules::LandType::Water
+                                                        .as_index()
+                                                && sim.occupancy().get(part.rx, part.ry).is_none()
+                                        })
+                                })
+                            })
+                        })
+                        .map(|cell| (i32::from(cell.rx), i32::from(cell.ry)))
+                        .collect::<Vec<_>>()
+                } else {
+                    cells_nearest(anchor)
+                };
+                sites.sort_by_key(|&(x, y)| (x - anchor.0).pow(2) + (y - anchor.1).pow(2));
+                let owner_name = sim.interner.resolve(owner).to_owned();
+                let depot = sites
+                    .into_iter()
+                    .find_map(|(x, y)| {
+                        sim.spawn_object(building_type, &owner_name, x as u16, y as u16, 0, rules)
+                    })
+                    .expect("an actual terrain-admitted depot/yard foundation");
+                let at = sim.entities().get(depot).unwrap().position;
+                let plane = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["ORCA"],
+                )[0];
+                (plane, depot)
+            };
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let owner = sim.entities().get(plane).unwrap().owner();
+                let at = sim.entities().get(plane).unwrap().position;
+                let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (x - i32::from(at.rx()))
+                            .abs()
+                            .max((y - i32::from(at.ry())).abs())
+                            >= 5
+                    });
+                spawn_on_free_cells(sim, &resources.rules, owner, sites, &["GAAIRC"]);
+                for base in [EntryBaseAction::Select, EntryBaseAction::Move] {
+                    assert_eq!(
+                        sim.entry_click_action(
+                            plane,
+                            depot,
+                            base,
+                            &resources.rules,
+                            Default::default(),
+                        ),
+                        None
+                    );
+                }
+                let destination = sim
+                    .object_move_click(
+                        owner,
+                        plane,
+                        depot,
+                        MoveAction::Move,
+                        true,
+                        &resources.rules,
+                    )
+                    .unwrap()
+                    .expect("Alt click resolves a normal movement destination");
+                let command = match destination {
+                    crate::sim::combat::TargetKind::Entity(target_id) => Command::MoveToObject {
+                        entity_id: plane,
+                        target_id,
+                    },
+                    crate::sim::combat::TargetKind::Cell(target_rx, target_ry) => Command::Move {
+                        entity_id: plane,
+                        target_rx,
+                        target_ry,
+                    },
+                };
+                sim.substrate
+                    .entities
+                    .get_mut(plane)
+                    .unwrap()
+                    .health
+                    .set_for_test(100);
+                sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+            }
+            let start = scene.sim().entities().get(plane).unwrap().position;
+            let mut moved = false;
+            for _ in 0..180 {
+                tick_with_due_commands(&mut scene);
+                let aircraft = scene.sim().entities().get(plane).unwrap();
+                moved |= crate::sim::movement::ground_pose::position_world_xy(&aircraft.position)
+                    != crate::sim::movement::ground_pose::position_world_xy(&start);
+                if aircraft.mission.effective().known() == Some(MissionType::Enter) {
+                    assert_ne!(
+                        aircraft.navigation.nav_com(),
+                        Some(crate::sim::components::NavTargetRef::object(depot))
+                    );
+                }
+                assert_ne!(aircraft.pending_entry(), Some(depot));
+                assert!(!aircraft.radio_contacts.contains(depot));
+                assert!(
+                    aircraft.health.current() > 0,
+                    "the aircraft must not merely crash without an airfield"
+                );
+            }
+            assert!(
+                moved,
+                "the test must execute movement, not merely refuse the click"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Cloak crate pickup and validated save/resume"]
     fn aymod_cloak_crate_grants_mobile_instances_and_survives_real_load() {
         use crate::sim::command::{Command, CommandEnvelope};

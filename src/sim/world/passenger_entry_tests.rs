@@ -5,6 +5,45 @@
 use super::*;
 use crate::sim::world::{EntryBaseAction, EntryClickAction};
 
+#[test]
+fn aircraft_repair_building_click_keeps_the_npatch_base_action() {
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let rules = retail.rules;
+    for kind in ["GADEPT", "GAYARD", "NAYARD", "YAYARD"] {
+        // The query arena gives naval foundations their actual water terrain;
+        // construction adjacency/shoreline planning is not under test here.
+        let (mut sim, _, _, _) = scene(&rules);
+        if rules.object(kind).unwrap().naval {
+            crate::sim::arena_fixture::flood(
+                &mut sim,
+                &rules,
+                32,
+                (14..25).flat_map(|y| (18..28).map(move |x| (x, y))),
+            );
+        }
+        let building = sim
+            .spawn_object(kind, "Americans", 20, 16, 0, &rules)
+            .unwrap();
+        let plane = sim
+            .spawn_object("ORCA", "Americans", 13, 13, 0, &rules)
+            .unwrap();
+        assert!(rules.object(kind).unwrap().unit_repair);
+        for base in [EntryBaseAction::Select, EntryBaseAction::Move] {
+            assert_eq!(
+                sim.entry_click_action(plane, building, base, &rules, Default::default()),
+                if !crate::rules::NPATCH_ENABLED && base == EntryBaseAction::Select {
+                    Some(EntryClickAction::NoEnter)
+                } else {
+                    None
+                },
+                "{kind}: NPAE417E24 skips the entire repair click override"
+            );
+        }
+    }
+}
+
 /// The player's IFV, GI and Grizzly on a flat skirmish arena.
 fn scene(rules: &RuleSet) -> (Simulation, u64, u64, u64) {
     let mut sim = Simulation::new();

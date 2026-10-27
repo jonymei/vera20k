@@ -1074,8 +1074,10 @@ fn a_deployed_gis_alt_over_the_ifv_skips_the_row() {
 /// cursor is NoEnter; Aircraft ClickedAction (`0x00417BD0`) passes 0x1F to
 /// Foot ClickedAction (`0x004D74E0`), whose default orders nothing, so the
 /// click orders nothing and no longer selects the depot.
+/// NPAE174417E24 skips that row: Select stays selectable, and Alt Move
+/// stays a movement order rather than becoming a repair Enter.
 #[test]
-fn a_players_jet_over_the_players_service_depot_gets_no_enter() {
+fn a_players_jet_over_the_players_service_depot_uses_its_profile() {
     let Some((retail, registry)) = retail() else {
         return;
     };
@@ -1087,8 +1089,8 @@ fn a_players_jet_over_the_players_service_depot_gets_no_enter() {
             .spawn_object(jet, "Americans", 13, 13, 0, rules)
             .unwrap_or_else(|| panic!("{jet}"));
         assert_eq!(
-            cursor(&sim, rules, &registry, jet_id, depot),
-            Some(CursorId::NoEnter),
+            cursor(&sim, rules, &registry, jet_id, depot) == Some(CursorId::NoEnter),
+            !crate::rules::NPATCH_ENABLED,
             "{jet}"
         );
         let mut selected = vec![jet_id];
@@ -1103,8 +1105,28 @@ fn a_players_jet_over_the_players_service_depot_gets_no_enter() {
                 false,
                 Some(&registry)
             ),
-            Some(Vec::new()),
+            if crate::rules::NPATCH_ENABLED {
+                None
+            } else {
+                Some(Vec::new())
+            },
             "{jet}"
         );
+        assert_eq!(selected.contains(&jet_id), crate::rules::NPATCH_ENABLED);
+        let mut selected = vec![jet_id];
+        assert_eq!(
+            entry_orders(
+                &sim,
+                rules,
+                &[jet_id],
+                &mut selected,
+                &hover(depot),
+                OrderModifier::ForceMove,
+                true,
+                Some(&registry),
+            ),
+            None
+        );
+        assert_eq!(selected, vec![jet_id], "Alt must stay on the Move path");
     }
 }

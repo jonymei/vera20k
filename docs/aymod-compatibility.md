@@ -37,8 +37,25 @@
   仅内存快照，不写原始存档。新实际测试1项和原有Cloak箱owner3项通过，现有F02生产实现无需再改；本批仅新增测试，无玩法critic重复轮次。
 - F02因此补齐实际MOD移动单位拾取/保存恢复链，不关闭建筑/落地飞机生命周期、敌方/传感器实战或GPU/GUI验收。
   未启动游戏、不替换固定玩家版、未发PR/推送；Return Dubai弱攻势线按用户要求暂停。
-- V10下一条Alt飞机维修调查已读实际NP417E24无条件跳到417E7D，跳过stock的UnitRepair/Dock点击分支；当前entry_click_action仍套stock NoEnter。
-  此为后续待适配入口，不把字节发现当“Alt误入修好”；还需核完整Alt目的地/输入消费者和原版分支，再补定向回归。
+- Alt飞机链已完成本轮生产修正与回归，详见下一节。固定cfb479750构建未替换；完整功能清单仍开放，不结束整体goal。
+
+### V10飞机维修建筑点击：NP跳过stock维修行（2026-10-27）
+
+- 实际NPAE174 AircraftClass::What_Action_OnObject417CC0的417E24为EB57无条件JMP417E7D，stock为7457/JZ。
+  因而整个UnitRepair/Dock点击覆盖分支被跳过，原Select/Alt Move保留；不是给所有飞机下达Enter的总禁令。
+  对照原始4D74E0..4D7CF0、41AA80..41ADC0、417CC0..417F70连续字节，在这些边界只发现417E24这一处差异。
+- 已在既有entry_click_action Aircraft分支增加NP能力门，避免仍用stock NoEnter拦截普通选择。核心Select回归修复前真实失败Some(NoEnter)而非None。
+  Move/目的地/Fly/Radio/机场owner未另造政策，合法机场返回不禁止。证据说明：本轮证明的旧实现差异是Select覆盖；Alt运行时测试是完整相关路径防回归，不伪称重现了此前独立Alt误入。
+- 核心retail覆盖GADEPT及GAYARD/NAYARD/YAYARD，船厂用真实Water基础地形准入；stock保留NoEnter，NP保留Select，Alt Move两者均不改成维修Enter。
+  客户端ORCA/BEAG实际光标查询和entry dispatch验证：NP选择不被消费，stock NoEnter消费无命令，Alt都留给Move路径。
+- 真实AYMOD场景另外覆盖ORCA对GADEPT和地形合法GAYARD：正式load_session、普通object_move_click(force_move=true)解析、正常命令队列及每案180帧；
+  飞机确实发生XY运动、存活、从无目标维修厂/船厂的无线电联系/候场指针或Enter目的地。提供正常GAAIRC，允许合法返机场，不把无机场AirportBound坠机当作拒绝维修成功。
+  三种船厂仅GAYARD做完整帧，其余两种已覆盖输入owner；GUI人工操作、其他飞机以及自定义Dock包含维修建筑的stock残余未扩称完成。
+- 最终NP/stock核心入口各4项、NP fly_orders机场绑定1项、NP/stock客户端各1项、实际AYMOD双场景1项均通过。
+  一次只读critic无可操作发现；其指出的仅维修厂实战缺口已再补GAYARD完整帧，无重复critic。早期夹具未设遭遇战导致shroud拒绝飞机、船厂落陆地、缺机场导致正常坠机，均修正夹具，不当作引擎缺陷。
+- 没有新增RNG抽样、timer/Detach、保留状态或保存字段；未改MOD/原始存档、未启动GUI、未更换固定构建、未推送/PR。下一个明确功能入口为铁幕目标准入。
+- 下一链只读已确认：Evaluate_Candidate6F826E→7E0AFC调用目标vt160，活跃无敌即拒绝；随后目标Type+233亦拒绝，再回原6F8273。
+  普通对象动作另有700444→7E0B35的vt160门，落70056C选择尾；还须核forced开火分支和+233的真实reader身份，再接两个既有owners，不只改被动扫描器。
 
 ### 非盟军AI巨炮：基地规划前置被错误强制绕过（2026-10-27）
 
@@ -670,7 +687,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 待核组**：精英后射程反降、光棱联击、
-铁幕目标的自动攻击准入、Alt 飞机误入维修厂/船厂、
+铁幕目标的自动攻击准入、
 秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已按实际#174修改接入：
 68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零但不标记返回项；
 `src/sim/secret_lab.rs`沿原owner保留NP/stock分支，原生RNG三例和直接消费者NP/无NP各九项通过。
@@ -679,6 +696,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 真实AY普通驻军/留驻、AI择楼、客户端点击与边界回归通过，critic无可操作发现。尚未进入当前cfb479750玩家标签，不新增序列化字段或触碰平民红血撤出。
 船厂维修免伤已按737CE4→7E0495修正：仅NP伤害查询排除UnitRepair，不误用Naval；其他工厂查询保留，真实付费维修受击/修满/释放及stock保护回归通过。
 不是直接把船伤害转给船厂；实际投射物对共格船厂的合法AoE不在此修复中取消，完整实战待验。
+飞机维修建筑点击已按417E24的NP无条件跳转接入：Select不被stock NoEnter覆盖，Alt仍走Move；实际GADEPT/GAYARD运动与无误入回归通过，详见当前检查点。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 **V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。
