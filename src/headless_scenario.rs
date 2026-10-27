@@ -3839,6 +3839,134 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual absorbed passenger death and saved release"]
+    fn aymod_reactor_passengers_follow_destruction_survival_flags_after_load() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for (kind, no_survivor) in [("YAPOWR", false), ("YAPOWRAI", true)] {
+            let (mut scene, building, rider) = aymod_nearby_pair(kind, "INIT", true);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let owner = scene.sim().entities().get(building).unwrap().owner();
+            let rules = &scene.runtime.resources.rules;
+            let cargo_buildings = rules
+                .all_objects()
+                .filter(|object| {
+                    object.category == crate::rules::object_type::ObjectCategory::Building
+                        && object.passengers > 0
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(cargo_buildings.len(), 2);
+            assert!(
+                cargo_buildings.iter().all(|object| {
+                    ["YAPOWR", "YAPOWRAI"].contains(&object.id.as_str())
+                        && object.infantry_absorb
+                        && object.absorbs_passengers()
+                }),
+                "the pending nonabsorber true-Cargo residual is not an authored AY building profile"
+            );
+            let tick = scene.sim().session.tick() + 1;
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::clicked_mission(rider, MissionType::Enter, TargetKind::Entity(building)),
+            ));
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene
+                        .sim()
+                        .entities()
+                        .get(rider)
+                        .unwrap()
+                        .passenger_role
+                        .inside_transport_id()
+                        == Some(building)
+                }),
+                "{kind}: ordinary Enter must load the real absorber"
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .passenger_role
+                    .occupants()
+                    .is_empty()
+            );
+            let bytes = save_scene(&scene, "AY reactor with an absorbed infantryman");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                assert_eq!(
+                    sim.entities()
+                        .get(building)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .passengers(),
+                    &[rider]
+                );
+                let damage = sim.entities().get(building).unwrap().health.current() + 1;
+                let warhead = sim.interner.intern("Super");
+                // DestructionEffects441F1B passes C4AppliedBy to
+                // SpawnSurvivors442D90; IgnoreDefenses supplies NoSurvivor.
+                sim.commit_direct_damage_receiver(
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        building,
+                        damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: no_survivor,
+                            arg6: false,
+                        },
+                    ),
+                    Default::default(),
+                );
+                let actor = sim.entities().get(rider).unwrap();
+                assert_eq!(
+                    actor.is_object_alive(),
+                    !no_survivor,
+                    "{kind}: native absorbed-passenger survival gate"
+                );
+                if !no_survivor {
+                    assert!(!actor.lifecycle.in_limbo());
+                    assert_eq!(actor.owner(), owner);
+                    assert_eq!(actor.passenger_role.inside_transport_id(), None);
+                }
+                assert!(sim.entities().get(building).is_none_or(|actor| {
+                    actor
+                        .passenger_role
+                        .cargo()
+                        .is_none_or(|cargo| cargo.is_empty())
+                }));
+            }
+            tick_with_due_commands(&mut scene);
+            let bytes = save_scene(&scene, "AY destroyed reactor passenger outcome");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            if no_survivor {
+                assert!(scene.sim().entities().get(rider).is_none());
+            } else {
+                let actor = scene.sim().entities().get(rider).unwrap();
+                assert!(actor.is_object_alive() && !actor.lifecycle.in_limbo());
+                assert_eq!(actor.passenger_role.inside_transport_id(), None);
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY hospitals power/Enter/heal/exit"]
     fn aymod_hospital_admits_heals_and_releases_wounded_infantry() {
         use crate::sim::combat::TargetKind;

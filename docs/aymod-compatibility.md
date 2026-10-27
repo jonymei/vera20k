@@ -6,17 +6,23 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于7a1daf5a6修V05建筑死亡武器之前过早弹出驻军的生产顺序。既有致死owner移交到Building postlude，不复制新owner；一次只读critic无新增可操作发现。未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于bac83ce32核实际AY建筑Cargo适用项并补生化炉存读/毁坏/NoSurvivor实际验收。仅测试/文档，无生产改动；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- Building442425返回Techno后，原生442625..44263B弹出驻军、44264C关灯、442665 DestructionEffects。现有hook原先在handle_death前；已移至finish_concrete_death的Building分支，晚于死亡武器/携带炸弹及saved-contact回调，仍先于DestructionEffects。同步迁移app灯光测试和枚举消费者；未改单位载员死亡链。
-- 新回归以retail+内存诊断覆盖为CAHSE01设置死亡武器，楼外E2证明确实遭爆炸，楼内E2应保持隐藏直至返回。修复前驻军死亡断言红，修复后存活/满血/弹出/旧关系清除通过；不修改MOD文件。实际AY原场景毁楼存读/重新入驻等4项仍通过。
-- 最终NP/stock驻军存储各4/3项、garrison_eject14项、死亡效果20项及ignored实际Dustbowl1项、crew33项（2个运输ignored未触及）、ROF2项、客户端match_lighting7项、stock原生建筑致死2项通过。NP直伤原生例通过；把stock原生MTNK发射语料跑在NP上会在致死前因reload60对62失败，已定位既有NP6FD0CB不加jitter政策，不改黄金数据去掩盖。GPU图像/GUI未重跑；首次错误过滤器0项不计验证。
-- 既有分散抽样/死亡碎片/死亡武器顺序改回原生：没有新增RNG调用、timer写入、Detach或保存字段，但相关抽样会因顺序修正而重新分配，不能保证错误旧版本逐帧重放。释放仍沿SellBuilding/Scatter/Unlimbo/空间刷新原owner。
-- 下一安全动作：核非吸收建筑真实Cargo死亡链：现有KillPassengers仍在DestructionEffects前，原生441F1B SpawnSurvivors后441F27才KillPassengers；不把此次驻军vector修复扩大为全部Cargo/crew/RNG顺序完成。先查实际AY此组合与已有spawn_survivors owner，再决定同一receiver接点，保留吸收建筑和单位原链。
+- 上轮garrison弹出/灯光边界修复bac83ce32保留。当前Battle/XMP03T4经正式加载后的typed全建筑列表，仅YAPOWR与YAPOWRAI的Passengers>0，二者均InfantryAbsorb/absorbs_passengers；非吸收建筑Cargo顺序残余在这个实际配置闭包中没有使用者，不继续为它扩展诊断配置。
+- 新aymod_reactor_passengers_follow_destruction_survival_flags_after_load：实际YAPOWR正常Enter吸收INIT→正式存读→普通致死→活体弹出→再次存读保持原House/关系清除；实际YAPOWRAI同链以IgnoreDefenses触发NoSurvivor，载员正常销毁、Cargo清空、正常帧后存读无残留。载员进入Cargo而非garrison vector，未修改MOD/存档字段，也未手工写关系。
+- 新实际复合测试1项、吸收/销毁/House计数/时间抹除相关4项、building_occupant_storage4项通过。没有新增RNG、timer或Detach逻辑；NoSurvivor沿既有SpawnSurvivors/UnInit抽样与清理，未跑全仓库、GUI或重复critic（无玩法修改）。生化炉AI专用类型不等于该例验证了真实AI自主装载，本例House仍为玩家。
+- 下一安全动作：转F06 ORCA精英对空武器、远距移动目标追击及热存读。先核实际typed武器/射程与现有Aircraft Attack owner，补实际追击链；不恢复Return Dubai弱攻势，不调AI/兵种/MOD。非吸收建筑Cargo的441F1B/441F27顺序作为通用引擎残余保留，未来其他模式/地图若引入该配置再走同一owner，不标全引擎完成。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04探测器死亡/换主/运输及多House重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V05实际生化炉Cargo毁坏与NoSurvivor（2026-10-28）
+
+- 通过实际AY Battle/XMP03T4生产规则all_objects检查全部Building类型；Passengers>0仅YAPOWR/YAPOWRAI，均为吸收建筑。上一轮非吸收建筑Cargo顺序残余无此闭包使用者；不把物理文本搜索当最终类型证据，也不扩大为全部可扩展地图均没有使用者。
+- 新实际复合测试中，YAPOWR的INIT从正常Enter进入Cargo，保存/完整资源恢复后给予普通致死伤害，SpawnSurvivors441F1B/442D90沿吸收分支释放活体，原House/无运输关系在二次存读后保持。YAPOWRAI用相同实际装载/存读链，在致死receiver的IgnoreDefenses=true传递NoSurvivor，INIT被UnInit、Cargo清空，帧尾退休后再次正式存读无幽灵成员。
+- 两个实例都不是garrison vector，未调用手工add或改MOD规则。YAPOWRAI只代表真实类型配置，不声称普通玩家House测试覆盖电脑自主装载/战术。C4AppliedBy源的特殊击杀归属、换主、满炉多成员与完整AI长局仍待验。
+- 复合测试1项、absorbed相关4项、存储/死亡边界4项通过。无生产实现/保存布局变化；沿已有RNG/计时/Detach owners，无需玩法critic。后续优先回到实际使用的功能项，不围绕不存在的自定义类型扩张范围。
 
 ### V05建筑死亡武器与驻军弹出顺序修复（2026-10-28）
 
