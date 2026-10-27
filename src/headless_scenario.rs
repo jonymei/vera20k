@@ -3334,6 +3334,426 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_ai_fortress_loading_team(
+        isolate_team_creation: bool,
+    ) -> (
+        HeadlessScenario,
+        crate::sim::intern::InternedId,
+        u64,
+        u64,
+        Vec<u64>,
+    ) {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, _) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(1);
+                session.options.unit_count = 0;
+            },
+            &[(LaunchCountry::from_country_index(0), AiDifficulty::Hard)],
+        );
+        let ai = house_of(scene.sim(), "Americans");
+        assert!(
+            !scene
+                .sim()
+                .houses
+                .get(&ai)
+                .unwrap()
+                .event_dispatch_eligible()
+        );
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().values().any(|actor| {
+                    actor.owner() == ai
+                        && scene.sim().interner.resolve(actor.type_ref()) == "GACNST"
+                })
+            }),
+            "normal AI MCV deployment must provide the friendly-base gather prerequisite"
+        );
+        let (team_id, carrier, riders) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            if isolate_team_creation {
+                // Native TAction74's existing latch isolates this component
+                // from unrelated higher-priority teams, without altering INIs.
+                sim.houses
+                    .get_mut(&ai)
+                    .unwrap()
+                    .set_ai_triggers_active(false);
+            }
+            let team_type = sim.interner.get("07C32EFC-G").unwrap();
+            let definition = sim.team_script_vm.team_type_definition(team_type).unwrap();
+            assert_eq!(sim.interner.resolve(definition.script_id), "07C32C8C-G");
+            let names = sim
+                .team_script_vm
+                .task_force_of(team_type)
+                .unwrap()
+                .entries
+                .iter()
+                .flat_map(|entry| {
+                    std::iter::repeat_n(
+                        sim.interner.resolve(entry.member_type.id).to_owned(),
+                        usize::try_from(entry.count).unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(names.iter().filter(|name| *name == "BFRT").count(), 1);
+            assert_eq!(names.iter().filter(|name| *name == "GGI").count(), 5);
+            assert_eq!(names.iter().filter(|name| *name == "GHOST").count(), 1);
+            assert_eq!(rules.object("BFRT").unwrap().passengers, 6);
+            assert!(rules.object("BFRT").unwrap().open_topped);
+            let (x, y) = sim.houses.get(&ai).unwrap().base_center().unwrap();
+            let sites = cells_nearest((i32::from(x), i32::from(y)));
+            // Supply exactly the authored TaskForce, not a new force count or
+            // production policy. Recruitment and script14/43 do the boarding.
+            let types = names.iter().map(String::as_str).collect::<Vec<_>>();
+            let members = spawn_on_free_cells(sim, rules, ai, sites, &types);
+            let carrier = members
+                .iter()
+                .copied()
+                .find(|id| {
+                    sim.interner
+                        .resolve(sim.entities().get(*id).unwrap().type_ref())
+                        == "BFRT"
+                })
+                .unwrap();
+            let riders = members
+                .into_iter()
+                .filter(|&id| id != carrier)
+                .collect::<Vec<_>>();
+            let team_id = sim
+                .create_team(team_type, Some(ai), rules)
+                .or_else(|| {
+                    sim.team_script_vm
+                        .teams_in_order()
+                        .find(|team| team.team_type_id() == Some(team_type) && team.owner() == ai)
+                        .map(|team| team.id())
+                })
+                .unwrap();
+            (team_id, carrier, riders)
+        };
+        (scene, ai, team_id, carrier, riders)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; native-legal competing AI recruitment during BFRT loading"]
+    fn aymod_ai_fortress_loading_observes_higher_priority_defense_recruitment() {
+        let (mut scene, _, team_id, carrier, riders) = aymod_ai_fortress_loading_team(false);
+        let team_type = scene
+            .sim()
+            .team_script_vm
+            .team(team_id)
+            .unwrap()
+            .team_type_id()
+            .unwrap();
+        let priority = scene
+            .sim()
+            .team_script_vm
+            .team_type_definition(team_type)
+            .unwrap()
+            .priority;
+        let mut stolen = std::collections::BTreeSet::new();
+        let mut receivers = std::collections::BTreeSet::new();
+        assert!((0..1800).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            for &rider in &riders {
+                if let Some((other, _)) = sim.team_script_vm.team_for_member(rider)
+                    && other != team_id
+                {
+                    let other_type = sim.team_script_vm.team(other).unwrap().team_type_id().unwrap();
+                    let definition = sim.team_script_vm.team_type_definition(other_type).unwrap();
+                    assert!(definition.is_base_defense && definition.priority > priority,
+                        "CanAdd6EA7C7's priority gate, not a passenger-link loss, explains this transfer");
+                    stolen.insert(rider);
+                    receivers.insert((sim.interner.resolve(other_type).to_owned(), definition.priority));
+                }
+            }
+            let count = sim.entities().get(carrier).unwrap().passenger_role.passenger_count();
+            !stolen.is_empty() && usize::try_from(count).unwrap() + stolen.len() == riders.len()
+                && sim.team_script_vm.team(team_id).is_some_and(|team| team.current_action(&sim.team_script_vm) == 43)
+        }), "the unrestricted fixture must retain the observed authored recruitment competition");
+        eprintln!(
+            "AY BFRT priority{priority}, competing defense {receivers:?}, reassigned {} riders; wait43 is not a boarding failure",
+            stolen.len()
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; authored AI fortress loading, save/fire/unload"]
+    fn aymod_ai_fortress_team_loads_six_and_restores_passenger_fire_and_exit() {
+        use crate::sim::command::Command;
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, ai, team_id, carrier, riders) = aymod_ai_fortress_loading_team(true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let aboard =
+            |scene: &HeadlessScenario| {
+                riders.iter().all(|id| {
+                    scene.sim().entities().get(*id).is_some_and(|actor| {
+                        actor.passenger_role.open_transport_id() == Some(carrier)
+                    })
+                })
+            };
+        let mut loading_action = false;
+        let mut full_action = false;
+        // Action14 admits one radio-contact rider at a time; use the actual
+        // walking cadence rather than shortening GGI speed or entry timers.
+        let loaded = (0..3600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            if let Some(team) = scene.sim().team_script_vm.team(team_id) {
+                let action = team.current_action(&scene.sim().team_script_vm);
+                loading_action |= action == 14;
+                full_action |= action == 43;
+                aboard(&scene) && team.cursor() >= 3
+            } else {
+                false
+            }
+        });
+        assert!(
+            loaded,
+            "AI BFRT did not load: team={:?}; carrier={:?}; riders={:?}",
+            scene
+                .sim()
+                .team_script_vm
+                .team(team_id)
+                .map(|team| (team.cursor(), team.members().collect::<Vec<_>>())),
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .map(|actor| (&actor.mission, &actor.passenger_role)),
+            riders
+                .iter()
+                .map(|id| scene.sim().entities().get(*id).map(|actor| (
+                    &actor.mission,
+                    &actor.position,
+                    &actor.passenger_role,
+                    scene.sim().team_script_vm.team_for_member(*id),
+                    scene.sim().team_script_vm.team_to_rejoin(*id)
+                )))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            loading_action && full_action,
+            "the real script must pass load14 and wait43"
+        );
+        let cargo = scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .passenger_role
+            .cargo()
+            .unwrap()
+            .passengers()
+            .to_vec();
+        assert_eq!(cargo.len(), 6);
+        assert_eq!(
+            scene
+                .sim()
+                .team_script_vm
+                .team(team_id)
+                .unwrap()
+                .members()
+                .collect::<Vec<_>>(),
+            [carrier]
+        );
+        let cursor = scene.sim().team_script_vm.team(team_id).unwrap().cursor();
+        let bytes = save_scene(&scene, "AY AI six-passenger fortress");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(aboard(&scene));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .passengers(),
+            cargo.as_slice()
+        );
+        assert_eq!(
+            scene.sim().team_script_vm.team(team_id).unwrap().cursor(),
+            cursor
+        );
+        let (victim, foot_victim) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 3)
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let victim = spawn_on_free_cells(sim, rules, enemy, sites, &["BFRT"])[0];
+            assert!(rules.object("BFRT").unwrap().omni_crush_resistant);
+            let ghost_weapon = rules
+                .weapon(rules.object("GHOST").unwrap().primary().unwrap())
+                .unwrap();
+            let ghost_wh = rules
+                .warhead(ghost_weapon.warhead.as_deref().unwrap())
+                .unwrap();
+            assert!(
+                !ghost_wh
+                    .interaction(rules.object("BFRT").unwrap().armor_id())
+                    .can_passively_acquire()
+            );
+            assert!(
+                ghost_wh
+                    .interaction(rules.object("E2").unwrap().armor_id())
+                    .can_passively_acquire()
+            );
+            // HollowPoint's authored 1% vehicle verses forbids passive
+            // acquisition. Give the SEAL a legal infantry target as well.
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 5)
+                .collect::<Vec<_>>();
+            let foot_victim = spawn_on_free_cells(sim, rules, enemy, sites, &["E2"])[0];
+            sim.mission_queue_exact(
+                victim,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            sim.mission_queue_exact(
+                foot_victim,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            (victim, foot_victim)
+        };
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+            (0..360).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired.extend(
+                    output
+                        .fire_events
+                        .iter()
+                        .filter(|event| {
+                            riders.contains(&event.attacker_id)
+                                && [victim, foot_victim].iter().any(|&id| {
+                                    event.target == crate::sim::combat::TargetKind::Entity(id)
+                                })
+                        })
+                        .map(|event| event.attacker_id),
+                );
+                fired.len() == 6
+            }),
+            "all six restored AI passengers must actually fire: {fired:?}"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let owner = runtime.simulation.interner.resolve(ai).to_owned();
+            // The waiter script does not author an unload action. Supply this
+            // tactical intent at the real AI payload boundary, not fake input.
+            assert!(runtime.simulation.apply_command(
+                &owner,
+                &Command::UnloadPassengers {
+                    transport_id: carrier
+                },
+                Some(&runtime.resources.rules)
+            ));
+        }
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                sim.team_script_vm
+                    .team(team_id)
+                    .is_some_and(|team| team.current_action(&sim.team_script_vm) == 11)
+                    && sim.entities().get(carrier).unwrap().mission.effective()
+                        == MissionId::from_known(MissionType::AreaGuard)
+                    && sim.entities().get(carrier).unwrap().mission.queued()
+                        != MissionId::from_known(MissionType::Unload)
+            }),
+            "the authored waiter must resume its persistent AreaGuard order"
+        );
+        assert!(aboard(&scene));
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            // DoMission6EDA25..6EDA71 spares Unload only for Guard(5),
+            // not this script's AreaGuard(11). Explicitly disband through
+            // TAction5's owner before testing a lasting external unload.
+            let team_type = sim
+                .team_script_vm
+                .team(team_id)
+                .unwrap()
+                .team_type_id()
+                .unwrap();
+            sim.destroy_teams_of_type(team_type, rules, crate::sim::world::FrameEffects::default());
+            assert!(sim.team_script_vm.team_for_member(carrier).is_none());
+            assert_eq!(
+                sim.entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .passenger_count(),
+                6
+            );
+            let owner = sim.interner.resolve(ai).to_owned();
+            assert!(sim.apply_command(
+                &owner,
+                &Command::UnloadPassengers {
+                    transport_id: carrier
+                },
+                Some(rules)
+            ));
+        }
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .passenger_count()
+                    == 0
+            }),
+            "a disbanded AI transport must release the six riders through ordinary Unload"
+        );
+        for &id in &riders {
+            let rider = scene.sim().entities().get(id).unwrap();
+            assert!(rider.health.current() > 0 && !rider.lifecycle.in_limbo());
+            assert_eq!(rider.passenger_role.inside_transport_id(), None);
+            assert_eq!(rider.passenger_role.open_transport_id(), None);
+        }
+        let bytes = save_scene(&scene, "AY AI fortress after unloading");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .passenger_count(),
+            0
+        );
+        for id in riders {
+            let rider = scene.sim().entities().get(id).unwrap();
+            assert!(!rider.lifecycle.in_limbo());
+            assert_eq!(rider.passenger_role.open_transport_id(), None);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY sixth passenger fire coordinate"]
     fn aymod_sixth_fortress_passenger_reuses_first_firing_port() {

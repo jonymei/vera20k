@@ -760,11 +760,15 @@ fn ejection_keeps_the_passengers_target_unless_it_leaves_another_houses_open_tra
             assert!(pax.passive_scan.acquired(), "{case}");
             assert_eq!(pax.weapon_burst.index(), 1, "{case}");
         } else {
-            // Through the class setter: its NULL arm resets the burst
-            // (`0x006FCF5B`), which a raw store would not.
+            // The class NULL setter clears passive acquisition. Stock
+            // 6FCF5B resets Burst2; NPAE174 removes that reset.
             assert_eq!(pax.attack_target.target(), None, "{case}");
             assert!(!pax.passive_scan.acquired(), "{case}");
-            assert_eq!(pax.weapon_burst.index(), 0, "{case}");
+            assert_eq!(
+                pax.weapon_burst.index(),
+                i32::from(crate::rules::NPATCH_ENABLED),
+                "{case}"
+            );
         }
     }
 }
@@ -1088,6 +1092,8 @@ fn retail_hover_transport_fallback_assignment_survives_save_and_continues() {
                 .same_identity(&control_dummy)
         );
         fx.sim.scenario_rng = crate::sim::rng::SimRng::new(0);
+        // Match load_validated's native player-load PlanMgr reset.
+        fx.sim.reset_planning_after_player_load();
         for id in fx.sim.substrate.entities.keys_sorted() {
             fx.sim.substrate.restore_move_sound_state_after_load(id);
         }
@@ -2389,6 +2395,8 @@ fn retail_bfrt_ejects_while_turning_and_resumes_after_save() {
     // Native ScenarioLoad resets the Scenario RNG to Seed(0). Apply that
     // same load prior to the uninterrupted control before comparing futures.
     fx.sim.scenario_rng = crate::sim::rng::SimRng::new(0);
+    // Match load_validated's native player-load PlanMgr reset.
+    fx.sim.reset_planning_after_player_load();
     // Foot Load also clears the move-sound countdown, including idle Feet.
     for id in fx.sim.substrate.entities.keys_sorted() {
         fx.sim.substrate.restore_move_sound_state_after_load(id);
