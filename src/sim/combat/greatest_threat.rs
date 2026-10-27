@@ -2271,6 +2271,7 @@ fn evaluate_candidate(
                         ctx.interner,
                         &cells,
                         &ctx.los,
+                        super::in_range::RangeProfile::active(),
                     )
                 }
                 None => super::in_range::mapless_in_range(

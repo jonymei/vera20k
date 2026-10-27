@@ -1,20 +1,34 @@
 # AYMOD 兼容性清单
 
-更新：2026-10-27。面向“人类玩家与多个电脑对战”的分批适配工作清单。
+更新：2026-10-28。面向“人类玩家与多个电脑对战”的分批适配工作清单。
 完整执行顺序见 [全面适配 PLAN](aymod-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
 不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
-## 当前检查点（2026-10-27）
+## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；已保留V03 cfb479750、红血碉堡444b79f31、船厂a2bcda164、F09 58d9df4f3、基地巨炮b5a046558、F02实际链e40241dcc、飞机入口4e23f4e39。铁幕目标准入6f864d63f也已保留；本轮继续完成光棱支援断电准入，下面记录覆盖与边界。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；已保留V03 cfb479750、红血碉堡444b79f31、船厂a2bcda164、F09 58d9df4f3、基地巨炮b5a046558、F02实际链e40241dcc、飞机入口4e23f4e39。铁幕目标准入6f864d63f、光棱支援6476356ee也已保留；本轮完成NP的Arcing/SubjectToCliffs射程分支，下面记录覆盖与边界。
 - 玩家固定入口仍为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst、源cfb479750。未替换/重建该标签、未启动游戏、未改MOD或原始存档，未推送/PR/发布。后续代码不自动进入该构建。
 - Return Dubai弱攻势线按用户要求暂停。此前陆海双队列/Walk集结已有修复；旧team184跨水区FNPC、SCHP hold和主动抗压/长局仍未关闭；闲置人类败局不是多AI长局验收，不调权重/兵种数值补强。
 - V01独立供电/失联Drive政策和F11跨模块光照接线的既有门禁不变，不把一般“继续功能”当作已批准这两项设计选择。完整PLAN仍有效，功能优先、UI随后。
-- 本轮光棱招募只读取既有LastOperational，原Update仍唯一写入；没有新增保存字段、RNG抽样、timer/Detach写入。一次独立critic无可操作发现，未重复审查。铁幕此前的C4/渗透输入捷径已接共享准入。
-- 本轮最终NP/stock光棱各7、建筑任务各16通过；NP运行状态/裂缝消费者13通过；零售Dustbowl光棱转发ignored在两个profile各1通过；真实AY手动Off→内存保存恢复→主塔独立开火→On→重新招募→主塔再次实际开火1项通过。
+- 本轮射程只改变同一InRange数值内核的分支选择，真实地图和mapless共用选择器；生产调用统一active profile，旧原生控制显式Stock，不改golden。没有新增保存字段、RNG抽样、timer/Detach写入，一次独立critic无可操作发现。
+- 本轮最终NP/stock InRange各32、GreatestThreat各43通过，NP line_of_fire原生控制1、输入context39通过；真实AY普通/精英巨炮typed配置+给定平面几何查询1项单独ignored运行通过。新增NPC桥面/射线组合边界已补入既有测试，不把Stock原生表重算为NP观测。
 - 原生/GUI并排、已持有目标受到铁幕后是否放弃、反击/脚本直接下达Attack、ForceShield完整运行时存读不在本轮结论内；不把新选敌/输入准入改成所有Attack总禁令。整体goal仍开放。
-- 下一安全功能链：继续范围差异调查。只读对照7012C0/70E140及6F7240相关连续字节，前两者未见补丁；6F7404→C2D5ED在Arcing之外又检查ProjectileType+296（既有SubjectToCliffs字段），假则落direct-range6F751E。须先核真实MOD的适用投射物与reader、边界和两个range调用路径，不能据此声称已解释全部“精英射程反降”。
+- 下一安全动作：继续实际普通/精英武器及投射物闭包核查，区分作者“精英射程反降”的其他原因与本次具体分支；或沿PLAN补V06实杀晋升/退档/存读生命周期。不能把一次巨炮查询当作全武器射程、实际炮口或GUI验收。
 - 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。V03空武器/建筑ammo早返短结果的完整reload fallback、其他F/V/A和真人验收仍开放。
+
+### V10相关射程：Arcing与SubjectToCliffs联合分支（2026-10-28）
+
+- 实读NPAE174 InRange6F73EE..7404与C2D5ED..C2D601：先检查ProjectileType+29B Arcing，再检查+296 SubjectToCliffs；两者均真才进原ballistic arm，否则落原direct arm6F751E。
+  46BBCE置EBX0、46BBE1清+296；46BFE4..46BFF8以当前bool读精确SubjectToCliffs。现有typed字段及parser用于本链，没有另设开关、字段或修改MOD的Level/Arcing/Range。
+- 已以RangeProfile的小型只读值选择同一个范围内核；所有生产compute_range_target调用及外部GreatestThreat调用均用active()，mapless使用同一选择器。不是两份数值实现，也不是给某个兵种单独增加范围。
+  最小射程与目标坐标解析仍在分支前；direct的高差/建筑foundation/桥面检查、ballistic的物理可达性与桥面检查、最终line-of-fire保持原owner。NP新路径跳过的旧ballistic查询按原补丁分支发生，不提前模拟或复制。
+- 新生产回归先真实红false而非true：现有原生控制建立的834水平/两级抬高、range900边界，在SubjectToCliffs=false下NP应走direct；真实地图实体查询与mapless均覆盖，cliffs=true仍走旧ballistic。未改任何数学内核或武器参数。
+- 旧原生range/bunker控制来自Stock，现显式选择Stock运行同一生产source builder/target converter/range内核组合，保留原golden、几何及Dummy查询结果；不把这些输出冒称NP原生执行。独立NP行为通过生产默认active路径验证，未用测试开关篡改生产状态。
+- 真实Return Dubai/Battle规则加载确认GTGCAN2普通/精英武器的实际投射物均Arcing=true、SubjectToCliffs=false；以真实NACNST基础数据和给定平面source点比较同一内核：NP direct计入目标foundation，Stock ballistic不计，原武器Range未改变。
+  此为实际typed规则+受控范围查询，不是整局攻击、实际炮口/弹道命中或渲染验证，也不证明所有精英射程问题都来自这一条。
+- 既有隔离line-domain回归增加NP新路线：Arcing=true/Cliffs=false/Walls=true，两端桥面数据保留最终射线的4次同Z采样，并确认桥下source拒绝；不是为了新路径绕开墙/桥面。
+  最终NP/Stock InRange各32、GreatestThreat各43通过；NP line_of_fire1、context input39及实际AY数据1通过。一次只读critic无可操作发现，其组合桥面/射线覆盖缺口已补；未重复critic。
+- 不新增随机抽样、timer/Detach或保留字段，未改MOD/原始保存/固定cfb479750构建、未启动GUI、未推送/PR。7012C0 GetWeaponRange及70E140 GetWeapon已读连续体未见静态补丁，不据此排除所有间接扩展。V10“精英射程反降”其余原因仍开放。
 
 ### V10光棱联击：断电支援塔准入（2026-10-27）
 
@@ -708,6 +722,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 飞机维修建筑点击已按417E24的NP无条件跳转接入：Select不被stock NoEnter覆盖，Alt仍走Move；实际GADEPT/GAYARD运动与无误入回归通过，详见当前检查点。
 铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；原目标保持/反击/直接脚本另验。
 光棱支援招募已按44B388→7E04BB接LastOperational采样，真实Off/存读/独立开火/On/重新联击通过；不现场重算供电，不取消已排定束，EMP/缺电/绘制边界仍开放。
+Arcing/SubjectToCliffs联合射程分支已接6F7404→C2D5ED，覆盖实体/mapless、桥面/射线及真实AY普通/精英巨炮typed查询；其他精英退射程原因、实际炮口与攻击验收仍开放。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 **V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。
