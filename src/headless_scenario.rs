@@ -3695,6 +3695,238 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; live garrison changes before a saved missile impact"]
+    fn aymod_garrison_missile_uses_the_live_occupants_after_unload_and_save() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for replace in [false, true] {
+            let mut scene = aymod_battle(0);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let (building, target, old, replacement) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let owner = house_of(sim, "Americans");
+                let enemy = house_of(sim, "Russians");
+                let sites = cells_nearest(aymod_anchor(sim, owner));
+                let building = spawn_on_free_cells(sim, rules, owner, sites, &["CAHSE01"])[0];
+                let at = sim.entities().get(building).unwrap().position;
+                let coord = crate::sim::movement::ground_pose::object_get_coords(
+                    sim.entities().get(building).unwrap(),
+                    sim.resolved_terrain(),
+                );
+                let center = (coord.x / 256, coord.y / 256);
+                let far = cells_nearest(center)
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (x - center.0).abs().max((y - center.1).abs()) == 6
+                            && u16::try_from(x)
+                                .ok()
+                                .zip(u16::try_from(y).ok())
+                                .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                    })
+                    .collect::<Vec<_>>();
+                let target = spawn_on_free_cells(sim, rules, enemy, far, &["APOC"])[0];
+                let near = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
+                let old = spawn_on_free_cells(sim, rules, owner, near.clone(), &["GGI"; 2]);
+                let replacement = spawn_on_free_cells(sim, rules, owner, near, &["E1"])[0];
+                for &rider in &old {
+                    assert!(crate::sim::passenger::add_garrison_occupant(
+                        sim,
+                        rules,
+                        rider,
+                        building,
+                        Some(&runtime.resources.overlay_registry),
+                        Default::default()
+                    ));
+                }
+                let weapon = rules
+                    .weapon(
+                        rules
+                            .object("GGI")
+                            .unwrap()
+                            .occupy_weapon
+                            .as_deref()
+                            .unwrap(),
+                    )
+                    .unwrap();
+                assert_eq!(weapon.id, "OCMissileLauncher");
+                assert!(
+                    !rules
+                        .projectile(weapon.projectile.as_deref().unwrap())
+                        .unwrap()
+                        .inviso,
+                    "use an authored in-flight missile, not an instant gun"
+                );
+                sim.substrate
+                    .entities
+                    .get_mut(target)
+                    .unwrap()
+                    .health
+                    .set(1);
+                sim.mission_queue_exact(
+                    target,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                // Keep the replacement from firing independently while outside.
+                sim.mission_queue_exact(
+                    replacement,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: building,
+                        target_id: target,
+                    },
+                ));
+                (building, target, old, replacement)
+            };
+            assert!(
+                (0..180).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    output.fire_events.iter().any(|event| {
+                        event.attacker_id == building
+                            && scene.sim().interner.resolve(event.weapon_id) == "OCMissileLauncher"
+                    })
+                }),
+                "actual occupied GGI must launch a missile"
+            );
+            assert!(
+                scene.sim().entities().get(target).unwrap().health.current() > 0,
+                "the shot must still be in flight when the player unloads"
+            );
+            {
+                let sim = &mut scene.runtime.simulation;
+                let owner = sim.entities().get(building).unwrap().owner();
+                // Building ClickedAction443557..443562 sends target=self,
+                // unlike the target-less convenience UnloadPassengers payload.
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::MegaMission {
+                        entity_id: building,
+                        mission: MissionType::Unload,
+                        target: Some(TargetKind::Entity(building)),
+                        destination: None,
+                    },
+                ));
+            }
+            assert!((0..30).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert!(
+                    scene.sim().entities().get(target).unwrap().health.current() > 0,
+                    "the normal unload must precede impact"
+                );
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .passenger_role
+                    .occupants()
+                    .is_empty()
+            }));
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                if replace {
+                    // Enter the existing garrison admission leaf. Full walking
+                    // admission is separate; do not force a path into a short
+                    // missile window or edit the authored projectile speed.
+                    assert!(crate::sim::passenger::add_garrison_occupant(
+                        sim,
+                        rules,
+                        replacement,
+                        building,
+                        Some(&runtime.resources.overlay_registry),
+                        Default::default()
+                    ));
+                }
+                sim.mission_queue_exact(
+                    building,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let occupants = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants();
+            assert_eq!(occupants.fire_index(), 0);
+            assert_eq!(
+                occupants.ids(),
+                if replace {
+                    std::slice::from_ref(&replacement)
+                } else {
+                    &[]
+                }
+            );
+            let bytes = save_scene(&scene, "AY missile after changed garrison");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(
+                (0..180).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(
+                        !output
+                            .fire_events
+                            .iter()
+                            .any(|event| event.attacker_id == building),
+                        "only the original missile may kill; the replacement must not shoot"
+                    );
+                    scene
+                        .sim()
+                        .entities()
+                        .get(target)
+                        .is_none_or(|actor| actor.health.current() <= 0)
+                }),
+                "the already-fired missile must survive unload and validated load"
+            );
+            let sim = scene.sim();
+            for rider in old {
+                let rider = sim.entities().get(rider).unwrap();
+                assert!(!rider.lifecycle.in_limbo());
+                assert_eq!(
+                    rider.veterancy.raw().bits(),
+                    0,
+                    "native NP credit uses the live list at impact, not a retained original shooter"
+                );
+            }
+            assert_eq!(
+                sim.entities()
+                    .get(replacement)
+                    .unwrap()
+                    .veterancy
+                    .raw()
+                    .bits()
+                    > 0,
+                replace
+            );
+            assert_eq!(
+                sim.entities().get(building).unwrap().veterancy.raw().bits(),
+                0
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY sniper and MiG garrison penetration"]
     fn aymod_sniper_respects_bunker_protection_and_boris_sortie_clears_it() {
         use crate::sim::command::{Command, CommandEnvelope};
