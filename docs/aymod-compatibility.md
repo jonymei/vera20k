@@ -6,16 +6,25 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于2ff34c8b4补V04真实YURI控制/死亡归还/IFV探测器死亡、存读与AI选敌准入。仅测试/文档，无生产改动，无需critic；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于6ca84e940修V04运输卸载漏恢复Foot传感器的生产缺口。已通过实际红/绿回归与一次只读critic，补边界回归；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 新aymod_sensor_capture_return_and_death_update_ai_cloak_admission_after_load使用实际TANY自然隐形、Russians电脑GAPILL（无Sensors）、有Sensors的FV和普通YURI。正常Attack真正控制FV后，旧House计数1→0、新House增加1，sensor_deposit归属正确；正式保存/恢复保持控制链和计数，不从实体store直接换主。
-- 控制者经生产致死receiver死亡，FreeAllCaptures归还FV，旧House计数恢复1、原控制House减去FV及YURI自身实际覆盖贡献；不因YURI也有Sensors而漏检幽灵计数。再经生产致死receiver毁FV，旧House计数归零，正常退休/正式存读后不复活。电脑GAPILL的实际GreatestThreat查询在有己方覆盖时取隐形TANY，无覆盖时不取它；为隔离探测链，炮塔保持Sleep，不宣称本例实射。
-- 新实际复合1项、原移动DOG/AI开火存读1项、sensor_lifecycle6项、capture_manager29项通过。复读Foot4DBEFB移除→Techno7014A0换主→4DBF81重加；无新增sensor状态、RNG、timer/Detach或保存布局，不运行全仓库/GUI/critic。
-- 下一安全动作：V04 IFV探测器装入真实运输艇/隐藏期间撤销sensor、卸载重建及载员存读。先核Foot Limbo/Unlimbo与Cargo owners，不把Building原生非对称半径套到Foot；建筑多House、运输、联盟重叠与其他视觉伪装仍开放。不恢复弱攻势，不改AI权重/数值/MOD/固定构建。
+- 新实际FV→LCRF正常Enter→运输中正式存读→普通Unload复现：FV已活体出车、inside清除，但sensor_deposit=None，附近实际TANY格的Russians计数仍0，电脑GAPILL不能重新准入隐形目标。不是距离、AI脚本或运输拒绝；诊断位置(25,88)距探测格(28,87)在实际9格覆盖内。
+- 根因为单位sensor add只放在5个world_spawn出生/部署调用处，通用Reveal缺少FootUnlimbo4D7318。现已在共享lifecycle的Foot邻居/威胁系数尾后调用既有sensor owner，移除5处重复add；放置失败、Consumed/AlreadyRevealed不经过该边界，不新增卸载专用逻辑。建筑独立sensor array无改动。
+- 修复后实际登船计数1→0，运输存读保持0；卸载立即恢复1与AI目标准入，二次存读保持1。新紧凑边界例保护出生仅1次、AlreadyRevealed及拒绝Reveal不改计数、重新Reveal回到1。没有新增保存字段、直接RNG、timer或Detach调用；sensor resident callbacks在原生Unlimbo阶段执行，非旧错误顺序逐帧承诺。
+- 最终实际运输1项、实际控制/归还/死亡1项、NP/stock sensor_lifecycle各7项、NP卸载35项、构造36项、重打包失败1项通过。只读critic无可操作发现；未运行全仓库/GUI/新游戏构建。一次world_spawn错误过滤器0项不计验证，已按真实techno_constructor_tests重跑36项。
+- 下一安全动作：F08实际基洛夫完整飞行/投弹/PostMortem链，已有直接BlimpHE receiver和fuse验证不是完整投弹。V04联盟/多House重叠、其他传感器/空艇/伪装族与完整运输战术仍开放；共享Unlimbo迁移未逐个认证所有间接调用者。不恢复弱攻势，不改AI权重/数值/MOD/固定构建。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
-- V04探测器运输及多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+- V04多House/联盟重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V04探测器卸载立即恢复：共用Unlimbo缺口修复（2026-10-28）
+
+- 实际TANY自然隐形、电脑GAPILL及FV/LCRF场景，正常Enter真实载入，不手工写Cargo；运输中完整资源存读，普通Unload出车。修复前计数0/sensor_deposit=None，FV存活/在地图/已脱离carrier，旧位置与新位置均在真实SensorsSight内，排除场景误差。
+- FootClass::Unlimbo4D72EA..4D7318在邻居/威胁系数尾后运行SensorsSight add；FootLimbo4DB376登车时已有配对remove。Rust原先仅在出生路径末尾add，漏掉普通重新Unlimbo。共享try_reveal_entity_with_context现调用既有add_unit_sensor_after_unlimbo，移除world_spawn的5个外部add，保持一个owner。地图出生/动态出生/部署等原调用均走共享Reveal；部署为建筑的旧Foot add本来是category过滤的no-op。
+- 新实际回归断言登船1→0、运输存读0、卸载立即1、出车存读1，期间电脑GreatestThreat随己方sensor准入/拒绝完全隐形TANY。紧凑单元例保护首次出生不重复、AlreadyRevealed/RejectedEarly不改计数、成功重新Reveal加一次。没有靠走到下一格的PerCell补偿来通过卸载断言。
+- 实际运输1、实际控制死亡1、NP/stock传感器各7、卸载35、构造36、重打包失败1通过；一次只读critic无可操作发现。没有新字段、直接随机调用、timer写入或Detach；已有sensor callbacks移到正确Unlimbo阶段，其他Foot重新Reveal亦共享修复。固定玩家构建未包含此修复。
+- 保留建筑原生非对称remove半径、联盟/多House复杂重叠、载具跨水运输全战术、其他伪装族/空艇/GUI等边界；不宣称每个间接Reveal调用都已验收，也不为旧存档中已丢的footprint另加追溯修复策略。
 
 ### V04 IFV探测器实际控制、归还、死亡及存读（2026-10-28）
 
@@ -825,7 +834,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 / 普通步兵入口已修，基础流程已验 | GAROBO/NARADR Hospital治疗owner原已有，但普通步兵WhatAction51E85A缺行；现共用医院鼠标动作，不再仅工程师可访问。Ammo=-1正常准入，不另改治疗或弹药 | 实际两医院E1：Off拒绝、On进驻治疗离开、满血拒绝通过；正常/计划下单与部署Move顺序通过。满员/联盟、治疗中失效、普通步兵保存/换主、自动AI仍开放；不是占领科技医院后的全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
-| V04 / P1 / 移动/换主归还/死亡/存读与AI准入已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。IFV实际YURI控制/控制者死亡归还/探测器死亡与双方计数/AI准入/存读已验；移动目标自身、探测器运输、多House/联盟重叠、空艇/精英潜艇/幻影等其他路径及画面仍待验 |
+| V04 / P1 / 移动/换主死亡/运输存读与AI准入已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。IFV实际控制/归还/死亡、登离LCRF/两次存读及计数/AI准入已验；卸载缺失sensor恢复已修共享Unlimbo。移动目标自身、多House/联盟重叠、空艇/精英潜艇/幻影等其他路径及画面仍待验 |
 | V05 / P1 / 索引/飞机奖励已修，驻军在途变化与补员存读已验，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 全员出驻/替换及末位穿透死亡后的真实GGI导弹、存读和当前名单归属通过；count1/cursor1保留，补新E1后普通开火/经验/回绕正确。不同帧多弹交错、建筑毁坏时弹出、非尾/原射手死亡、单人全局续火、其他子机家族和实际母体连续晋升/换主仍待验，不关闭全V05 |
 | V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射束、部署普通精英及独立场解缠已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；另验普通/精英DESO实际部署槽与创建场、独立残留场正式存读后周期伤害救船。各例边界见检查点；换主、多AI、完整抗压/长期场衰减及原鱿鱼-海豚崩溃回放仍待验 |

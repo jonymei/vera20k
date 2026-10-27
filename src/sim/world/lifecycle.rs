@@ -1477,6 +1477,11 @@ impl Simulation {
                 .navigation
                 .retain_threat_avoidance_after_unlimbo(object.threat_avoidance_coefficient);
         }
+        // FootClass::Unlimbo4D7309..4D7318 adds SensorsSight after the
+        // neighbor/threat-coefficient tail, before the concrete class returns.
+        // This shared boundary includes transport exits and other re-reveals,
+        // not just construction; failed/consumed Unlimbo never reaches it.
+        self.add_unit_sensor_after_unlimbo(stable_id, context.rules(), context.registry());
         // Unit737BBE..737BD2 / Aircraft414403..414417 snap Secondary after
         // Foot success, including dead-Techno success. The Techno body snap
         // above has its own alive gate and precedes idle. Diagnostic callers
