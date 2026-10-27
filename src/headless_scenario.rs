@@ -3694,6 +3694,116 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_garrison_missile_in_flight() -> (HeadlessScenario, u64, u64, Vec<u64>, u64) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        let mut scene = aymod_battle(0);
+        let (building, target, old, replacement) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            let sites = cells_nearest(aymod_anchor(sim, owner));
+            let building = spawn_on_free_cells(sim, rules, owner, sites, &["CAHSE01"])[0];
+            let at = sim.entities().get(building).unwrap().position;
+            let coord = crate::sim::movement::ground_pose::object_get_coords(
+                sim.entities().get(building).unwrap(),
+                sim.resolved_terrain(),
+            );
+            let center = (coord.x / 256, coord.y / 256);
+            let far = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - center.0).abs().max((y - center.1).abs()) == 6
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect::<Vec<_>>();
+            let target = spawn_on_free_cells(sim, rules, enemy, far, &["APOC"])[0];
+            let near = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
+            let old = spawn_on_free_cells(sim, rules, owner, near.clone(), &["GGI"; 2]);
+            let replacement = spawn_on_free_cells(sim, rules, owner, near, &["E1"])[0];
+            for &rider in &old {
+                assert!(crate::sim::passenger::add_garrison_occupant(
+                    sim,
+                    rules,
+                    rider,
+                    building,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default()
+                ));
+            }
+            let weapon = rules
+                .weapon(
+                    rules
+                        .object("GGI")
+                        .unwrap()
+                        .occupy_weapon
+                        .as_deref()
+                        .unwrap(),
+                )
+                .unwrap();
+            assert_eq!(weapon.id, "OCMissileLauncher");
+            assert!(
+                !rules
+                    .projectile(weapon.projectile.as_deref().unwrap())
+                    .unwrap()
+                    .inviso,
+                "use an authored in-flight missile, not an instant gun"
+            );
+            sim.substrate
+                .entities
+                .get_mut(target)
+                .unwrap()
+                .health
+                .set(1);
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            // Keep the replacement from firing independently while outside.
+            sim.mission_queue_exact(
+                replacement,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: target,
+                },
+            ));
+            (building, target, old, replacement)
+        };
+        assert!(
+            (0..180).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == building
+                        && scene.sim().interner.resolve(event.weapon_id) == "OCMissileLauncher"
+                })
+            }),
+            "actual occupied GGI must launch a missile"
+        );
+        assert!(
+            scene.sim().entities().get(target).unwrap().health.current() > 0,
+            "the shot must still be in flight when the player unloads"
+        );
+        (scene, building, target, old, replacement)
+    }
+
+    #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; live garrison changes before a saved missile impact"]
     fn aymod_garrison_missile_uses_the_live_occupants_after_unload_and_save() {
@@ -3702,110 +3812,9 @@ mod retail_construction_tests {
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for replace in [false, true] {
-            let mut scene = aymod_battle(0);
+            let (mut scene, building, target, old, replacement) =
+                aymod_garrison_missile_in_flight();
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
-            let (building, target, old, replacement) = {
-                let runtime = &mut scene.runtime;
-                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-                let owner = house_of(sim, "Americans");
-                let enemy = house_of(sim, "Russians");
-                let sites = cells_nearest(aymod_anchor(sim, owner));
-                let building = spawn_on_free_cells(sim, rules, owner, sites, &["CAHSE01"])[0];
-                let at = sim.entities().get(building).unwrap().position;
-                let coord = crate::sim::movement::ground_pose::object_get_coords(
-                    sim.entities().get(building).unwrap(),
-                    sim.resolved_terrain(),
-                );
-                let center = (coord.x / 256, coord.y / 256);
-                let far = cells_nearest(center)
-                    .into_iter()
-                    .filter(|&(x, y)| {
-                        (x - center.0).abs().max((y - center.1).abs()) == 6
-                            && u16::try_from(x)
-                                .ok()
-                                .zip(u16::try_from(y).ok())
-                                .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
-                    })
-                    .collect::<Vec<_>>();
-                let target = spawn_on_free_cells(sim, rules, enemy, far, &["APOC"])[0];
-                let near = cells_nearest((i32::from(at.rx()), i32::from(at.ry())));
-                let old = spawn_on_free_cells(sim, rules, owner, near.clone(), &["GGI"; 2]);
-                let replacement = spawn_on_free_cells(sim, rules, owner, near, &["E1"])[0];
-                for &rider in &old {
-                    assert!(crate::sim::passenger::add_garrison_occupant(
-                        sim,
-                        rules,
-                        rider,
-                        building,
-                        Some(&runtime.resources.overlay_registry),
-                        Default::default()
-                    ));
-                }
-                let weapon = rules
-                    .weapon(
-                        rules
-                            .object("GGI")
-                            .unwrap()
-                            .occupy_weapon
-                            .as_deref()
-                            .unwrap(),
-                    )
-                    .unwrap();
-                assert_eq!(weapon.id, "OCMissileLauncher");
-                assert!(
-                    !rules
-                        .projectile(weapon.projectile.as_deref().unwrap())
-                        .unwrap()
-                        .inviso,
-                    "use an authored in-flight missile, not an instant gun"
-                );
-                sim.substrate
-                    .entities
-                    .get_mut(target)
-                    .unwrap()
-                    .health
-                    .set(1);
-                sim.mission_queue_exact(
-                    target,
-                    MissionId::from_known(MissionType::Sleep),
-                    1,
-                    sim.session.binary_frame(),
-                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
-                )
-                .unwrap();
-                // Keep the replacement from firing independently while outside.
-                sim.mission_queue_exact(
-                    replacement,
-                    MissionId::from_known(MissionType::Sleep),
-                    1,
-                    sim.session.binary_frame(),
-                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
-                )
-                .unwrap();
-                sim.queue_command(CommandEnvelope::new(
-                    owner,
-                    sim.session.tick() + 1,
-                    Command::Attack {
-                        attacker_id: building,
-                        target_id: target,
-                    },
-                ));
-                (building, target, old, replacement)
-            };
-            assert!(
-                (0..180).any(|_| {
-                    let output = tick_with_due_commands(&mut scene);
-                    output.fire_events.iter().any(|event| {
-                        event.attacker_id == building
-                            && scene.sim().interner.resolve(event.weapon_id) == "OCMissileLauncher"
-                    })
-                }),
-                "actual occupied GGI must launch a missile"
-            );
-            assert!(
-                scene.sim().entities().get(target).unwrap().health.current() > 0,
-                "the shot must still be in flight when the player unloads"
-            );
             {
                 let sim = &mut scene.runtime.simulation;
                 let owner = sim.entities().get(building).unwrap().owner();
@@ -3923,6 +3932,231 @@ mod retail_construction_tests {
                 0
             );
         }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; partial garrison death, saved live cursor and refill"]
+    fn aymod_garrison_tail_death_preserves_the_pending_shot_and_cursor_after_load() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind, combat_weapon,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, target, old, replacement) = aymod_garrison_missile_in_flight();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .fire_index(),
+            1
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let hp = sim.entities().get(building).unwrap().health.current();
+            let wh = rules.warhead("AWPWH").unwrap();
+            assert_eq!(wh.bunker_penetration_level(), 1);
+            assert!(
+                wh.bunker_penetration_level()
+                    > rules.object("CAHSE01").unwrap().bunker_protection_level()
+            );
+            let warhead = sim.interner.intern(&wh.id);
+            // Enter the real NP damage prefix with zero ordinary damage.
+            // Actual sniper firing is covered separately; this isolates the
+            // roster mutation between one real missile's launch and impact.
+            let hit = EntityDamageEvent::direct_receiver(
+                building,
+                0,
+                0,
+                RAD_NO_ATTACKER,
+                None,
+                warhead,
+                ReceiverCallFlags {
+                    ignore_defenses: false,
+                    arg6: false,
+                },
+            );
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                hit,
+                Default::default(),
+            );
+            assert_eq!(sim.entities().get(building).unwrap().health.current(), hp);
+            assert!(
+                sim.entities()
+                    .get(old[1])
+                    .is_none_or(|rider| !rider.is_object_alive())
+            );
+            let actor = sim.entities().get(building).unwrap();
+            assert_eq!(actor.passenger_role.occupants().ids(), &old[..1]);
+            assert_eq!(
+                actor.passenger_role.occupants().fire_index(),
+                1,
+                "penetration/PointerExpired do not reset the live fire cursor"
+            );
+            assert_eq!(
+                combat_weapon::firing_occupant_id(actor, rules.object("CAHSE01").unwrap()),
+                None,
+                "GetWeapon45274E falls back to the building's slots, not a wrapped survivor"
+            );
+            sim.mission_queue_exact(
+                building,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+        }
+        // UnInit marks the object dead synchronously; physical retirement
+        // belongs to the normal end-of-frame queue, not the damage callback.
+        tick_with_due_commands(&mut scene);
+        assert!(scene.sim().entities().get(old[1]).is_none());
+        assert!(scene.sim().entities().get(target).unwrap().health.current() > 0);
+        let bytes = save_scene(&scene, "AY partial garrison death with a pending missile");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let actor = scene.sim().entities().get(building).unwrap();
+        assert_eq!(actor.passenger_role.occupants().ids(), &old[..1]);
+        assert_eq!(
+            actor.passenger_role.occupants().fire_index(),
+            1,
+            "load must preserve this valid native count-one/cursor-one state"
+        );
+        assert!(
+            (0..180).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == building)
+                );
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .is_none_or(|victim| victim.health.current() <= 0)
+            }),
+            "the pending missile must still kill after partial death and restore"
+        );
+        let first_xp = scene.sim().entities().get(old[0]).unwrap().veterancy.raw();
+        assert!(
+            first_xp.bits() > 0,
+            "NP previous live index is zero even though the current cursor is now out of the live list"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(replacement)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            0
+        );
+        let next = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(crate::sim::passenger::add_garrison_occupant(
+                sim,
+                rules,
+                replacement,
+                building,
+                Some(&runtime.resources.overlay_registry),
+                Default::default()
+            ));
+            let actor = sim.entities().get(building).unwrap();
+            assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
+            assert_eq!(
+                combat_weapon::firing_occupant_id(actor, rules.object("CAHSE01").unwrap()),
+                Some(replacement)
+            );
+            let coord =
+                crate::sim::movement::ground_pose::object_get_coords(actor, sim.resolved_terrain());
+            let center = (coord.x / 256, coord.y / 256);
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (3..=4).contains(&(x - center.0).abs().max((y - center.1).abs())))
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let next = spawn_on_free_cells(sim, rules, enemy, sites, &["E2"])[0];
+            sim.substrate.entities.get_mut(next).unwrap().health.set(1);
+            sim.mission_queue_exact(
+                next,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let owner = sim.entities().get(building).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: next,
+                },
+            ));
+            next
+        };
+        let mut fired = false;
+        assert!(
+            (0..180).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == building)
+                {
+                    assert_eq!(event.target, TargetKind::Entity(next));
+                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), "UCPara");
+                    fired = true;
+                }
+                scene
+                    .sim()
+                    .entities()
+                    .get(next)
+                    .is_none_or(|victim| victim.health.current() <= 0)
+            }),
+            "normal Attack must use the replacement in the still-current slot"
+        );
+        assert!(fired);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(replacement)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0
+        );
+        assert_eq!(
+            scene.sim().entities().get(old[0]).unwrap().veterancy.raw(),
+            first_xp
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .fire_index(),
+            0
+        );
     }
 
     #[cfg(feature = "npatch")]
