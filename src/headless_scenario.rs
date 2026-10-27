@@ -3291,6 +3291,182 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; elite ORCA intercepts a moving airborne target after load"]
+    fn aymod_orca_elite_intercepts_a_moving_air_target_after_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (plane, target, expected_weapon, health, initial_plane, initial_target) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            let plane = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["ORCA"],
+            )[0];
+            let at = sim.entities().get(plane).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs() >= 9 && (y - center.1).abs() >= 9)
+                .collect::<Vec<_>>();
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["ZEP"])[0];
+            let kind = rules.object("ORCA").unwrap();
+            assert!(kind.npatch_aa_combat);
+            let weapon = rules.weapon(kind.elite_primary().unwrap()).unwrap();
+            assert_ne!(kind.elite_primary(), kind.primary());
+            assert!(
+                rules
+                    .projectile(weapon.projectile.as_deref().unwrap())
+                    .unwrap()
+                    .aa
+            );
+            let expected_weapon = weapon.id.clone();
+            assert!(
+                crate::sim::combat::object_distance_to(plane, &TargetKind::Entity(target), sim)
+                    .unwrap()
+                    > weapon.range_leptons + 4 * 256
+            );
+            sim.substrate
+                .entities
+                .get_mut(plane)
+                .unwrap()
+                .veterancy
+                .set_elite();
+            let victim = sim.substrate.entities.get_mut(target).unwrap();
+            let ground = i32::from(victim.position.z()) * 104;
+            victim
+                .position
+                .set_exact_z_leptons_for_test(Some(ground + 500));
+            let health = victim.health.current();
+            let initial_target = victim.position;
+            let dest = cells_nearest((
+                i32::from(initial_target.rx()),
+                i32::from(initial_target.ry()),
+            ))
+            .into_iter()
+            .find(|&(x, y)| {
+                (x - i32::from(initial_target.rx()))
+                    .abs()
+                    .max((y - i32::from(initial_target.ry())).abs())
+                    == 8
+                    && u16::try_from(x)
+                        .ok()
+                        .zip(u16::try_from(y).ok())
+                        .is_some_and(|(x, y)| {
+                            sim.path_grid()
+                                .is_some_and(|grid| grid.is_walkable_for_infantry(x, y))
+                        })
+            })
+            .unwrap();
+            // Supply the opponent's ordinary Move payload. This is target
+            // motion, not a claim that the AI chose this tactical route.
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            assert!(sim.apply_command(
+                &enemy_name,
+                &Command::Move {
+                    entity_id: target,
+                    target_rx: dest.0 as u16,
+                    target_ry: dest.1 as u16,
+                },
+                Some(rules)
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+            (plane, target, expected_weapon, health, at, initial_target)
+        };
+        let xy = |at: crate::sim::components::Position| (at.rx(), at.ry(), at.sub_x(), at.sub_y());
+        assert!(
+            (0..90).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == plane),
+                    "the saved boundary must precede the first release"
+                );
+                let sim = scene.sim();
+                let actor = sim.entities().get(plane).unwrap();
+                actor.attack_target.target() == Some(TargetKind::Entity(target))
+                    && xy(actor.position) != xy(initial_plane)
+                    && xy(sim.entities().get(target).unwrap().position) != xy(initial_target)
+            }),
+            "the distant target must actually move while the ORCA retains its attack order"
+        );
+        let bytes = save_scene(&scene, "AY elite ORCA pursuing an airborne target");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let saved_target = scene.sim().entities().get(target).unwrap().position;
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(plane)
+                .unwrap()
+                .attack_target
+                .target(),
+            Some(TargetKind::Entity(target))
+        );
+        let mut fired = false;
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == plane)
+                {
+                    assert_eq!(
+                        scene.sim().interner.resolve(event.weapon_id),
+                        expected_weapon
+                    );
+                    assert_eq!(event.target, TargetKind::Entity(target));
+                    fired = true;
+                }
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .is_some_and(|victim| victim.health.current() < health)
+            }),
+            "restored elite ORCA must intercept and damage the moving ZEP; fired={fired}"
+        );
+        assert!(fired);
+        let sim = scene.sim();
+        assert_ne!(
+            xy(sim.entities().get(plane).unwrap().position),
+            xy(initial_plane)
+        );
+        assert!(
+            crate::sim::movement::air_movement::is_high_flying(
+                sim.entities().get(target).unwrap(),
+                sim.resolved_terrain(),
+                Some((&scene.runtime.resources.rules, &sim.interner)),
+            ),
+            "the victim must still be airborne at impact"
+        );
+        let victim = sim.entities().get(target).unwrap();
+        assert_ne!(xy(victim.position), xy(saved_target));
+        assert!(
+            victim.navigation.nav_com().is_some(),
+            "the intercept must precede completion of the target's Move"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY MTNK independent turret speed"]
     fn aymod_mtnk_keeps_independent_turret_speed_while_firing() {
         use crate::sim::command::{Command, CommandEnvelope};

@@ -6,16 +6,24 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于bac83ce32核实际AY建筑Cargo适用项并补生化炉存读/毁坏/NoSurvivor实际验收。仅测试/文档，无生产改动；未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于b380d7ec2补F06精英ORCA远距追击移动空中目标及接敌前热存读。现有生产链通过，无玩法改动，无需critic；未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- 上轮garrison弹出/灯光边界修复bac83ce32保留。当前Battle/XMP03T4经正式加载后的typed全建筑列表，仅YAPOWR与YAPOWRAI的Passengers>0，二者均InfantryAbsorb/absorbs_passengers；非吸收建筑Cargo顺序残余在这个实际配置闭包中没有使用者，不继续为它扩展诊断配置。
-- 新aymod_reactor_passengers_follow_destruction_survival_flags_after_load：实际YAPOWR正常Enter吸收INIT→正式存读→普通致死→活体弹出→再次存读保持原House/关系清除；实际YAPOWRAI同链以IgnoreDefenses触发NoSurvivor，载员正常销毁、Cargo清空、正常帧后存读无残留。载员进入Cargo而非garrison vector，未修改MOD/存档字段，也未手工写关系。
-- 新实际复合测试1项、吸收/销毁/House计数/时间抹除相关4项、building_occupant_storage4项通过。没有新增RNG、timer或Detach逻辑；NoSurvivor沿既有SpawnSurvivors/UnInit抽样与清理，未跑全仓库、GUI或重复critic（无玩法修改）。生化炉AI专用类型不等于该例验证了真实AI自主装载，本例House仍为玩家。
-- 下一安全动作：转F06 ORCA精英对空武器、远距移动目标追击及热存读。先核实际typed武器/射程与现有Aircraft Attack owner，补实际追击链；不恢复Return Dubai弱攻势，不调AI/兵种/MOD。非吸收建筑Cargo的441F1B/441F27顺序作为通用引擎残余保留，未来其他模式/地图若引入该配置再走同一owner，不标全引擎完成。
+- 新aymod_orca_elite_intercepts_a_moving_air_target_after_load使用实际AY ORCA/ZEP；typed精英武器与普通武器不同、投射物AA=true，初始实际距离大于精英射程再加4格。设置精英与初始高空作为提供的先验，不改武器/速度；ZEP的正常Move payload与ORCA Attack进入既有owner。
+- 接敌前双方实际水平移动、ORCA仍锁定ZEP且没有开火时正式保存/完整资源恢复。随后实际fire_events校验精英武器/目标，ZEP真正掉血且仍高飞、Move未完成、存读后位置继续改变；不是靠ammo减少代替命中。普通近距空/地两例仍保留。
+- 实际aymod_orca_2项、AACombat reader/隐形准入2项、Aircraft attack_mission7项通过。复读NPAE414D36→C27C60..C27C78，AACombat只跳高飞清目标，不解除隐形/AA等其他准入。没有新增RNG、timer/Detach或保存字段；本轮无GUI/GPU/完整电脑战术或返回机场重装覆盖。
+- 下一安全动作：F07谭雅对已感知/未感知潜艇的真实Attack、海面/水下选槽边界及存读；先核既有传感器/隐形/海军选武器owners，沿实际水图复用现成海军fixture，不改Sapper键或猜AntiNaval/AntiUnderwater。F06电脑自主ORCA战术、GUI及持续返航重装仍开放；非吸收建筑Cargo顺序残余维持当前实际闭包无使用者分类。
 - V05不同帧多弹交叉命中、原射手死亡的经验归属/单人全局自动续火仍开放；V08重新装载/带队卸载/竞争补员/多AI长局、子机其他家族与连续晋升及旧控制者指针选择残余亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04探测器死亡/换主/运输及多House重叠、V07换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F06精英ORCA远距移动目标追击与热存读（2026-10-28）
+
+- 新实际AY测试从正式Battle资源创建ORCA与远距ZEP；精英等级/初始高空为明示先验，正常Move/Attack命令产生双方运动，不修改MOD数值或模拟追踪路径。生产typed武器确认精英槽不同于普通槽且弹道AA=true，起始距离超过精英射程4格以上。
+- 双方均水平移动且尚未第一次开火时正式save_validated/load_validated及完整资源恢复，目标指针保留；恢复后真实fire_events必须使用配置精英武器并指向ZEP，随后真实命中掉血。命中时ZEP仍高飞、Move未结束、位置相比存读边界继续变化，ORCA亦已实际位移。
+- 复读414D36/C27C60..C27C78：AACombat只令IsHighFlying清目标判断返回false，继续414D4D隐形准入；不新增第二套目标追踪/绕过AA。原普通对空及对地实际场景仍通过。
+- 最终实际ORCA2项、AACombat2项、Aircraft attack_mission7项通过。本条仅测试/文档，无生产修改，无新增RNG、计时、Detach或存档字段。首跑缓存保留器Unsupported PE debug closure安全停止、删除0字节，最终测试无此阻塞；未手动清理固定构建。
+- 尚未覆盖：电脑自主战术选择、GUI、往返机场重装/长时间多目标战斗、玩家晋升过程（本例给定精英先验）。不把单次追击存读通过扩张为全部飞机功能完成。
 
 ### V05实际生化炉Cargo毁坏与NoSurvivor（2026-10-28）
 
@@ -783,7 +791,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
-| F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK | 远距移动目标截击、精英武器对空、玩家GUI与持续AI战术尚未单独验；不将此链扩大为所有飞机行为通过 |
+| F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；玩家GUI、持续AI战术、返航重装/多目标和实际晋升过程仍待验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。仍需单验感知/未感知潜艇、Hover/Organic主武器例外与GUI，不扩大为所有海军行为通过 |
 | F08 / P2 / 已接入，完整投弹/画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 未认证基洛夫完整飞行投弹、GUI或所有既有引爆算术；其他使用此别名的弹头共享reader，未逐个实战验证 |
 | F09 / P2 / 已接入，实际挂载待核 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。根仅定义TankMakeupKit/CRMakeupKit使用此WH，尚未建立实际挂载闭包；MGTK/FV常见配置不走这两武器，不能据此解释原局弱攻势 |
