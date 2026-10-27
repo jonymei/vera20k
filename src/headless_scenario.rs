@@ -1773,6 +1773,91 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Cloak crate pickup and validated save/resume"]
+    fn aymod_cloak_crate_grants_mobile_instances_and_survives_real_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, infantry) = aymod_nearby_pair("MTNK", "E1", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            assert_eq!(rules.powerups.weights[3], 10);
+            assert_eq!(rules.crate_rules.radius, 768);
+            assert!(!rules.object("MTNK").unwrap().cloakable);
+            assert!(!rules.object("E1").unwrap().cloakable);
+            let at = sim.entities().get(tank).unwrap().position;
+            let friend = sim.entities().get(infantry).unwrap().position;
+            let cell = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find(|&(x, y)| {
+                    let near = |p: crate::sim::components::Position| {
+                        (x - i32::from(p.rx())).abs().max((y - i32::from(p.ry())).abs()) <= 1
+                    };
+                    near(at)
+                        && near(friend)
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| {
+                                sim.terrain_cell_level(x, y) == Some(at.z())
+                                    && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                                    && sim.substrate.occupancy.get(x, y).is_none_or(|cell| {
+                                        cell.is_empty_on(
+                                            crate::sim::movement::locomotor::MovementLayer::Ground,
+                                        )
+                                    })
+                                    && sim.overlay_grid.as_ref().unwrap().cell(x, y).overlay_id.is_none()
+                            })
+                })
+                .expect("an empty adjacent crate cell inside both units' radius");
+            assert!(crate::sim::crates::place_crate(
+                sim,
+                rules,
+                &resources.overlay_registry,
+                (cell.0 as i16, cell.1 as i16),
+                Some(3),
+            ));
+            let owner = sim.entities().get(tank).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: cell.0 as u16,
+                    target_ry: cell.1 as u16,
+                },
+            ));
+        }
+        let granted = |scene: &HeadlessScenario, id| {
+            scene.sim().entities().get(id).unwrap().cloak.as_ref()
+                .is_some_and(|cloak| cloak.crate_granted())
+        };
+        for _ in 0..600 {
+            tick_with_due_commands(&mut scene);
+            if granted(&scene, tank) {
+                break;
+            }
+        }
+        assert!(granted(&scene, tank), "ordinary Drive must collect the Cloak crate");
+        assert!(granted(&scene, infantry), "nearby infantry receives the instance ability");
+        let bytes = save_scene(&scene, "AY Cloak crate");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(granted(&scene, tank) && granted(&scene, infantry));
+        for _ in 0..300 {
+            tick_with_due_commands(&mut scene);
+            if [tank, infantry].into_iter().all(|id| {
+                scene.sim().entities().get(id).unwrap().cloak.as_ref().unwrap().is_fully_cloaked()
+            }) {
+                return;
+            }
+        }
+        panic!("actual mobile cloak AI did not finish after restored crate pickup");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY fixed Explosion crate through ordinary Drive movement"]
     fn aymod_explosion_crate_uses_actual_rules_and_finishes_after_picker_damage() {
         use crate::sim::{

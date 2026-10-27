@@ -7,7 +7,7 @@
 ## 当前检查点（2026-10-27）
 
 - 任务目录D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；V03普通连发/Stop/Guard/保存恢复已提交cfb479750，
-  同House红血碉堡准入已提交444b79f31，船厂维修免伤修复已提交a2bcda164。本批继续F09；只做本地提交，未推送/PR/发布。
+  同House红血碉堡准入444b79f31、船厂维修a2bcda164、F09弹头58d9df4f3、基地巨炮规划b5a046558均本地提交；只做本地提交，未推送/PR/发布。
 - 玩家入口仍固定为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst，
   干净源cfb479750、fast/no-default-features/npatch；manifest与from-label解析校验通过，未启动游戏。
   不包含后续红血碉堡和船厂修复；旧hospital-xp及更早入口、原始存档均保留，不静默替换玩家版。
@@ -28,6 +28,17 @@
 - 最新 Return Dubai 困难1v1 诊断把“电脑攻势弱”拆开：9000帧电脑已有21辆车、2重工、2船厂/10个海军生产头、累计生产64项，多个队伍已成型并带玩家单位/基地目标；不是发展或生产头完全卡死。9000帧仍无射击，10500帧开始出现 Computer1 对 Player 的18/17/16发射与击杀，11519帧电脑累计击杀12、损失14，玩家单位清空。当前证据指向集结/寻路/接敌时间窗，不先调AI权重或兵种数值。
 - 同一报告中队0、21、3、63、65在9000帧已有目标，随后目标和队伍成员持续变化，Action/Coordinate_Attack在推进；海军184另有跨Water raw2→4的Gather action53可达性问题，不能与本1v1陆军接敌延迟混为一谈。其原生FNPC/地形拓扑仍待证，不合并水域或发明回退。
 - V01独立供电/失联Drive政策、F11跨模块光照接线门禁不变；未启动GUI、改MOD配置或原始存档。完整PLAN有效，F09已接生产reader及两个消费者；下一安全动作继续核查AI的集结寻路/接敌链或V10无键功能，不以本批两条修复结束全面适配。
+
+### 本轮功能验证：F02实际AY隐形箱（2026-10-27）
+
+- 正式AYMOD Battle加载后，按实际Cloak权重10、CrateRadius768，生产place_crate放置固定Cloak箱，普通Move让MTNK拾取；
+  周围同House E1通过真实范围owner接收实例能力。没有改MTNK/E1类型Cloakable、计时器或MOD规则，没有直接调用授予/隐形更新冒充实际拾取。
+- 新增aymod_cloak_crate_grants_mobile_instances_and_survives_real_load：拾取→GameSnapshot正式验证保存→完整生产恢复/重建→MTNK/E1均完成隐形。
+  仅内存快照，不写原始存档。新实际测试1项和原有Cloak箱owner3项通过，现有F02生产实现无需再改；本批仅新增测试，无玩法critic重复轮次。
+- F02因此补齐实际MOD移动单位拾取/保存恢复链，不关闭建筑/落地飞机生命周期、敌方/传感器实战或GPU/GUI验收。
+  未启动游戏、不替换固定玩家版、未发PR/推送；Return Dubai弱攻势线按用户要求暂停。
+- V10下一条Alt飞机维修调查已读实际NP417E24无条件跳到417E7D，跳过stock的UnitRepair/Dock点击分支；当前entry_click_action仍套stock NoEnter。
+  此为后续待适配入口，不把字节发现当“Alt误入修好”；还需核完整Alt目的地/输入消费者和原版分支，再补定向回归。
 
 ### 非盟军AI巨炮：基地规划前置被错误强制绕过（2026-10-27）
 
@@ -628,7 +639,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
-| F02 / P1 / 已接入，场景与画面待验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY正式加载箱子与GUI待验；建筑/落地飞机仅能力接收已测，不冒称完整生命周期/画面等价；新字段改变保存布局 |
+| F02 / P1 / 实际移动单位链已验，画面待验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；3项生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留。NP/无NP箱子各82项通过；独立critic修正已回归 | 实际AY MTNK普通Move拾取、附近E1受益及正式保存恢复后双方隐形已通过；GUI、建筑/落地飞机完整生命周期仍待验；新字段改变保存布局 |
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
