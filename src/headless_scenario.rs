@@ -1773,6 +1773,164 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real Prism support after power orders and save/resume"]
+    fn aymod_prism_support_respects_saved_offline_state_and_recovers() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{
+            DelayedFire,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        // A friendly heavy target keeps the supporting tower on Guard;
+        // the master receives an explicit player Attack, not an AI override.
+        let (mut scene, master, target) = aymod_nearby_pair("ATESLA", "APOC", true);
+        let supporter = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(rules.is_prism_type(rules.object("ATESLA").unwrap()));
+            let owner = sim.entities().get(master).unwrap().owner();
+            let at = sim.entities().get(master).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["GAPOWR"]);
+            spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["ATESLA"])[0]
+        };
+        let queue = |scene: &mut HeadlessScenario, command| {
+            let sim = &mut scene.runtime.simulation;
+            let owner = sim.entities().get(master).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+        };
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        for id in [master, supporter] {
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .building_last_operational
+                    .is_operational()
+            );
+        }
+        queue(
+            &mut scene,
+            Command::SetBuildingOnLine {
+                entity_id: supporter,
+                on: false,
+            },
+        );
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .building_last_operational
+                .is_operational()
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY offline Prism supporter");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .building_last_operational
+                .is_operational()
+        );
+        queue(
+            &mut scene,
+            Command::Attack {
+                attacker_id: master,
+                target_id: target,
+            },
+        );
+        let mut fired = false;
+        for _ in 0..240 {
+            let output = tick_with_due_commands(&mut scene);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(master)
+                    .unwrap()
+                    .prism_support_count
+                    .count(),
+                0
+            );
+            assert!(
+                !scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_some_and(|pending| matches!(
+                        pending.fire(),
+                        DelayedFire::SupportBeam { .. }
+                    ))
+            );
+            if output
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == master)
+            {
+                fired = true;
+                break;
+            }
+        }
+        assert!(
+            fired,
+            "the online master must still fire without offline support"
+        );
+        queue(
+            &mut scene,
+            Command::SetBuildingOnLine {
+                entity_id: supporter,
+                on: true,
+            },
+        );
+        let mut recruited = false;
+        for _ in 0..240 {
+            let output = tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let supporter = sim.entities().get(supporter).unwrap();
+            if supporter
+                .pending_building_fire
+                .pending()
+                .is_some_and(|pending| matches!(pending.fire(), DelayedFire::SupportBeam { .. }))
+            {
+                assert!(supporter.building_last_operational.is_operational());
+                assert!(
+                    sim.entities()
+                        .get(master)
+                        .unwrap()
+                        .prism_support_count
+                        .count()
+                        > 0
+                );
+                recruited = true;
+            }
+            if recruited
+                && output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == master)
+            {
+                return;
+            }
+        }
+        panic!("the restored supporter never rejoined Prism support after power On");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real Guard acquisition after restored Iron Curtain expiry"]
     fn aymod_guard_waits_for_restored_iron_curtain_before_acquiring_a_target() {
         use crate::sim::superweapon::invulnerability::{InvulnKind, apply_invulnerability};

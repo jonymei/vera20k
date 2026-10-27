@@ -6,15 +6,29 @@
 
 ## 当前检查点（2026-10-27）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；已保留V03 cfb479750、红血碉堡444b79f31、船厂a2bcda164、F09 58d9df4f3、基地巨炮b5a046558、F02实际链e40241dcc、飞机入口4e23f4e39。本轮在其上完成铁幕目标准入，下面记录覆盖与边界。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；已保留V03 cfb479750、红血碉堡444b79f31、船厂a2bcda164、F09 58d9df4f3、基地巨炮b5a046558、F02实际链e40241dcc、飞机入口4e23f4e39。铁幕目标准入6f864d63f也已保留；本轮继续完成光棱支援断电准入，下面记录覆盖与边界。
 - 玩家固定入口仍为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst、源cfb479750。未替换/重建该标签、未启动游戏、未改MOD或原始存档，未推送/PR/发布。后续代码不自动进入该构建。
 - Return Dubai弱攻势线按用户要求暂停。此前陆海双队列/Walk集结已有修复；旧team184跨水区FNPC、SCHP hold和主动抗压/长局仍未关闭；闲置人类败局不是多AI长局验收，不调权重/兵种数值补强。
 - V01独立供电/失联Drive政策和F11跨模块光照接线的既有门禁不变，不把一般“继续功能”当作已批准这两项设计选择。完整PLAN仍有效，功能优先、UI随后。
-- 本轮铁幕检查由既有invulnerability、Immune字段、被动扫描和输入owner共同完成；没有新增保存字段、RNG抽样、timer/Detach写入。一次critic指出的C4/渗透捷径绕过已修，并补光标/下单回归；没有二次critic。
-- 最终NP与stock：GreatestThreat各43、输入context各39、cursor contract各9通过；Ares context39、NoManualFire直接消费者2通过。真实AY Guard→受保护目标→正式内存保存恢复→到期后自动接敌1项通过。首次cursor筛选0项已改正确模块补跑，不算覆盖。
+- 本轮光棱招募只读取既有LastOperational，原Update仍唯一写入；没有新增保存字段、RNG抽样、timer/Detach写入。一次独立critic无可操作发现，未重复审查。铁幕此前的C4/渗透输入捷径已接共享准入。
+- 本轮最终NP/stock光棱各7、建筑任务各16通过；NP运行状态/裂缝消费者13通过；零售Dustbowl光棱转发ignored在两个profile各1通过；真实AY手动Off→内存保存恢复→主塔独立开火→On→重新招募→主塔再次实际开火1项通过。
 - 原生/GUI并排、已持有目标受到铁幕后是否放弃、反击/脚本直接下达Attack、ForceShield完整运行时存读不在本轮结论内；不把新选敌/输入准入改成所有Attack总禁令。整体goal仍开放。
-- 下一安全功能链：光棱联击。只读已定位44B388→7E04BB先读候选Building+6C8，再回原alive检查；既有LastOperational owner恰好持有该字段，不能误用+660手动online或+6EA stuff_enabled，也不能换成现场重算的operational。先补生产回归再改共享prism_supporter。
+- 下一安全功能链：继续范围差异调查。只读对照7012C0/70E140及6F7240相关连续字节，前两者未见补丁；6F7404→C2D5ED在Arcing之外又检查ProjectileType+296（既有SubjectToCliffs字段），假则落direct-range6F751E。须先核真实MOD的适用投射物与reader、边界和两个range调用路径，不能据此声称已解释全部“精英射程反降”。
 - 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。V03空武器/建筑ammo早返短结果的完整reload fallback、其他F/V/A和真人验收仍开放。
+
+### V10光棱联击：断电支援塔准入（2026-10-27）
+
+- 实读NPAE174 BuildingClass::Mission_Attack44B388→7E04BB：先读候选Building+6C8，假则跳44B4AE下一个候选，真则恢复原alive+90检查，再回44B38E。
+  原producer43FBEF在Building Update的运行状态边沿处理后存储该采样；现有LastOperational由world/gap_generator唯一写入，Prism只读，不用+660手动online、+6EA stuff_enabled或现场重算替代。
+- 已在唯一prism_supporter加NP采样门，stock不变。新回归先真实红：手动Off并经过真实sample producer后仍被选中；修复后拒绝。
+  回归特意覆盖两个旧采样边界：Off尚未Update时仍可支援，On尚未Update时仍拒绝，下一次producer才反转。不能为了立刻生效破坏原生对象访问顺序。
+- 旧stock原生shared-body比较夹具未运行Update采样，现显式给所有候选true的额外NP前置，继续比较不变的原生公共体输出；没有改golden或执行/存档harness，也不把此控制边界称为完整NP原生对照。新增边沿回归另外走实际GoOffline/GoOnline和visit_building_operational。
+- 真实AYMOD：正式Battle加载、两座ATESLA和真实GAPOWR；友军APOC只供主塔显式玩家Attack，避免支援塔先自动Attack而合法失去招募资格。
+  普通SetBuildingOnLine Off→采样false→正式内存保存/恢复保持false→主塔实际独立开火且支援计数0、无待发支援束；普通On→采样true→真正招募并给主塔加count→主塔再次实际开火。未改MOD数值、原保存或固定构建，未启动GUI。
+- 最终NP/stock Prism各7、Building missions各16通过；NP LastOperational直接消费者gap_generator13通过；相关ignored零售Dustbowl光棱转发各1单独运行通过，剩余四个ignored是非Prism场景未扩跑。实际AY复合场景1通过；一次只读critic无可操作发现。
+- 建筑任务覆盖首次发现四项旧围墙测试期待清目标重置burst，实际返回7而非0。已追到此前V03的同一Assign_Target owner及实际NP6FCF5B..60六个NOP，仅修测试profile预期：NP保留7，stock仍清0；围墙目标/命令/恢复/反击逻辑均未修改，没有靠改断言掩盖本轮玩法缺陷。
+- 本检查不新增随机抽样、timer、Detach或序列化字段。已经招募/已排定的支援束仍由原ProcessDelayedFire处理，原补丁没有加中途掉电取消，不能擅加。
+  实际EMP、全House缺电、抽电/出售与支援束GUI画面未单独重放；本条不关闭全部光棱、供电或V10。固定cfb479750玩家版不包含本次修复。
 
 ### V10铁幕/力场保护目标准入（2026-10-27）
 
@@ -693,6 +707,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 不是直接把船伤害转给船厂；实际投射物对共格船厂的合法AoE不在此修复中取消，完整实战待验。
 飞机维修建筑点击已按417E24的NP无条件跳转接入：Select不被stock NoEnter覆盖，Alt仍走Move；实际GADEPT/GAYARD运动与无误入回归通过，详见当前检查点。
 铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；原目标保持/反击/直接脚本另验。
+光棱支援招募已按44B388→7E04BB接LastOperational采样，真实Off/存读/独立开火/On/重新联击通过；不现场重算供电，不取消已排定束，EMP/缺电/绘制边界仍开放。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 **V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。
