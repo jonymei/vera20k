@@ -3533,12 +3533,8 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; live squid release, recapture and save/resume"]
-    fn aymod_radiation_beam_releases_a_live_squid_from_its_ship() {
+    fn aymod_grappled_ship_at_shore() -> (HeadlessScenario, u64, u64, (u16, u16), u64) {
         use crate::rules::terrain_rules::LandType;
-        use crate::sim::command::{Command, CommandEnvelope};
-        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
         let launch = battle_session(
@@ -3546,7 +3542,6 @@ mod retail_construction_tests {
             &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
         );
         let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
-        let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let (squid, ship, land) = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -3619,6 +3614,198 @@ mod retail_construction_tests {
             scene.sim().entities().get(ship).unwrap().parasite.eater(),
             Some(squid)
         );
+        (scene, squid, ship, land, held_anim)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; rookie and elite DESO deploy rescue"]
+    fn aymod_radiation_deploy_releases_a_live_squid() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        for elite in [false, true] {
+            let (mut scene, squid, ship, land, anim) = aymod_grappled_ship_at_shore();
+            let expected = if elite {
+                "RadEruptionWeaponE"
+            } else {
+                "RadEruptionWeapon"
+            };
+            let actor = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let weapon = rules.weapon(expected).unwrap();
+                assert!(weapon.rad_level > 0);
+                assert!(
+                    rules
+                        .warhead(weapon.warhead.as_deref().unwrap())
+                        .unwrap()
+                        .sonic
+                );
+                let owner = sim.entities().get(ship).unwrap().owner();
+                let owner_name = sim.interner.resolve(owner).to_owned();
+                let actor = sim
+                    .spawn_object("DESO", &owner_name, land.0, land.1, 0, rules)
+                    .unwrap();
+                if elite {
+                    // Rank is a fixture boundary here, not a promotion claim.
+                    sim.substrate
+                        .entities
+                        .get_mut(actor)
+                        .unwrap()
+                        .veterancy
+                        .set_elite();
+                }
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::ToggleInfantryDeploy { entity_id: actor },
+                ));
+                actor
+            };
+            let mut fired = false;
+            let released = (0..360).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output.fire_events.iter().filter(|e| e.attacker_id == actor) {
+                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), expected);
+                    assert_eq!(
+                        event.weapon_slot,
+                        crate::sim::combat::combat_weapon::WeaponSlot::Secondary
+                    );
+                    assert_eq!(
+                        event.target,
+                        crate::sim::combat::TargetKind::Cell(land.0, land.1)
+                    );
+                    fired = true;
+                }
+                scene
+                    .sim()
+                    .entities()
+                    .get(ship)
+                    .is_some_and(|e| e.parasite.eater().is_none())
+            });
+            assert!(
+                fired && released,
+                "{expected}: normal deployment must rescue the host"
+            );
+            let sim = scene.sim();
+            assert!(
+                sim.radiation.site_at(land).is_some(),
+                "actual deployment must create its field"
+            );
+            let host = sim.entities().get(ship).unwrap();
+            assert!(
+                sim.radiation
+                    .cell_level((host.position.rx(), host.position.ry()))
+                    > 0.0
+            );
+            assert!(
+                host.health.current() > 0
+                    && !host.parasite.is_paralyzed(sim.session.binary_frame())
+            );
+            let source = sim.entities().get(squid).unwrap();
+            assert!(source.health.current() > 0 && !source.lifecycle.in_limbo());
+            assert_eq!(source.parasite.class().unwrap().victim(), None);
+            assert_eq!(source.parasite.class().unwrap().grapple_anim(), None);
+            tick_with_due_commands(&mut scene);
+            assert!(scene.sim().anim(anim).is_none());
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; saved radiation field without a live shooter"]
+    fn aymod_radiation_field_releases_a_live_squid_after_load() {
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, squid, ship, _, anim) = aymod_grappled_ship_at_shore();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let center = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let weapon = rules.weapon("RadEruptionWeapon").unwrap();
+            let spread = crate::sim::combat::cell_spread::whole_cells(
+                rules
+                    .warhead(weapon.warhead.as_deref().unwrap())
+                    .unwrap()
+                    .cell_spread_f64,
+            );
+            let site_warhead = rules.warhead(&rules.radiation.site_warhead).unwrap();
+            assert_eq!(site_warhead.id, "RadSite");
+            assert!(site_warhead.sonic && site_warhead.radiation);
+            let host = sim.entities().get(ship).unwrap();
+            let center = (host.position.rx(), host.position.ry());
+            // Enter the existing radiation producer boundary without a bullet
+            // or direct damage. Only the periodic Foot AI may release the host.
+            sim.radiation.apply_detonation(
+                crate::sim::radiation::RadDetonation {
+                    rx: center.0,
+                    ry: center.1,
+                    rad_level: weapon.rad_level,
+                    spread,
+                    rad_type: weapon.rad_type.clone(),
+                    firing_house: None,
+                    invoker: None,
+                },
+                sim.session.binary_frame(),
+                sim.session.theater(),
+                rules,
+                sim.resolved_terrain.as_ref(),
+                &mut sim.lighting_sources,
+            );
+            assert_eq!(
+                sim.entities().get(ship).unwrap().parasite.eater(),
+                Some(squid)
+            );
+            assert!(sim.radiation.cell_level(center) > 0.0);
+            center
+        };
+        let bytes = save_scene(&scene, "AY pending periodic RadSite rescue");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().radiation.cell_level(center) > 0.0);
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            Some(squid)
+        );
+        let frames = scene
+            .runtime
+            .resources
+            .rules
+            .radiation
+            .application_delay
+            .max(1)
+            + 1;
+        let released = (0..frames).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(!output.fire_events.iter().any(|e| e.attacker_id == ship));
+            scene
+                .sim()
+                .entities()
+                .get(ship)
+                .is_some_and(|e| e.parasite.eater().is_none())
+        });
+        assert!(
+            released,
+            "saved RadSite must release through periodic Foot damage alone"
+        );
+        let sim = scene.sim();
+        let source = sim.entities().get(squid).unwrap();
+        assert!(source.health.current() > 0 && !source.lifecycle.in_limbo());
+        assert_eq!(source.parasite.class().unwrap().victim(), None);
+        let host = sim.entities().get(ship).unwrap();
+        assert!(
+            host.health.current() > 0 && !host.parasite.is_paralyzed(sim.session.binary_frame())
+        );
+        tick_with_due_commands(&mut scene);
+        assert!(scene.sim().anim(anim).is_none());
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; live squid release, recapture and save/resume"]
+    fn aymod_radiation_beam_releases_a_live_squid_from_its_ship() {
+        use crate::rules::terrain_rules::LandType;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, squid, ship, land, held_anim) = aymod_grappled_ship_at_shore();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let bytes = save_scene(&scene, "AY live squid grapple");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert_eq!(

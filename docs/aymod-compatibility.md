@@ -6,18 +6,25 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于8b0c3b514补齐V07缠船/解缠/再次捕获与存读验证。此前巨炮规划、飞机入口、铁幕、光棱、射程分支及V06生命周期均已本地保存；本轮仅测试/文档，未推送/PR/发布。
-- 玩家固定入口仍为D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd，标签aymod-playtest-20261026-burst、源cfb479750。未替换/重建该标签、未启动游戏、未改MOD或原始存档，未推送/PR/发布。后续代码不自动进入该构建。
-- Return Dubai弱攻势线按用户要求暂停。此前陆海双队列/Walk集结已有修复；旧team184跨水区FNPC、SCHP hold和主动抗压/长局仍未关闭；闲置人类败局不是多AI长局验收，不调权重/兵种数值补强。
-- V01独立供电/失联Drive政策和F11跨模块光照接线的既有门禁不变，不把一般“继续功能”当作已批准这两项设计选择。完整PLAN仍有效，功能优先、UI随后。
-- 本轮真实AY的YTNK与YAGGUN均通过普通Attack击杀预置残血APOC赚取XP至精英，不直接设rank；友军非武装建筑用于隔离蓄速。热状态正式保存/恢复后，Stop/Guard退至stage/value均0，随后仍按当前档位的精英武器正常开火。
-- 最终实际复合生命周期1项（含坦克/建筑两例）、既有两类精英首发1项、Gattling原生控制/帧回归7项、Veterancy12项通过。仅测试/文档修改，不重跑未影响的stock生产构建，也不为测试-only改动重复critic。
-- 最初错误期待循环音效report latch也持久；已实读原生TechnoLoad70BF61与70C20E，EBX0并清+4B8，现有serde skip是有意等价。保留rank/stage/value，另断言load清音效latch，不把夹具错误报成存档缺陷。没有改序列化或任何原始存档。
-- 原生/GUI并排、已持有目标受到铁幕后是否放弃、反击/脚本直接下达Attack、ForceShield完整运行时存读不在本轮结论内；不把新选敌/输入准入改成所有Attack总禁令。整体goal仍开放。
-- 用户询问的非盟军巨炮已有本地修复b5a046558：只允许原生GAPLUG特殊延期，不再把缺前置建筑强塞计划。本轮重跑正式Return Dubai规则/三阵营计划1项通过；固定cfb479750版仍不含修复，原存档已有计划/巨炮不追溯删除，完整实际建造落地仍待验。
-- V07正式AY场景新增缠绕中保存/恢复、同一AI鱿鱼自主再次捕获、普通DESO再次开火解除、释放后再次保存/恢复及驱逐舰移动；复合回归1项和Parasite25项通过。未改生产实现，无须玩法critic。
-- 下一安全动作：按PLAN继续V07辐射场/部署普通精英武器解除寄生；不要把已通过的Sonic辐射束等同于RadSite或部署武器。V06对空槽、换主及完整ROF倍率仍开放，不能把两条地面链当作所有战术验收。
-- 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。V03空武器/建筑ammo早返短结果的完整reload fallback、其他F/V/A和真人验收仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于6e6857f69补V07部署普通/精英武器和独立残留辐射场救船。仅测试/文档，无生产玩法改动，无需玩法critic，未推送/PR/发布；整体goal仍开放。
+- 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750保持不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
+- Return Dubai弱攻势线继续按用户要求暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，但跨水区FNPC、SCHP hold、抗压和多AI长局仍开放。非盟军巨炮本地修复b5a046558已通过三阵营计划回归；固定版不含，旧计划/已造巨炮不追溯删除，建造落地实战仍待验。
+- V01独立供电/失联Drive政策及F11跨模块光照接线的批准门禁不变，一般“继续功能”不解除这两项门禁。功能优先，UI随后，全部PLAN仍有效。
+- 本轮真实AY DESO正常部署分别发射普通/精英Secondary，自身Cell为目标，创建辐射场并解除AI鱿鱼缠绕；不是把原来的主武器辐射束重复当部署结果。精英rank为明确夹具边界，不声称本条覆盖晋升。
+- 另从实际普通部署武器的RadLevel/CellSpread生成独立场，没有DESO/子弹/直接伤害；正式保存/恢复仍保持缠绕和场，再由周期Foot伤害解除，双方存活、瘫痪结束、旧动画回收。该例从辐射服务生产边界注入，不冒称完整部署到残留场的一镜到底。
+- 最终aymod_radiation_三项通过（部署项含两个rank边界，并复跑既有辐射束/再次捕获/存读复合链），radiation owner4项通过。前轮Parasite25项与三阵营巨炮计划1项通过；本轮不重复未改生产实现的stock/全库测试。
+- 原生NPAE的Foot周期路径还经4DA5EB→B94CD0检查Cell有效辐射/站点，4DA603→B93248按绑定类型取因子/弹头或回退全局，再回4DA629虚调用具体ReceiveDamage；本轮仅证明AY当前默认类型的有效站点路径，未声称所有NP扩展辐射类型或无站点残留都已等价。
+- 下一安全动作：继续V04实际隐形/传感器移动、丢失/重发现和AI选敌生命周期，先确认当前配置与现有检测owner；或V05驻军变化/子机再生。V07换主/多AI/完整抗压及原鱿鱼-海豚闪退全面排除仍开放；本轮不是该闪退的完整回放。
+- V06地面晋升/热存读/退档已有覆盖，音效latch按原生Load清零，不更改serde skip；对空/换主/ROF倍率仍开放。铁幕已有目标/反击/脚本与ForceShield完整存读、V03空武器reload fallback、其余清单及真人验收仍开放。
+- 上次Python936项的1失败/6错误/49跳过（依赖feature闭包与Windows symlink WinError1314）保留；本轮无Python工具修改，不重复全套。
+
+### V07部署普通/精英与独立残留场救船（2026-10-28）
+
+- 共用aymod_grappled_ship_at_shore，复用既有正式Return Dubai加载、岸边合法位置和AI SQD自主缠玩家DEST，不复制寄生或损伤实现。既有辐射束存读测试仍执行原链。
+- 新aymod_radiation_deploy_releases_a_live_squid通过普通ToggleInfantryDeploy，让真实DESO部署，分别验证RadEruptionWeapon/RadEruptionWeaponE的真实Secondary事件、自身Cell目标、实际场创建且宿主格有场、活体解缠及动画回收。普通/精英测试使用实际typed武器/弹头，不改RadLevel/ROF/伤害/CellSpread；精英由夹具设rank，仅验证对应部署槽。
+- 新aymod_radiation_field_releases_a_live_squid_after_load从实际普通部署武器读取RadLevel、经现有cell_spread::whole_cells换算范围，在既有RadiationState::apply_detonation生产边界注入场；无DESO、子弹或直接ReceiveDamage。这是独立周期消费者验证，不冒称完整发射路径。实际RadSite typed warhead确认Radiation/Sonic，保存前和恢复后均保持场及缠绕，再正常advance_tick至application_delay内解除、双方存活、瘫痪清理与旧动画回收。
+- 该默认类型的原生最终调用可达4DA629具体ReceiveDamage，Sonic沿既有4D7345/4D735F→ExitUnit62A4A0；NPAE站点/绑定类型分支另见检查点，未把stock连续体直接当NP证据。现有状态/加载/伤害/寄生owners无需新实现，无新增RNG、timer或Detach逻辑。
+- 最终NP实际三项（含部署两个rank）及radiation owner4项通过。仅测试/文档；无GUI、MOD/原保存/固定构建写入，无发布。换主、多AI、完整抗压、部署场的完整保存后长期衰减和原鱿鱼-海豚崩溃回放仍待验，不关闭全部V07。
 
 ### V07缠船、再次捕获与正式存读（2026-10-28）
 
@@ -729,7 +736,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V04 / P1 | 隐形/传感器的其他路径已有实现；F01 不等于整个系统缺失 | IFV/狗/英雄/空艇的传感器范围、精英潜艇/幻影、移动和开火；目标丢失/再发现以及 AI 选敌一起验，不从旧说明硬编码范围 |
 | V05 / P1 / 已修NP驻军索引，生命周期仍开放 | 驻军/建筑经验与子机经验：现按NPAE702FBB读取击杀时活索引减一，负值加当前人数；stock仍付当前索引。Trainable建筑优先自身，BFRT/母子机owners不变 | NP/stock首杀及回绕、下一名武器装填通过；真实AY CAHSE01/E1双驻军首杀通过。不是持久真正射手归属；多发在途/死亡弹出/驻军变动与子机再生仍待完整验，不复制BFRT政策 |
 | V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
-| V07 / P1 / 辐射束救船、再次捕获及存读已验，其余仍开放 | AY RadBeamWarhead的Sonic=yes已走既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 真实AI乌贼自主缠玩家DEST→缠绕中正式存读→己方DESO开火解除→同一乌贼再次自主捕获/再次解除→释放后正式存读/船实际移动通过；排除守方持续反击，不等同完整交战；辐射场/部署普通精英武器、换主和多AI仍待验 |
+| V07 / P1 / 辐射束、部署普通精英及独立场解缠已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；另验普通/精英DESO实际部署槽与创建场、独立残留场正式存读后周期伤害救船。各例边界见检查点；换主、多AI、完整抗压/长期场衰减及原鱿鱼-海豚崩溃回放仍待验 |
 | V08 / P1 / 玩家BFRT与TTNK充能对照已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑BFRT/载员/存读等未覆盖，不把线圈充能当V01中心供电 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
