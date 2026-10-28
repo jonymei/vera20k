@@ -875,7 +875,13 @@ fn retail_dustbowl_shot_down_rocketeer_falls_and_leaves_no_body() {
             (expected.0, Some(expected.1)),
             "frame {index}: {frame:?}"
         );
-        assert_eq!(frame.health, 1, "frame {index}: {frame:?}");
+        // NPAE17451BC67 bypasses the stock51BC96 resurrection. The
+        // descent and death-action completion still use their existing owners.
+        assert_eq!(
+            frame.health,
+            if crate::rules::NPATCH_ENABLED { 0 } else { 1 },
+            "frame {index}: {frame:?}"
+        );
         if index < 11 {
             assert!(
                 now.altitude < last_height && now.altitude > 0,
@@ -1138,8 +1144,58 @@ fn shoot_the_rocketeer(
     );
 }
 
+#[cfg(not(feature = "npatch"))]
 fn scenario_draws(before: i32, after: i32) -> i32 {
     (after - before).rem_euclid(97)
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_shot_down_cheering_rocketeer_does_not_revive_as_a_ground_target() {
+    let input = serde_json::json!({
+        "doing": 32, "fraction": 0.0,
+        "owner": {"moving": true, "phase": 2}
+    });
+    let (mut sim, rules, shooter) = rocketeer_crash_fixture(&input);
+    let grid = crate::sim::pathfinding::PathGrid::test_all_passable(70, 70);
+    shoot_the_rocketeer(&mut sim, &rules, shooter);
+    assert_eq!(sim.entities().get(1).unwrap().health.current(), 0);
+    let (mut low_fall, mut retired) = (false, false);
+    for _ in 0..160 {
+        sim.advance_tick(&[], Some(&rules), Some(&grid), None, 67);
+        let Some(actor) = sim.entities().get(1).filter(|e| e.is_object_alive()) else {
+            retired = true;
+            break;
+        };
+        let height =
+            crate::sim::movement::air_movement::current_fly_height(actor, sim.resolved_terrain());
+        if height > 0 {
+            // Actual NPAE51BC67 jumps past51BC96's Health=1 fallback.
+            // Keep the shared target setter's existing Health==0 rejection;
+            // do not create a second ground-weapon/layer immunity owner.
+            assert_eq!(
+                actor.health.current(),
+                0,
+                "falling infantry must not be revived by the next AI visit"
+            );
+            assert!(
+                !crate::sim::mission::concrete_effects::assign_target_commits(
+                    sim.entities(),
+                    sim.terrain_objects.objects(),
+                    Some(crate::sim::combat::TargetKind::Entity(1))
+                )
+            );
+            low_fall |= height < crate::util::lepton::HIGH_FLIGHT_THRESHOLD_LEPTONS as i32;
+        }
+    }
+    assert!(
+        low_fall,
+        "cover a live falling object below the ordinary high-flight cutoff"
+    );
+    assert!(
+        retired,
+        "suppressed resurrection must not strand the crash or corpse"
+    );
 }
 
 /// Parity with `tools/spatial_oracle/jumpjet_infantry_crash.json`: a
@@ -1161,6 +1217,8 @@ fn scenario_draws(before: i32, after: i32) -> i32 {
 /// Not compared: the Scenario draws of the fall's other frames. VERA's also
 /// carry the faller's Guard mission, which native runs too (InfantryClass::AI
 /// calls FootClass::AI at any Health, `0x0051BC9D`) but the oracle does not.
+// The corpus executes the stock Health-reset arm, bypassed by NPAE51BC67.
+#[cfg(not(feature = "npatch"))]
 #[test]
 fn a_shot_down_rocketeer_falls_like_the_native_crash() {
     let corpus: serde_json::Value = serde_json::from_str(crate::test_fixture::text(

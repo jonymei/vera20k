@@ -1081,11 +1081,16 @@ impl Simulation {
 impl crate::sim::world::ObjectSubstrate {
     /// `InfantryClass::AI`'s Health reset (`0x0051BC57..0x0051BC96`), before
     /// `FootClass::AI`: an infantryman at Health 0 or below whose action is
-    /// not a death sequence ([`in_death_sequence`]) is set to Health 1. A
-    /// corpse on its death sequence and a crashing Jumpjet infantryman keep
-    /// Health 0; a death whose `Do_Action` was refused (a sequence with no
-    /// frames, `0x0051D70F`) left the previous action, and is raised here.
+    /// not a death sequence ([`in_death_sequence`]) is set to Health 1 in stock. A
+    /// corpse on its death sequence keeps Health 0; a death whose `Do_Action`
+    /// was refused (a sequence with no frames, `0x0051D70F`) left the
+    /// previous action, and is raised here. NPAE174 bypasses this reset.
     pub(crate) fn infantry_health_reset(&mut self, id: u64) {
+        // NPAE174 InfantryAI51BC67 jumps unconditionally to51BC9D, bypassing
+        // Health=1 at51BC96 for every infantryman, not just falling Jumpjets.
+        if crate::rules::NPATCH_ENABLED {
+            return;
+        }
         let Some(actor) = self.entities.get_mut(id) else {
             return;
         };

@@ -6,14 +6,23 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于c7a5e37c7补F02完全隐形建筑受击、过渡存读与当前NP EMP策略下的状态/到期恢复。实际cloak crate3项及共同伤害负边界1项通过；仅共用夹具/回归，无生产修改/新critic，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于f7b9c21bd修V10坠落飞兵错误复活，修改既有infantry_health_reset唯一owner。NP/stock相关模块各64项、零售实弹坠落各1项、实际AY场景1项通过；只读critic无可操作发现。已完成本链本地验证，未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：回到V10尚待核的火箭飞行兵坠落目标层无键修复，先核实际AY使用、#174补丁与现有Jumpjet死亡/层owner，不先猜行为或改数值；F02本轮只完成逻辑状态组合，受损FX/EMP绘制、多AI选敌仍另验。V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
+- 下一安全动作：继续V05非尾驻军移除/单剩成员自动续火的功能链，先核现有名单游标和开火owner，不重开已暂停的弱攻势调查。V10坠落修复不是修改目标层/高度门槛；真实地面单位完整自主索敌、坠落中存读及多AI仍未验。F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
 - V05双弹/第二射手死亡与本轮剩余Cargo顺序已通过各自范围；非尾移除、单剩驻军原生自动续火、母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08重新装载/带队卸载/竞争补员/多AI长局亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V10坠落飞兵：NP跳过步兵Health=1复活（2026-10-28）
+
+- 作者170507说明是“修正了原版中火箭飞行兵坠落过程中可受到地面部队攻击的BUG”。实际AY GameMD.exe的Infantry vtable7EB058、AI槽+5C指向51BAB0；InfantryClass::AI51BC57读取Health，51BC67为EB34无条件跳至51BC9D，跳过51BC96的Health=1写入，再进入FootClass::AI4DA530。该补丁覆盖所有步兵，不仅Jumpjet；不能另造坠落目标层、AG免疫或专属兵种判断。
+- 现有ObjectSubstrate::infantry_health_reset在NP模式直接返回，stock保持原逻辑；唯一生产调用仍在techno_ai的Foot/Techno AI之前。原生高空虚函数+54经Foot4DE620到Object5F6B90，既有208高度判定未改。没有新增状态、reader、保存布局、RNG调用、timer写入或Detach；保持HP0会自然改变后续AI/动作抽样，不声称与错误复活路径逐帧RNG相同。
+- 先失败回归：普通致死receiver击落正在非死亡动作中的飞兵，下一普通帧旧实现HP1而期望HP0；修后每个离地坠落帧均HP0，共享目标setter拒绝，覆盖低于208和最终退休。另测非Jumpjet的ENGINEER，NP保持0、stock恢复1，保护实际补丁的全步兵范围。
+- 实际AY Battle场景：JUMPJET经普通Move自行起飞，使用正式致死receiver进入坠落，穿过208高度后落地退休；未手写高度、动作或坠落状态。该例不是实际AA武器命中；另有零售Dustbowl的HTK真实开火击落、整段下降/目标清理/无尸体回归在NP与stock均通过。没有新增原生执行golden；原stock crash corpus保持不变且只在stock断言，NP使用独立行为回归。
+- 最终retail gate下，NP/stock各运行jumpjet_infantry16、infantry_action16、infantry_death5、chronosphere13、cell_receiver14项；另各跑零售实弹坠落1项，实际AY场景1项通过。旧零帧死亡序列测试与零售坠落测试原先硬断言HP1，在NP下先失败，现依据51BC67区分模式，其余生命周期/下降/退休断言保留。只读critic无可操作发现，之后补齐上述consumer测试；未启动GUI、未改MOD/原始保存/固定玩家版。
+- 残余：未验证真实AG-only攻击者完整自主索敌/开火循环、NP原生下降/RNG逐帧对照、坠落中存读或多AI实局；不把共享setter拒绝冒称这些都通过。V10其他独立机制继续保持各自状态。
 
 ### F02完全隐形建筑受击与当前NP EMP策略的状态组合（2026-10-28）
 
@@ -958,7 +967,8 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
-秘密实验室单位选择概率、火箭飞行兵坠落目标层。秘密实验室已按实际#174修改接入：
+秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，
+不是改变目标层；NP/stock死亡与实际AY坠落验证、未验边界见当前检查点对应节。秘密实验室已按实际#174修改接入：
 68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零但不标记返回项；
 `src/sim/secret_lab.rs`沿原owner保留NP/stock分支，原生RNG三例和直接消费者NP/无NP各九项通过。
 不改变既有保存fallback/夺取/授权owner；真实AY多实验室/GUI场景仍待验。

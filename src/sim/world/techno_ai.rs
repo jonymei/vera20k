@@ -737,7 +737,7 @@ fn techno_ai_shell(
         }
         sim.mission_host_promote(id, sim.session.binary_frame(), rules);
     }
-    // `InfantryClass::AI`'s Health reset (`0x0051BC57`) precedes
+    // `InfantryClass::AI`'s mode-specific Health reset (`0x0051BC57`) precedes
     // `FootClass::AI`, and with it the Techno body below.
     if category == EntityCategory::Infantry {
         sim.substrate.infantry_health_reset(id);

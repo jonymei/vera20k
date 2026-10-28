@@ -4200,7 +4200,8 @@ impl Simulation {
                 entity.kill_record.is_recorded(),
                 // A Temporal erase leaves at full health with its kill
                 // already booked (`combat::record_kill::record_kill_credit`);
-                // a crashing infantryman falls at Health 1 (`0x0051BC57`)
+                // a crashing infantryman can fall at Health 1 in stock
+                // (`0x0051BC57`; NPAE174 bypasses this reset at51BC67)
                 // after the kill that booked its loss.
                 entity.health.current() == 0
                     || entity.kill_record.killer().is_some()

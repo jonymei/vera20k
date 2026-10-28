@@ -2981,6 +2981,113 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Jumpjet takeoff, fatal receiver and low-altitude fall in NP mode"]
+    fn aymod_shot_down_rocketeer_keeps_zero_health_until_impact() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        let (mut scene, actor, _) = aymod_nearby_pair("JUMPJET", "GAPOWR", true);
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("JUMPJET").unwrap();
+            assert!(kind.jumpjet && kind.crashable);
+            let unit = sim.entities().get(actor).unwrap();
+            let owner = unit.owner();
+            let at = unit.position;
+            let goal = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    ((i32::from(x) - i32::from(at.rx()))
+                        .abs()
+                        .max((i32::from(y) - i32::from(at.ry())).abs())
+                        == 6
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y))
+                    .then_some((x, y))
+                })
+                .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: goal.0,
+                    target_ry: goal.1,
+                },
+            ));
+        }
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                crate::sim::movement::air_movement::current_fly_height(
+                    scene.sim().entities().get(actor).unwrap(),
+                    scene.sim().resolved_terrain(),
+                ) >= crate::util::lepton::HIGH_FLIGHT_THRESHOLD_LEPTONS as i32
+            }),
+            "the actual configured unit must take off through ordinary Move"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let damage = sim.entities().get(actor).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    actor,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        let (mut low_fall, mut retired) = (false, false);
+        for _ in 0..600 {
+            tick_with_due_commands(&mut scene);
+            let Some(unit) = scene
+                .sim()
+                .entities()
+                .get(actor)
+                .filter(|e| e.is_object_alive())
+            else {
+                retired = true;
+                break;
+            };
+            let height = crate::sim::movement::air_movement::current_fly_height(
+                unit,
+                scene.sim().resolved_terrain(),
+            );
+            if height > 0 {
+                assert_eq!(unit.health.current(), 0);
+                assert!(
+                    !crate::sim::mission::concrete_effects::assign_target_commits(
+                        scene.sim().entities(),
+                        scene.sim().terrain_objects.objects(),
+                        Some(TargetKind::Entity(actor))
+                    )
+                );
+                low_fall |= height < crate::util::lepton::HIGH_FLIGHT_THRESHOLD_LEPTONS as i32;
+            }
+        }
+        assert!(
+            low_fall && retired,
+            "the real AY fall must cross the ground-target threshold and retire"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY fixed Explosion crate through ordinary Drive movement"]
     fn aymod_explosion_crate_uses_actual_rules_and_finishes_after_picker_damage() {
         use crate::sim::{

@@ -50,7 +50,8 @@ pub(crate) fn retail_rules_binding(anims: &[(&str, i32)]) -> Option<RuleSet> {
 /// [`retail_rules_binding`] with `artmd.ini`'s infantry sequences bound, as
 /// the app binds them: a killed infantryman plays its Die sequence instead of
 /// having a zero-count request refused (`0x0051D70F`) and reviving at
-/// Health 1 on its next visit (`0x0051BC57`).
+/// Health 1 on its next stock visit (`0x0051BC57`; NPAE174 bypasses this
+/// reset at `0x0051BC67`).
 pub(crate) fn retail_rules_with_sequences(anims: &[(&str, i32)]) -> Option<RuleSet> {
     let mut rules = retail_rules_binding(anims)?;
     rules.bind_animation_sequences(
