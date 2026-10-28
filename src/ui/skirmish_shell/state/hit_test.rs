@@ -8,7 +8,7 @@ use super::super::layout::{
     RandomMapSetupControl, RectPx, SKIRMISH_AI_ROW_COUNT, SkirmishCheckboxId, SkirmishShellLayout,
     SkirmishTrackbarId, combo_face_rect,
 };
-use super::trackbars::{trackbar_ids, trackbar_rect};
+use super::trackbars::trackbar_rect;
 use super::{
     ChooseMapHoverTarget, ChooseMapModalState, OwnerDrawButton, SkirmishAiRowType, SkirmishComboId,
     SkirmishComboItem, SkirmishCountryChoice, SkirmishHoverTarget, SkirmishShellAction,
@@ -71,7 +71,7 @@ pub fn hovered_shell_control(
             return Some(SkirmishHoverTarget::Checkbox(checkbox.id));
         }
     }
-    for id in trackbar_ids() {
+    for id in state.trackbar_ids() {
         if trackbar_rect(layout, id).contains(x, y) {
             return Some(SkirmishHoverTarget::Trackbar(id));
         }
@@ -164,6 +164,7 @@ pub fn status_help_key_for_hover(target: SkirmishHoverTarget) -> Option<&'static
         SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::UnitCount0x50c) => {
             Some("STT:SkirmishSliderUnit")
         }
+        SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::TechLevel0x512) => None,
         SkirmishHoverTarget::FlagPicture => Some("STT:SkirmishPictureFlag"),
         SkirmishHoverTarget::GameTypeLabel0x6ec => Some("STT:SkirmishLabelGameType"),
         SkirmishHoverTarget::ScenarioLabel0x5a8 => Some("STT:SkirmishLabelScenario"),

@@ -281,6 +281,84 @@ fn first_admitted_row(rect: RectPx) -> i32 {
     rect.y + rect.h - 17
 }
 
+#[test]
+fn tech_slider_input_uses_launch_value_and_hidden_control_rejects_drag() {
+    let ini = IniFile::from_str(
+        "[UISettings]\nShowTechLevelSlider=yes\n[MultiplayerDialogSettings]\nTechLevel=6\n",
+    );
+    let mut shell = SkirmishShellState::default();
+    shell.trackbar_bounds = SkirmishTrackbarBounds::from_multiplayer_dialog_settings(&ini);
+    shell.apply_multiplayer_dialog_values(
+        &crate::sim::game_options::GameOptions::from_multiplayer_dialog_settings(&ini),
+    );
+    shell.apply_ui_settings(&ini);
+    let layout = compute_layout(800, 600);
+    let rect = layout.trackbars.tech_level;
+    let y = first_admitted_row(rect);
+    assert_eq!(
+        shell
+            .trackbar_bounds
+            .range(SkirmishTrackbarId::TechLevel0x512),
+        TrackbarRange::new(1, 6, 1)
+    );
+    handle_option_mouse_down(&mut shell, &layout, &[], rect.x + 7, y);
+    assert_eq!(
+        shell.launch_options_base.tech_level,
+        if crate::rules::NPATCH_ENABLED { 1 } else { 6 }
+    );
+    let launch = pack_launch_session_without_start_validation(
+        &shell,
+        &[test_map_entry("test.mmx")],
+        &stock_skirmish_modes(),
+    )
+    .unwrap();
+    assert_eq!(
+        launch.options.tech_level,
+        shell.launch_options_base.tech_level
+    );
+    handle_option_mouse_up(&mut shell);
+    let thumb = shell
+        .trackbar_bounds
+        .range(SkirmishTrackbarId::TechLevel0x512)
+        .thumb_left_in(shell.launch_options_base.tech_level, rect, layout.scale);
+    handle_option_mouse_down(&mut shell, &layout, &[], rect.x + thumb + 2, y);
+    if crate::rules::NPATCH_ENABLED {
+        assert!(shell.trackbar_hold.is_some_and(|hold| hold.dragging));
+    }
+    shell.apply_ui_settings(&IniFile::from_str("[UISettings]\nShowTechLevelSlider=no\n"));
+    let before = shell.launch_options_base.tech_level;
+    handle_option_mouse_move(&mut shell, &layout, &[], rect.x + rect.w - 51, y);
+    assert_eq!(shell.launch_options_base.tech_level, before);
+    assert!(!matches!(
+        hovered_shell_control(&layout, &shell, &[], rect.x + 7, y),
+        Some(SkirmishHoverTarget::Trackbar(
+            SkirmishTrackbarId::TechLevel0x512
+        ))
+    ));
+}
+
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR; authored UISettings opens the actual tech slider"]
+fn aymod_tech_slider_reads_the_authored_rules_through_production_ini_reader() {
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let ini = IniFile::from_bytes(&std::fs::read(root.join("rulesmd.ini")).unwrap()).unwrap();
+    let mut shell = SkirmishShellState::default();
+    shell.trackbar_bounds = SkirmishTrackbarBounds::from_multiplayer_dialog_settings(&ini);
+    shell.apply_ui_settings(&ini);
+    assert_eq!(
+        shell
+            .trackbar_ids()
+            .any(|id| id == SkirmishTrackbarId::TechLevel0x512),
+        crate::rules::NPATCH_ENABLED
+    );
+    assert_eq!(
+        shell
+            .trackbar_bounds
+            .range(SkirmishTrackbarId::TechLevel0x512),
+        TrackbarRange::new(1, 10, 1)
+    );
+}
+
 /// A Skirmish state with the slider ranges retail Rules gives through the
 /// production reader, or `None` without the retail INIs.
 fn retail_ranges_shell() -> Option<SkirmishShellState> {

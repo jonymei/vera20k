@@ -265,13 +265,14 @@ pub struct SkirmishShellState {
     pub starting_credits: i32,
     pub game_speed: i32,
     pub unit_count: i32,
+    pub show_tech_level_slider: bool,
     /// Credits/Unit Count slider ranges, seeded from `[MultiplayerDialogSettings]`
     /// at lobby construction (stock-default constants until then).
     pub trackbar_bounds: SkirmishTrackbarBounds,
     /// Per-match option base, seeded from `[MultiplayerDialogSettings]` at lobby
     /// construction (stock defaults until then). The launch path overrides the
     /// fields exposed as widgets from the live state above; this base carries
-    /// the non-widget toggles (tech level, bases, shroud, …) into the match.
+    /// the non-widget toggles (bases, shroud, …) into the match.
     pub launch_options_base: SkirmishLaunchOptions,
     pub short_game: bool,
     pub super_weapons: bool,
@@ -358,6 +359,7 @@ impl Default for SkirmishShellState {
             starting_credits: options.starting_credits,
             game_speed: options.game_speed,
             unit_count: options.unit_count,
+            show_tech_level_slider: false,
             trackbar_bounds: SkirmishTrackbarBounds::default(),
             launch_options_base: SkirmishLaunchOptions::default(),
             short_game: options.short_game,

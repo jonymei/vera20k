@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于ee94e6e7e完成F12科技滑条的首轮活动原生链/资源/保存及现有owner调查：不是只加控件，还缺NP [Skirmish] TechLevel读取/写回，原生范围1..Rules默认TechLevel、隐藏控制与AY checkbox让位。当前无Rust改动/待完成Cargo，未跑Cargo/未启动GUI；实现及正式AY reader/输入/画面验收尚未完成，不把调查当已支持。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于82fd49de7接入F12科技等级：选源启动投影读取开关、范围/输入/隐藏门、同一启动值、NP进程822CF4保存读取/写回、布局让位、绘制及实际House传递。最终NP：skirmish_shell142、skirmish_session64、实际AY reader1、shell_render87，共294项通过（render2 ignored未跑）；stock对应UI142+session64，共206项通过（实际AY例1 ignored未跑）。无待完成Cargo；新控件GPU/GUI尚未验，F12不关闭。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：沿F12已定位链实施科技设置，先明确822CF4进程共享值与现有MultiplayerShellRuntime/Skirmish snapshot的唯一归属；不得为LAN/WOL各复制一份科技状态。复用launch_options_base.tech_level作为当前控件值、TrackbarRange作为输入数值owner，补读取/持久化/隐藏准入/布局/绘制/启动到House的同一链及1–3项集中回归。先读下方F12唯一调查节，避免把上限硬编码10或遗漏BuildOffAlly让位。Return Dubai攻势暂停，V01/F11批准门禁、固定构建不变；16色仍独立开放。
+- 下一安全动作：完成F12科技控件真实输出验证，优先复用现有shell capture/renderer与windowless GPU测试；覆盖已开启/隐藏、当前数字与新增checkbox位置，不启动玩家游戏或替换固定构建。继续核科技控件原生hover帮助与LAN/WOL接收远端科技后回离线的进程值回流，不扩大离线单屏结论。当前单值由MultiplayerShellRuntime持有、UI只用launch_options_base.tech_level，不给每个profile复制状态；16色独立开放。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -345,14 +345,17 @@
 - 本次复合1项内部三组配置均通过，另重跑实际建筑AI1/驻军归属1/powered_unit8，共11项通过；与上轮93项有重叠，不相加为新总数。测试不对失去支持的旧Drive单位继续下Move，因此不能把offline旗标冒称“新命令必被拒绝/绝对不能动”；保留V01原生聚合及失联移动政策门禁。新旧House均为受控组件，不是多AI自主夺取/长局；无新玩法实现/RNG/timer/Detach调用/保存字段，无需新critic，无GUI/MOD/原始存档/固定构建改动。
 - 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
 
-### F12科技等级设置：活动原生链与实施前置（2026-10-28）
+### F12科技等级设置：已接入，画面及扩展边界开放（2026-10-28）
 
-- 当前仍未实现。实际AY根rulesmd.ini声明ShowTechLevelSlider=yes；这个声明尚待新的正式reader接线回归，不能拿文本出现代替读取成功。静读ShowTechLevelSlider字面值BA4000与UISettings BA4255，B98800先调用原Rules671EA0，再B98811调用C281E0；C28204..C2821B以当前BA8FFF byte为默认调用ReadBool5295F0并写回。该byte原文件初值00；缺项不等于强开。既有ProcessAssets启动投影来自NativeRulesProcessOwner的root→可选LANGRULE，不应为控件另读一份脱离选源的文件。
+- 已沿现有owners接入。实际AY根rulesmd.ini的ShowTechLevelSlider=yes已由新增实际AY测试经正式IniFile/Bool reader及state.trackbar_ids消费验证，不再只凭文本出现。静读ShowTechLevelSlider字面值BA4000与UISettings BA4255，B98800先调用原Rules671EA0，再B98811调用C281E0；C28204..C2821B以当前BA8FFF byte为默认调用ReadBool5295F0并写回。该byte原文件初值00；缺项不等于强开。既有ProcessAssets启动投影来自NativeRulesProcessOwner的root→可选LANGRULE，不应为控件另读一份脱离选源的文件。
 - Skirmish OnSetup6AECFF实际跳BA137D：取控件512，BA138B读已存822CF4，BA1391..BA13A9用Rules+149C（MultiplayerDialogSettings.TechLevel）为上界、低word=1设置range，再BA13AD..BA13B5设置position；BA13B7..BA13D6按开关隐藏512和label69E。不是固定0..10，也不是取TechnoType.TechLevel。缺项默认10的Rules值已有GameOptions reader；新的控件范围应沿既有TrackbarRange的SETRANGE/SETPOS语义，不能直接clamp覆盖越界保存值的原生行为。
 - Start/Back的控件打包路径6AD75A跳BA134B，BA1350..BA1368读512的TBM_GETPOS并写822CF4；随后返回原继续读UnitCount等选项。即便隐藏，控件的初始化/打包语义也要与可交互性区分，隐藏控件不能留可点击/拖动/滚轮/hover命中。
-- 持久化也有实际NP修改：C27480先原ReadSkirmish697F10，再C274A5..C274BF按当前822CF4作默认，ReadInt5276D0读[Skirmish] TechLevel；C274DB先原Write698F90，再C274FA..C27511写同section/key。两个字符串已实际读为Skirmish/TechLevel。现有skirmish_session/persistence.rs只保存原十个选项与Slot，不含它。822CF4是进程共享值，不能未经调用链核对就给LAN/WOL每个profile复制独立科技状态；stock不得因NP功能新增该key的读取或写入。
-- 复用既有RT_DIALOG parser只读取资源、未执行原生UI代码：AY dialog102的slider512模板[269,227,85,13]，label69E为GUI:TechLevel/[201,228,60,10]；BuildOffAlly69D已在左侧[48,244,140,10]，而当前Rust仍放在右侧第四行，直接叠加会重叠。slider、label、checkbox让位须进入现有layout/translate/scale和renderer共享几何，不用另造绝对屏幕坐标。label缺失时的本地化fallback、hover帮助键仍需按实际资源/调用确认，不猜新CSF键。
-- 现有唯一链：startup rules projection→SkirmishShellState.apply_multiplayer_dialog_values/launch_options_base.tech_level→state::launch打包→SkirmishLaunchOptions→GameOptions→scenario_bootstrap::populate_launch_houses→HouseState；House与起始单位预算已消费该选项。继续扩展这些owners，不新增并行科技数值、绕过启动层写House或改变AI权重/单位数值。需要一条设置读入/点击或拖动/Start与Back持久化/再开/实际House科技准入的集中回归，另验证关闭与stock边界及真实输出；当前调查不替代实现、critic或画面验收。
+- 持久化也有实际NP修改：C27480先原ReadSkirmish697F10，再C274A5..C274BF按当前822CF4作默认，ReadInt5276D0读[Skirmish] TechLevel；C274DB先原Write698F90，再C274FA..C27511写同section/key。两个字符串已实际读为Skirmish/TechLevel。原有profile snapshot只保存十个选项与Slot；新增科技值由MultiplayerShellRuntime的单个私有tech_level持有，不向LAN/WOL各复制字段。初始化按C274A5读取，现有统一pack_snapshot_options在全部三个Start/Back打包调用点接控件值，原持久化owner按C274FA写回[Skirmish] TechLevel。stock不读/不写该key，保留原文件中的未知TechLevel项；回归同时确认[LAN]同名项未被改写。
+- 复用既有RT_DIALOG parser只读取资源、未执行原生UI代码：AY dialog102的slider512模板[269,227,85,13]，label69E为GUI:TechLevel/[201,228,60,10]；BuildOffAlly69D已在左侧[48,244,140,10]，而当前Rust仍放在右侧第四行，直接叠加会重叠。slider、label、checkbox让位已接现有layout/translate/scale及两条绘制消费者；NP checkbox移至该左侧位置，stock保留原布局。控件统一从state.trackbar_ids取得可见集合，关闭时无新命中且旧拖动不再改值；文字取真实资源GUI:TechLevel，缺字典时沿现有label fallback机制。科技hover目前不给猜测的STT键，原生帮助映射仍待核，最终画面未验。
+- 现有唯一链：startup rules projection→SkirmishShellState.apply_multiplayer_dialog_values/launch_options_base.tech_level→state::launch打包→SkirmishLaunchOptions→GameOptions→scenario_bootstrap::populate_launch_houses→HouseState；House与起始单位预算已消费该选项。继续扩展这些owners，不新增并行科技数值、绕过启动层写House或改变AI权重/单位数值。已补三项集中回归：输入/同一launch值/隐藏旧拖动、实际AY reader，以及真实临时profile读取4→点击1→正常close/persist→新进程owner重开1→GameOptions/实际participant Houses均1。后者用真实retail AssetManager初始化ProcessAssets国家注册表，非空注册表伪造；原先空ProcessAssets夹具触发正常InvalidCountryIndex，已修夹具，不绕过国家校验。Back打包入口另核同一值3；stock读档4不生效、默认10且不重写该未知key。临时profile完全独立于用户设置与原档，成功后删除测试文件。
+
+- 最终retail gate下NP ui::skirmish_shell142、app::frontend::skirmish_session64、actual AY reader1、shell_render87，共294项通过；renderer2项ignored未跑。stock UI142、session64，共206项通过，actual AY reader1保持ignored未跑。新项单跑及中间重复不叠加。现有checkbox几何断言按实际NP资源分支更新，stock期望未变；未运行全仓库/Clippy，未改Python工具，无新增模拟保存布局/RNG/timer/Detach。
+- 本条是UI/设置和启动参数链，未改sim科技准入/AI权重/兵种数值；依review.md的UI排除项不新增玩法critic。未启动GUI、改MOD配置/原始存档或固定构建，也未推送/发布。真实GPU/字体/缩放输出、越界设置的完整交互、原生hover帮助及LAN/WOL接收远端科技再返回离线时的共享值回流仍开放；普通/电脑House初值证明不等于长局AI或所有科技准入测试，F12和整个目标继续开放。
 
 ### V10实际AY修船时的正常舰炮伤害及存读（2026-10-28）
 
@@ -1151,7 +1154,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
-| F12 / P2 / 科技滑条活动原生链已核，尚未实现 | 扩展遭遇战 UI：8色大厅/战场错配已修；科技设置需同时补NP保存读取/写回与布局让位，完整16色独立开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs:159` 只有速度/金钱/单位数滑条；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
+| F12 / P2 / 科技设置链已接，画面/扩展边界待验 | 扩展遭遇战 UI：8色大厅/战场错配已修；科技开关/输入/持久化/布局/绘制/实际House传递已接，完整16色独立开放 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；`src/ui/skirmish_shell/layout.rs` 已补TechLevel0x512与原生让位，现有state/renderer共用可见集合；`src/skirmish_launch.rs:18` 颜色数8；`src/app/frontend/skirmish_shell_render/controls.rs:353` 固定8色 | 先核 #174 颜色表与选择政策，再接配置/选项/启动数据；30槽目标不等于已支持16色，验证颜色占用、同色策略和人/AI辨识 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，

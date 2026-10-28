@@ -522,6 +522,7 @@ impl App {
         // shifts the slider extents like gamemd does (it reads them from Rules at
         // dialog-build time); without assets we keep the stock-default ranges.
         if let Some(rules_projection) = startup_rules_projection.as_ref() {
+            skirmish_shell_state.apply_ui_settings(rules_projection);
             skirmish_shell_state.trackbar_bounds =
                 crate::ui::skirmish_shell::SkirmishTrackbarBounds::from_multiplayer_dialog_settings(
                     rules_projection,

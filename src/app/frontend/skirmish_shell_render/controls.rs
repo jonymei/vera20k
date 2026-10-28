@@ -443,6 +443,7 @@ pub(super) fn trackbar_rect_for_id(layout: &SkirmishShellLayout, id: SkirmishTra
         SkirmishTrackbarId::GameSpeed0x529 => layout.trackbars.game_speed,
         SkirmishTrackbarId::Credits0x511 => layout.trackbars.credits,
         SkirmishTrackbarId::UnitCount0x50c => layout.trackbars.unit_count,
+        SkirmishTrackbarId::TechLevel0x512 => layout.trackbars.tech_level,
     }
 }
 
@@ -688,11 +689,7 @@ pub(super) fn push_trackbar_instances(
     shell: &SkirmishShellState,
 ) {
     let chrome = atlas.control_chrome();
-    for id in [
-        SkirmishTrackbarId::GameSpeed0x529,
-        SkirmishTrackbarId::Credits0x511,
-        SkirmishTrackbarId::UnitCount0x50c,
-    ] {
+    for id in shell.trackbar_ids() {
         let rect = trackbar_rect_for_id(layout, id);
         let value = trackbar_visual_value(shell, id);
         let thumb_left = shell

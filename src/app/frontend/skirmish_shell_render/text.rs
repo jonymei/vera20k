@@ -135,6 +135,7 @@ pub(super) fn trackbar_display_value(shell: &SkirmishShellState, id: SkirmishTra
         SkirmishTrackbarId::GameSpeed0x529 => trackbar_visual_value(shell, id).to_string(),
         SkirmishTrackbarId::Credits0x511 => shell.credits().to_string(),
         SkirmishTrackbarId::UnitCount0x50c => shell.unit_count.to_string(),
+        SkirmishTrackbarId::TechLevel0x512 => shell.launch_options_base.tech_level.to_string(),
     }
 }
 
@@ -147,6 +148,7 @@ pub(super) fn trackbar_label(state: &AppState, id: SkirmishTrackbarId) -> String
         SkirmishTrackbarId::GameSpeed0x529 => localized_label(state, "GUI:GameSpeed", "Game Speed"),
         SkirmishTrackbarId::Credits0x511 => localized_label(state, "GUI:Credits", "Credits"),
         SkirmishTrackbarId::UnitCount0x50c => localized_label(state, "GUI:UnitCount", "Unit Count"),
+        SkirmishTrackbarId::TechLevel0x512 => localized_label(state, "GUI:TechLevel", "Tech Level"),
     }
 }
 
@@ -158,6 +160,7 @@ pub(super) fn trackbar_label_rect_for_id(
         SkirmishTrackbarId::GameSpeed0x529 => layout.trackbar_labels.game_speed,
         SkirmishTrackbarId::Credits0x511 => layout.trackbar_labels.credits,
         SkirmishTrackbarId::UnitCount0x50c => layout.trackbar_labels.unit_count,
+        SkirmishTrackbarId::TechLevel0x512 => layout.trackbar_labels.tech_level,
     }
 }
 
@@ -667,11 +670,7 @@ pub(super) fn build_shell_text_draws(
         );
     }
 
-    for id in [
-        SkirmishTrackbarId::GameSpeed0x529,
-        SkirmishTrackbarId::Credits0x511,
-        SkirmishTrackbarId::UnitCount0x50c,
-    ] {
+    for id in shell.trackbar_ids() {
         let label = trackbar_label(state, id);
         push_label_draw(
             &mut shell_draws,

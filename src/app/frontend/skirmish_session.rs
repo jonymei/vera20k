@@ -191,6 +191,8 @@ pub(crate) struct MultiplayerShellRuntime {
     /// Physical process INI8870C0 input. Accepted writers update this buffer
     /// before attempting disk persistence; repeated6980C0 reads never reopen disk.
     settings_ini: Vec<u8>,
+    /// Process822CF4, not a separate value per LAN/WOL profile.
+    tech_level: i32,
     /// Observer preference AC10C8, read as an integer by 5EE190.
     lan_observer_mode: i32,
     /// The taunt command's process-static rate clock `[0x00825C88]`.
@@ -883,7 +885,19 @@ impl MultiplayerShellRuntime {
             settings_ini,
         ) = load_persistence(ini_path.as_deref(), defaults);
 
+        // NPAE174 ReadSkirmish697F10 -> C274A5..C274BF.
+        let tech_level = if crate::rules::NPATCH_ENABLED {
+            IniFile::from_bytes(&settings_ini)
+                .map(|ini| {
+                    ini.section_or_empty("Skirmish")
+                        .read_int("TechLevel", defaults.tech_level)
+                })
+                .unwrap_or(defaults.tech_level)
+        } else {
+            defaults.tech_level
+        };
         let mut runtime = Self {
+            tech_level,
             snapshot,
             lan_snapshot,
             wol_snapshot,
@@ -948,6 +962,11 @@ impl MultiplayerShellRuntime {
         );
         state.starting_credits = credits.set_up(self.snapshot.credits);
         state.unit_count = units.set_up(self.snapshot.unit_count);
+        if crate::rules::NPATCH_ENABLED {
+            state.launch_options_base.tech_level = bounds
+                .range(SkirmishTrackbarId::TechLevel0x512)
+                .set_up(self.tech_level);
+        }
         state.short_game = self.snapshot.short_game;
         state.super_weapons = self.snapshot.super_weapons_allowed;
         state.build_off_ally = self.snapshot.build_off_ally;
@@ -996,7 +1015,7 @@ impl MultiplayerShellRuntime {
     ) {
         pack_snapshot_selection(&mut self.snapshot, state, maps, modes);
         pack_snapshot_slots(&mut self.snapshot, state);
-        pack_snapshot_options(&mut self.snapshot, state);
+        self.pack_snapshot_options(state);
     }
 
     /// Run the common Start/Back state transaction in the verified order:
@@ -1045,7 +1064,7 @@ impl MultiplayerShellRuntime {
         pack_snapshot_slots(&mut self.snapshot, state);
         assignments.resolve_local_color(&mut self.scenario_rng);
         assignments.resolve_ai(&mut self.scenario_rng, &mut draw_country)?;
-        pack_snapshot_options(&mut self.snapshot, state);
+        self.pack_snapshot_options(state);
         let resolved = assignments.finish();
         self.validate_network_countries(&resolved)?;
 
@@ -1089,7 +1108,7 @@ impl MultiplayerShellRuntime {
     ) {
         pack_snapshot_selection(&mut self.snapshot, state, maps, modes);
         pack_snapshot_slots(&mut self.snapshot, state);
-        pack_snapshot_options(&mut self.snapshot, state);
+        self.pack_snapshot_options(state);
         let mut handle_bytes = crate::util::native_string::acp_encode(&state.player_name_edit.text);
         handle_bytes.truncate(MULTIPLAYER_HANDLE_LIMIT_BYTES);
         self.local_preferences.handle_bytes = handle_bytes;
@@ -1385,7 +1404,17 @@ impl MultiplayerShellRuntime {
     /// order, then let the owner perform one final filesystem write.
     fn update_persistence_bytes(&self, existing: &[u8]) -> Vec<u8> {
         let updated = self.update_local_preference_bytes(existing);
-        self.snapshot.update_ini_bytes(&updated)
+        let updated = self.snapshot.update_ini_bytes(&updated);
+        // NPAE174 WriteSkirmish698F90 -> C274FA..C27511.
+        if crate::rules::NPATCH_ENABLED {
+            crate::util::ini_writer::set_ini_values(
+                &updated,
+                "Skirmish",
+                &[("TechLevel", &self.tech_level.to_string())],
+            )
+        } else {
+            updated
+        }
     }
 
     pub(crate) fn mark_gameplay_scenario_return_pending(&mut self) {
@@ -1515,15 +1544,22 @@ fn pack_snapshot_slots(snapshot: &mut MultiplayerSetupSnapshot, state: &Skirmish
     }
 }
 
-fn pack_snapshot_options(snapshot: &mut MultiplayerSetupSnapshot, state: &SkirmishShellState) {
-    snapshot.game_speed = state.game_speed;
-    snapshot.credits = state.credits();
-    snapshot.unit_count = state.unit_count;
-    snapshot.short_game = state.short_game;
-    snapshot.super_weapons_allowed = state.super_weapons;
-    snapshot.build_off_ally = state.build_off_ally;
-    snapshot.mcv_repacks = state.mcv_redeploy;
-    snapshot.crates_appear = state.crates;
+impl MultiplayerShellRuntime {
+    fn pack_snapshot_options(&mut self, state: &SkirmishShellState) {
+        let snapshot = &mut self.snapshot;
+        snapshot.game_speed = state.game_speed;
+        snapshot.credits = state.credits();
+        snapshot.unit_count = state.unit_count;
+        snapshot.short_game = state.short_game;
+        snapshot.super_weapons_allowed = state.super_weapons;
+        snapshot.build_off_ally = state.build_off_ally;
+        snapshot.mcv_repacks = state.mcv_redeploy;
+        snapshot.crates_appear = state.crates;
+        // OnSetup/Start/Back BA1350..BA1368 packs the actual slider value.
+        if crate::rules::NPATCH_ENABLED {
+            self.tech_level = state.launch_options_base.tech_level;
+        }
+    }
 }
 
 pub(crate) fn skirmish_global_defaults(state: &SkirmishShellState) -> SkirmishGlobalDefaults {
@@ -1533,6 +1569,7 @@ pub(crate) fn skirmish_global_defaults(state: &SkirmishShellState) -> SkirmishGl
         game_speed: state.game_speed,
         credits: state.credits(),
         unit_count: state.unit_count,
+        tech_level: state.launch_options_base.tech_level,
         short_game: state.short_game,
         super_weapons_allowed: state.super_weapons,
         build_off_ally: state.build_off_ally,
@@ -1847,6 +1884,7 @@ mod tests {
             ),
             local_preferences: LocalMultiplayerPreferences::default(),
             settings_ini: Vec::new(),
+            tech_level: 10,
             lan_observer_mode: 0,
             taunt_clock: Default::default(),
             scenario_rng,
@@ -1877,6 +1915,7 @@ mod tests {
             ),
             local_preferences: LocalMultiplayerPreferences::default(),
             settings_ini: Vec::new(),
+            tech_level: 10,
             lan_observer_mode: 0,
             taunt_clock: Default::default(),
             scenario_rng: SimRng::new(u64::from(seed)),
@@ -2220,6 +2259,107 @@ mod tests {
         assert_eq!(owner.local_participant().name, name);
         owner.release_online_handle();
         assert_eq!(owner.local_participant().name, &name[..19]);
+    }
+
+    #[test]
+    fn tech_slider_survives_close_reopen_and_reaches_participant_houses() {
+        let Some(retail) =
+            crate::rules::retail_ini_fixture::retail_battle_rules_for_map("XMP03T4.MAP")
+        else {
+            return;
+        };
+        let Some((_, assets)) = crate::rules::retail_ini_fixture::retail_assets() else {
+            return;
+        };
+        let directory = std::env::temp_dir().join(format!(
+            "vera20k-tech-slider-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join(profile_file::FILENAME);
+        std::fs::write(&path, b"[Skirmish]\nTechLevel=4\n[LAN]\nTechLevel=9\n").unwrap();
+        let mut process = empty_process_assets();
+        process.initialize_sources_if_needed(&assets).unwrap();
+        let mut owner = MultiplayerShellRuntime::initialize(
+            7,
+            &mut process,
+            Some(&directory),
+            None,
+            Some(&retail.rules),
+            defaults(),
+        );
+        let mut shell = SkirmishShellState::default();
+        shell.apply_ui_settings(&IniFile::from_str(
+            "[UISettings]\nShowTechLevelSlider=yes\n",
+        ));
+        owner.hydrate_shell(&mut shell, &[map()], &[mode()]);
+        assert_eq!(
+            shell.launch_options_base.tech_level,
+            if crate::rules::NPATCH_ENABLED { 4 } else { 10 }
+        );
+        let layout = crate::ui::skirmish_shell::compute_layout(800, 600);
+        let rect = layout.trackbars.tech_level;
+        crate::ui::skirmish_shell::handle_option_mouse_down(
+            &mut shell,
+            &layout,
+            &[map()],
+            rect.x + 7,
+            rect.y + rect.h - 17,
+        );
+        let launch = crate::ui::skirmish_shell::pack_launch_session_without_start_validation(
+            &shell,
+            &[map()],
+            &[mode()],
+        )
+        .unwrap();
+        let resolved = owner
+            .close_shell_transaction(&shell, &[map()], &[mode()], &launch)
+            .unwrap();
+        let expected = if crate::rules::NPATCH_ENABLED { 1 } else { 10 };
+        assert_eq!(resolved.options.tech_level, expected);
+        owner.persist_snapshot();
+        let mut reopened = MultiplayerShellRuntime::initialize(
+            7,
+            &mut process,
+            Some(&directory),
+            None,
+            Some(&retail.rules),
+            defaults(),
+        );
+        let mut fresh_shell = SkirmishShellState::default();
+        reopened.hydrate_shell(&mut fresh_shell, &[map()], &[mode()]);
+        assert_eq!(fresh_shell.launch_options_base.tech_level, expected);
+        let written = std::fs::read(&path).unwrap();
+        let ini = IniFile::from_bytes(&written).unwrap();
+        assert_eq!(ini.section_or_empty("LAN").read_int("TechLevel", 0), 9);
+        assert_eq!(
+            ini.section_or_empty("Skirmish").read_int("TechLevel", 0),
+            if crate::rules::NPATCH_ENABLED { 1 } else { 4 }
+        );
+        let mut sim = crate::sim::world::Simulation::with_seed(7);
+        *sim.session_mut_for_test().game_options_mut_for_test() = resolved
+            .options
+            .to_game_options(resolved.ai_player_count as i32);
+        sim.intern_rule_type_ids(&retail.rules);
+        let slots = crate::sim::scenario_bootstrap::normalized_launch_slots(&resolved);
+        crate::sim::scenario_bootstrap::populate_launch_houses(&mut sim, &slots, &retail.rules);
+        assert_eq!(sim.houses().len(), slots.len());
+        assert!(
+            sim.houses()
+                .values()
+                .all(|house| house.tech_level() == expected)
+        );
+        // Back packs the same live value, without creating a profile-local copy.
+        shell.launch_options_base.tech_level = 3;
+        reopened.pack_shell_snapshot(&shell, &[map()], &[mode()]);
+        reopened.hydrate_shell(&mut fresh_shell, &[map()], &[mode()]);
+        assert_eq!(
+            fresh_shell.launch_options_base.tech_level,
+            if crate::rules::NPATCH_ENABLED { 3 } else { 10 }
+        );
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     #[test]
