@@ -6337,6 +6337,302 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; overlapping own/allied sensors, real movement, death and saved AI admission"]
+    fn aymod_overlapping_detectors_keep_house_counts_through_movement_and_death() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::Command;
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, cloaker, observer) = aymod_nearby_pair("TANY", "GAPILL", false);
+        eprintln!(
+            "AY detector overlap Paranoid={}",
+            scene.runtime.resources.rules.general.paranoid
+        );
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let ally = {
+            let slot = crate::sim::scenario_bootstrap::NormalizedSkirmishSlot {
+                owner_name: "DetectorAlly".into(),
+                country: LaunchCountry::from_country_index(u32::from(country.0)),
+                color_index: 3,
+                start_position: crate::skirmish_launch::LaunchStartPosition::Auto,
+                team: crate::skirmish_launch::LaunchTeam::None,
+                is_human: false,
+                observer: false,
+                source_human_index: None,
+                handle: None,
+                difficulty: crate::sim::house_state::HouseDifficulty::Hard,
+            };
+            let runtime = &mut scene.runtime;
+            crate::sim::scenario_bootstrap::populate_launch_houses(
+                &mut runtime.simulation,
+                std::slice::from_ref(&slot),
+                &runtime.resources.rules,
+            );
+            let id = runtime.simulation.interner.get("DetectorAlly").unwrap();
+            assert!(
+                !runtime
+                    .simulation
+                    .houses
+                    .get(&id)
+                    .unwrap()
+                    .event_dispatch_eligible()
+            );
+            id
+        };
+        let sleep = |scene: &mut HeadlessScenario, id| {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+        };
+        let (enemy, owner, cell) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let target = sim.entities().get(cloaker).unwrap();
+            let owner = target.owner();
+            let at = target.position;
+            let enemy = sim.entities().get(observer).unwrap().owner();
+            spawn_on_free_cells(
+                sim,
+                &resources.rules,
+                ally,
+                cells_nearest((i32::from(at.rx()) - 12, i32::from(at.ry()) - 12)),
+                &["NAPOWR"],
+            );
+            // Fixture diplomacy uses the graph owner, not raw ally-mask writes.
+            // Supplied opponent movement below is not autonomous AI planning.
+            for (from, to) in [(enemy, ally), (ally, enemy)] {
+                sim.make_ally(
+                    from,
+                    to,
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    Default::default(),
+                    false,
+                );
+            }
+            assert!(crate::map::houses::are_houses_mutually_allied(
+                sim.house_alliances(),
+                sim.interner.resolve(enemy),
+                sim.interner.resolve(ally)
+            ));
+            (enemy, owner, (at.rx(), at.ry()))
+        };
+        sleep(&mut scene, cloaker);
+        sleep(&mut scene, observer);
+        assert!((0..360).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(cloaker)
+                .unwrap()
+                .cloak
+                .unwrap()
+                .is_fully_cloaked()
+        }));
+        let count = |scene: &HeadlessScenario, house| {
+            let fog = &scene.sim().fog;
+            fog.sensors_by_house()
+                .get(&house)
+                .and_then(|values| {
+                    values.get(usize::from(cell.1) * usize::from(fog.width()) + usize::from(cell.0))
+                })
+                .copied()
+                .unwrap_or(0)
+        };
+        let own_count = count(&scene, owner);
+        let check = |scene: &mut HeadlessScenario, a, b| {
+            assert!(crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner.resolve(enemy),
+                scene.sim().interner.resolve(ally),
+            ));
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(cloaker)
+                    .unwrap()
+                    .cloak
+                    .unwrap()
+                    .is_fully_cloaked()
+            );
+            assert_eq!(count(scene, enemy), a);
+            assert_eq!(count(scene, ally), b);
+            assert_eq!(count(scene, owner), own_count);
+            let runtime = &mut scene.runtime;
+            let candidate = runtime.simulation.greatest_threat_represented(
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                observer,
+                crate::sim::combat::threat_range::ScanMission::Guard,
+                None,
+            );
+            // EvaluateCandidate6F7DB1..6F7DEB -> Cell4870D0 reads the
+            // attacker's per-house word, not the ally's positive word.
+            assert_eq!(candidate == Some(cloaker), a > 0);
+        };
+        check(&mut scene, 0, 0);
+        let (first, last, allied_detector, radius) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let radius = u16::from(resources.rules.object("DOG").unwrap().sensors_sight);
+            assert!(radius > 0 && !resources.rules.object("GAPILL").unwrap().sensors);
+            let sites: Vec<_> = cells_nearest((i32::from(cell.0), i32::from(cell.1)))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    u16::try_from(x)
+                        .ok()
+                        .zip(u16::try_from(y).ok())
+                        .is_some_and(|center| {
+                            sim.fog.sensor_circle_cells(center, radius).contains(&cell)
+                        })
+                })
+                .collect();
+            let dogs =
+                spawn_on_free_cells(sim, &resources.rules, enemy, sites.clone(), &["DOG", "DOG"]);
+            let allied_detector = spawn_on_free_cells(sim, &resources.rules, ally, sites, &["DOG"])[0];
+            (dogs[0], dogs[1], allied_detector, radius)
+        };
+        for id in [first, last, allied_detector] {
+            sleep(&mut scene, id);
+        }
+        check(&mut scene, 2, 1);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY two own detector circles and one allied circle");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        check(&mut scene, 2, 1);
+        let destination = {
+            let sim = scene.sim();
+            cells_nearest((i32::from(cell.0), i32::from(cell.1)))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let distance = (x - i32::from(cell.0))
+                        .abs()
+                        .max((y - i32::from(cell.1)).abs());
+                    if !(i32::from(radius) + 3..=i32::from(radius) + 5).contains(&distance) {
+                        return None;
+                    }
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    if sim.occupancy().get(x, y).is_some_and(|cell| {
+                        !cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                    }) {
+                        return None;
+                    }
+                    sim.foot_path_zone_precheck(
+                        first,
+                        crate::sim::components::DriveCoord::cell(x, y, 0),
+                        &scene.runtime.resources.rules,
+                    )
+                    .unwrap()
+                    .then_some((x, y))
+                })
+                .expect("reachable free destination beyond target sensor overlap")
+        };
+        {
+            let runtime = &mut scene.runtime;
+            let name = runtime.simulation.interner.resolve(enemy).to_owned();
+            assert!(runtime.simulation.apply_command(
+                &name,
+                &Command::Move {
+                    entity_id: first,
+                    target_rx: destination.0,
+                    target_ry: destination.1
+                },
+                Some(&runtime.resources.rules)
+            ));
+        }
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let at = scene.sim().entities().get(first).unwrap().position;
+            (at.rx(), at.ry()) == destination && count(&scene, enemy) == 1
+        }));
+        sleep(&mut scene, first);
+        check(&mut scene, 1, 1);
+        let bytes = save_scene(
+            &scene,
+            "AY one detector moved out, own and ally circles remain",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        check(&mut scene, 1, 1);
+        let kill = |scene: &mut HeadlessScenario, id| {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let amount = sim.entities().get(id).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    id,
+                    amount,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        };
+        kill(&mut scene, last);
+        let bytes = save_scene(
+            &scene,
+            "AY lethal detector damage with allied overlap still present",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!((0..360).any(|_| {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(count(&scene, ally), 1);
+            scene.sim().entities().get(last).is_none()
+        }));
+        check(&mut scene, 0, 1);
+        let bytes = save_scene(&scene, "AY ally-only coverage must not admit the AI target");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        check(&mut scene, 0, 1);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(allied_detector)
+                .unwrap()
+                .is_alive()
+        );
+        kill(&mut scene, allied_detector);
+        assert!((0..360).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().entities().get(allied_detector).is_none()
+        }));
+        check(&mut scene, 0, 0);
+        let bytes = save_scene(
+            &scene,
+            "AY retired overlapping detector circles stay removed",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        check(&mut scene, 0, 0);
+        assert!(scene.sim().entities().get(first).unwrap().is_alive());
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; moving AI sensors, cloak acquisition and real load"]
     fn aymod_mobile_sensors_update_cloaked_infantry_ai_acquisition_after_load() {
         use crate::sim::command::Command;
