@@ -10564,14 +10564,14 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY Gattling kill promotion, hot save, Stop/Guard and resumed fire"]
     fn aymod_gattling_promotes_through_fire_and_resumes_after_hot_save() {
-        aymod_gattling_promotion_lifecycle(false, false);
+        aymod_gattling_promotion_lifecycle(false, false, &["YTNK", "YAGGUN"]);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
-        aymod_gattling_promotion_lifecycle(true, false);
+        aymod_gattling_promotion_lifecycle(true, false, &["YTNK", "YAGGUN"]);
     }
 
     #[cfg(feature = "npatch")]
@@ -10579,7 +10579,16 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; hot promoted Gattling tank owner transfer and saved ground/AA fire"]
     fn aymod_hot_gattling_tank_changes_owner_and_resumes_elite_fire_after_load() {
         for airborne in [false, true] {
-            aymod_gattling_promotion_lifecycle(airborne, true);
+            aymod_gattling_promotion_lifecycle(airborne, true, &["YTNK"]);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hot promoted Gattling building owner transfer and saved ground/AA fire"]
+    fn aymod_hot_gattling_building_changes_owner_and_resumes_elite_fire_after_load() {
+        for airborne in [false, true] {
+            aymod_gattling_promotion_lifecycle(airborne, true, &["YAGGUN"]);
         }
     }
 
@@ -11206,15 +11215,10 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_gattling_promotion_lifecycle(airborne: bool, transfer_unit: bool) {
+    fn aymod_gattling_promotion_lifecycle(airborne: bool, transfer_owner: bool, actors: &[&str]) {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let actors: &[&str] = if transfer_unit {
-            &["YTNK"]
-        } else {
-            &["YTNK", "YAGGUN"]
-        };
         for &actor_type in actors {
             let victim_type = if airborne { "JUMPJET" } else { "APOC" };
             let (mut scene, actor, first_victim) =
@@ -11413,7 +11417,8 @@ mod retail_construction_tests {
                 unit.gattling.value(),
                 unit.gattling.report_latch(),
             );
-            if transfer_unit {
+            assert!(saved.3);
+            if transfer_owner {
                 let country = scene
                     .runtime
                     .resources
@@ -11434,8 +11439,9 @@ mod retail_construction_tests {
                     cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
                     &["GAPOWR"],
                 );
-                // Unit7463A0 -> Foot4DBED0 -> Techno7014A0 clears orders,
-                // not the accumulated rank or gattling stage/value.
+                // Unit7463A0 preserves the accumulated stage/value. NP
+                // Building448BD9 -> C2ECB9 visits old-owner AI43FB20 first;
+                // snapshot that visit's output instead of imposing Unit state.
                 sim.change_owner_with_rules(
                     actor,
                     recipient,
@@ -11445,16 +11451,21 @@ mod retail_construction_tests {
                 );
                 let transferred = sim.entities().get(actor).unwrap();
                 assert_eq!(transferred.owner(), recipient);
-                assert_eq!(
-                    (
-                        &transferred.veterancy,
-                        transferred.gattling.stage(),
-                        transferred.gattling.value()
-                    ),
-                    (&saved.0, saved.1, saved.2)
-                );
+                assert_eq!(transferred.veterancy, saved.0);
+                if actor_type == "YTNK" {
+                    assert_eq!(
+                        (transferred.gattling.stage(), transferred.gattling.value()),
+                        (saved.1, saved.2)
+                    );
+                }
                 assert!(transferred.attack_target.target().is_none());
             }
+            let unit = scene.sim().entities().get(actor).unwrap();
+            let saved = (
+                unit.veterancy.clone(),
+                unit.gattling.stage(),
+                unit.gattling.value(),
+            );
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let expected_owner = scene.sim().entities().get(actor).unwrap().owner();
             let bytes = save_scene(&scene, "AY promoted hot Gattling");
@@ -11479,7 +11490,6 @@ mod retail_construction_tests {
             );
             // Native TechnoLoad70BF61/70C20E clears the process-local report
             // latch, so a future charge restarts its sound loop after loading.
-            assert!(saved.3);
             assert!(!loaded.gattling.report_latch());
             let rules = &scene.runtime.resources.rules;
             let table = &rules.object(actor_type).unwrap().gattling_stages;
