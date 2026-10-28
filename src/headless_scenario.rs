@@ -6385,6 +6385,124 @@ mod retail_construction_tests {
             }) && fired,
             "restored rearmed ORCA must leave its pad and damage a genuinely airborne target"
         );
+        restore(&mut scene);
+        let await_reload = |scene: &mut HeadlessScenario| {
+            assert!(
+                (0..6000).any(|_| {
+                    tick_with_due_commands(scene);
+                    let sim = scene.sim();
+                    let actor = sim.entities().get(plane).unwrap();
+                    actor.ammo().unwrap().current() == capacity
+                        && actor.mission.effective().known() == Some(MissionType::Guard)
+                        && air_movement::current_fly_height(actor, sim.resolved_terrain()) == 0
+                        && actor.radio_contacts.contains(airfield)
+                        && sim
+                            .entities()
+                            .get(airfield)
+                            .unwrap()
+                            .radio_contacts
+                            .contains(plane)
+                }),
+                "a spent magazine must naturally return, land and fully rearm"
+            );
+        };
+        // AircraftClass::Mission_Attack418C21 clears a human aircraft's
+        // target when empty. Finish that return before giving a fresh Attack.
+        if scene
+            .sim()
+            .entities()
+            .get(plane)
+            .unwrap()
+            .ammo()
+            .unwrap()
+            .current()
+            == 0
+        {
+            await_reload(&mut scene);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(plane)
+                    .unwrap()
+                    .attack_target
+                    .target()
+                    .is_none()
+            );
+            restore(&mut scene);
+        }
+        let ground_hp = scene
+            .sim()
+            .entities()
+            .get(ground_target)
+            .unwrap()
+            .health
+            .current();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: plane,
+                target_id: ground_target,
+            },
+        ));
+        let mut ground_shot = false;
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output.fire_events.iter().filter(|event| {
+                    event.attacker_id == plane
+                        && event.target == crate::sim::combat::TargetKind::Entity(ground_target)
+                }) {
+                    let kind = scene.runtime.resources.rules.object("ORCA").unwrap();
+                    assert_eq!(
+                        scene.sim().interner.resolve(event.weapon_id),
+                        if promote {
+                            kind.elite_primary().unwrap()
+                        } else {
+                            kind.primary().unwrap()
+                        }
+                    );
+                    ground_shot = true;
+                }
+                ground_shot
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(plane)
+                        .unwrap()
+                        .ammo()
+                        .unwrap()
+                        .current()
+                        == 0
+            }),
+            "saved air combat must accept a normal ground Attack and spend the remaining magazine; fired={ground_shot}, ground={:?}, plane={:?}",
+            scene
+                .sim()
+                .entities()
+                .get(ground_target)
+                .map(|actor| actor.health.current()),
+            scene.sim().entities().get(plane).map(|actor| (
+                actor.ammo().unwrap().current(),
+                actor.mission.effective(),
+                actor.mission.handler_state(),
+                actor.attack_target.target(),
+                actor.navigation.nav_com(),
+                actor.radio_contacts.slot(0),
+            ))
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(ground_target)
+                .is_none_or(|entity| entity.health.current() < ground_hp),
+            "air-to-ground continuation must cause real ground damage"
+        );
+        restore(&mut scene);
+        await_reload(&mut scene);
+        restore(&mut scene);
     }
 
     #[cfg(feature = "npatch")]

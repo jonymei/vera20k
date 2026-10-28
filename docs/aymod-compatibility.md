@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于719ba5bc7补F06实际ORCA真实击杀晋升精英、完整存读及精英AA续战，复用已通过的空弹/自动返航/部分与满弹存读链。最终aymod_orca4、npatch_rewards6、veterancy12，共22项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于572485c25补F06普通/实杀精英ORCA对空后切回对地、实际对应武器伤害、再次自然空弹回程/满弹落地及三次附加存读。最终aymod_orca4、attack_mission7、dock_cycle5（3 ignored未跑）、airfield_reload2，共18项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续同一F06链的空→地切换及第二次自然空弹返航，不重写已完成Alt入口；ORCA实际击杀晋升/精英AA存读已验，不重复set_elite替代。当前仍限human指令组件，AI自主目标/战术、多机竞争和GPU开放。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
+- 下一安全动作：回到F01补实际SNIPE移动/开火隐形状态及存读边界；先核其正式typed武器和DecloakToFire，不重复已有TANY静止开火/移动传感器用例。ORCA单机地→空→地/自然重装及实杀精英已验，多机竞争/AI自主战术和GPU仍开放。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -354,6 +354,10 @@
 - 后续aymod_orca_earns_elite_and_resumes_reloaded_air_combat_after_load复用上述真实空弹/自动回程/三次存读前缀，随后普通Attack逐个击杀实际APOC；只将受控靶HP准备为1并Sleep隔离还击，不写ORCA经验、等级、弹量或任务阶段。每次必须有指向当前靶的真实fire_event和死亡、XP实际增长，最多16次内达到Elite。缺弹时等待自然返航补弹；每次新靶出生前等待上次真实弹体全部离场且Attack结束，避免新靶承受上一轮残弹，未清投射物或计时器。最初不等待残弹的夹具在round1出现无新发射而靶死亡，修正的是测试隔离，不宣称发现生产缺陷。
 - 晋升后正式存读保留完整Veterancy，再以正常Move实际起飞的ZEP为靶；每个射手对该靶的fire_event必须选实际ORCA ElitePrimary=MaverickE，且命中前帧仍为高空并真实掉血。晋升后的额外存读不要求满弹；只在弹量为0时等待自然补满，不把有剩弹误称第二次完整补给周期。
 - 最终retail gate下aymod_orca4、record_kill::npatch_rewards_tests6、veterancy12，共22项通过，先前新例单跑1项不叠加。只有测试/台账，无新生产实现、RNG/timer/Detach/保存字段或玩法critic；未启动GUI、未改MOD/原始存档/固定构建、未发布。实际晋升后的ElitePrimary选择已验，反向空→地完整回程、多机竞争/自主多AI和GPU仍开放。
+
+- 同一普通/实杀精英夹具现继续：真实ZEP被AA命中后立即正式存读；尚有余弹的普通飞机直接收到普通对地Attack，精英例在该边界已经空弹，则先等自然返航、满弹/Guard/落地/双方radio contact，再存读并发新的Attack。核对AY原生Mission_Attack418C15..418C3D：空弹且human/leave-map会通过vt+3C8清目标；原测试错误期待空弹时新Attack跨返航保留，实际回满弹Guard/目标None，现明确按原生输入语义测试，不改生产来保留目标。
+- 新的对地阶段必须有指向原NACNST的真实fire_event，普通取Primary、实杀精英取ElitePrimary，并使原目标HP下降；真实耗尽当前弹仓后再完整存读，不发Enter/Return、不写Ammo/mission阶段。随后自然回原真实机场，满弹/Guard/落地/双向联系均成立，再存读核Ammo/dock/mission/state/rearm/双方联系。故新增三次存读（AA命中后、地面空弹、再次补满）；已空弹的精英另有补给后一次。该用例不要求“所有飞机AA命中时都有余弹”，不覆盖空弹时排队Attack的自动重发。
+- 最终retail gate下aymod_orca4、attack_mission7、dock_cycle5（3 ignored未跑）、airfield_reload2，共18项通过。仅扩展两个既有场景，无新生产状态/RNG/timer/Detach/保存字段、新玩法critic或GUI/MOD/原始存档/固定构建/发布改动。单机双向战斗/自然重装已验，不据此关闭多机竞争、AI持续战术或画面验收。
 
 ### F05实际MTNK行进跟踪、移动开火与完整存读（2026-10-28）
 
@@ -1109,7 +1113,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，MTNK运动存读/实射已验，画面待验 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者及原地Attack；实际MTNK追横移SMCV、运动分向/移动开火、独立速率/运动存读续战实伤已验；其他类型/特殊转角及实际画面仍待验，沿用旋转owner，不拟合速度 |
-| F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；实际普通ORCA对地打空/自动返航/部分与满弹存读/重装后起飞对真实高空ZEP损伤已验。实际击杀晋升后存读及ElitePrimary对空发射/命中已验；玩家GUI、持续AI战术、反向空→地/多机竞争仍待验；不将此链扩大为所有飞机行为通过 |
+| F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；实际普通ORCA对地打空/自动返航/部分与满弹存读/重装后起飞对真实高空ZEP损伤已验。实际击杀晋升后存读及ElitePrimary对空发射/命中已验；普通/实杀精英的对空后切地、自然打空回程和附加存读已验；精英空弹先自然补给再发新Attack。玩家GUI、持续AI战术和多机竞争仍待验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通SUB自然隐形/未探测拒绝、游近探测及两次存读/Sapper命中；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。精英潜艇、探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
 | F08 / P2 / 普通完整投弹/两次存读已验，画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。精英/其他别名弹头、长连投/多目标、GUI及全部既有引爆算术仍未逐项认证 |
 | F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
