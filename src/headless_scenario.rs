@@ -13229,6 +13229,7 @@ mod retail_construction_tests {
     fn aymod_hospital_contending_patients(
         kind: &str,
         count: usize,
+        waiting_offset: i32,
     ) -> (HeadlessScenario, u64, Vec<u64>, InternedId) {
         use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
@@ -13244,7 +13245,14 @@ mod retail_construction_tests {
             sim,
             rules,
             local,
-            cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+            cells_nearest((i32::from(at.rx()) + waiting_offset, i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        >= waiting_offset
+                }),
             &vec!["ENGINEER"; count - 1],
         ));
         // All cursors offer Enter before any of the same-tick events execute.
@@ -13284,7 +13292,7 @@ mod retail_construction_tests {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for kind in ["GAROBO", "NARADR"] {
             let (mut scene, hospital, patients, local) =
-                aymod_hospital_contending_patients(kind, 2);
+                aymod_hospital_contending_patients(kind, 2, 0);
             let (first, second) = (patients[0], patients[1]);
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let strength = scene
@@ -13367,7 +13375,7 @@ mod retail_construction_tests {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for kind in ["GAROBO", "NARADR"] {
             let (mut scene, hospital, patients, local) =
-                aymod_hospital_contending_patients(kind, 3);
+                aymod_hospital_contending_patients(kind, 3, 0);
             let (first, cancelled, next) = (patients[0], patients[1], patients[2]);
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let bytes = save_scene(&scene, "AY hospital three contending patients");
@@ -13498,6 +13506,161 @@ mod retail_construction_tests {
             let building = scene.sim().entities().get(hospital).unwrap();
             assert!(building.radio_contacts.is_empty());
             assert!(building.passenger_role.cargo().unwrap().is_empty());
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; waiting hospital patient death and hospital retirement"]
+    fn aymod_hospital_pending_death_and_hospital_loss_preserve_native_lifetimes() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let kill = |scene: &mut HeadlessScenario, id| {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let damage = sim.entities().get(id).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    id,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        };
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patients, local) =
+                aymod_hospital_contending_patients(kind, 3, 16);
+            let (first, dying, waiting) = (patients[0], patients[1], patients[2]);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            kill(&mut scene, dying);
+            let bytes = save_scene(&scene, "AY hospital waiting patient lethally wounded");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    if let Some(patient) = sim.entities().get(dying) {
+                        assert!(patient.health.current() <= 0);
+                        assert!(!patient.lifecycle.in_limbo());
+                    }
+                    let building = sim.entities().get(hospital).unwrap();
+                    assert!(!building.radio_contacts.contains(dying));
+                    assert!(
+                        building
+                            .passenger_role
+                            .cargo()
+                            .is_none_or(|cargo| !cargo.passengers().contains(&dying))
+                    );
+                    let pending = sim.entities().get(waiting).unwrap();
+                    assert!(pending.is_alive() && !pending.lifecycle.in_limbo());
+                    assert_eq!(pending.pending_entry.get(), Some(hospital));
+                    sim.entities().get(dying).is_none()
+                        && sim.entities().get(first).unwrap().lifecycle.in_limbo()
+                }),
+                "{kind}: dying waiter must retire without entering or stealing the reservation"
+            );
+            let bytes = save_scene(
+                &scene,
+                "AY hospital admitted first patient and surviving waiter",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(scene.sim().entities().get(dying).is_none());
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(waiting)
+                    .unwrap()
+                    .pending_entry
+                    .get(),
+                Some(hospital)
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(waiting)
+                    .unwrap()
+                    .radio_contacts
+                    .is_empty()
+            );
+            let waiting_at = scene.sim().entities().get(waiting).unwrap().position;
+            let hospital_at = scene.sim().entities().get(hospital).unwrap().position;
+            let rules = &scene.runtime.resources.rules;
+            assert!(matches!(
+                rules
+                    .warhead(&rules.bridge_warheads.c4_name)
+                    .unwrap()
+                    .inf_death,
+                1 | 2
+            ));
+            assert!(
+                (i32::from(waiting_at.rx()) - i32::from(hospital_at.rx()))
+                    .abs()
+                    .max((i32::from(waiting_at.ry()) - i32::from(hospital_at.ry())).abs())
+                    >= 6
+            );
+            kill(&mut scene, hospital);
+            // Building442511 handles its admitted contact/Cargo; pending Foot
+            // 70D7F2..70D8D8 and pointer expiry own the unrelated waiting man.
+            assert!(
+                (0..180).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    let patient = sim.entities().get(waiting).unwrap();
+                    assert!(patient.is_alive() && !patient.lifecycle.in_limbo());
+                    assert_eq!(patient.owner(), local);
+                    assert_eq!(patient.health.current(), 1);
+                    assert_eq!(patient.passenger_role.inside_transport_id(), None);
+                    sim.entities().get(hospital).is_none()
+                        && patient.pending_entry.get().is_none()
+                        && !patient.radio_contacts.contains(hospital)
+                }),
+                "{kind}: destruction must release the distant waiting man without admitting or killing him"
+            );
+            // The saved near contact takes C4 before DestructionEffects442665.
+            // Its lethal DetachAll(1) removes it from Cargo7077D8..7077E9;
+            // Die1/Die2 return without UnInit5185E5. Limbo has no Logic turn.
+            for _ in 0..180 {
+                tick_with_due_commands(&mut scene);
+                let corpse = scene.sim().entities().get(first).unwrap();
+                assert_eq!(corpse.health.current(), 0);
+                assert!(corpse.is_object_alive() && corpse.lifecycle.in_limbo());
+                assert!(!corpse.in_logic_vector.is_member());
+                assert_eq!(corpse.passenger_role.inside_transport_id(), None);
+            }
+            let bytes = save_scene(
+                &scene,
+                "AY hospital destroyed with pending patient released",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            for id in [hospital, dying] {
+                assert!(scene.sim().entities().get(id).is_none());
+            }
+            let corpse = scene.sim().entities().get(first).unwrap();
+            assert_eq!(corpse.health.current(), 0);
+            assert!(corpse.is_object_alive() && corpse.lifecycle.in_limbo());
+            assert!(!corpse.in_logic_vector.is_member());
+            assert_eq!(corpse.passenger_role.inside_transport_id(), None);
+            assert!(corpse.radio_contacts.is_empty());
+            let patient = scene.sim().entities().get(waiting).unwrap();
+            assert!(patient.is_alive() && !patient.lifecycle.in_limbo());
+            assert_eq!(patient.health.current(), 1);
+            assert_eq!(patient.owner(), local);
+            assert_eq!(patient.pending_entry.get(), None);
+            assert_eq!(patient.passenger_role.inside_transport_id(), None);
+            assert!(!patient.radio_contacts.contains(hospital));
         }
     }
 
