@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD1bc1c6bac后补F07实际普通/精英TANY对隐形SUB的共享场景：未探测拒绝、自然游近探测、两次存读、Sapper/SapperE实射伤害、命中后第三次存读均通过。精英为明示初始等级，不冒称实杀晋升。当前两项实际通过；前一V04移动目标实际1（含两场景）、sensor_lifecycle7、techno_ai_cloak::tests17亦通过，本轮合计27项，无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEADf3f5f9353后补F07实际TANY探测撤离/重获：同一SUB自然完全隐形，普通Move撤回原格并停稳后无探测且FireError=Cant，完整存读保持；再次游近重获/存读后普通Attack实际Sapper命中，最终再次保存恢复。新增长循环用正式双人House启动隔离电脑自主反击；不是多AI验收，也不是命中后幸存再潜。最终普通/精英/重获三实际场景及原HYD普通/精英一项，共4项通过，无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续F07探测撤离后潜艇自然重隐/拒绝，再重获后的普通Attack续战和存读，沿既有武器/传感器/隐形owners，不直接写cloak或sensor计数。V09特殊生命周期、V07多AI竞争等保留，不重复修Alt飞机链；F12网络返回/16色独立开放。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
+- 下一安全动作：转V10实际飞兵坠落中存读，沿既有死亡/运动/快照owners验证HP0、目标拒绝与最终退休，不重复Alt飞机入口。F07受击后幸存再潜仍开放；当前Sapper首击已杀死SUB，不能伪造高血量或改MOD来制造该边界。V09特殊生命周期、V07多AI竞争、F12网络返回/16色及V01/F11批准门禁保留，Return Dubai攻势暂停。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -279,8 +279,10 @@
 - 检查未探测时FireSubject拒绝攻击（排除射程，只测其他实际门），正式存读/完整资源恢复后仍无sensor且返回Cant。游近进入探测范围、第二次存读保留sensor；普通Attack真正发射Sapper并伤害SUB。并非验证玩家能在GUI点到未探测潜艇；Sleep仅隔离SUB反击。
 - 实读GetFireError6FC24D..6FC29D的未感知目标拒绝是Cant6（6FCD29），不是Cloaked9。NavalTargeting4分支6F38FC..6F3915保留Hover/Organic返回0，但实际AY TANY主武器HollowPoint2对LCRF heavy、DLPH light的typed interaction均为零；SelectWeapon6F3716..6F3751先行选择副武器。新增实际例同时断言海军leaf返回0、完整选择返回1、真实Sapper命中，避免按键名/单leaf误改规则。
 - 实际Tanya5项、选武器3项、GetFireError3项通过。新增两项测试，不新增玩法状态/随机抽样/计时/Detach或保存布局；未改MOD。原HYD普通/精英与其他TANY行为继续通过，无需玩法critic。
-- 2026-10-29补精英TANY同一生产场景，复用普通例的唯一场景helper：初始等级明确供应，不写cloak/sensor/位置或伤害。普通/精英均经SUB自然隐形、未探测Cant、游近探测和完整保存恢复；精英等级恢复后保持，真实Attack分别发射Sapper/SapperE并命中掉血。命中后第三次完整存读保持SUB剩余血量；本轮两项实际测试通过，无新增玩法状态/RNG/timer/Detach/保存字段，无生产修改或新critic。
-- 保留探测离开后再潜与重获、换主/运输、多AI长局、GUI等边界；本例只证明玩家普通Attack在真实感知门后的实际效果。不是AntiNaval/AntiUnderwater新增键实现，它们原先的残留分类不变。
+- 2026-10-29补精英TANY同一生产场景，复用普通例的唯一场景helper：初始等级明确供应，不写cloak/sensor/位置或伤害。普通/精英均经SUB自然隐形、未探测Cant、游近探测和完整保存恢复；精英等级恢复后保持，真实Attack分别发射Sapper/SapperE并命中掉血。命中后第三次完整存读保持SUB剩余血量或已退休结果；本轮两项实际测试通过，无新增玩法状态/RNG/timer/Detach/保存字段，无生产修改或新critic。
+- 续验开火前撤离/重获：同一TANY普通Move退回原出生格，等待真实locomotor停稳，目标保持原格/完全隐形/血量不变且无双方开火。圈外FireSubject只绕过射程，返回Cant；完整存读仍拒绝。再次普通Move游近、真实探测恢复并存读后，普通Attack发射Sapper并命中同一SUB，命中结果再次存读保持。普通/精英/重获三项及原HYD普通/精英一项，最终共4项实际测试通过。
+- 夹具边界已纠正：最初首击后想重打同一SUB，但实际已退休，未提高血量/修改MOD或替换目标。退回出生格的首个格边沿仍Moving，现等待自然停稳才断言Cant，不绕过运动门。长循环中电脑SUB会进入AreaGuard并主动发射（无team，关闭AITrigger也仍发生），因此正式launch增加双人House选项，仅新重获例用受控敌方人类House；不逐帧覆写任务/冻结AI，也不把此正常反击当成传感器bug。原普通/精英测试仍保留困难电脑House。
+- 保留受击后幸存再潜、其他换主/运输、多AI自主探测竞争/长局、GUI等边界；新例是开火前丢失/重获，不冒称目标曾受伤后重新隐蔽。不是AntiNaval/AntiUnderwater新增键实现，它们原先的残留分类不变。无新增生产RNG/timer/Detach或保存字段，无玩法修改/新critic；未动MOD/原始存档/固定版，未启动GUI或发布。
 
 ### F06精英ORCA远距移动目标追击与热存读（2026-10-28）
 
@@ -1220,7 +1222,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，MTNK运动存读/实射已验，画面待验 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者及原地Attack；实际MTNK追横移SMCV、运动分向/移动开火、独立速率/运动存读续战实伤已验；其他类型/特殊转角及实际画面仍待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；实际普通ORCA对地打空/自动返航/部分与满弹存读/重装后起飞对真实高空ZEP损伤已验。实际击杀晋升后存读及ElitePrimary对空发射/命中已验；普通/实杀精英的对空后切地、自然打空回程和附加存读已验；精英空弹先自然补给再发新Attack。玩家GUI、持续AI战术和多机竞争仍待验；不将此链扩大为所有飞机行为通过 |
-| F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通/精英TANY对SUB自然隐形/未探测拒绝、游近探测及两次存读，分别Sapper/SapperE实际命中后第三次存读保持血量；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
+| F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通/精英TANY对SUB自然隐形/未探测拒绝、游近探测及两次存读，分别Sapper/SapperE实际命中后第三次存读保持血量或退休结果；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。开火前探测撤离/圈外拒绝/再次重获与存读后真实命中已验（新长循环是受控双人House）；受击后幸存再潜/多AI竞争及GUI仍待验，不扩大为所有海军行为通过 |
 | F08 / P2 / 普通完整投弹/两次存读已验，画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。精英/其他别名弹头、长连投/多目标、GUI及全部既有引爆算术仍未逐项认证 |
 | F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |

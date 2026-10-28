@@ -7516,6 +7516,16 @@ mod retail_construction_tests {
         target_type: &str,
         separation: u16,
     ) -> (HeadlessScenario, u64, u64) {
+        aymod_water_pair_with_target_control(actor_type, target_type, separation, false)
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_water_pair_with_target_control(
+        actor_type: &str,
+        target_type: &str,
+        separation: u16,
+        human_target: bool,
+    ) -> (HeadlessScenario, u64, u64) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "重返迪拜.yrm";
         let mut launch = battle_session(
@@ -7524,6 +7534,30 @@ mod retail_construction_tests {
         );
         launch.local_slot_mut().country = LaunchCountry::from_country_index(0);
         launch.options.unit_count = 0;
+        if human_target {
+            // Keep the long sensor-only component free of autonomous retaliation.
+            let mut human = launch.humans[0].clone();
+            human.name = "Target controller".to_owned();
+            human.raw_slot_index = Some(1);
+            human.slot.country = LaunchCountry::from_country_index(1);
+            human.slot.color_index = 1;
+            launch.humans.push(human);
+            launch.opponents.clear();
+            launch.ai_player_count = 0;
+            launch.pre_fill_house_roster = crate::skirmish_launch::PreFillHouseRoster::new(
+                launch
+                    .humans
+                    .iter()
+                    .enumerate()
+                    .map(|(index, human)| crate::skirmish_launch::PreFillHumanHouse {
+                        priority: i32::from(human.slot.color_index),
+                        source_order: index as u8,
+                        observer: false,
+                    })
+                    .collect(),
+                Vec::new(),
+            );
+        }
         let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
         let runtime = &mut scenario.runtime;
         let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -7853,23 +7887,31 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Tanya senses and attacks a saved cloaked submarine"]
     fn aymod_tanya_detects_a_cloaked_submarine_before_sapper_attack_after_load() {
-        aymod_tanya_submarine_detection_and_attack(false);
+        aymod_tanya_submarine_detection_and_attack(false, false);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; elite Tanya senses and hits a saved cloaked submarine with SapperE"]
     fn aymod_elite_tanya_detects_a_cloaked_submarine_before_sapper_attack_after_load() {
-        aymod_tanya_submarine_detection_and_attack(true);
+        aymod_tanya_submarine_detection_and_attack(true, false);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_tanya_submarine_detection_and_attack(elite: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Tanya withdraws and reacquires the same submarine across saves before Sapper impact"]
+    fn aymod_tanya_reacquires_a_cloaked_submarine_before_sapper_attack_after_load() {
+        aymod_tanya_submarine_detection_and_attack(false, true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_tanya_submarine_detection_and_attack(elite: bool, reacquire: bool) {
         use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, actor, sub) = aymod_water_pair("TANY", "SUB", 14);
+        let (mut scene, actor, sub) =
+            aymod_water_pair_with_target_control("TANY", "SUB", 14, reacquire);
         if elite {
             scene
                 .runtime
@@ -7882,8 +7924,9 @@ mod retail_construction_tests {
                 .set_elite();
         }
         let expected_weapon = if elite { "SapperE" } else { "Sapper" };
+        let start = scene.sim().entities().get(actor).unwrap().position;
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
-        let (owner, sub_cell, health) = {
+        let (owner, sub_cell) = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
             let kind = rules.object("TANY").unwrap();
@@ -7904,10 +7947,11 @@ mod retail_construction_tests {
             (
                 sim.entities().get(actor).unwrap().owner(),
                 (victim.position.rx(), victim.position.ry()),
-                victim.health.current(),
             )
         };
         let sensed = |scene: &HeadlessScenario| {
+            let victim = scene.sim().entities().get(sub).unwrap();
+            assert_eq!((victim.position.rx(), victim.position.ry()), sub_cell);
             scene
                 .sim()
                 .fog
@@ -7998,6 +8042,95 @@ mod retail_construction_tests {
             elite
         );
         assert_ne!(error(&scene), FireError::Cant);
+        if reacquire {
+            assert!(scene.sim().entities().get(sub).unwrap().is_alive());
+            let initial_hp = scene.sim().entities().get(sub).unwrap().health.current();
+            let tick = scene.sim().session.tick() + 1;
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: start.rx(),
+                    target_ry: start.ry(),
+                },
+            ));
+            assert!(
+                (0..1200).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(
+                        !output
+                            .fire_events
+                            .iter()
+                            .any(|event| [actor, sub].contains(&event.attacker_id)),
+                        "withdrawal unexpectedly fired: {:?}",
+                        output.fire_events
+                    );
+                    let mover = scene.sim().entities().get(actor).unwrap();
+                    let victim = scene.sim().entities().get(sub).unwrap();
+                    (mover.position.rx(), mover.position.ry()) == (start.rx(), start.ry())
+                        && crate::sim::movement::motion_query::is_moving(mover) == Some(false)
+                        && !sensed(&scene)
+                        && victim.cloak.unwrap().is_fully_cloaked()
+                }),
+                "withdrawal must leave the living submarine fully cloaked and unsensed"
+            );
+            assert_eq!(error(&scene), FireError::Cant);
+            let bytes = save_scene(
+                &scene,
+                "AY same submarine after pre-attack Tanya withdrawal",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(!sensed(&scene));
+            assert_eq!(
+                scene.sim().entities().get(sub).unwrap().health.current(),
+                initial_hp
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(sub)
+                    .unwrap()
+                    .cloak
+                    .unwrap()
+                    .is_fully_cloaked()
+            );
+            assert_eq!(error(&scene), FireError::Cant);
+            let tick = scene.sim().session.tick() + 1;
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: sub_cell.0 - 3,
+                    target_ry: sub_cell.1,
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(
+                        !output
+                            .fire_events
+                            .iter()
+                            .any(|event| [actor, sub].contains(&event.attacker_id)),
+                        "reacquisition unexpectedly fired: {:?}; sensed={}; sub mission={:?}, team={:?}", output.fire_events, sensed(&scene), scene.sim().entities().get(sub).unwrap().mission.current(), scene.sim().team_script_vm.team_for_member(sub)
+                    );
+                    sensed(&scene)
+                }),
+                "the same Tanya must reacquire the same living submarine"
+            );
+            let bytes = save_scene(&scene, "AY same submarine reacquired before Sapper attack");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(sensed(&scene));
+            assert_eq!(
+                scene.sim().entities().get(sub).unwrap().health.current(),
+                initial_hp
+            );
+            assert_ne!(error(&scene), FireError::Cant);
+        }
+        let before_hit = scene.sim().entities().get(sub).unwrap().health.current();
         let tick = scene.sim().session.tick() + 1;
         scene.runtime.simulation.queue_command(CommandEnvelope::new(
             owner,
@@ -8027,7 +8160,7 @@ mod retail_construction_tests {
                     .sim()
                     .entities()
                     .get(sub)
-                    .is_none_or(|victim| victim.health.current() < health)
+                    .is_none_or(|victim| victim.health.current() < before_hit)
             }),
             "Tanya must close and damage the detected submarine with {expected_weapon}; fired={fired}"
         );
