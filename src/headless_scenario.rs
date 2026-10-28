@@ -17261,6 +17261,192 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real ChaosAttack receiver, berserk rearm and saved natural expiry"]
+    fn aymod_gattling_berserk_rearm_survives_load_and_returns_to_normal() {
+        use crate::sim::combat::veterancy::VeterancyRank;
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, actor, target) = aymod_nearby_pair("YTNK", "NACNST", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let rules = &resources.rules;
+            // This is the actual ChaosAttack receiver, not a supplied berserk
+            // latch or an assertion that an independently powered drone fired.
+            let gas = rules
+                .weapon(rules.object("CAOS").unwrap().primary().unwrap())
+                .unwrap();
+            let warhead_name = gas.warhead.as_deref().unwrap();
+            assert!(rules.warhead(warhead_name).unwrap().psychedelic);
+            assert!(
+                rules
+                    .general
+                    .difficulty_rows
+                    .iter()
+                    .all(|row| row.rof == 1.0)
+            );
+            let owner = sim.entities().get(actor).unwrap().owner();
+            assert_eq!(
+                sim.houses().get(&owner).unwrap().rof_bias(),
+                crate::util::native_x87::NativeF64Bits::ONE
+            );
+            let hp = sim.entities().get(actor).unwrap().health.current();
+            let warhead = sim.interner.intern(warhead_name);
+            sim.commit_direct_damage_receiver(
+                rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    actor,
+                    gas.damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: false,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+            let entity = sim.entities().get(actor).unwrap();
+            assert_eq!(entity.health.current(), hp);
+            assert!(entity.berserk.is_active() && entity.berserk.timer() > 0);
+        }
+        let assert_shot = |scene: &HeadlessScenario, weapon_id, berserk: bool| {
+            let entity = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(entity.veterancy.rank_kind(), VeterancyRank::Rookie);
+            let weapon = scene
+                .runtime
+                .resources
+                .rules
+                .weapon(scene.sim().interner.resolve(weapon_id))
+                .unwrap();
+            assert!(weapon.rof > 0);
+            // FireAt6FF28F..6FF29E halves the full reload, but CDQ writes
+            // zero to the separate NP short clock for a positive full ROF.
+            assert_eq!(
+                entity.rearm_timer.duration(),
+                if berserk { weapon.rof / 2 } else { weapon.rof }
+            );
+            if berserk {
+                assert_eq!(entity.saved_rearm_delay(), 0);
+            }
+            assert_eq!(
+                entity.rearm_timer.start_frame(),
+                scene.sim().session.binary_frame().wrapping_sub(1) as i32
+            );
+        };
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                let active = scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .berserk
+                    .is_active();
+                if let Some(event) = output
+                    .fire_events
+                    .iter()
+                    .find(|event| event.attacker_id == actor && active)
+                {
+                    assert_shot(&scene, event.weapon_id, true);
+                    return true;
+                }
+                false
+            }),
+            "gassed YTNK must actually fire through its ordinary berserk Hunt"
+        );
+        let entity = scene.sim().entities().get(actor).unwrap();
+        let saved = (
+            entity.berserk,
+            entity.rearm_timer,
+            entity.saved_rearm_delay(),
+        );
+        assert!(saved.1.remaining(scene.sim().session.binary_frame() as i32) > 0);
+        let bytes = save_scene(
+            &scene,
+            "AY berserk Gattling with an active full reload and zero short clock",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let entity = scene.sim().entities().get(actor).unwrap();
+        assert_eq!(
+            (
+                entity.berserk,
+                entity.rearm_timer,
+                entity.saved_rearm_delay()
+            ),
+            saved
+        );
+        let mut resumed = false;
+        assert!(
+            (0..saved.0.timer() + 1).any(|_| {
+                let remaining = scene.sim().entities().get(actor).unwrap().berserk.timer();
+                let output = tick_with_due_commands(&mut scene);
+                let entity = scene.sim().entities().get(actor).unwrap();
+                assert_eq!(entity.berserk.timer(), (remaining - 1).max(0));
+                if entity.berserk.is_active() {
+                    for event in output
+                        .fire_events
+                        .iter()
+                        .filter(|event| event.attacker_id == actor)
+                    {
+                        assert_shot(&scene, event.weapon_id, true);
+                        resumed = true;
+                    }
+                    false
+                } else {
+                    true
+                }
+            }),
+            "saved berserk must expire by normal AI countdown, not a test write"
+        );
+        assert!(
+            resumed,
+            "saved berserk shooter must fire again before calming down"
+        );
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(actor).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                if let Some(event) = output
+                    .fire_events
+                    .iter()
+                    .find(|event| event.attacker_id == actor)
+                {
+                    assert!(
+                        !scene
+                            .sim()
+                            .entities()
+                            .get(actor)
+                            .unwrap()
+                            .berserk
+                            .is_active()
+                    );
+                    assert_shot(&scene, event.weapon_id, false);
+                    return true;
+                }
+                false
+            }),
+            "ordinary fire after natural berserk expiry must restore the full reload"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_assert_gattling_reload(
         scene: &HeadlessScenario,
         actor: u64,
