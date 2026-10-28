@@ -19478,6 +19478,248 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; single-slot ASW sortie, saved loss and regeneration"]
+    fn aymod_destroyer_asw_fires_and_regenerates_with_parent_experience() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        for kind in ["DEST", "CDEST"] {
+            let mut launch = battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            );
+            launch.options.unit_count = 0;
+            let mut scene = load_session(&root, map, 17, launch).unwrap();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let (parent, target, child) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                assert!(rules.object("SUB").unwrap().underwater);
+                assert!(rules.object("ASW").unwrap().trainable);
+                let owner = house_of(sim, "Americans");
+                let enemy = house_of(sim, "Russians");
+                let owner_name = sim.interner.resolve(owner).to_owned();
+                let enemy_name = sim.interner.resolve(enemy).to_owned();
+                let terrain = sim.resolved_terrain().unwrap();
+                let free_water = |x, y| {
+                    terrain.cell(x, y).is_some_and(|cell| {
+                        !cell.outside_playfield
+                            && !cell.bridge_facts.has_structural_bridge()
+                            && cell.land_type
+                                == crate::rules::terrain_rules::LandType::Water.as_index()
+                            && sim.occupancy().get(x, y).is_none()
+                    })
+                };
+                let (x, y, tx) = terrain
+                    .cells()
+                    .iter()
+                    .find_map(|cell| {
+                        let tx = cell.rx.checked_add(4)?;
+                        (free_water(cell.rx, cell.ry) && free_water(tx, cell.ry))
+                            .then_some((cell.rx, cell.ry, tx))
+                    })
+                    .expect("legal nearby water sites for a destroyer and submarine");
+                let parent = sim.spawn_object(kind, &owner_name, x, y, 0, rules).unwrap();
+                let target = sim
+                    .spawn_object("SUB", &enemy_name, tx, y, 0, rules)
+                    .unwrap();
+                sim.mission_queue_exact(
+                    target,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                let slots = sim
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .slots();
+                assert_eq!(slots.len(), 1);
+                (parent, target, slots[0].spawn().unwrap())
+            };
+            // Receiver credit, not a fabricated rank: regeneration must inherit
+            // even though the one-slot promotion pool deliberately skips ASW.
+            aymod_kill_for_experience(&mut scene, parent);
+            let parent_xp = scene.sim().entities().get(parent).unwrap().veterancy.raw();
+            assert!(parent_xp.bits() > 0);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(child)
+                    .unwrap()
+                    .veterancy
+                    .raw()
+                    .bits(),
+                0
+            );
+            let attack = |scene: &mut HeadlessScenario| {
+                let sim = &mut scene.runtime.simulation;
+                let owner = sim.entities().get(parent).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: parent,
+                        target_id: target,
+                    },
+                ));
+            };
+            let health = scene.sim().entities().get(target).unwrap().health.current();
+            attack(&mut scene);
+            let mut fired = false;
+            assert!(
+                (0..1200).any(|_| {
+                    let frame = scene.sim().session.binary_frame();
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(scene.sim().session.binary_frame() > frame);
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == child && event.target == TargetKind::Entity(target)
+                    });
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .is_some_and(|entity| entity.health.current() < health)
+                }),
+                "{kind}: ordinary Attack must launch ASW and damage the submarine"
+            );
+            let regen = {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let owner = sim.entities().get(parent).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Stop { entity_id: parent },
+                ));
+                let hp = sim.entities().get(child).unwrap().health.current();
+                let warhead = sim.interner.intern("Super");
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        child,
+                        hp,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+                sim.entities()
+                    .get(parent)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .regen_rate()
+            };
+            assert!(regen > 0);
+            assert!(
+                (0..300).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .spawn_manager
+                        .as_ref()
+                        .unwrap()
+                        .slots()[0]
+                        .spawn()
+                        .is_none()
+                }),
+                "{kind}: actual ASW death must release the single slot"
+            );
+            let pending = scene
+                .sim()
+                .entities()
+                .get(parent)
+                .unwrap()
+                .spawn_manager
+                .clone()
+                .unwrap();
+            assert!(
+                pending.slots()[0]
+                    .timer()
+                    .remaining(scene.sim().session.binary_frame() as i32)
+                    > 0
+            );
+            let bytes = save_scene(&scene, "AY single-slot ASW loss with regeneration pending");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref(),
+                Some(&pending)
+            );
+            let replacement = (0..regen + 60)
+                .find_map(|_| {
+                    let frame = scene.sim().session.binary_frame();
+                    tick_with_due_commands(&mut scene);
+                    assert!(scene.sim().session.binary_frame() > frame);
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)?
+                        .spawn_manager
+                        .as_ref()?
+                        .slots()[0]
+                        .spawn()
+                })
+                .expect("ASW regeneration must finish after real load");
+            assert_ne!(replacement, child);
+            let new_child = scene.sim().entities().get(replacement).unwrap();
+            assert_eq!(new_child.spawn_owner_id.owner(), Some(parent));
+            assert_eq!(new_child.veterancy.raw(), parent_xp);
+            let bytes = save_scene(
+                &scene,
+                "AY regenerated ASW inherited its parent's experience",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let restored = scene.sim().entities().get(replacement).unwrap();
+            assert_eq!(restored.spawn_owner_id.owner(), Some(parent));
+            assert_eq!(restored.veterancy.raw(), parent_xp);
+            attack(&mut scene);
+            assert!(
+                (0..1200).any(|_| {
+                    tick_with_due_commands(&mut scene)
+                        .fire_events
+                        .iter()
+                        .any(|event| {
+                            event.attacker_id == replacement
+                                && event.target == TargetKind::Entity(target)
+                        })
+                }),
+                "{kind}: replacement ASW must relaunch and fire after load"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; carrier child kill, saved regeneration and relaunch"]
     fn aymod_carrier_child_keeps_experience_and_regenerates_after_real_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};

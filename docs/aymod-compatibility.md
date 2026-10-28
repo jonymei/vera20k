@@ -6,14 +6,14 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于ccc4087af继续V05：两张Battle图正式typed库存确认7组母子机；实际DEST单槽与DRED双槽母体用正式致死receiver取得连续老兵/精英经验、两次热存读及正常AI采样同步通过。DRED另通过普通Attack发射/实际导弹出池、再生计时热存读/新导弹继承/再存读与普通Attack再发射。最终实际库存1项/新组合1项/原CARRIER再生1项，SpawnManager36项及NP奖励6项通过；一个旧Hornet整轮扫射slow未涉及未跑。初始无有效对手夹具在frame91胜利终止，不计玩法缺陷；已用正常有对手新局和时钟检查纠正。仅测试/台账，无新生产状态/玩法/critic，无待完成Cargo，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于113d0674b继续V05：实际DEST/CDEST单槽ASW普通Attack向SUB开火并造成伤害；正式致死receiver造成子机损失、正常单槽释放、原配置再生计时存读、新ASW继承母体raw/SpawnOwner、再次完整存读和普通Attack重新开火通过。母体经验来自正式击杀receiver，不设rank/raw/cache；子机死亡不是实际防空弹击杀。仅测试/台账，无生产修改或新critic，固定版未动，整体目标开放；上一轮库存/DEST-DRED连续晋升/DRED再生验收仍保留。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续DEST单槽ASW实际反潜出击/损失后的再生与等级继承，或BSUB/CMISL家族；不重复已验DRED连续晋升/导弹再生及医院小边界。医院control1留尸限制单独保留；F12完整compositor/AppState、peer/重连仍开放；V01/F11批准门禁、Return Dubai弱攻势专项暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
-- V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际损失再生与旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
+- 下一安全动作：继续BSUB/CMISL家族实际发射/出池/保存再生，随后处理V3/VLAD或母子机换主；不重复已验DEST/CDEST反潜实射/receiver死亡再生、DRED连续晋升/导弹再生及医院小边界。医院control1留尸限制单独保留；F12完整compositor/AppState、peer/重连仍开放；V01/F11批准门禁、Return Dubai弱攻势专项暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
+- V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW防空弹实杀与旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
 ### F12遭遇战完整MPC目录、随机分配与真实GPU（2026-10-29）
@@ -87,7 +87,15 @@
 - DRED精英池另用普通Attack向真实敌方CARRIER发射，两枚旧子机实际离开limbo后至少一槽真实出池；不通过直接UnInit/致死注入制造再生。普通Stop后仍在运行中的原配置再生计时/完整manager保存恢复，正常帧新建不同ID的DMISL，SpawnOwner和母体当前raw继承正确。实读6B78EF→C2D7F3..C2D816由子机Trainable控制复制，再存读后新导弹通过普通Attack实际离开limbo重发。这里证明出池/再生/重发，不扩称所有弹道命中几何或终端伤害。
 - 初版用无有效参赛对手的加载夹具，导弹虽已发射，frame91对局终止跳过MainTick尾帧提交，导致之后等待永不到期；对象mission counter继续被测试调用不能证明游戏时钟在前进。读现有commit_frame_tail终局门后改用原有对手/正常MCV新局，保留原胜负政策且在等弹循环断言时钟前进，不改timer、清终局标志或调整AI权重来过测试。此失败不是导弹或Return Dubai弱攻势红证据。
 - 最终retail gate/NP下实际库存1项、新DEST/DRED组合1项、原CARRIER实杀/再生/重发1项通过；SpawnManager36项通过（旧Hornet整轮扫射slow未触及、保留1 ignored），NP奖励6项通过。首次两个模块路径过滤器为0，已用正确路径各补36/6，不计0项为通过。纯NP测试新增，未重跑stock既有覆盖，也未启动GUI/改MOD或原始存档/固定玩家版/发布；仅测试/台账，无新生产RNG/timer/Detach或保存字段，无需新玩法critic。
-- 剩余：DEST/CDEST单槽实际反潜与损失再生、BSUB/CMISL/V3/VLAD其他家族的组合、子机已更强边界的更多实际场景、换主和多AI长局；旧单元强子机不降级覆盖保留，不以本轮关闭整个V05。
+- 剩余：DEST/CDEST单槽实际反潜与receiver死亡再生见下节，实际防空弹实杀仍未验；BSUB/CMISL/V3/VLAD其他家族的组合、子机已更强边界的更多实际场景、换主和多AI长局；旧单元强子机不降级覆盖保留，不以本轮关闭整个V05。
+
+### V05实际DEST/CDEST单槽反潜机：实射、损失与存读再生（2026-10-29）
+
+- 正式Return Dubai/Battle加载正常美国与苏联困难对手、原始MCV和unit_count=0。分别合法放置DEST/CDEST及相距4格的敌方SUB，正式typed确认SUB.Underwater和ASW.Trainable；仅令目标Sleep隔离反击，不修改MOD/武器、传感器、射程、子机任务或母体计时。普通Attack产生原ASW的真实fire_event，并令同一SUB掉血，不以母舰炮弹或单纯离开limbo代替反潜开火。
+- 母舰先通过既有APOC致死receiver取得正raw经验，未手写母体/子机等级或cache，初生ASW仍为0。使用正式Super致死receiver制造该ASW损失，普通Stop和正常帧处理后单槽为空；这不是防空武器实弹击落，不能据此关闭该边界。
+- 原配置SpawnRegenRate=400的正剩余计时/完整SpawnManager保存后经正式资源恢复保持不变，不设timer或时钟。正常帧生成不同ID的ASW，SpawnOwner和继承raw正确；再次完整存读检查两者，普通Attack让替补实际向原SUB再次开火。等待出击和再生时逐帧要求binary_frame前进，防止终局停止时钟的夹具假象。继承原生仍为6B78EF→C2D7F3..C2D816的子机Trainable门，不因单槽而另造策略；本轮重新实读该段指令，未新增原生执行。
+- 仅新增一个实际AY组合测试（覆盖两种母舰），没有生产reader、状态、RNG调用、timer/Detach实现或保存字段改动，不需玩法critic。未启动GUI、未改MOD/原始存档/固定玩家版、未发布。防空弹实杀、原生逐帧对照、BSUB/CMISL等其他家族、换主及多AI长局仍开放，不关闭整个V05。
+- 最终retail gate/NP下实际组合1项、SpawnManager36项、NP奖励6项通过；旧Hornet整轮扫射slow未涉及，保留1 ignored。仅NP测试/台账改动，未重跑stock。中途一次运行因作者在编译期间编辑台账被runner拒绝，不计通过；停止编辑后重新执行上述三组，均正常结束，无待完成Cargo。
 
 ### V02等待者死亡与医院销毁：预约清理、留存尸体分开验收（2026-10-29）
 
@@ -1358,7 +1366,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V02 / P2 / 入口/Cargo/EMP任务保留已修，联盟/缺电/Off/EMP治疗存读已验 | GAROBO/NARADR Hospital保留患者owner，普通步兵共用医院动作，Ammo=-1准入；Passengers=0仍可有Cargo；建筑EMP不再误调Deactivate重置治疗 | 手动Off拒新、已有患者继续；自然缺电/EMP下原有与新患者可治疗出院，正式存读/预约清理、独立House电网及恢复已验。EMP原生生命周期/雷达顺序与付款恢复见对应节；治疗中解盟/新申请拒绝、同帧双人预约等待及依次治满/存读已验；步行中双向解盟/保存后的原生入院失联停疗边界已验，不能算正常治愈；三人预约中普通Move取消/其余两人正常治满与三次存读已验；等待者死亡/医院退休后远处等待者清预约已验，已住院者C4序列死亡可留存limbo尸体；完整TTNK医院实战、单向外交/其他取消、占领旧患者其他恢复及自主多AI仍开放；不是科技医院全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback；两图typed库存仅无武器/不可驻军CAAIRP/CAPOWR具Ammo5，正常Occupier普通/精英均有武器，暂未找到常规FireAt消费者；游标/回调等运行时边界仍开放，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 / 移动/换主死亡/运输及两电脑重叠存读已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL用自身House探测圈获取全隐形TANY；普通Guard实射、自然重隐后的拒绝与再发现通过；同方2圈+盟友1圈时按原生隔离计数，不跨盟友直接共享探测 | IFV控制/归还/死亡、登离LCRF/存读已验，共享Unlimbo已修。两电脑House的重叠、移走一个/退休最后本方源、盟友圈仍在但不为本方准入，以及最终退休/存读已验；SNIPE自身普通Move穿圈/邻格解隐/自然重隐及边沿存读已验；其他联盟变动/圈家族、空艇/精英潜艇/幻影等及画面仍待验，不宣称多AI自主走位或长局通过 |
-| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；count1/cursor1的普通GetWeapon→Cant→drop、180帧含存读不归零/不发射及补员恢复已验；实际SNIPE两次尾删/游标1/经验/两次存读及原弹归属已验，正等级不应随机删非尾；其他名单损伤来源和原生循环分支仍待核。剩余Cargo在SpawnSurvivors后清理；另修control0错误移除隐形乘员名单，实际TANY普通入BFRT/自然隐形/存读/正常卸载通过，control1清理仍保留；实际DEST/DRED连续晋升热存读及DRED普通发射出池/再生继承/再存读重发已验；其他家族、ASW实际损失再生及换主仍待验，不关闭全V05 |
+| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；count1/cursor1的普通GetWeapon→Cant→drop、180帧含存读不归零/不发射及补员恢复已验；实际SNIPE两次尾删/游标1/经验/两次存读及原弹归属已验，正等级不应随机删非尾；其他名单损伤来源和原生循环分支仍待核。剩余Cargo在SpawnSurvivors后清理；另修control0错误移除隐形乘员名单，实际TANY普通入BFRT/自然隐形/存读/正常卸载通过，control1清理仍保留；实际DEST/DRED连续晋升热存读及DRED普通发射出池/再生继承/再存读重发已验；DEST/CDEST实际反潜实射/receiver死亡再生/继承/两次存读后重发已验；其他家族、ASW防空弹实杀及换主仍待验，不关闭全V05 |
 | V06 / P1 / 地空晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN地面及自然起飞JUMPJET对空实杀晋升、热stage存读、Stop/Guard退档和精英对应槽续射已验；对空目标是受控human House组件，不是AI自主飞行。既有stage0首发由配置实现；YTNK/YAGGUN热状态地空换主存读/新主人续射已验；机炮保存额外旧主AI后的状态，普通human House的实际地空reload及运行中双计时存读已验；实际NATBNK正常进出/非1倍率地空射击及驻留/释放存读已验；碉堡实弹毁坏/正常出售四路释放存读、Move和续射已验；V12特殊回调、碉堡Temporal/争抢、其他倍率/全档精确节奏及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源第三House/同宿主House换主后的解缠、两次存读与GPU已验；源自然瘫痪到期/新主人普通移动/再存读已验；多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载/卸载/重装存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读实射、解散全卸载/存读、同一批活体重建队重装、部分与全装存读并六人再次实射通过；不代表自主重建决策。优先级招走与AreaGuard保留原生行为；两图6种BFRT队/4脚本均无Unload8/Deploy9或切换17/18，不列为必需卸载缺口；07C257EC-G首段Attack0,4及实杀后自然转cursor5的Attack0,5/两段存读/实际乘员命中已验；最终0,1自然选中建筑/移动状态存读后追近、保存后新乘员实射及额外伤害已验（本例1890帧）；其他进攻脚本/竞争补员/换主/多AI长局仍待验；不把线圈充能当V01中心供电 |
