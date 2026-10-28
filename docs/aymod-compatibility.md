@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于91128c1b1核V05真实狙击穿透producer：原生正等级固定删末位，负等级重复尾删清空，无随机/按cursor选非尾语义。新增SNIPE普通Attack两次真实杀GGI、count2→1→0/cursor1保留、两次完整存读/经验及原导弹幸存者击杀归属。最终aymod_sniper2、aymod_garrison7、RecordKill NP6，共15项通过，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于2b9c9e46c补F05实际MTNK追击正常横向移动SMCV，真实位移中的车体/炮塔分向与移动开火、持续独立速率、运动中完整存读/续射实伤。最终实际1、turret组件3、FacingClass14、combat_turret_facing7，共25项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：转F05常见MTNK行进时炮塔独立跟踪/射击链，先核现有unit_turret_rot与movement/unit_post消费者及原生更新顺序，再作实际配置验证，不拟合/修改ROT。狙击穿透非尾删除不再作为该补丁缺失项：正等级尾删/负等级清空已有直接原生定义；其他名单删除来源/完整游标分支仍单列未核。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
+- 下一安全动作：继续F06实际ORCA空弹返航/重装后对空对地续战及存读链，先核现有aircraft mission/dock/ammo/AACombat owners，不重写已完成Alt维修入口。F05已补普通MTNK运动组件，不扩称全部14类型/特殊大转角热载入或GPU。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -344,6 +344,13 @@
 - 71e67bf1b后续实际AY验收：同一aymod_captured_center_transfers_support夹具按typed PowersUnit逐对运行GAROBO→ROBO、NARADR→DRON、NAPSIS→CAOS，正常Battle加载后供给原主真实电厂/中心和另一个同俄罗斯Country但独立human House的电厂/对应单位。新主原先无中心，通过普通Move真实到格触发739F21离线，不手写provider/counter/latch；原主仍获支持。首次完整保存恢复后，由新主SENGINEER普通Capture实际步行夺取，旧主House计数归零/旧单位offline，工程师正常消耗；捕获边界第二次保存保留已有counted值，普通更新让新主获得支持并Reactivate。没有对中心发Off/On或补另一座中心/伪造House标志，新主普通Move使对应单位实际到达新格，第三次保存保留中心/双方单位归属、旧offline/新online、House支持与位置。
 - 本次复合1项内部三组配置均通过，另重跑实际建筑AI1/驻军归属1/powered_unit8，共11项通过；与上轮93项有重叠，不相加为新总数。测试不对失去支持的旧Drive单位继续下Move，因此不能把offline旗标冒称“新命令必被拒绝/绝对不能动”；保留V01原生聚合及失联移动政策门禁。新旧House均为受控组件，不是多AI自主夺取/长局；无新玩法实现/RNG/timer/Detach调用/保存字段，无需新critic，无GUI/MOD/原始存档/固定构建改动。
 - 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
+
+### F05实际MTNK行进跟踪、移动开火与完整存读（2026-10-28）
+
+- 新aymod_moving_grizzly_tracks_with_independent_turret_after_load从正式AY Battle加载MTNK/SMCV，目标经共享Unit换主receiver交给独立Russian human House并建真实GAPOWR，排除原电脑自动部署/改派。目标只收普通横向Move，射手只收普通Attack，自行追击/瞄准/发射；双方均要求实际位移，目标须被实际武器损伤，无手写朝向、位置、rank、运动/旋转timer或MOD参数。
+- 实读NP UnitCtor735584→C2DEB6..C2DEC9：读Type+5A5的无符号TurretROT byte，FF才回退Type+71C普通ROT，再返回73558A；保持既有ObjectType::unit_turret_rot构造及unit_post单owner。实际typed MTNK两个速率必须不同，整段普通帧车体/炮塔FacingClass各持自己的速率；观察到真实位移时两者朝向不同，也要求至少一次真实位移帧出现射手fire_event。不是靠只观察渲染角度或改速度来凑差异。
+- 在真实运动且两控制器朝向分离时完整保存/资源恢复，核世界坐标、车体/炮塔完整FacingClass、rearm、攻击目标和移动目标坐标不变；随后继续普通帧，必须再次实际发射并使原目标HP下降。初样例额外要求运动时仍有多帧is_rotating弧，但本例短角差没有这种窗口（运动分向和移动开火已观察到）；因此保存运动中的真实分离控制器，不强造大角度插值，并保留大转角特定热载入窗口为未实测。活动插值本身仍由既有FacingClass原生组件golden覆盖，不把组件等价扩大为该实际窗口。
+- 最终retail gate下新实际1、movement::turret3、FacingClass14、combat_turret_facing7，共25项通过；无生产修改/新玩法critic、新状态/RNG/timer/Detach/保存布局，无GUI/MOD/原始存档/固定构建/发布变更。只验证常见MTNK这条运动追击链；其他13类型、异常运动/旋转组合和GPU/GUI仍保留。
 
 ### V03早返短间隔：实际配置影响边界（2026-10-28）
 
@@ -1091,7 +1098,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F02 / P1 / 建筑受击/策略EMP、盟友探测与红血重隐已验，健康建筑GPU门禁已验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；原生产半径/敌我/未占格/重复/保存/hash与换主/Unlimbo及critic修正保留 | 实际MTNK/E1、GAPOWR与ORCA、正常ALLY/活DOG双向接触及HP1重隐已验；新增GAPOWR/GAROBO全隐形受击state3存读重隐，以及既有策略EMP在powered门下的状态/到期恢复。上游EMP政策不宣称#174等价；受损/EMP FX绘制、启用自然粒子、多AI选敌和完整生命周期仍开放。健康建筑两格式GPU门禁已验，既有字段改变保存布局 |
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
-| F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |
+| F05 / P1 / 已实现，MTNK运动存读/实射已验，画面待验 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者及原地Attack；实际MTNK追横移SMCV、运动分向/移动开火、独立速率/运动存读续战实伤已验；其他类型/特殊转角及实际画面仍待验，沿用旋转owner，不拟合速度 |
 | F06 / P1 / 已实现，部分场景待验 | ORCA的AACombat现保留空中攻击目标，不改变投射物AA准入 | AircraftType逐层读取/保存/hash；既有`techno_ai::drop_airborne_target_step`按NPAE174 414D36/C27C60跳过高空清目标，仍检查隐形感知。实际AY ORCA普通Attack已伤害仍在空中的ZEP及地面MTNK；精英远距追击移动ZEP在双方运动/开火前热存读后保留目标并实际命中 | 精英远距移动目标及热存读已验；玩家GUI、持续AI战术、返航重装/多目标和实际晋升过程仍待验；不将此链扩大为所有飞机行为通过 |
 | F07 / P1 / 已有实现，部分待验 | 谭雅海军副武器由原有NavalTargeting=4选择，不是两个新Weapon flags | 实际TANY Secondary=Sapper、EliteSecondary=SapperE；`combat_weapon::select_naval_targeting_weapon`匹配6F3820/6F38FC..6F3915。Return Dubai正式加载后，普通/精英Attack均实际发射对应武器并伤害HYD | 已检查的NPAE174 Weapon reader不读AntiNaval/AntiUnderwater，见C04。已验普通SUB自然隐形/未探测拒绝、游近探测及两次存读/Sapper命中；Hover LCRF/Organic DLPH实际被主武器零倍率提前回退Sapper，海军leaf仍返回0。精英潜艇、探测丢失后再潜/续战及GUI仍待验，不扩大为所有海军行为通过 |
 | F08 / P2 / 普通完整投弹/两次存读已验，画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem，不另造平面伤害 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。精英/其他别名弹头、长连投/多目标、GUI及全部既有引爆算术仍未逐项认证 |

@@ -2200,6 +2200,166 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; independent MTNK turret tracks a moving target during real pursuit and hot load"]
+    fn aymod_moving_grizzly_tracks_with_independent_turret_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::ground_pose::position_world_coord;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, target) = aymod_nearby_pair("MTNK", "SMCV", false);
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let controller = scene.add_human_house(
+            "MovingTargetController",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.change_owner_with_rules(
+                target,
+                controller,
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            let at = sim.entities().get(target).unwrap().position;
+            let from = sim.entities().get(tank).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                controller,
+                cells_nearest((i32::from(at.rx()) + 20, i32::from(at.ry()))),
+                &["GAPOWR"],
+            );
+            // Move across the line of sight, rather than directly away, so
+            // pursuit needs live hull steering as well as independent aiming.
+            let dx = i32::from(at.rx()) - i32::from(from.rx());
+            let dy = i32::from(at.ry()) - i32::from(from.ry());
+            let goal = if dx.abs() >= dy.abs() {
+                (i32::from(at.rx()), i32::from(at.ry()) + 12)
+            } else {
+                (i32::from(at.rx()) + 12, i32::from(at.ry()))
+            };
+            let destination = cells_nearest(goal)
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    (sim.path_grid()
+                        .is_some_and(|grid| grid.is_walkable_for_infantry(x, y))
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.substrate.occupancy.get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        }))
+                    .then_some((x, y))
+                })
+                .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                controller,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: target,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+            let owner = sim.entities().get(tank).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: tank,
+                    target_id: target,
+                },
+            ));
+        }
+        let object = scene.runtime.resources.rules.object("MTNK").unwrap();
+        let hull_rate =
+            crate::sim::movement::FacingClass::new(0, object.turret_rot).rot_per_frame();
+        let turret_rate =
+            crate::sim::movement::FacingClass::new(0, object.unit_turret_rot()).rot_per_frame();
+        assert_ne!(
+            turret_rate, hull_rate,
+            "actual AY MTNK must exercise independent TurretROT"
+        );
+        let initial_hp = scene.sim().entities().get(target).unwrap().health.current();
+        let target_start =
+            position_world_coord(&scene.sim().entities().get(target).unwrap().position);
+        let mut target_moved = false;
+        let mut saved = false;
+        let mut steered_while_moving = false;
+        let mut moving_shot = false;
+        let mut fired_after_load = false;
+        for _ in 0..900 {
+            let before = position_world_coord(&scene.sim().entities().get(tank).unwrap().position);
+            let output = tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let actor = sim.entities().get(tank).unwrap();
+            let now = sim.session.binary_frame();
+            let barrel = actor.barrel_facing.unwrap();
+            target_moved |=
+                position_world_coord(&sim.entities().get(target).unwrap().position) != target_start;
+            assert_eq!(actor.body_facing.rot_per_frame(), hull_rate);
+            assert_eq!(barrel.rot_per_frame(), turret_rate);
+            let moved = position_world_coord(&actor.position) != before;
+            steered_while_moving |= moved && barrel.current(now) != actor.body_facing.current(now);
+            let fired = output.fire_events.iter().any(|event| {
+                event.attacker_id == tank
+                    && event.target == crate::sim::combat::TargetKind::Entity(target)
+            });
+            moving_shot |= moved && fired;
+            fired_after_load |= saved && fired;
+            if !saved && moved && barrel.current(now) != actor.body_facing.current(now) {
+                let witness = (
+                    position_world_coord(&actor.position),
+                    actor.body_facing,
+                    actor.barrel_facing,
+                    actor.rearm_timer,
+                    actor.attack_target.target(),
+                );
+                let target_position =
+                    position_world_coord(&sim.entities().get(target).unwrap().position);
+                let pristine = sim.resolved_terrain().unwrap().clone();
+                let bytes = save_scene(&scene, "AY moving MTNK independent turret");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                let sim = scene.sim();
+                let actor = sim.entities().get(tank).unwrap();
+                assert_eq!(
+                    (
+                        position_world_coord(&actor.position),
+                        actor.body_facing,
+                        actor.barrel_facing,
+                        actor.rearm_timer,
+                        actor.attack_target.target()
+                    ),
+                    witness
+                );
+                assert_eq!(
+                    position_world_coord(&sim.entities().get(target).unwrap().position),
+                    target_position
+                );
+                saved = true;
+            }
+            if saved
+                && target_moved
+                && steered_while_moving
+                && moving_shot
+                && fired_after_load
+                && scene.sim().entities().get(target).unwrap().health.current() < initial_hp
+            {
+                return;
+            }
+        }
+        panic!(
+            "MTNK pursuit incomplete: saved={saved} target_moved={target_moved} steered={steered_while_moving} moving_shot={moving_shot} fired_after_load={fired_after_load}"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; three distinct human Houses, directional allied shields, overlapping launches and saved independent blackouts"]
     fn aymod_allied_force_shields_refresh_receivers_without_sharing_blackout() {
         use crate::map::houses::is_allied_with;
