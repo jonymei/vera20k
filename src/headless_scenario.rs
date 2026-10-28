@@ -2200,6 +2200,167 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; launched IC/FS keeps an existing attack through protection, save and natural expiry"]
+    fn aymod_existing_attack_survives_launched_protection_and_full_save() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::superweapon::chronosphere_tests::charge_super;
+        use crate::sim::superweapon::invulnerability::{InvulnKind, is_invulnerable};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for (name, kind) in [
+            ("IronCurtainSpecial", InvulnKind::IronCurtain),
+            ("ForceShieldSpecial", InvulnKind::ForceShield),
+        ] {
+            let (mut scene, tank, target) = aymod_nearby_pair("MTNK", "NACNST", false);
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("Russians")
+                .unwrap();
+            let defender = scene.add_human_house(
+                "ProtectedDefender",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                sim.change_owner_with_rules(
+                    target,
+                    defender,
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+                let at = sim.entities().get(target).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    defender,
+                    cells_nearest((i32::from(at.rx()) + 16, i32::from(at.ry()))),
+                    &["NANRCT", "NATECH", "NAIRON"],
+                );
+                let owner = sim.entities().get(tank).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: tank,
+                        target_id: target,
+                    },
+                ));
+            }
+            let initial_hp = scene.sim().entities().get(target).unwrap().health.current();
+            let mut fired = false;
+            assert!(
+                (0..240).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == tank && event.target == TargetKind::Entity(target)
+                    });
+                    scene.sim().entities().get(target).unwrap().health.current() < initial_hp
+                }) && fired,
+                "ordinary Attack must damage the victim before protection"
+            );
+            let sw = {
+                let sim = &mut scene.runtime.simulation;
+                // Charged Super is the fixture input boundary; providers and
+                // SPECIAL_PLACE launch are real, natural charging is separate.
+                let sw = charge_super(sim, defender, name);
+                let at = sim.entities().get(target).unwrap().position;
+                sim.queue_command(CommandEnvelope::new(
+                    defender,
+                    sim.session.tick() + 1,
+                    Command::LaunchSuperWeapon {
+                        sw_type_id: sw,
+                        target_rx: at.rx(),
+                        target_ry: at.ry(),
+                    },
+                ));
+                sw
+            };
+            tick_with_due_commands(&mut scene);
+            let target_entity = scene.sim().entities().get(target).unwrap();
+            let shield = target_entity
+                .invulnerability
+                .as_ref()
+                .expect("actual launch must protect the building");
+            assert_eq!(shield.kind(), kind);
+            let protection = shield.timer();
+            let duration = protection.duration();
+            assert!((30..10000).contains(&duration));
+            let expires = protection.start_frame().wrapping_add(duration) as u32;
+            let protected_hp = target_entity.health.current();
+            let mut protected_shots = 0;
+            let mut resumed = false;
+            for elapsed in 0..duration + 240 {
+                if elapsed == 12 {
+                    let sim = scene.sim();
+                    let fade = sim.super_weapons.get(&defender).unwrap()[&sw].fade();
+                    let blackout =
+                        sim.power_states[&defender].blackout_remaining(sim.session.binary_frame());
+                    let rearm = sim.entities().get(tank).unwrap().rearm_timer;
+                    let pristine = sim.resolved_terrain().unwrap().clone();
+                    let bytes = save_scene(&scene, "AY existing attack under launched protection");
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    let sim = scene.sim();
+                    assert_eq!(
+                        sim.entities()
+                            .get(target)
+                            .unwrap()
+                            .invulnerability
+                            .as_ref()
+                            .unwrap()
+                            .timer(),
+                        protection
+                    );
+                    assert_eq!(sim.super_weapons.get(&defender).unwrap()[&sw].fade(), fade);
+                    assert_eq!(
+                        sim.power_states[&defender].blackout_remaining(sim.session.binary_frame()),
+                        blackout
+                    );
+                    assert_eq!(sim.entities().get(tank).unwrap().rearm_timer, rearm);
+                }
+                let frame = scene.sim().session.binary_frame();
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(tank)
+                        .unwrap()
+                        .attack_target
+                        .target(),
+                    Some(TargetKind::Entity(target))
+                );
+                let output = tick_with_due_commands(&mut scene);
+                let shots = output
+                    .fire_events
+                    .iter()
+                    .filter(|event| {
+                        event.attacker_id == tank && event.target == TargetKind::Entity(target)
+                    })
+                    .count();
+                let entity = scene.sim().entities().get(target).unwrap();
+                if frame < expires {
+                    // NP blocks NEW input/scanner admission, not an existing
+                    // Attack's FireAt; damage immunity is a distinct owner.
+                    assert_eq!(entity.health.current(), protected_hp);
+                    protected_shots += shots;
+                } else if entity.health.current() < protected_hp {
+                    assert!(!is_invulnerable(entity.invulnerability.as_ref(), frame));
+                    resumed = true;
+                    break;
+                }
+            }
+            assert!(
+                protected_shots > 0 && resumed,
+                "old Attack must keep firing harmlessly and damage again after natural expiry"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual aircraft Alt move over a service depot"]
     fn aymod_aircraft_alt_move_does_not_enter_or_repair_at_a_depot() {
         use crate::sim::command::{Command, CommandEnvelope};
