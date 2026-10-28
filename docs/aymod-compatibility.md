@@ -6,18 +6,23 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于8b0613443扩展实际F02建筑箱子场景，补双方正常ALLY、不同House盟友DOG接触、1HP红血及两次移出/移回的隐形循环和存读。实际crate cloak两项通过；仅测试/台账，无生产修改/新critic，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于c7a5e37c7补F02完全隐形建筑受击、过渡存读与当前NP EMP策略下的状态/到期恢复。实际cloak crate3项及共同伤害负边界1项通过；仅共用夹具/回归，无生产修改/新critic，未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
-- Building+30C已确认是NaturalParticleSystem，Type+764由713B9A读取；NaturalParticleLocation为Type+768三坐标，713BF1..713C34经476420读取，并非+308 Spark、+310 damage-Smoke，也不是RefinerySmokeParticleSystem（Type+774）。更新原reader/消费者注释，不新建重复粒子owner。
-- 原生初始化：Techno_ctor6F3231..6F3247从+304清8个指针，包含+30C；Type_ctor710B00/71127B..71128E把system/位置初始化为空，CoordStruct空值初始化43B0F0置零。不能直接把BSS89C848读成文件常量（工具按未file-backed拒绝），本轮依据其初始化指令而非零填充猜值。
-- BuildingUnlimbo440E99..440EA7先要求NaturalParticleSystem非空才分配/调用62DC50并写30C；完全隐形454E7F..454E9E销毁旧30C；退隐到0的454F3D..454F6C先比较NaturalParticleLocation与空坐标，相同便在分配/构造前跳过。生产typed全Building列表在普通Battle/XMP03T4和Return Dubai均system=None、位置0，已新增正式场景回归，不把单个电厂或文本grep当全集证据。
-- 因此这两配置fresh场景的自然粒子链未启用，当前箱子隐形无需创建空壳粒子状态，也没有这条路径新增对象ID/抽样；其他模式/地图、自定义非空位置或历史带30C的外来存档仍保留未实现通用生命周期。NAWEAP的NaturalSmokeLocation不是此reader读取的NaturalParticleLocation，未擅加别名；字面字节检索不当作全局不可达证明。
-- 最终真实两图适用性1项、原Type空引用读取1项、实际移动/建筑/落地飞机箱子2项通过。未增加RNG、timer/Detach或保存字段，无全仓库/GUI/新游戏构建。缓存保留器Unsupported PE debug closure安全停止、删除0字节，不手动清理固定构建。
-- 下一安全动作：继续F02隐形中受击/EMP的实际状态门，或V04联盟/多House的AI选敌边界；本例是在已显形时受损到1HP，再通过真实盟友DOG接触循环，不替代隐形中受击或受损FX绘制。V02联盟准入、自然缺电/EMP及旧失联者其他恢复操作仍开放，V07实际GPU不等于整个App/原局重放，启用NaturalParticleSystem配置仍开放。
+- Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
+- 下一安全动作：回到V10尚待核的火箭飞行兵坠落目标层无键修复，先核实际AY使用、#174补丁与现有Jumpjet死亡/层owner，不先猜行为或改数值；F02本轮只完成逻辑状态组合，受损FX/EMP绘制、多AI选敌仍另验。V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
 - V05双弹/第二射手死亡与本轮剩余Cargo顺序已通过各自范围；非尾移除、单剩驻军原生自动续火、母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08重新装载/带队卸载/竞争补员/多AI长局亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F02完全隐形建筑受击与当前NP EMP策略的状态组合（2026-10-28）
+
+- 将既有普通MTNK拾箱/Building与落地ORCA能力授予/正式存读/自然完全隐形前缀抽为同一aymod_cloaked_building_and_landed_aircraft夹具。原盟友DOG/红血/换主例仍用GAPOWR；新例用GAPOWR和GAROBO，对Powered的后者正常提供远处GAPOWR供电，不改规则或Cloak状态。
+- 两种建筑在完全隐形后经正式Super非致死1点伤害，HP确实少1，马上进入state3；保存/完整资源恢复保留state3并自然完成过渡、重新隐形。实读Building vtable7E3EBC+FC（7E3FB8）为703850，Techno70281D通过该共享wrapper进入7036C0；不是另写建筑受击状态或把已显形时的伤害代替本例。
+- EMP使用正式typed TTNK.Primary -> projectile.AirburstWeapon -> TankBoltEMP -> EMPulsWH链，确认实际子弹头EmEffect=true；初跑错误选了主武器WH，断言失败后改为正确的生产引用链，未添加假Secondary/预注册孤立武器或修改MOD。直接进入既有NP EMP落点producer，不写counter；这是影响处理的组合验证，不能冒称TTNK实际选中并打中未探测隐形建筑。
+- 上游时长/目标准入仍为[npatch-emp.md](npatch-emp.md)记录的现有兼容政策，不是本轮证明的#174算术：Powered=false的GAPOWR未获counter且保持完成隐形；Powered=true的GAROBO获活EMP，普通帧后不保持state2，正式保存/恢复保留非零counter及相同state/building_stage。剩余counter>0的每一后续帧均不保持完全隐形，到期后自然重新隐形，再保存保留HP、实例能力与state2。
+- 不强制EMP期间必须停在state0。实读Building455012..455053分别询问ShouldUncloak和CanAuto，不能从Foot的state-zero head照搬到建筑；本例只检查完成隐形不被保留，不扩称EMP过程的全部可见透明度或循环相位。既有provider/失联Drive政策批准门禁未变，本轮未迁移或改变EMP策略。
+- 最终实际aymod_cloak_crate_三项（新项含两种建筑）及combat_cloak_damage_tests的已死对象负边界1项通过。仅测试，无新生产状态、RNG调用、timer/Detach实现或保存字段，无GUI/固定构建/MOD/原始存档/发布改动。受损/EMP的GPU/GUI、实际隐形目标发射准入、全部建筑家族及多AI长局仍开放。
 
 ### F02不同House盟友传感器、红血及重复隐形循环（2026-10-28）
 
@@ -922,7 +927,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
 | F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
-| F02 / P1 / 移动/建筑/飞机、盟友探测与红血重隐已验，健康建筑GPU门禁已验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；生产回归涵盖严格半径、敌我、未占格对象、重复/存读/hash与换主/Unlimbo保留；原NP/无NP箱子及critic修正已回归 | 实际MTNK/E1、GAPOWR独立454DB0阶段与ORCA落地存读通过；新增正常ALLY后盟友DOG仍阻止重隐，HP1红血建筑经DOG两次移出/返回与多次存读保持隐形能力。健康建筑两格式GPU的owner/敌方/侦测门禁已验；+30C当前两Battle未用。启用粒子配置、隐形中受击/EMP、受损FX绘制与完整生命周期仍开放。既有字段改变保存布局 |
+| F02 / P1 / 建筑受击/策略EMP、盟友探测与红血重隐已验，健康建筑GPU门禁已验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；原生产半径/敌我/未占格/重复/保存/hash与换主/Unlimbo及critic修正保留 | 实际MTNK/E1、GAPOWR与ORCA、正常ALLY/活DOG双向接触及HP1重隐已验；新增GAPOWR/GAROBO全隐形受击state3存读重隐，以及既有策略EMP在powered门下的状态/到期恢复。上游EMP政策不宣称#174等价；受损/EMP FX绘制、启用自然粒子、多AI选敌和完整生命周期仍开放。健康建筑两格式GPU门禁已验，既有字段改变保存布局 |
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |
 | F05 / P1 / 已实现，待GUI验收 | 独立炮塔速度：已按NPAE174分离Unit炮塔与车体，影响跟踪、射击时机 | MTNK、FV、SREF、ROBO、HTK、HTNK、APOC、HORV、HARV、TTNK、TTNK2、LTNK、YTNK、TELE 共14处物理用法；`src/rules/native_processing.rs`保留byte，`ObjectType::unit_turret_rot`为共享速率入口；`src/sim/world/world_spawn/construction.rs`初始化、`src/sim/world/unit_post.rs`持续瞄准消费 | 已核#174 reader/构造消费者并通过原地Attack；行进跟踪与实际画面待验，沿用旋转owner，不拟合速度 |

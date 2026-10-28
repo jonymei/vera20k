@@ -2249,13 +2249,13 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; cloak crate building and landed aircraft ability and state"]
-    fn aymod_cloak_crate_cloaks_a_building_and_landed_aircraft_across_load() {
+    fn aymod_cloaked_building_and_landed_aircraft(
+        building_type: &str,
+    ) -> (HeadlessScenario, u64, u64, u64, ResolvedTerrainGrid) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, building, plane) = aymod_nearby_pair("GAPOWR", "ORCA", true);
+        let (mut scene, building, plane) = aymod_nearby_pair(building_type, "ORCA", true);
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let tank = {
             let runtime = &mut scene.runtime;
@@ -2263,9 +2263,20 @@ mod retail_construction_tests {
             let rules = &resources.rules;
             let owner = sim.entities().get(building).unwrap().owner();
             let at = sim.entities().get(building).unwrap().position;
+            if rules.object(building_type).unwrap().powered {
+                let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (x - i32::from(at.rx()))
+                            .abs()
+                            .max((y - i32::from(at.ry())).abs())
+                            >= 6
+                    });
+                spawn_on_free_cells(sim, rules, owner, sites, &["GAPOWR"]);
+            }
             let center = (i32::from(at.rx()), i32::from(at.ry()));
             let tank = spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["MTNK"])[0];
-            for (id, kind) in [(building, "GAPOWR"), (plane, "ORCA")] {
+            for (id, kind) in [(building, building_type), (plane, "ORCA")] {
                 assert!(!rules.object(kind).unwrap().cloakable);
                 sim.mission_queue_exact(
                     id,
@@ -2395,6 +2406,260 @@ mod retail_construction_tests {
             );
         }
 
+        (scene, building, plane, tank, pristine)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; damage and configured NP EMP delivery on real crate-cloaked buildings"]
+    fn aymod_cloak_crate_building_damage_and_emp_transitions_survive_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAPOWR", "GAROBO"] {
+            let (mut scene, building, _plane, _tank, pristine) =
+                aymod_cloaked_building_and_landed_aircraft(kind);
+            let state = |scene: &HeadlessScenario| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .state()
+            };
+            let before = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .health
+                .current();
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let warhead = sim.interner.intern("Super");
+                // The real receiver reaches Techno70281D ->703850. Building
+                // vtable7E3FB8 inherits that wrapper, not a second transition.
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        building,
+                        1,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: false,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .health
+                    .current(),
+                before - 1
+            );
+            assert_eq!(
+                state(&scene),
+                3,
+                "actual nonlethal damage must begin the Building's reveal ramp"
+            );
+            let bytes = save_scene(
+                &scene,
+                "AY crate-cloaked building damaged during full cloak",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(state(&scene), 3);
+            assert!(
+                (0..180).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    state(&scene) == 2
+                }),
+                "{kind}: saved damage reveal must finish and naturally recloak"
+            );
+            let susceptible = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let primary = rules
+                    .weapon(rules.object("TTNK").unwrap().primary().unwrap())
+                    .unwrap();
+                let projectile = rules
+                    .projectile(primary.projectile.as_deref().unwrap())
+                    .unwrap();
+                let weapon = rules
+                    .weapon(projectile.airburst_weapon.as_deref().unwrap())
+                    .unwrap();
+                assert_eq!(weapon.id, "TankBoltEMP");
+                let wh = rules.warhead(weapon.warhead.as_deref().unwrap()).unwrap();
+                assert!(wh.em_effect);
+                let at = crate::sim::movement::ground_pose::object_get_coords(
+                    sim.entities().get(building).unwrap(),
+                    sim.resolved_terrain(),
+                );
+                let susceptible = rules.object(kind).unwrap().powered;
+                // Enter the existing NP impact producer, without direct counter
+                // writes or fake targeting of an unsensed invisible building.
+                // Upstream NP duration/admission remains documented policy,
+                // not a new claim of NPAE arithmetic or a real TTNK sortie.
+                sim.apply_npatch_emp_detonation(
+                    crate::sim::projectile::ProjectileCoord {
+                        x: at.x,
+                        y: at.y,
+                        z: at.z,
+                    },
+                    Some(building),
+                    None,
+                    weapon.damage,
+                    wh,
+                    rules,
+                    Default::default(),
+                );
+                susceptible
+            };
+            if !susceptible {
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .emp_remaining(),
+                    0
+                );
+                assert_eq!(
+                    state(&scene),
+                    2,
+                    "unpowered GAPOWR is outside current NP building EMP admission"
+                );
+                continue;
+            }
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .emp_remaining()
+                    > 0
+            );
+            tick_with_due_commands(&mut scene);
+            assert_ne!(state(&scene), 2);
+            let remaining = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .emp_remaining();
+            assert!(
+                remaining > 0,
+                "the save must capture a live pulse, not an expired one"
+            );
+            let saved_stage = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .building_stage();
+            let saved_state = state(&scene);
+            let bytes = save_scene(
+                &scene,
+                "AY crate-cloaked powered building with live EMP and reveal state",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .emp_remaining(),
+                remaining
+            );
+            assert_eq!(state(&scene), saved_state);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .building_stage(),
+                saved_stage
+            );
+            // Building455012/45503F asks ShouldUncloak and CanAuto separately.
+            // Do not demand state0: it can cycle ramps, but must never retain
+            // a completed cloak while the supplied EMP counter is still live.
+            for _ in 0..1000 {
+                tick_with_due_commands(&mut scene);
+                if scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .emp_remaining()
+                    == 0
+                {
+                    break;
+                }
+                assert_ne!(state(&scene), 2);
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .emp_remaining(),
+                0
+            );
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 2
+            }));
+            let bytes = save_scene(&scene, "AY building naturally recloaked after EMP expiry");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let actor = scene.sim().entities().get(building).unwrap();
+            assert!(actor.cloak.as_ref().unwrap().crate_granted());
+            assert_eq!(actor.health.current(), before - 1);
+            assert_eq!(state(&scene), 2);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; cloak crate building and landed aircraft ability and state"]
+    fn aymod_cloak_crate_cloaks_a_building_and_landed_aircraft_across_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, _plane, tank, pristine) =
+            aymod_cloaked_building_and_landed_aircraft("GAPOWR");
+        let granted = |scene: &HeadlessScenario, id| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .is_some_and(|cloak| cloak.crate_granted())
+        };
         // Building CanAuto457770/Should4578C0 ignore own Sensors, but a
         // change of House makes the same physical neighbour foreign.
         let (dog, owner, destination) = {
