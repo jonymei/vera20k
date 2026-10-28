@@ -2200,6 +2200,259 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; three distinct human Houses, directional allied shields, overlapping launches and saved independent blackouts"]
+    fn aymod_allied_force_shields_refresh_receivers_without_sharing_blackout() {
+        use crate::map::houses::is_allied_with;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType, authority::LiveReadyInputProvider};
+        use crate::sim::superweapon::chronosphere_tests::charge_super;
+        use crate::sim::world::{
+            SimSoundEvent,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, lab, _) = aymod_nearby_pair("NATECH", "NANRCT", true);
+        let a = scene.sim().entities().get(lab).unwrap().owner();
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let b = scene.add_human_house(
+            "ShieldHouseB",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let c = scene.add_human_house(
+            "ShieldHouseC",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let owners = [a, b, c];
+        let receivers = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(lab).unwrap().position;
+            for (index, owner) in owners.iter().copied().enumerate() {
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((
+                        i32::from(at.rx()) + 18 + index as i32 * 8,
+                        i32::from(at.ry()),
+                    )),
+                    &["NANRCT", "NATECH"],
+                );
+            }
+            let mut ids = Vec::new();
+            for owner in owners {
+                let id = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry()) + 8)),
+                    &["YAGGUN"],
+                )[0];
+                let frame = sim.session.binary_frame();
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    frame,
+                    &LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                ids.push(id);
+            }
+            // Fixture diplomacy is deliberately one-way: B lists A, C lists B.
+            // Launch6CD221 asks each receiver owner, not the launcher.
+            for (asker, ally) in [(b, a), (c, b)] {
+                let asker = sim.interner.resolve(asker).to_ascii_uppercase();
+                let ally = sim.interner.resolve(ally).to_ascii_uppercase();
+                sim.house_alliances_mut_for_test()
+                    .entry(asker)
+                    .or_default()
+                    .insert(ally);
+            }
+            for (asker, ally, expected) in
+                [(b, a, true), (a, b, false), (c, b, true), (c, a, false)]
+            {
+                assert_eq!(
+                    is_allied_with(
+                        sim.house_alliances.as_map(),
+                        sim.interner.resolve(asker),
+                        sim.interner.resolve(ally)
+                    ),
+                    expected
+                );
+            }
+            ids
+        };
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+        }
+        for &id in &receivers {
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(id, &scene.runtime.resources.rules),
+                Some(true)
+            );
+        }
+        let at = scene.sim().entities().get(receivers[0]).unwrap().position;
+        let cell = (at.rx(), at.ry());
+        let launch = |scene: &mut HeadlessScenario, owner| {
+            let sim = &mut scene.runtime.simulation;
+            let sw = charge_super(sim, owner, "ForceShieldSpecial");
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::LaunchSuperWeapon {
+                    sw_type_id: sw,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            tick_with_due_commands(scene);
+            sw
+        };
+        let sw = launch(&mut scene, a);
+        let timer = |scene: &HeadlessScenario, id| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .unwrap()
+                .invulnerability
+                .as_ref()
+                .map(|state| state.timer())
+        };
+        let first = timer(&scene, receivers[0]).unwrap();
+        assert_eq!(timer(&scene, receivers[1]), Some(first));
+        assert_eq!(timer(&scene, receivers[2]), None);
+        let restore = |scene: &mut HeadlessScenario| {
+            let shields: Vec<_> = receivers.iter().map(|&id| timer(scene, id)).collect();
+            let blackouts: Vec<_> = owners
+                .iter()
+                .map(|owner| scene.sim().power_states[owner].blackout_timer_for_test())
+                .collect();
+            let fades: Vec<_> = [a, b]
+                .iter()
+                .map(|owner| {
+                    scene
+                        .sim()
+                        .super_weapons
+                        .get(owner)
+                        .and_then(|supers| supers.get(&sw))
+                        .map(|instance| instance.fade())
+                })
+                .collect();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, "AY allied overlapping shields");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(
+                receivers
+                    .iter()
+                    .map(|&id| timer(scene, id))
+                    .collect::<Vec<_>>(),
+                shields
+            );
+            assert_eq!(
+                owners
+                    .iter()
+                    .map(|owner| scene.sim().power_states[owner].blackout_timer_for_test())
+                    .collect::<Vec<_>>(),
+                blackouts
+            );
+            assert_eq!(
+                [a, b]
+                    .iter()
+                    .map(|owner| scene
+                        .sim()
+                        .super_weapons
+                        .get(owner)
+                        .and_then(|supers| supers.get(&sw))
+                        .map(|instance| instance.fade()))
+                    .collect::<Vec<_>>(),
+                fades
+            );
+        };
+        restore(&mut scene);
+        for _ in 0..23 {
+            tick_with_due_commands(&mut scene);
+        }
+        let a_blackout = scene.sim().power_states[&a].blackout_timer_for_test();
+        let a_fade = scene.sim().super_weapons.get(&a).unwrap()[&sw].fade();
+        assert_eq!(launch(&mut scene, b), sw);
+        assert_eq!(timer(&scene, receivers[0]), Some(first));
+        let refreshed = timer(&scene, receivers[1]).unwrap();
+        assert_ne!(refreshed, first);
+        assert_eq!(timer(&scene, receivers[2]), Some(refreshed));
+        assert_eq!(
+            scene.sim().power_states[&a].blackout_timer_for_test(),
+            a_blackout
+        );
+        assert_eq!(
+            scene.sim().super_weapons.get(&a).unwrap()[&sw].fade().0,
+            a_fade.0 - 1
+        );
+        let b_blackout = scene.sim().power_states[&b].blackout_timer_for_test();
+        assert_ne!(a_blackout, b_blackout);
+        let ends = [a_blackout, b_blackout].map(|timer| {
+            timer
+                .start_frame()
+                .wrapping_add(timer.duration())
+                .wrapping_sub(1) as u32
+        });
+        let now = scene.sim().session.binary_frame();
+        let fade_frames = [a, b].map(|owner| {
+            now + scene.sim().super_weapons.get(&owner).unwrap()[&sw].fade().0 as u32 - 1
+        });
+        restore(&mut scene);
+        let sound = scene
+            .runtime
+            .resources
+            .rules
+            .super_weapon("ForceShieldSpecial")
+            .unwrap()
+            .special_sound
+            .clone()
+            .unwrap();
+        let mut heard = Vec::new();
+        let finish = ends[1].max(fade_frames[1]) + 5;
+        assert!(finish - now < 10000);
+        while scene.sim().session.binary_frame() <= finish {
+            let frame = scene.sim().session.binary_frame();
+            let output = tick_with_due_commands(&mut scene);
+            for event in output.sound_events {
+                if matches!(event, SimSoundEvent::VocAt { ref sound_id, .. } if sound_id == &sound)
+                {
+                    heard.push(frame);
+                }
+            }
+            for (index, owner) in owners.into_iter().enumerate() {
+                let low = index < 2 && frame < ends[index];
+                assert_eq!(scene.sim().power_states[&owner].is_low_power(), low);
+                assert_eq!(
+                    scene.sim().building_operational_state(
+                        receivers[index],
+                        &scene.runtime.resources.rules
+                    ),
+                    Some(!low)
+                );
+            }
+            assert_eq!(
+                scene.sim().power_states[&c].blackout_remaining(scene.sim().session.binary_frame()),
+                0
+            );
+            if frame == ends[0] {
+                restore(&mut scene);
+            }
+        }
+        assert_eq!(heard, fade_frames);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; saved ForceShield fade fires once and real powered cannon resumes after blackout"]
     fn aymod_force_shield_saved_fade_and_blackout_restore_powered_fire() {
         use crate::sim::command::{Command, CommandEnvelope};
