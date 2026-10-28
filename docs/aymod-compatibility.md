@@ -6,12 +6,12 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于fd77cf65b补非盟军巨炮修复的三困难AI实际发展/选择/付款/落地与结束施工验证。实际AY三AI场景1项、Return Dubai三阵营计划1项、NP planner11项、基地选择tests12项通过；本轮仅测试/台账、无新玩法critic。未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于be3d55385核V10作者明确点名的磁电坦克精英射程。实际Return Dubai typed武器/范围边界1项、Battle实射/经验receiver晋升/存读再实射1项、NP InRange32项和GetWeapon3项通过；该具体配置链已有兼容，本轮仅测试/台账、无新玩法critic。未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V10精英后射程反降的剩余原因，先核作者原说明、实际使用兵种及共享武器/射程owner，不能通过改Range数值“修复”；不重开Return Dubai弱攻势调查。V10坠落地面单位完整自主索敌、坠落中存读及多AI仍未验；F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
+- 下一安全动作：继续V10其他实际普通/精英武器对及共享射程入口的适用性核对，区分配置刻意缩短、已有逻辑与真正未移植补丁；不能凭作者笼统说明给所有精英加一格，也不重开Return Dubai弱攻势调查。TELE的13/12格最远处实际炮口/车辆抬升、多AI与GPU仍未验；坠落地面完整索敌/存读、F02受损FX/EMP绘制、V02联盟/自然缺电/恢复及V07整个App/原局仍开放。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -275,6 +275,13 @@
 - 读档后普通Stop及Guard事件让两者都退至stage0/value0，精英经验与缓存不丢；重新普通Attack时，真实fire_event武器匹配发射前当前stage对应的EliteWeapon槽。允许原生瞄准时继续蓄速，不凭作者短句硬设高档或假定所有首发都固定stage0。
 - 最终复合实际生命周期1项（坦克/机炮两例）、既有精英首发1项（两类普通/精英typed ROF关系）、Gattling7、Veterancy12通过。仅新增回归和台账，既有生产链无需修复，无新增状态/timer/Detach、无MOD/固定构建/原存档写入；未启动GUI，无发布或critic重复轮次。
 - 边界：对空槽、换主/登离载具、所有ROF倍率与连续间隔、完整强度敌军交战和GPU画面未扩称通过。这里证明普通武器击杀/晋升/蓄速/存读/退档/续战两条地面链，不关闭全部V06或整体目标。
+
+### V10磁电坦克精英射程：实际配置与既有共享owner（2026-10-28）
+
+- 复读作者170507：第116行笼统称“部分武器精英级后射程反而降低”，第178行明确点名磁电坦克。对应TELE，不是幻影MGTK；不能将作者两句话都直接归因到Arcing补丁。正式Battle/XMP03T4及Return Dubai加载下，TELE普通/精英主槽为MagneticBeam/MagneticBeamE，Range12/13；建筑副槽MagneShake/MagneShakeE为11/12格。本轮未改这些值。
+- 实读实际AY GetWeapon70E15F..70E17C选择存在的精英槽，否则70E17E..70E18B回退普通槽；沿既有get_weapon/weapon_range/InRange，不增加精英通用射程奖励或TELE专属例外。Return Dubai生产typed reader下，平地给定查询源点对车辆/建筑分别放在普通射程外半格（建筑仍经既有foundation owner），普通拒绝、精英通过，GetWeaponRange保留实际精英原Range；不是实际炮口或远距攻击回放。
+- 实际Battle场景：TELE普通Attack对GAPOWR发射MagneShake，普通Stop后沿既有致死receiver/RecordKill/Add取得精英经验，普通帧采样等级，不写rank/XP。这里APOC奖励来自明示direct-receiver击杀输入，不是磁电抬升实杀。正式存读后两个武器槽仍分别13/12格；再普通Attack实际发射MagneShakeE并造成建筑伤害。这覆盖真实建筑选副槽、等级切换与保存恢复，但不是13格车辆抬升/12格最远建筑攻击验证。
+- 最终实际两项、NP InRange32项及combat_weapon::tests3项通过；仅测试/台账，无生产改动/新critic，无新增RNG、timer写入、Detach或保存字段，既有owner副作用保持。未启动GUI、未改MOD/原始存档/固定玩家版或发布。该具体配置链不再列成纯缺失；作者“部分武器”其余身份、精英最远炮口/实际抬升、多AI与视觉仍保留，不据此关闭全V10。
 
 ### V10相关射程：Arcing与SubjectToCliffs联合分支（2026-10-28）
 
@@ -988,6 +995,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；原目标保持/反击/直接脚本另验。
 光棱支援招募已按44B388→7E04BB接LastOperational采样，真实Off/存读/独立开火/On/重新联击通过；不现场重算供电，不取消已排定束，EMP/缺电/绘制边界仍开放。
 Arcing/SubjectToCliffs联合射程分支已接6F7404→C2D5ED，覆盖实体/mapless、桥面/射线及真实AY普通/精英巨炮typed查询；其他精英退射程原因、实际炮口与攻击验收仍开放。
+作者明确点名的TELE已核实际主槽12→13、副槽11→12格，实际边界查询及普通实射→经验receiver晋升→存读→精英建筑实射通过，见对应节；不是通用精英加射程补丁，也不冒称最远炮口/车辆抬升已验。
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 **V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。

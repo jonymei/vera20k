@@ -1371,6 +1371,80 @@ mod tests {
         assert_original_range_rows(&native["rows"]);
     }
 
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Magnetron normal/elite vehicle and building reach"]
+    fn aymod_magnetron_elite_slots_keep_the_authored_extra_cell_of_reach() {
+        use crate::headless_scenario::{battle_session, load_session};
+        use crate::sim::combat::combat_weapon::{get_weapon, weapon_range};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+        let rules = &scene.runtime.resources.rules;
+        let terrain = flat_terrain(64, 64);
+        for (target_type, index, normal_name, elite_name, normal_cells) in [
+            ("MTNK", 0, "MagneticBeam", "MagneticBeamE", 12),
+            ("GAPOWR", 1, "MagneShake", "MagneShakeE", 11),
+        ] {
+            let mut actor = ground_attacker(4, 4, 0, "TELE");
+            let mut target = ground_target(24, 24, 0, target_type);
+            if index == 1 {
+                target.set_category_for_test(EntityCategory::Structure);
+                target.type_facts.set_foundation_for_test(
+                    rules.object(target_type).unwrap().foundation.clone().into(),
+                );
+            }
+            let interner = test_interner();
+            let point = object_get_coords(&target, Some(&terrain));
+            let foundation = foundation_reach_leptons(&target, rules, &interner);
+            let source = (
+                i64::from(point.x) - normal_cells * 256 - foundation - 128,
+                i64::from(point.y),
+                i64::from(point.z),
+            );
+            let mut world = Simulation::new();
+            world.substrate.entities.insert(target);
+            let kind = rules.object("TELE").unwrap();
+            let normal =
+                get_weapon(&actor, kind, index, world.entities(), rules, &interner).unwrap();
+            assert_eq!(normal.id, normal_name);
+            assert_eq!(i64::from(normal.range_leptons), normal_cells * 256);
+            assert!(!compute_in_range(
+                &actor,
+                source,
+                &TargetKind::Entity(200),
+                normal,
+                rules,
+                &interner,
+                &world,
+                &terrain,
+                &LineOfFireInputs::terrain_only()
+            ));
+            actor.veterancy.set_elite();
+            // GetWeapon70E15F..70E17C selects the authored elite slot; the
+            // extra reach comes from AY rules, not a new elite range bonus.
+            let elite =
+                get_weapon(&actor, kind, index, world.entities(), rules, &interner).unwrap();
+            assert_eq!(elite.id, elite_name);
+            assert_eq!(i64::from(elite.range_leptons), (normal_cells + 1) * 256);
+            assert_eq!(
+                weapon_range(&actor, kind, index, world.entities(), rules, &interner),
+                elite.range_leptons
+            );
+            assert!(compute_in_range(
+                &actor,
+                source,
+                &TargetKind::Entity(200),
+                elite,
+                rules,
+                &interner,
+                &world,
+                &terrain,
+                &LineOfFireInputs::terrain_only()
+            ));
+        }
+    }
+
     fn assert_original_range_rows(rows: &serde_json::Value) {
         // The projectile's Arcing=, SubjectToElevation= and Floater=
         // combinations, one bit each.

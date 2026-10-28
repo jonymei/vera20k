@@ -9359,6 +9359,108 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Magnetron firing, earned elite slots and saved range"]
+    fn aymod_magnetron_earned_elite_keeps_its_range_and_fires_the_elite_building_weapon() {
+        use crate::sim::combat::combat_weapon::get_weapon;
+        use crate::sim::combat::veterancy::RANK_ELITE_U16;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, actor, target) = aymod_nearby_pair("TELE", "GAPOWR", false);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let ranges = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let rules = &scene.runtime.resources.rules;
+            let entity = sim.entities().get(actor).unwrap();
+            [0, 1].map(|index| {
+                get_weapon(
+                    entity,
+                    rules.object("TELE").unwrap(),
+                    index,
+                    sim.entities(),
+                    rules,
+                    &sim.interner,
+                )
+                .unwrap()
+                .range_leptons
+            })
+        };
+        let normal_ranges = ranges(&scene);
+        assert_eq!(normal_ranges, [12 * 256, 11 * 256]);
+        let owner = scene.sim().entities().get(actor).unwrap().owner();
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        assert!((0..180).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            output.fire_events.iter().any(|event| {
+                event.attacker_id == actor
+                    && event.target == crate::sim::combat::TargetKind::Entity(target)
+                    && scene.sim().interner.resolve(event.weapon_id) == "MagneShake"
+            })
+        }));
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Stop { entity_id: actor },
+        ));
+        tick_with_due_commands(&mut scene);
+        // Exercise RecordKill/Add and the ordinary rank sampler, not set_elite.
+        // These kills enter the direct receiver seam, not Magnetron lift shots.
+        for _ in 0..8 {
+            if scene.sim().entities().get(actor).unwrap().veterancy.rank() == RANK_ELITE_U16 {
+                break;
+            }
+            aymod_kill_for_experience(&mut scene, actor);
+        }
+        tick_with_due_commands(&mut scene);
+        assert_eq!(
+            scene.sim().entities().get(actor).unwrap().veterancy.rank(),
+            RANK_ELITE_U16
+        );
+        assert_eq!(ranges(&scene), [13 * 256, 12 * 256]);
+        let bytes = save_scene(&scene, "AY Magnetron after earning elite");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            ranges(&scene),
+            [normal_ranges[0] + 256, normal_ranges[1] + 256]
+        );
+        assert!(scene.sim().entities().get(target).unwrap().health.current() > 0);
+        let health = scene.sim().entities().get(target).unwrap().health.current();
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == actor
+                        && event.target == crate::sim::combat::TargetKind::Entity(target)
+                        && scene.sim().interner.resolve(event.weapon_id) == "MagneShakeE"
+                });
+                fired
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(target)
+                        .is_none_or(|target| target.health.current() < health)
+            }),
+            "ordinary Attack after saved promotion must use the elite building slot and damage the target"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_kill_for_experience(scenario: &mut HeadlessScenario, killer: u64) {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
         let runtime = &mut scenario.runtime;
