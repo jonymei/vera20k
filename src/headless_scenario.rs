@@ -1963,18 +1963,25 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real Prism support after power orders and save/resume"]
     fn aymod_prism_support_respects_saved_offline_state_and_recovers() {
-        aymod_prism_power_recovery(false);
+        aymod_prism_power_recovery(false, false);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual House power loss blocks Prism fire and recruitment across saves, then restores support"]
     fn aymod_prism_support_recovers_after_saved_house_power_loss() {
-        aymod_prism_power_recovery(true);
+        aymod_prism_power_recovery(true, false);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_prism_power_recovery(house_outage: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; isolated supporter EMP and natural expiry restore actual Prism support across saves"]
+    fn aymod_prism_support_recovers_after_saved_supporter_emp() {
+        aymod_prism_power_recovery(false, true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_prism_power_recovery(house_outage: bool, emp_supporter: bool) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::{
             DelayedFire,
@@ -1991,8 +1998,11 @@ mod retail_construction_tests {
             let at = sim.entities().get(master).unwrap().position;
             let center = (i32::from(at.rx()), i32::from(at.ry()));
             let power = spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["GAPOWR"])[0];
-            let supporter =
-                spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["ATESLA"])[0];
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| !emp_supporter || (x - center.0).abs().max((y - center.1).abs()) == 4)
+                .collect::<Vec<_>>();
+            let supporter = spawn_on_free_cells(sim, rules, owner, sites, &["ATESLA"])[0];
             (supporter, power)
         };
         let queue = |scene: &mut HeadlessScenario, command| {
@@ -2015,13 +2025,53 @@ mod retail_construction_tests {
             );
         }
         let switched = if house_outage { power } else { supporter };
-        queue(
-            &mut scene,
-            Command::SetBuildingOnLine {
-                entity_id: switched,
-                on: false,
-            },
-        );
+        if emp_supporter {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let primary = rules
+                .weapon(rules.object("TTNK").unwrap().primary().unwrap())
+                .unwrap();
+            let projectile = rules
+                .projectile(primary.projectile.as_deref().unwrap())
+                .unwrap();
+            let emp = rules
+                .weapon(projectile.airburst_weapon.as_deref().unwrap())
+                .unwrap();
+            assert_eq!(emp.id, "TankBoltEMP");
+            let wh = rules.warhead(emp.warhead.as_deref().unwrap()).unwrap();
+            assert!(wh.em_effect);
+            let at = crate::sim::movement::ground_pose::object_get_coords(
+                sim.entities().get(supporter).unwrap(),
+                sim.resolved_terrain(),
+            );
+            sim.apply_npatch_emp_detonation(
+                crate::sim::projectile::ProjectileCoord {
+                    x: at.x,
+                    y: at.y,
+                    z: at.z,
+                },
+                Some(supporter),
+                None,
+                emp.damage,
+                wh,
+                rules,
+                Default::default(),
+            );
+            assert!(sim.entities().get(supporter).unwrap().emp_remaining() > 3);
+            assert_eq!(
+                sim.entities().get(master).unwrap().emp_remaining(),
+                0,
+                "EMP footprint must leave the master operational"
+            );
+        } else {
+            queue(
+                &mut scene,
+                Command::SetBuildingOnLine {
+                    entity_id: switched,
+                    on: false,
+                },
+            );
+        }
         for _ in 0..3 {
             tick_with_due_commands(&mut scene);
         }
@@ -2045,7 +2095,40 @@ mod retail_construction_tests {
         );
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let bytes = save_scene(&scene, "AY offline Prism supporter");
+        let saved_emp = scene
+            .sim()
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .emp_remaining();
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        if emp_supporter {
+            assert!(!scene.sim().power_states[&owner].is_low_power());
+            assert!(scene.sim().entities().get(supporter).unwrap().building_online());
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .emp_remaining(),
+                saved_emp
+            );
+            assert!(saved_emp > 0);
+            assert_eq!(
+                scene.sim().entities().get(master).unwrap().emp_remaining(),
+                0
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(master)
+                    .unwrap()
+                    .building_last_operational
+                    .is_operational()
+            );
+        }
         assert!(
             !scene
                 .sim()
@@ -2066,6 +2149,18 @@ mod retail_construction_tests {
         let before_hp = scene.sim().entities().get(target).unwrap().health.current();
         for _ in 0..240 {
             let output = tick_with_due_commands(&mut scene);
+            if emp_supporter {
+                assert!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(supporter)
+                        .unwrap()
+                        .emp_remaining()
+                        > 0,
+                    "the master must fire while support is still EMP-disabled"
+                );
+            }
             if house_outage {
                 assert!(scene.sim().power_states[&owner].is_low_power());
                 assert!(
@@ -2114,14 +2209,37 @@ mod retail_construction_tests {
                 "the online master must still fire without offline support"
             );
         }
-        queue(
-            &mut scene,
-            Command::SetBuildingOnLine {
-                entity_id: switched,
-                on: true,
-            },
-        );
-        if house_outage {
+        if emp_supporter {
+            queue(&mut scene, Command::Stop { entity_id: master });
+            assert!(
+                (0..1000).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    assert_eq!(sim.entities().get(master).unwrap().emp_remaining(), 0);
+                    let supporter = sim.entities().get(supporter).unwrap();
+                    if supporter.emp_remaining() > 0 {
+                        assert!(!supporter.building_last_operational.is_operational());
+                        assert!(!supporter.pending_building_fire.pending().is_some_and(
+                            |pending| matches!(pending.fire(), DelayedFire::SupportBeam { .. })
+                        ));
+                        false
+                    } else {
+                        supporter.building_last_operational.is_operational()
+                    }
+                }),
+                "supporter EMP must expire naturally and restore its sample"
+            );
+        } else {
+            queue(
+                &mut scene,
+                Command::SetBuildingOnLine {
+                    entity_id: switched,
+                    on: true,
+                },
+            );
+        }
+        let mut recovery_hp = before_hp;
+        if house_outage || emp_supporter {
             // Let ordinary House/tower updates restore operational samples;
             // Attack can have dropped on Cant while power was unavailable.
             for _ in 0..3 {
@@ -2145,6 +2263,7 @@ mod retail_construction_tests {
             );
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             assert!(!scene.sim().power_states[&owner].is_low_power());
+            recovery_hp = scene.sim().entities().get(target).unwrap().health.current();
             queue(
                 &mut scene,
                 Command::Attack {
@@ -2180,14 +2299,14 @@ mod retail_construction_tests {
                     .iter()
                     .any(|event| event.attacker_id == master)
             {
-                if house_outage {
+                if house_outage || emp_supporter {
                     assert!(
                         (0..120).any(|_| {
                             if scene
                                 .sim()
                                 .entities()
                                 .get(target)
-                                .is_none_or(|unit| unit.health.current() < before_hp)
+                                .is_none_or(|unit| unit.health.current() < recovery_hp)
                             {
                                 return true;
                             }
