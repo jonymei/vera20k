@@ -4152,6 +4152,186 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real Armor/Firepower pickup, saved multipliers and projectile damage"]
+    fn aymod_multiplier_crates_change_real_saved_combat_damage() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for slot in [9u8, 11] {
+            let (mut scene, tank, target) = aymod_nearby_pair("MTNK", "GAPOWR", true);
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("Russians")
+                .unwrap();
+            assert_eq!(
+                f64::from_bits(
+                    scene.runtime.resources.rules.powerups.magnitudes[usize::from(slot)].bits()
+                ),
+                if slot == 9 { 2.5 } else { 2.0 }
+            );
+            let cell = {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                sim.mission_queue_exact(
+                    tank,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &resources.rules,
+                    },
+                )
+                .unwrap();
+                let at = sim.entities().get(tank).unwrap().position;
+                let other = sim.entities().get(target).unwrap().position;
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter_map(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+                    .find(|&(x, y)| {
+                        let near = |p: crate::sim::components::Position| {
+                            x.abs_diff(p.rx()).max(y.abs_diff(p.ry())) <= 1
+                        };
+                        near(at)
+                            && near(other)
+                            && sim.terrain_cell_level(x, y) == Some(at.z())
+                            && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                            && sim.occupancy().get(x, y).is_none_or(|cell| {
+                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                            })
+                            && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+                    })
+                    .expect("free crate cell inside the tank and building radius")
+            };
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let initial = save_scene(&scene, "AY before multiplier crate pickup");
+            let mut losses = Vec::new();
+            for pickup in [false, true] {
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &initial);
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                if pickup {
+                    assert!(crate::sim::crates::place_crate(
+                        sim,
+                        &resources.rules,
+                        &resources.overlay_registry,
+                        (cell.0 as i16, cell.1 as i16),
+                        Some(slot)
+                    ));
+                }
+                let owner = sim.entities().get(tank).unwrap().owner();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Move {
+                        entity_id: tank,
+                        target_rx: cell.0,
+                        target_ry: cell.1,
+                    },
+                ));
+                assert!((0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let at = scene.sim().entities().get(tank).unwrap().position;
+                    (at.rx(), at.ry()) == cell
+                }));
+                let expected = if pickup {
+                    scene.runtime.resources.rules.powerups.magnitudes[usize::from(slot)]
+                } else {
+                    crate::util::native_x87::NativeF64Bits::ONE
+                };
+                let selected = |sim: &Simulation| {
+                    if slot == 9 {
+                        sim.entities()
+                            .get(target)
+                            .unwrap()
+                            .crate_multipliers
+                            .armor()
+                    } else {
+                        sim.entities()
+                            .get(tank)
+                            .unwrap()
+                            .crate_multipliers
+                            .firepower()
+                    }
+                };
+                assert_eq!(selected(scene.sim()), expected);
+                // Only turn the unarmed building hostile after pickup, so
+                // Guard cannot start a comparison shot during the Move.
+                let defender = scene.add_human_house(
+                    "CrateDefender",
+                    LaunchCountry::from_country_index(u32::from(country.0)),
+                );
+                let runtime = &mut scene.runtime;
+                runtime.simulation.change_owner_with_rules(
+                    target,
+                    defender,
+                    &runtime.resources.rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+                let bytes = save_scene(&scene, "AY multiplier before actual Attack");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(selected(scene.sim()), expected);
+                let sim = &mut scene.runtime.simulation;
+                let hp = sim.entities().get(target).unwrap().health.current();
+                assert_eq!(
+                    hp,
+                    scene
+                        .runtime
+                        .resources
+                        .rules
+                        .object("GAPOWR")
+                        .unwrap()
+                        .strength
+                );
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: tank,
+                        target_id: target,
+                    },
+                ));
+                let mut shots = 0;
+                assert!((0..300).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    shots += output
+                        .fire_events
+                        .iter()
+                        .filter(|event| event.attacker_id == tank)
+                        .count();
+                    scene.sim().entities().get(target).unwrap().health.current() < hp
+                }));
+                assert_eq!(
+                    shots, 1,
+                    "compare one real projectile, not combined volleys"
+                );
+                losses.push(hp - scene.sim().entities().get(target).unwrap().health.current());
+            }
+            assert!(
+                losses[0] >= 10,
+                "comparison must observe meaningful actual projectile damage"
+            );
+            // Metamorphic gameplay check, not a new native arithmetic golden:
+            // the real configured2x firepower /2.5x armor must reach damage.
+            if slot == 11 {
+                assert!(
+                    (losses[1] - losses[0] * 2).abs() <= 2,
+                    "Firepower: {losses:?}"
+                );
+            } else {
+                assert!(
+                    (losses[1] * 5 - losses[0] * 2).abs() <= 5,
+                    "Armor: {losses:?}"
+                );
+            }
+            eprintln!("AY crate{slot}: baseline and upgraded first-impact damage {losses:?}");
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual weighted, map-placed and trigger-selected crate applicability"]
     fn aymod_battle_crate_inventory_excludes_unported_effect_arms() {
         use crate::rules::powerups::POWERUP_NAMES;
