@@ -4152,6 +4152,91 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual weighted, map-placed and trigger-selected crate applicability"]
+    fn aymod_battle_crate_inventory_excludes_unported_effect_arms() {
+        use crate::rules::powerups::POWERUP_NAMES;
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in [None, Some("重返迪拜.yrm")] {
+            let scene = if let Some(map) = map {
+                let launch = battle_session(
+                    map,
+                    &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+                );
+                load_session(&root, map, 0x00C0_FFEE, launch).unwrap()
+            } else {
+                aymod_battle(0)
+            };
+            let table = &scene.runtime.resources.rules.powerups;
+            assert_eq!(
+                table.weights,
+                [
+                    10, 15, 10, 10, 15, 0, 0, 0, 10, 10, 10, 10, 0, 0, 10, 0, 0, 0, 0
+                ]
+            );
+            // Pickup481AC8 selects all nineteen weights. Fixed overlay data
+            // bypasses that draw; trigger108 (6DF69B -> 68BCC0 -> 56BEC0)
+            // can also request a zero-weight slot. Check all three sources.
+            let unported = [5u8, 12, 16, 17];
+            let registry = &scene.runtime.resources.overlay_registry;
+            let placed: Vec<_> = scene
+                .sim()
+                .overlay_grid()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| {
+                    cell.overlay_id
+                        .and_then(|id| registry.flags(id))
+                        .is_some_and(|flags| flags.crate_type)
+                })
+                .map(|cell| cell.overlay_data)
+                .collect();
+            let scripted: Vec<_> = scene
+                .map
+                .actions
+                .values()
+                .flat_map(|action| action.entries())
+                .filter(|action| action.kind == 108)
+                .map(|action| {
+                    action
+                        .literal_value()
+                        .expect("crate action has a literal value")
+                })
+                .collect();
+            for slot in unported {
+                assert_eq!(
+                    table.weights[usize::from(slot)],
+                    0,
+                    "{}",
+                    POWERUP_NAMES[usize::from(slot)]
+                );
+                assert!(
+                    !placed.contains(&slot),
+                    "map-placed {}",
+                    POWERUP_NAMES[usize::from(slot)]
+                );
+                assert!(
+                    !scripted
+                        .iter()
+                        .any(|&value| value != 20 && value as u8 == slot),
+                    "trigger-selected {}",
+                    POWERUP_NAMES[usize::from(slot)]
+                );
+            }
+            eprintln!(
+                "{}: active={:?}, placed={placed:?}, trigger108={scripted:?}",
+                scene.sim().session.map_name(),
+                POWERUP_NAMES
+                    .iter()
+                    .zip(table.weights)
+                    .filter(|(_, weight)| *weight != 0)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; natural building particle slot applicability in actual scenarios"]
     fn aymod_building_natural_particle_slot_is_dormant_in_battle_scenarios() {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
