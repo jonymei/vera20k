@@ -9360,6 +9360,251 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; complete allocated normal/elite weapon range inventory"]
+    fn aymod_elite_range_inventory_retains_authored_shorter_weapon_slots() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in ["XMP03T4.MAP", "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm"] {
+            let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+            let rules = &scene.runtime.resources.rules;
+            let mut pairs = 0;
+            let mut shorter = Vec::new();
+            let mut unresolved = Vec::new();
+            for kind in rules.all_objects() {
+                for index in 0..crate::rules::object_type::WEAPON_SLOT_COUNT {
+                    for name in [kind.weapon_at(index), kind.elite_weapon_at(index)]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if rules.weapon(name).is_none() {
+                            unresolved.push((kind.id.as_str(), index, name));
+                        }
+                    }
+                    let Some(normal) = kind.weapon_at(index).and_then(|name| rules.weapon(name)) else {
+                        continue;
+                    };
+                    let Some(elite) = kind
+                        .elite_weapon_at(index)
+                        .and_then(|name| rules.weapon(name))
+                    else {
+                        continue;
+                    };
+                    pairs += 1;
+                    if normal.range_leptons > 0
+                        && elite.range_leptons >= 0
+                        && elite.range_leptons < normal.range_leptons
+                    {
+                        shorter.push((
+                            kind.id.as_str(),
+                            index,
+                            normal.id.as_str(),
+                            normal.range_leptons,
+                            elite.id.as_str(),
+                            elite.range_leptons,
+                        ));
+                    }
+                }
+            }
+            assert!(
+                pairs > 0,
+                "inspect allocated typed weapons, not unparsed sections"
+            );
+            assert!(
+                unresolved.is_empty(),
+                "{map}: unresolved slots must not silently disappear from the range inventory: {unresolved:?}"
+            );
+            shorter.sort_unstable();
+            // These are actual AY INI choices, not missing elite-range bonuses.
+            // Keep the configured shorter weapon rather than silently maxing it
+            // against its normal counterpart. FV slot6 is SHK's active IFVMode.
+            assert_eq!(
+                shorter,
+                [
+                    ("FV", 6, "CRElectricBolt", 1536, "TankBolt", 1344),
+                    ("UTNK", 0, "Comet", 2816, "120mmE", 1600),
+                    ("XCOMET2", 0, "OPCoilFragment", 1024, "TeslaFragment2", 768),
+                    ("XCOMET2", 1, "TeslaFragmentE", 768, "CoilFragmentEMP", 512),
+                ],
+                "{map}: authored shorter elite ranges among {pairs} allocated pairs"
+            );
+            eprintln!(
+                "AY {map}: {pairs} allocated normal/elite pairs, {} authored reductions",
+                shorter.len()
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual SHK gunner and authored shorter elite Tesla IFV range"]
+    fn aymod_tesla_ifv_keeps_its_authored_shorter_elite_weapon_after_saved_promotion() {
+        use crate::sim::combat::veterancy::RANK_ELITE_U16;
+        use crate::sim::combat::{TargetKind, combat_weapon, in_range, line_of_fire::LineOfFireInputs};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, actor, gunner) = aymod_nearby_pair("FV", "SHK", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let owner = scene.sim().entities().get(actor).unwrap().owner();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::clicked_mission(gunner, MissionType::Enter, TargetKind::Entity(actor)),
+        ));
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(gunner)
+                .unwrap()
+                .passenger_role
+                .inside_transport_id()
+                == Some(actor)
+        }));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .current_weapon_number(),
+            6
+        );
+        let target = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(actor).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 3
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            spawn_on_free_cells(sim, rules, enemy, sites, &["GAPOWR"])[0]
+        };
+        let probe = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let rules = &scene.runtime.resources.rules;
+            let actor = sim.entities().get(actor).unwrap();
+            let target_entity = sim.entities().get(target).unwrap();
+            assert_eq!(
+                rules.object("GAPOWR").unwrap().foundation.dimensions(),
+                (2, 2)
+            );
+            let point = crate::sim::movement::ground_pose::object_get_coords(
+                target_entity,
+                sim.resolved_terrain(),
+            );
+            let weapon = combat_weapon::current_weapon(
+                actor,
+                rules.object("FV").unwrap(),
+                sim.entities(),
+                rules,
+                &sim.interner,
+            )
+            .unwrap();
+            // Supplied query geometry at6.5 cells, not the actual nearby muzzle.
+            // The shared direct arm includes the real building foundation.
+            let reaches = in_range::compute_in_range(
+                actor,
+                (
+                    i64::from(point.x) - 1664,
+                    i64::from(point.y),
+                    i64::from(point.z),
+                ),
+                &TargetKind::Entity(target),
+                weapon,
+                rules,
+                &sim.interner,
+                sim,
+                sim.resolved_terrain().unwrap(),
+                &LineOfFireInputs::terrain_only(),
+            );
+            (weapon.id.clone(), weapon.range_leptons, reaches)
+        };
+        assert_eq!(probe(&scene), ("CRElectricBolt".to_owned(), 1536, true));
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        assert!((0..180).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            output.fire_events.iter().any(|event| {
+                event.attacker_id == actor
+                    && event.target == TargetKind::Entity(target)
+                    && scene.sim().interner.resolve(event.weapon_id) == "CRElectricBolt"
+            })
+        }));
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Stop { entity_id: actor },
+        ));
+        tick_with_due_commands(&mut scene);
+        for _ in 0..8 {
+            if scene.sim().entities().get(actor).unwrap().veterancy.rank() == RANK_ELITE_U16 {
+                break;
+            }
+            aymod_kill_for_experience(&mut scene, actor);
+        }
+        tick_with_due_commands(&mut scene);
+        assert_eq!(
+            scene.sim().entities().get(actor).unwrap().veterancy.rank(),
+            RANK_ELITE_U16
+        );
+        assert_eq!(probe(&scene), ("TankBolt".to_owned(), 1344, false));
+        let bytes = save_scene(&scene, "AY Tesla IFV after earned elite");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(gunner)
+                .unwrap()
+                .passenger_role
+                .inside_transport_id(),
+            Some(actor)
+        );
+        assert_eq!(probe(&scene), ("TankBolt".to_owned(), 1344, false));
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        ));
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                output.fire_events.iter().any(|event| {
+                    event.attacker_id == actor
+                        && event.target == TargetKind::Entity(target)
+                        && scene.sim().interner.resolve(event.weapon_id) == "TankBolt"
+                })
+            }),
+            "the saved elite gunner mode must remain usable at ordinary close range"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Magnetron firing, earned elite slots and saved range"]
     fn aymod_magnetron_earned_elite_keeps_its_range_and_fires_the_elite_building_weapon() {
         use crate::sim::combat::combat_weapon::get_weapon;
