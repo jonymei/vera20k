@@ -5666,9 +5666,7 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; actual Engineer captures a hospital with a patient before saved destruction"]
-    fn aymod_hospital_engineer_capture_disconnects_patient_before_saved_destruction() {
+    fn aymod_hospital_captured_with_patient() -> (HeadlessScenario, u64, u64, InternedId) {
         use crate::sim::command::{Command, CommandEnvelope};
         // A real high-strength infantry patient gives the walking Engineer a
         // natural capture window; no repair-rate or speed override is used.
@@ -5774,6 +5772,172 @@ mod retail_construction_tests {
                     .unwrap()
                     .strength
         );
+        (scene, hospital, patient, recipient)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; captured hospital serves a new owner's patient before sale cleans old Cargo"]
+    fn aymod_captured_hospital_serves_new_patient_and_sale_cleans_old_cargo_after_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, hospital, old, recipient) = aymod_hospital_captured_with_patient();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let old_state = |scene: &HeadlessScenario| {
+            let actor = scene.sim().entities().get(old).unwrap();
+            (
+                actor.owner(),
+                actor.health.current(),
+                actor.lifecycle.in_limbo(),
+                actor.passenger_role.inside_transport_id(),
+            )
+        };
+        let expected = old_state(&scene);
+        assert_ne!(expected.0, recipient);
+        let bytes = save_scene(&scene, "AY captured hospital before new service");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        // Guard449817 only restarts UnitRepair/UnitReload/Bunker, not Hospital;
+        // Hospital44B91E sends RepairTick solely to radio contact0. A retained
+        // Cargo entry is not enough to invent automatic healing/relinking.
+        let kind = scene.runtime.resources.rules.object("GAROBO").unwrap();
+        assert!(!kind.unit_repair && !kind.unit_reload && !kind.bunker);
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(old_state(&scene), expected);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .slot(0),
+                None
+            );
+        }
+        let (fresh, strength) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(hospital).unwrap().position;
+            let fresh = spawn_on_free_cells(
+                sim,
+                rules,
+                recipient,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["E1"],
+            )[0];
+            sim.substrate.entities.get_mut(fresh).unwrap().health.set(1);
+            sim.queue_command(CommandEnvelope::new(
+                recipient,
+                sim.session.tick() + 1,
+                Command::clicked_mission(fresh, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+            (fresh, rules.object("E1").unwrap().strength)
+        };
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .passengers()
+                    == [fresh, old]
+            }),
+            "new service must admit through the normal Enter owner despite retained old Cargo"
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(fresh)
+                .unwrap()
+                .lifecycle
+                .in_limbo()
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY hospital with new patient ahead of captured Cargo",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(fresh).unwrap();
+                !actor.lifecycle.in_limbo() && actor.health.current() == strength
+            }),
+            "the new owner's real patient must heal and exit after the service save"
+        );
+        // Hospital44B9B7/473430 pops the Cargo head, not an arbitrary member.
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(hospital)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .passengers(),
+            &[old]
+        );
+        assert_eq!(old_state(&scene), expected);
+        assert_eq!(
+            scene.sim().entities().get(fresh).unwrap().owner(),
+            recipient
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(fresh)
+                .unwrap()
+                .passenger_role
+                .inside_transport_id(),
+            None
+        );
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            recipient,
+            scene.sim().session.tick() + 1,
+            Command::SellBuilding {
+                entity_id: hospital,
+            },
+        ));
+        assert!(
+            (0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().get(hospital).is_none()
+            }),
+            "ordinary sale must finish with the remaining nonabsorber Cargo"
+        );
+        // ObjectUnInit5F660D finally kills remaining Cargo with no attacker.
+        assert!(scene.sim().entities().get(old).is_none());
+        let bytes = save_scene(
+            &scene,
+            "AY sold captured hospital with no old Cargo references",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().entities().get(old).is_none());
+        assert!(scene.sim().entities().get(hospital).is_none());
+        let actor = scene.sim().entities().get(fresh).unwrap();
+        assert!(
+            actor.is_object_alive() && actor.health.current() > 0 && !actor.lifecycle.in_limbo()
+        );
+        assert_eq!(actor.owner(), recipient);
+        assert_eq!(actor.passenger_role.inside_transport_id(), None);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Engineer captures a hospital with a patient before saved destruction"]
+    fn aymod_hospital_engineer_capture_disconnects_patient_before_saved_destruction() {
+        let (mut scene, hospital, patient, _) = aymod_hospital_captured_with_patient();
         aymod_assert_hospital_cargo_destruction(&mut scene, hospital, patient);
     }
 

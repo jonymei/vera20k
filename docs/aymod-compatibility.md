@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于303dc2c25补普通工程师真实步行占领正在治疗的GAROBO，接通实际换主断联Cargo到保存/毁坏清理。实际医院4项通过；仅共用夹具/回归，无生产玩法修改/新critic，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于7ab98e50a接续被夺GAROBO的新主人送医/新患者出院、正常卖楼清理旧Cargo及三次存读。医院新项1+原项4通过，仅共用夹具/回归，无生产玩法修改/新critic，未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
@@ -15,9 +15,17 @@
 - BuildingUnlimbo440E99..440EA7先要求NaturalParticleSystem非空才分配/调用62DC50并写30C；完全隐形454E7F..454E9E销毁旧30C；退隐到0的454F3D..454F6C先比较NaturalParticleLocation与空坐标，相同便在分配/构造前跳过。生产typed全Building列表在普通Battle/XMP03T4和Return Dubai均system=None、位置0，已新增正式场景回归，不把单个电厂或文本grep当全集证据。
 - 因此这两配置fresh场景的自然粒子链未启用，当前箱子隐形无需创建空壳粒子状态，也没有这条路径新增对象ID/抽样；其他模式/地图、自定义非空位置或历史带30C的外来存档仍保留未实现通用生命周期。NAWEAP的NaturalSmokeLocation不是此reader读取的NaturalParticleLocation，未擅加别名；字面字节检索不当作全局不可达证明。
 - 最终真实两图适用性1项、原Type空引用读取1项、实际移动/建筑/落地飞机箱子2项通过。未增加RNG、timer/Detach或保存字段，无全仓库/GUI/新游戏构建。缓存保留器Unsupported PE debug closure安全停止、删除0字节，不手动清理固定构建。
-- 下一安全动作：核V02被夺医院失联患者后续恢复/离开，先追完整原生Guard/Repair更新链，不凭换主会QueueGuard就断言原生永久卡死，也不擅自加自动弹出/收编；联盟准入、自然缺电与EMP仍分列。V07实际GPU不等于整个App/玩家原局重放，启用NaturalParticleSystem配置仍开放。
+- 下一安全动作：优先回到F02建筑损坏/联盟传感器边界；V02本例新主人继续服务和卖楼收尾已验，旧失联者在有限等待/一次新服务中保留原状，不能据此宣称任何情况下永不恢复。V02联盟准入、自然缺电/EMP及其他恢复操作仍分列；V07实际GPU不等于整个App/玩家原局重放，启用NaturalParticleSystem配置仍开放。
 - V05双弹/第二射手死亡与本轮剩余Cargo顺序已通过各自范围；非尾移除、单剩驻军原生自动续火、母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08重新装载/带队卸载/竞争补员/多AI长局亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### V02被夺医院的新服务、旧载员保留及正常出售（2026-10-28）
+
+- 新actual aymod_captured_hospital_serves_new_patient_and_sale_cleans_old_cargo_after_load与原占领/毁坏例共用aymod_hospital_captured_with_patient，仍是同一实际GAROBO/BRUTE正常入院和SENGINEER步行占领，不复制换主/入院实现。保存/完整资源恢复后正常推进120帧，旧病人的House、HP、limbo及inside关系保持、radio contact0仍空；这是有限窗口观察，不是全局永久停滞证明。
+- 继续为新主人提供实际E1伤员，经普通Enter进入，真实Cargo头序为[new, old]。第二次正式保存/恢复后，E1自然治满并活体离开，新House及无inside关系正确；原病人仍在旧Cargo槽，归属/HP/limbo/inside元组不变。没有为了恢复服务重置Guard/Repair、radio、Cargo或治疗时钟。
+- 已核原生Guard449817..449833的自动Repair门只读UnitRepair/UnitReload/Bunker，不含Hospital；医院44B91E只向contact0发RepairTick，44B9B7经473430取Cargo head后调用原ExitObject。这个实际场景没有把失联老成员错误当成新病人出院，也未把新一轮治疗无差别施给旧病人，不添加自动收编/弹出政策。
+- 新主人随后发普通SellBuilding，卖楼正常结束，医院和剩余旧载员均退休；第三次正式存读没有二者引用，已经出院的E1仍活、HP>0、非limbo且保持新House/无inside。静读ObjectUnInit5F65F0/5F6603..5F660D确认所有Techno的剩余Cargo走KillPassengers(NULL)，未把原生出售清理改成额外救出旧病人。
+- 最终新项1与原医院4项通过；无新玩法实现/critic，无新增RNG、timer/Detach或保存字段，无GUI/固定构建/MOD/原始存档/发布改动。尚不覆盖原病人的其他恢复操作、不同贴靠位置/夺取方式、联盟/满员、自然缺电/EMP或自主多AI，V02不整体关闭。
 
 ### V02真实工程师占领时的病人归属、断联及毁坏存读（2026-10-28）
 
@@ -25,7 +33,7 @@
 - 发普通CaptureBuilding命令给新House的SENGINEER；观察到真实世界坐标位移、医院所有权变化和工程师被消耗，不再直接调用change_owner_with_rules或手工断radio。占领时病人仍受伤、活着且在limbo/Cargo中，保留原House；医院换给接收方，contact0为空。
 - 该实际患者落点距共用GetDockCoord大于0x3F，GAROBO不是WeaponsFactory；静读Building448644/448649..44864C比较0x40后跳4485AA，那里先发0x17 RUN_AWAY、再发3 OVER_OUT。不能因建筑换主就自动把所有Cargo改House；别的实际贴靠坐标/类型分支仍另验。另读Techno701524..70156E的非Selling/非simple-deployer特例会QueueGuard，但未据此穷尽后续Update或宣布恢复治疗永远不可能。
 - 将a44f2c427原有“剩余Cargo保存/毁坏”断言提为同一测试owner：供应Radio Break的旧边界和本次真实工程师边界共用完整保存/恢复、毁坏声音前活体Cargo、最终UnInit/帧尾退休及二次存读无幽灵成员。普通占领现在可实际产生该断联Cargo窗口，补齐上一轮只供应radio断联的触发缺口；毁坏仍在正式致死receiver边界提供，不冒称炮弹实战或改变联系人C4清理规则。
-- 最终AY医院4项通过，旧两类型Off/On治疗及旧断联死亡回归一并通过；无新增生产状态、RNG、timer/Detach或保存字段，无GUI/固定构建/MOD/原始存档/发布变更。正常治疗恢复/最终离开、联盟/满员、其他夺取方式及自主多AI仍开放，不关闭整个换主或V02。
+- 最终AY医院4项通过，旧两类型Off/On治疗及旧断联死亡回归一并通过；无新增生产状态、RNG、timer/Detach或保存字段，无GUI/固定构建/MOD/原始存档/发布变更。新主人后续服务/卖楼收尾已由上节接续；旧病人其他恢复方式、联盟/满员、其他夺取方式及自主多AI仍开放，不关闭整个换主或V02。
 
 ### V02已入院病人的手动Off与治疗存读（2026-10-28）
 
@@ -927,7 +935,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | ID / 优先级 | 类别与当前边界 | 下一次验收 |
 | --- | --- | --- |
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
-| V02 / P2 / 入口/Cargo死亡顺序已修，Off治疗与工程师换主断联存读已验 | GAROBO/NARADR Hospital原owner保留，普通步兵共用医院鼠标动作，Ammo=-1正常准入；Passengers=0仍可有真实Cargo | Off拒新/On治疗离开/满血拒绝、已入院者Off存读后治满出院通过；实际工程师占领GAROBO形成原House患者断联Cargo，保存/毁坏清理通过。夺取后正常恢复治疗/离开、自然缺电/EMP、满员/联盟及自动AI仍开放；不是科技医院全军被动自愈 |
+| V02 / P2 / 入口/Cargo死亡顺序已修，Off治疗、被夺医院新服务/出售存读已验 | GAROBO/NARADR Hospital原owner保留，普通步兵共用医院鼠标动作，Ammo=-1正常准入；Passengers=0仍可有真实Cargo | Off拒新/On治疗、Off下已有患者治满出院通过；工程师占领GAROBO后的旧House断联Cargo、毁坏后缀，以及新主人再送医/新患者出院/出售清理旧Cargo与存读均通过。旧病人其他恢复、自然缺电/EMP、满员/联盟及自主AI仍开放；不是科技医院全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 / 移动/换主死亡/运输存读与AI准入已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。IFV实际控制/归还/死亡、登离LCRF/两次存读及计数/AI准入已验；卸载缺失sensor恢复已修共享Unlimbo。移动目标自身、多House/联盟重叠、空艇/精英潜艇/幻影等其他路径及画面仍待验 |
 | V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、两原GGI导弹与第二射手死亡后的当前名单XP已验。剩余Cargo改在SpawnSurvivors后清理，GAROBO懒分配Cargo回归通过；非尾删除/单人自动续火、其他子机家族与母体连续晋升/换主仍待验，不关闭全V05 |
