@@ -12077,6 +12077,59 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; typed building ammo and admitted garrison weapon early-return inventory"]
+    fn aymod_rearm_early_return_inventory_tracks_buildings_and_occupiers() {
+        use crate::rules::object_type::ObjectCategory;
+        use crate::sim::combat::combat_weapon::occupant_weapon;
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in ["XMP03T4.MAP", "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm"] {
+            let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+            let rules = &scene.runtime.resources.rules;
+            let mut ammo_buildings = Vec::new();
+            let mut unarmed_occupiers = Vec::new();
+            let mut occupiers = 0;
+            for object in rules.all_objects() {
+                // GetROF6FCFA9..BE tests live Building Ammo>1, not Burst.
+                if object.category == ObjectCategory::Building
+                    && (object.ammo > 1 || object.initial_ammo > 1)
+                {
+                    ammo_buildings.push((object.id.as_str(), object.ammo, object.initial_ammo));
+                    assert!(!object.can_be_occupied && !object.can_occupy_fire);
+                    assert!(
+                        (0..crate::rules::object_type::WEAPON_SLOT_COUNT).all(|index| {
+                            object.weapon_at(index).is_none()
+                                && object.elite_weapon_at(index).is_none()
+                        }),
+                        "{map}: ammo building {} now has a firing slot",
+                        object.id
+                    );
+                }
+                if object.category == ObjectCategory::Infantry && object.occupier {
+                    occupiers += 1;
+                    // FireAt advances to the next occupant before asking
+                    // BuildingGetWeapon4526F0 for its reload weapon.
+                    for rank in [0, 200] {
+                        if occupant_weapon(rules, object, rank).is_none() {
+                            unarmed_occupiers.push((object.id.as_str(), rank));
+                        }
+                    }
+                }
+            }
+            assert!(occupiers > 0);
+            assert_eq!(
+                ammo_buildings,
+                [("CAAIRP", 5, -1), ("CAPOWR", 5, -1)],
+                "{map}: Building Ammo early-return candidates changed"
+            );
+            assert!(
+                unarmed_occupiers.is_empty(),
+                "{map}: admitted unarmed garrison candidates: {unarmed_occupiers:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; complete allocated normal/elite weapon range inventory"]
     fn aymod_elite_range_inventory_retains_authored_shorter_weapon_slots() {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
