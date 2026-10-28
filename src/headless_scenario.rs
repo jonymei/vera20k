@@ -9402,6 +9402,60 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual BFRT TeamTypes and reachable transport script actions on two Battle maps"]
+    fn aymod_fortress_script_transport_inventory() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in ["XMP03T4.MAP", "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm"] {
+            let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+            let sim = scene.sim();
+            let vm = &sim.team_script_vm;
+            let bfrt = sim.interner.get("BFRT").unwrap();
+            let mut rows = Vec::new();
+            let mut scripts = std::collections::BTreeSet::new();
+            for &id in vm.team_type_order() {
+                let definition = vm.team_type_definition(id).unwrap();
+                if !vm
+                    .task_force_of(id)
+                    .unwrap()
+                    .entries
+                    .iter()
+                    .any(|entry| entry.member_type.id == bfrt && entry.count > 0)
+                {
+                    continue;
+                }
+                let script = vm.script(definition.script_id).unwrap();
+                // 8 unloads and 9 deploys; 17 changes ScriptType, 18 TeamType.
+                // The actual BFRT programs use none of these. Operand 9 on
+                // Attack(0) is not a Deploy opcode.
+                assert!(
+                    script
+                        .actions
+                        .iter()
+                        .all(|action| !matches!(action.action_id, 8 | 9 | 17 | 18)),
+                    "{map}: BFRT script {} now needs a transport/control-flow audit",
+                    sim.interner.resolve(script.id)
+                );
+                rows.push((sim.interner.resolve(id), sim.interner.resolve(script.id)));
+                scripts.insert(sim.interner.resolve(script.id));
+            }
+            assert_eq!(
+                rows,
+                [
+                    ("0A43AEFC-G", "0612EDBC-G"),
+                    ("044091AC-G", "08DA356C-G"),
+                    ("07C257EC-G", "07C30DBC-G"),
+                    ("07C32EFC-G", "07C32C8C-G"),
+                    ("07C328CC-G", "07C32C8C-G"),
+                    ("07C3227C-G", "0612EDBC-G"),
+                ],
+                "{map}: review the complete BFRT TeamType consumer set"
+            );
+            assert_eq!(scripts.len(), 4);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; native-legal competing AI recruitment during BFRT loading"]
     fn aymod_ai_fortress_loading_observes_higher_priority_defense_recruitment() {
         let (mut scene, _, team_id, carrier, riders) = aymod_ai_fortress_loading_team(false);
