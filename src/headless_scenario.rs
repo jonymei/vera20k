@@ -6830,6 +6830,345 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; allied hospital admission, natural blackout and saved treatment"]
+    fn aymod_allied_hospital_keeps_admitting_and_healing_during_natural_low_power() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{EntryBaseAction, EntryClickAction};
+        for kind in ["GAROBO", "NARADR"] {
+            let mut scene = aymod_battle(0);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let local = house_of(scene.sim(), "Americans");
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index(if kind == "GAROBO" {
+                    "Americans"
+                } else {
+                    "Russians"
+                })
+                .unwrap();
+            let foreign = scene.add_human_house(
+                "HospitalAlly",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            let (hospital, provider, patient) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let object = rules.object(kind).unwrap();
+                assert!(object.hospital && object.powered && object.power < 0);
+                let center = aymod_anchor(sim, local);
+                let hospital =
+                    spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &[kind])[0];
+                let provider =
+                    spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &["GAPOWR"])[0];
+                // A powered allied House must not donate electricity to the
+                // hospital owner's independent House power state.
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    local,
+                    cells_nearest((center.0 + 12, center.1)),
+                    &["GAPOWR"],
+                );
+                let patient = spawn_on_free_cells(sim, rules, local, cells_nearest(center), &["E1"])[0];
+                sim.substrate
+                    .entities
+                    .get_mut(patient)
+                    .unwrap()
+                    .health
+                    .set(1);
+                (hospital, provider, patient)
+            };
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scene);
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules),
+                Some(true)
+            );
+            assert_ne!(
+                scene.sim().entry_click_action(
+                    patient,
+                    hospital,
+                    EntryBaseAction::Select,
+                    &scene.runtime.resources.rules,
+                    Default::default()
+                ),
+                Some(EntryClickAction::Enter)
+            );
+            {
+                let sim = &mut scene.runtime.simulation;
+                let index = |owner| {
+                    sim.houses()
+                        .order()
+                        .iter()
+                        .position(|&id| id == owner)
+                        .unwrap() as i32
+                };
+                let (local_index, foreign_index) = (index(local), index(foreign));
+                let tick = sim.session.tick() + 1;
+                sim.queue_command(CommandEnvelope::new(
+                    local,
+                    tick,
+                    Command::Ally {
+                        house_index: foreign_index,
+                    },
+                ));
+                sim.queue_command(CommandEnvelope::new(
+                    foreign,
+                    tick,
+                    Command::Ally {
+                        house_index: local_index,
+                    },
+                ));
+            }
+            tick_with_due_commands(&mut scene);
+            assert!(crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner.resolve(local),
+                scene.sim().interner.resolve(foreign)
+            ));
+            let enter = |scene: &mut HeadlessScenario, patient| {
+                assert_eq!(
+                    scene.sim().entry_click_action(
+                        patient,
+                        hospital,
+                        EntryBaseAction::Select,
+                        &scene.runtime.resources.rules,
+                        Default::default()
+                    ),
+                    Some(EntryClickAction::Enter),
+                    "{kind} patient{patient}: hospital={:?}",
+                    scene.sim().entities().get(hospital).map(|building| (
+                        &building.mission,
+                        building.radio_contacts.slot(0),
+                        building.building_online()
+                    ))
+                );
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    local,
+                    sim.session.tick() + 1,
+                    Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+                ));
+                assert!(
+                    (0..600).any(|_| {
+                        tick_with_due_commands(scene);
+                        let sim = scene.sim();
+                        sim.entities().get(patient).unwrap().lifecycle.in_limbo()
+                            && sim
+                                .entities()
+                                .get(hospital)
+                                .unwrap()
+                                .passenger_role
+                                .cargo()
+                                .is_some_and(|cargo| cargo.passengers() == [patient])
+                    }),
+                    "the allied patient must walk into the actual hospital"
+                );
+            };
+            enter(&mut scene, patient);
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let damage = sim.entities().get(provider).unwrap().health.current() + 1;
+                let warhead = sim.interner.intern("Super");
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        provider,
+                        damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: false,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+            assert!((0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .power_states()
+                    .get(&foreign)
+                    .is_some_and(|power| power.is_low_power())
+                    && scene
+                        .sim()
+                        .building_operational_state(hospital, &scene.runtime.resources.rules)
+                        == Some(false)
+            }));
+            let heal_and_exit = |scene: &mut HeadlessScenario, patient, patient_type| {
+                let strength = scene
+                    .runtime
+                    .resources
+                    .rules
+                    .object(patient_type)
+                    .unwrap()
+                    .strength;
+                let sim = scene.sim();
+                let actor = sim.entities().get(patient).unwrap();
+                let before = actor.health.current();
+                assert!(before < strength && actor.lifecycle.in_limbo());
+                assert!(sim.entities().get(hospital).unwrap().building_online());
+                let local_power = sim.power_states().get(&local).unwrap();
+                assert!(!local_power.is_low_power() && local_power.total_output() > 0);
+                let bytes = save_scene(scene, "AY allied hospital during natural blackout");
+                scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+                let sim = scene.sim();
+                let actor = sim.entities().get(patient).unwrap();
+                assert_eq!(actor.health.current(), before);
+                assert_eq!(actor.passenger_role.inside_transport_id(), Some(hospital));
+                assert_eq!(
+                    sim.entities()
+                        .get(hospital)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .passengers(),
+                    &[patient]
+                );
+                let mut healed = false;
+                assert!(
+                    (0..1800).any(|_| {
+                        tick_with_due_commands(scene);
+                        let sim = scene.sim();
+                        assert!(sim.power_states().get(&foreign).unwrap().is_low_power());
+                        assert!(sim.entities().get(hospital).unwrap().building_online());
+                        assert_eq!(
+                            sim.building_operational_state(hospital, &scene.runtime.resources.rules),
+                            Some(false)
+                        );
+                        let actor = sim.entities().get(patient).unwrap();
+                        assert_eq!(actor.owner(), local);
+                        healed |= actor.health.current() > before;
+                        !actor.lifecycle.in_limbo() && actor.health.current() == strength
+                    }),
+                    "{kind}: natural low power must not stop the admitted allied treatment"
+                );
+                assert!(healed);
+                let sim = scene.sim();
+                assert_eq!(
+                    sim.entities()
+                        .get(patient)
+                        .unwrap()
+                        .passenger_role
+                        .inside_transport_id(),
+                    None
+                );
+                assert!(
+                    sim.entities()
+                        .get(hospital)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .is_empty()
+                );
+                assert!(
+                    (0..180).any(|_| {
+                        tick_with_due_commands(scene);
+                        scene
+                            .sim()
+                            .entities()
+                            .get(hospital)
+                            .unwrap()
+                            .radio_contacts
+                            .slot(0)
+                            .is_none()
+                    }),
+                    "{kind}: the completed patient's radio reservation must eventually release for a new admission"
+                );
+            };
+            heal_and_exit(&mut scene, patient, "E1");
+            let second = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(hospital).unwrap().position;
+                let second = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    local,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["BRUTE"],
+                )[0];
+                sim.substrate
+                    .entities
+                    .get_mut(second)
+                    .unwrap()
+                    .health
+                    .set(1);
+                second
+            };
+            // CanLoad43C422 reads +660, not IsPowered4555D0. Unlike manual
+            // Off, natural low power must still allow this new admission.
+            enter(&mut scene, second);
+            heal_and_exit(&mut scene, second, "BRUTE");
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(hospital).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    foreign,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["GAPOWR"],
+                );
+            }
+            assert!((0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules)
+                    == Some(true)
+                    && !scene
+                        .sim()
+                        .power_states()
+                        .get(&foreign)
+                        .unwrap()
+                        .is_low_power()
+            }));
+            let bytes = save_scene(&scene, "AY allied hospital after natural power recovery");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner.resolve(local),
+                scene.sim().interner.resolve(foreign)
+            ));
+            assert_eq!(
+                scene.sim().entities().get(hospital).unwrap().owner(),
+                foreign
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules),
+                Some(true)
+            );
+            for id in [patient, second] {
+                let actor = scene.sim().entities().get(id).unwrap();
+                assert_eq!(actor.owner(), local);
+                assert!(!actor.lifecycle.in_limbo());
+                assert_eq!(actor.passenger_role.inside_transport_id(), None);
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual admitted hospital patient across manual power-off and saved treatment"]
     fn aymod_hospital_keeps_treating_its_admitted_patient_offline_after_load() {
         use crate::sim::command::{Command, CommandEnvelope};
