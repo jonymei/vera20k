@@ -19081,6 +19081,403 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; typed spawn-family and child training inventory"]
+    fn aymod_spawn_family_training_inventory() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        for map in ["XMP03T4.MAP", "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm"] {
+            let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+            let rules = &scene.runtime.resources.rules;
+            let mut families = Vec::new();
+            for parent in rules.all_objects() {
+                if let Some(child) = parent.spawns.as_deref() {
+                    let child = rules
+                        .object(child)
+                        .expect("configured spawn child must resolve");
+                    families.push((
+                        parent.id.as_str(),
+                        child.id.as_str(),
+                        parent.spawns_number,
+                        parent.trainable,
+                        child.trainable,
+                        parent.missile_spawn,
+                    ));
+                }
+            }
+            families.sort();
+            assert_eq!(
+                families,
+                [
+                    ("BSUB", "CMISL", 2, true, true, false),
+                    ("CARRIER", "HORNET", 4, true, true, false),
+                    ("CDEST", "ASW", 1, true, true, false),
+                    ("DEST", "ASW", 1, true, true, false),
+                    ("DRED", "DMISL", 2, true, true, false),
+                    ("V3", "V3ROCKET", 1, true, true, false),
+                    ("VLAD", "DMISL", 2, true, true, false),
+                ],
+                "{map}: re-audit actual spawn families before expanding the promotion claim"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; successive naval-parent promotions with one-slot and two-slot pools"]
+    fn aymod_naval_spawn_pools_follow_consecutive_saved_parent_promotions() {
+        use crate::sim::combat::veterancy::{LEVEL_ELITE, LEVEL_ROOKIE, LEVEL_VETERAN};
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        for (kind, slots) in [("DEST", 1), ("DRED", 2)] {
+            let mut launch = battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            );
+            launch.options.unit_count = 0;
+            let mut scene = load_session(&root, map, 17, launch).unwrap();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let enemy = house_of(scene.sim(), "Russians");
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let enemy_name = sim.interner.resolve(enemy).to_owned();
+            let water = sim
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| {
+                    !cell.outside_playfield
+                        && !cell.bridge_facts.has_structural_bridge()
+                        && cell.land_type == crate::rules::terrain_rules::LandType::Water.as_index()
+                })
+                .map(|cell| (cell.rx, cell.ry))
+                .collect::<Vec<_>>();
+            let parent = water
+                .iter()
+                .find_map(|&(x, y)| sim.spawn_object(kind, &owner_name, x, y, 0, rules))
+                .unwrap();
+            let at = sim.entities().get(parent).unwrap().position;
+            let children = sim
+                .entities()
+                .get(parent)
+                .unwrap()
+                .spawn_manager
+                .as_ref()
+                .unwrap()
+                .slots()
+                .iter()
+                .map(|slot| slot.spawn().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(children.len(), slots);
+            tick_with_due_commands(&mut scene);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache(),
+                LEVEL_ROOKIE
+            );
+            for (rank, cached) in [(100, LEVEL_VETERAN), (200, LEVEL_ELITE)] {
+                let old_cache = scene
+                    .sim()
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache();
+                let prior_child_xp = children
+                    .iter()
+                    .map(|&id| scene.sim().entities().get(id).unwrap().veterancy.raw())
+                    .collect::<Vec<_>>();
+                // Award actual lethal-receiver credit; do not set the parent's
+                // rank/raw/cache or call the synchronization helper directly.
+                for _ in 0..24 {
+                    if scene.sim().entities().get(parent).unwrap().veterancy.rank() >= rank {
+                        break;
+                    }
+                    let runtime = &mut scene.runtime;
+                    let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                    let victim = water
+                        .iter()
+                        .filter(|&&(x, y)| {
+                            (i32::from(x) - i32::from(at.rx()))
+                                .abs()
+                                .max((i32::from(y) - i32::from(at.ry())).abs())
+                                >= 8
+                        })
+                        .find_map(|&(x, y)| {
+                            sim.spawn_object("DEST", &enemy_name, x, y, 0, &resources.rules)
+                        })
+                        .unwrap();
+                    let damage = sim.entities().get(victim).unwrap().health.current() + 1;
+                    let warhead = sim.interner.intern("Super");
+                    sim.commit_direct_damage_receiver(
+                        &resources.rules,
+                        Some(&resources.overlay_registry),
+                        EntityDamageEvent::direct_receiver(
+                            victim,
+                            damage,
+                            0,
+                            parent,
+                            Some(owner),
+                            warhead,
+                            ReceiverCallFlags {
+                                ignore_defenses: true,
+                                arg6: false,
+                            },
+                        ),
+                        Default::default(),
+                    );
+                }
+                let experience = scene.sim().entities().get(parent).unwrap().veterancy.raw();
+                assert_eq!(
+                    scene.sim().entities().get(parent).unwrap().veterancy.rank(),
+                    rank
+                );
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .veterancy
+                        .rank_cache(),
+                    old_cache
+                );
+                let bytes = save_scene(&scene, "AY parent promotion pending its normal AI sample");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .veterancy
+                        .rank_cache(),
+                    old_cache
+                );
+                for (&id, &prior) in children.iter().zip(&prior_child_xp) {
+                    assert_eq!(
+                        scene.sim().entities().get(id).unwrap().veterancy.raw(),
+                        prior
+                    );
+                }
+                tick_with_due_commands(&mut scene);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .veterancy
+                        .rank_cache(),
+                    cached
+                );
+                for (&id, &prior) in children.iter().zip(&prior_child_xp) {
+                    let child = scene.sim().entities().get(id).unwrap();
+                    assert_eq!(child.spawn_owner_id.owner(), Some(parent));
+                    assert!(child.lifecycle.in_limbo());
+                    // NPAE C2D85F..C2D865 skips the entire single-slot pool;
+                    // multi-slot weak children inherit only at this rank sample.
+                    assert_eq!(
+                        child.veterancy.raw(),
+                        if slots > 1 { experience } else { prior }
+                    );
+                }
+            }
+            let bytes = save_scene(&scene, "AY elite naval parent and its inherited pool");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache(),
+                LEVEL_ELITE
+            );
+            for &id in &children {
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(id)
+                        .unwrap()
+                        .spawn_owner_id
+                        .owner(),
+                    Some(parent)
+                );
+            }
+            if kind == "DRED" {
+                use crate::sim::command::{Command, CommandEnvelope};
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let target = water
+                    .iter()
+                    .filter(|&&(x, y)| {
+                        (i32::from(x) - i32::from(at.rx()))
+                            .abs()
+                            .max((i32::from(y) - i32::from(at.ry())).abs())
+                            == 8
+                    })
+                    .find_map(|&(x, y)| {
+                        sim.spawn_object("CARRIER", &enemy_name, x, y, 0, &resources.rules)
+                    })
+                    .unwrap();
+                let regen = sim
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .regen_rate();
+                assert!(regen > 0);
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: parent,
+                        target_id: target,
+                    },
+                ));
+                let mut launched = [false; 2];
+                let lost_slot = (0..1200)
+                    .find_map(|_| {
+                        let frame = scene.sim().session.binary_frame();
+                        tick_with_due_commands(&mut scene);
+                        assert!(
+                            scene.sim().session.binary_frame() > frame,
+                            "the battle must remain active while checking missile timers"
+                        );
+                        for (index, &id) in children.iter().enumerate() {
+                            launched[index] |= scene
+                                .sim()
+                                .entities()
+                                .get(id)
+                                .is_some_and(|child| !child.lifecycle.in_limbo());
+                        }
+                        scene
+                            .sim()
+                            .entities()
+                            .get(parent)
+                            .unwrap()
+                            .spawn_manager
+                            .as_ref()
+                            .unwrap()
+                            .slots()
+                            .iter()
+                            .enumerate()
+                            .position(|(index, slot)| launched[index] && slot.spawn().is_none())
+                    })
+                    .expect("normal DRED Attack must launch and consume a real missile");
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Stop { entity_id: parent },
+                ));
+                tick_with_due_commands(&mut scene);
+                let manager = scene
+                    .sim()
+                    .entities()
+                    .get(parent)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+                assert!(manager.slots()[lost_slot].spawn().is_none());
+                assert!(
+                    manager.slots()[lost_slot]
+                        .timer()
+                        .remaining(scene.sim().session.binary_frame() as i32)
+                        > 0
+                );
+                let bytes = save_scene(
+                    &scene,
+                    "AY elite DRED missile consumed with regeneration pending",
+                );
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .spawn_manager
+                        .as_ref(),
+                    Some(&manager)
+                );
+                let replacement = (0..regen + 60)
+                    .find_map(|_| {
+                        tick_with_due_commands(&mut scene);
+                        scene
+                            .sim()
+                            .entities()
+                            .get(parent)?
+                            .spawn_manager
+                            .as_ref()?
+                            .slots()[lost_slot]
+                            .spawn()
+                    })
+                    .expect("configured DRED regeneration must create a new missile after load");
+                assert_ne!(replacement, children[lost_slot]);
+                let parent_xp = scene.sim().entities().get(parent).unwrap().veterancy.raw();
+                let child = scene.sim().entities().get(replacement).unwrap();
+                assert_eq!(child.spawn_owner_id.owner(), Some(parent));
+                assert_eq!(child.veterancy.raw(), parent_xp);
+                let bytes = save_scene(&scene, "AY regenerated elite DRED missile");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let target = water
+                    .iter()
+                    .filter(|&&(x, y)| {
+                        (i32::from(x) - i32::from(at.rx()))
+                            .abs()
+                            .max((i32::from(y) - i32::from(at.ry())).abs())
+                            == 8
+                    })
+                    .find_map(|&(x, y)| {
+                        sim.spawn_object("CARRIER", &enemy_name, x, y, 0, &resources.rules)
+                    })
+                    .unwrap();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: parent,
+                        target_id: target,
+                    },
+                ));
+                assert!(
+                    (0..1200).any(|_| {
+                        tick_with_due_commands(&mut scene);
+                        scene
+                            .sim()
+                            .entities()
+                            .get(replacement)
+                            .is_some_and(|child| {
+                                child.spawn_owner_id.owner() == Some(parent)
+                                    && !child.lifecycle.in_limbo()
+                            })
+                    }),
+                    "regenerated elite missile must relaunch through normal Attack after load"
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; carrier child kill, saved regeneration and relaunch"]
     fn aymod_carrier_child_keeps_experience_and_regenerates_after_real_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
