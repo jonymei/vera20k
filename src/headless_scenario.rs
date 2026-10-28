@@ -4985,6 +4985,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual mind control transfers sensor coverage and death removes it"]
     fn aymod_sensor_capture_return_and_death_update_ai_cloak_admission_after_load() {
+        aymod_sensor_capture_return_and_death("FV");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real cloaked SNIPE capture, return and detector death across saves"]
+    fn aymod_sniper_capture_return_and_death_preserve_cloak_and_sensor_ownership() {
+        aymod_sensor_capture_return_and_death("SNIPE");
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_sensor_capture_return_and_death(sensor_type: &str) {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
@@ -5023,14 +5035,14 @@ mod retail_construction_tests {
             let owner = sim.entities().get(cloaker).unwrap().owner();
             let enemy = sim.entities().get(observer).unwrap().owner();
             let at = sim.entities().get(cloaker).unwrap().position;
-            assert!(rules.object("FV").unwrap().sensors);
+            assert!(rules.object(sensor_type).unwrap().sensors);
             assert!(!rules.object("GAPILL").unwrap().sensors);
             let center = (i32::from(at.rx()), i32::from(at.ry()));
             let sites = cells_nearest(center)
                 .into_iter()
                 .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 3)
                 .collect::<Vec<_>>();
-            let sensor = spawn_on_free_cells(sim, rules, enemy, sites, &["FV"])[0];
+            let sensor = spawn_on_free_cells(sim, rules, enemy, sites, &[sensor_type])[0];
             let at_sensor = sim.entities().get(sensor).unwrap().position;
             let center = (i32::from(at_sensor.rx()), i32::from(at_sensor.ry()));
             let sites = cells_nearest(center)
@@ -5070,6 +5082,36 @@ mod retail_construction_tests {
                 None,
             )
         };
+        let intrinsic_cloak = scene
+            .runtime
+            .resources
+            .rules
+            .object(sensor_type)
+            .unwrap()
+            .cloakable;
+        let hidden_sensor = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .get(sensor)
+                .unwrap()
+                .cloak
+                .is_some_and(|cloak| cloak.is_fully_cloaked())
+        };
+        if intrinsic_cloak {
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                hidden_sensor(&scene)
+            }));
+            assert!(
+                scene.sim().fog.has_sensor_for_house(
+                    owner,
+                    scene.sim().entities().get(sensor).unwrap().position.rx(),
+                    scene.sim().entities().get(sensor).unwrap().position.ry()
+                ),
+                "the real controller must detect the cloaked infantry before firing"
+            );
+        }
         assert!((0..30).any(|_| {
             tick_with_due_commands(&mut scene);
             count(&scene, enemy) == 1
@@ -5116,8 +5158,16 @@ mod retail_construction_tests {
         assert_eq!(count(&scene, enemy), 0);
         assert_eq!(count(&scene, owner), original_own_count + 1);
         assert_ne!(scan(&mut scene), Some(cloaker));
-        let bytes = save_scene(&scene, "AY captured IFV sensor coverage");
+        if intrinsic_cloak {
+            assert!(hidden_sensor(&scene));
+        }
+        let captured_cloak = scene.sim().entities().get(sensor).unwrap().cloak;
+        let bytes = save_scene(&scene, "AY captured detector sensor coverage");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(sensor).unwrap().cloak,
+            captured_cloak
+        );
         assert_eq!(count(&scene, enemy), 0);
         assert_eq!(count(&scene, owner), original_own_count + 1);
         let kill = |scene: &mut HeadlessScenario, id| {
@@ -5144,7 +5194,7 @@ mod retail_construction_tests {
             );
         };
         // The real Yuri can contribute its own sensor circle too. Removing
-        // that source must not mask a leaked IFV contribution on return.
+        // that source must not mask a leaked detector contribution on return.
         let controller_circle = scene
             .sim()
             .entities()
@@ -5187,7 +5237,48 @@ mod retail_construction_tests {
         assert_eq!(count(&scene, enemy), 1);
         assert_eq!(count(&scene, owner), remaining_own_count);
         assert_eq!(scan(&mut scene), Some(cloaker));
+        if intrinsic_cloak {
+            assert!(hidden_sensor(&scene));
+        }
+        let returned_cloak = scene.sim().entities().get(sensor).unwrap().cloak;
+        let bytes = save_scene(&scene, "AY returned detector before death");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(scene.sim().entities().get(sensor).unwrap().owner(), enemy);
+        assert_eq!(
+            scene.sim().entities().get(sensor).unwrap().cloak,
+            returned_cloak
+        );
+        assert_eq!(count(&scene, enemy), 1);
+        assert_eq!(count(&scene, owner), remaining_own_count);
         kill(&mut scene, sensor);
+        if let Some(body) = scene.sim().entities().get(sensor)
+            && body.lifecycle.object_alive()
+        {
+            assert!(
+                body.health.current() <= 0,
+                "the detector must actually receive lethal damage: hp={}, alive={}, action={:?}",
+                body.health.current(),
+                body.lifecycle.object_alive(),
+                body.mission_leaf.as_infantry().map(|leaf| leaf.doing())
+            );
+            // ReceiveDamage5185DF/51863F retains the infantry death
+            // sequence; DoType_Sequencer520CAD later performs UnInit.
+            assert!(matches!(
+                body.mission_leaf.as_infantry().map(|leaf| leaf.doing()),
+                Some(11 | 12)
+            ));
+            assert_eq!(count(&scene, enemy), 1);
+            let bytes = save_scene(&scene, "AY dying detector before natural retirement");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(count(&scene, enemy), 1);
+            assert!(
+                (0..240).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().entities().get(sensor).is_none()
+                }),
+                "a lethally damaged detector must naturally finish its death sequence"
+            );
+        }
         assert_eq!(
             count(&scene, enemy),
             0,
@@ -5195,7 +5286,7 @@ mod retail_construction_tests {
         );
         assert_ne!(scan(&mut scene), Some(cloaker));
         tick_with_due_commands(&mut scene);
-        let bytes = save_scene(&scene, "AY IFV detector removed after controller death");
+        let bytes = save_scene(&scene, "AY detector removed after controller death");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert_eq!(count(&scene, enemy), 0);
         assert_eq!(count(&scene, owner), remaining_own_count);
