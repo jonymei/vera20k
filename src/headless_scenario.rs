@@ -4152,6 +4152,180 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real HealBase pickup heals distant owned Technos, not another house"]
+    fn aymod_heal_crate_restores_owned_units_and_buildings_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, building) = aymod_nearby_pair("MTNK", "GAPOWR", true);
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let foreign = scene.add_human_house(
+            "HealCrateForeign",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (infantry, foreign_building, cell) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let owner = sim.entities().get(tank).unwrap().owner();
+            let at = sim.entities().get(tank).unwrap().position;
+            let distant = cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry()) + 12));
+            let infantry = spawn_on_free_cells(sim, &resources.rules, owner, distant, &["E1"])[0];
+            let distant = cells_nearest((i32::from(at.rx()) - 12, i32::from(at.ry()) - 12));
+            let foreign_building =
+                spawn_on_free_cells(sim, &resources.rules, foreign, distant, &["GAPOWR"])[0];
+            for id in [infantry, foreign_building] {
+                let p = sim.entities().get(id).unwrap().position;
+                assert!(p.rx().abs_diff(at.rx()).max(p.ry().abs_diff(at.ry())) > 6);
+            }
+            sim.mission_queue_exact(
+                infantry,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &resources.rules,
+                },
+            )
+            .unwrap();
+            let warhead = sim.interner.intern("Super");
+            for id in [tank, building, infantry, foreign_building] {
+                let full = sim.entities().get(id).unwrap().health.current();
+                // Only prepare ordinary nonlethal wounds through the existing
+                // receiver. The crate itself must perform every healing write.
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        id,
+                        full / 2,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: false,
+                        },
+                    ),
+                    Default::default(),
+                );
+                assert!(sim.entities().get(id).unwrap().health.current() < full);
+            }
+            let cell = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter_map(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+                .find(|&(x, y)| {
+                    x.abs_diff(at.rx()).max(y.abs_diff(at.ry())) == 1
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                        && sim.occupancy().get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        })
+                        && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+                })
+                .expect("free adjacent crate cell");
+            (infantry, foreign_building, cell)
+        };
+        {
+            let sim = &mut scene.runtime.simulation;
+            let owner = sim.entities().get(tank).unwrap().owner();
+            for (from, to) in [(owner, foreign), (foreign, owner)] {
+                let house_index = sim
+                    .houses()
+                    .order()
+                    .iter()
+                    .position(|&id| id == to)
+                    .unwrap() as i32;
+                sim.queue_command(CommandEnvelope::new(
+                    from,
+                    sim.session.tick() + 1,
+                    Command::Ally { house_index },
+                ));
+            }
+        }
+        tick_with_due_commands(&mut scene);
+        let allied = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            crate::map::houses::are_houses_mutually_allied(
+                sim.house_alliances(),
+                sim.interner()
+                    .resolve(sim.entities().get(tank).unwrap().owner()),
+                sim.interner().resolve(foreign),
+            )
+        };
+        assert!(allied(&scene));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let health =
+            |scene: &HeadlessScenario, id| scene.sim().entities().get(id).unwrap().health.current();
+        let wounded: Vec<_> = [tank, building, infantry, foreign_building]
+            .into_iter()
+            .map(|id| health(&scene, id))
+            .collect();
+        let bytes = save_scene(&scene, "AY wounds before HealBase pickup");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(allied(&scene));
+        assert_eq!(
+            [tank, building, infantry, foreign_building]
+                .into_iter()
+                .map(|id| health(&scene, id))
+                .collect::<Vec<_>>(),
+            wounded
+        );
+        let runtime = &mut scene.runtime;
+        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+        assert_eq!(resources.rules.powerups.weights[2], 10);
+        assert!(crate::sim::crates::place_crate(
+            sim,
+            &resources.rules,
+            &resources.overlay_registry,
+            (cell.0 as i16, cell.1 as i16),
+            Some(2)
+        ));
+        let owner = sim.entities().get(tank).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Move {
+                entity_id: tank,
+                target_rx: cell.0,
+                target_ry: cell.1,
+            },
+        ));
+        let full = |scene: &HeadlessScenario, id| {
+            let sim = scene.sim();
+            let entity = sim.entities().get(id).unwrap();
+            sim.interner
+                .object_type(entity.type_ref(), &scene.runtime.resources.rules)
+                .unwrap()
+                .strength
+        };
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert_eq!(health(&scene, foreign_building), wounded[3]);
+                [tank, building, infantry]
+                    .into_iter()
+                    .all(|id| health(&scene, id) == full(&scene, id))
+            }),
+            "HealBase must restore owned units and buildings beyond CrateRadius"
+        );
+        let bytes = save_scene(&scene, "AY HealBase healed only collector house");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(allied(&scene));
+        for id in [tank, building, infantry] {
+            assert_eq!(health(&scene, id), full(&scene, id));
+        }
+        assert_eq!(health(&scene, foreign_building), wounded[3]);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real Armor/Firepower pickup, saved multipliers and projectile damage"]
     fn aymod_multiplier_crates_change_real_saved_combat_damage() {
         use crate::sim::command::{Command, CommandEnvelope};
