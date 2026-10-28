@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于HEAD1e3c6f413完成本轮F12遭遇战16色生产链：startup MPC连续目录→UI/运行时派生缓存→占用过滤/普通滚动点击→启动准入/偏好重开→House颜色及真实GPU；唯一随机分配owner按原生保留local/AI扩展、network human固定8的区别。先红测Color15被压成7，修后普通下拉拖动/点击15、打包15/14及偏好重开15通过。NP UI111/runtime64/core launch16/color_scheme8/renderer13、实际AY色块1/House映射1/GPU1通过；stock UI110/runtime64/core launch16/color_scheme8通过，无待完成Cargo。一次只读critic无生产发现，建议的真实滚动点击覆盖已补。固定版/配置/原档未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，本轮在1d9464551的遭遇战16色链上补齐BC/BD/C2/C9与WOL My Information消费者、网络AI偏好恢复及实际palette投影。先红测网络Color15恢复为0/random，修后NP/stock的session64、MyInfo6、profile7、network view3均通过；共享实际色块GPU1通过。一次只读critic无可操作发现，无待完成Cargo。完整网络画面/真人交互仍开放，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：沿F12共享颜色目录继续网络菜单消费者（BC/BD与WOL My Information仍显式8色），先核接收/选色准入、占用及持久化再接同一目录，不只扩绘制或放宽协议校验；其他F/V功能未验边界仍保留。光棱常见待发失效不重复扩测试。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。非盟军巨炮修复已在本分支，固定版未包含。
+- 下一安全动作：功能优先，推进V02医院步行途中解盟的准入/取消/存读边界，复用既有医院与外交owner；不重复已绿的光棱或Alt飞机入口。F12网络消费者已接但完整compositor/AppState与实际peer/重连仍待验；V01/F11批准门禁和Return Dubai专项暂停保留。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -24,7 +24,15 @@
 - 随机分配沿唯一ShellRandomAssignmentState和draw_collision_free_color：69B7FF→C27B30的local ChooseColor及69BA13→C27B43的AI draw使用extra+7；ProcessRandomAssignments69B94F的network human draw仍固定7，observer归一化8不变。抽取顺序/碰撞重试不改，无额外RNG；颜色耗尽沿既有VERA大房间最少占用复用政策。两个角色的最后唯一空位15覆盖生产local/AI入口，stock原生顺序回归保留。
 - 原实际AY色块例增加count16及MPC16棕色，原House映射例增加priority15→MPC16。复用既有无窗口GPU、真实chrome/font与生产emitter，不另造渲染器：原800x600/BGRA与1280x720/RGBA两个场景中，实际MPC16与MPC01临时承载同HSV的参照色块像素一致，且不同于未占用灰色；原科技滑条/让位checkbox/深度保护断言继续通过。参照仅为测试内palette副本，不写MOD，不冒称原生截图或全部下拉画面验证。
 - 最终NP UI111/runtime64/core launch16/color_scheme8/renderer13、实际AY色块1/House映射1/GPU1通过；stock UI110/runtime64/core launch16/color_scheme8通过。首次client launch过滤器0项已改core执行16项；编译时两处参数/借用错误已修，GPU测试初稿参数位置错误已修，最终运行无失败。一次只读critic无生产发现，建议的真实滚动点击已补；未再起critic。无GUI/固定版/MOD/原始存档/发布改动。
-- 本轮闭环的是遭遇战选色到实际启动/绘制，不是全F12：BC/BD、WOL My Information目录仍显式stock8以免未经核对扩大另一屏；network AI随机分配作为同一原生owner已用扩展上限，网络人类随机的原生不对称保留。完整网络交互/重连、多玩家同色政策、旧MenuColors、全部popup GPU/真人GUI仍开放。已有V01/F11批准门禁不变。
+- 该批闭环的是遭遇战选色到实际启动/绘制，不是全F12：BC/BD及WOL消费者已由下节继续接入；network AI随机分配作为同一原生owner已用扩展上限，网络人类随机的原生不对称保留。完整网络交互/重连、多玩家同色政策、旧MenuColors、全部popup GPU/真人GUI仍开放。已有V01/F11批准门禁不变。
+
+### F12网络设置与WOL共享扩展颜色（2026-10-29）
+
+- BC/BD/C2/C9设置及WOL My Information改用既有RuleSet.multiplayer_color_count与available_color_choices，不新增目录或改变协议准入。网络AI偏好恢复的固定8门禁改用同一runtime count；先红测具体15被替换为0/random，修后LAN/WOL重开、地图fallback和扩展行保持通过。stock仍8。
+- 实读实际AY网络恢复5ED9FA..5EDA06→4E49A0，4E4A43..4E4A50经BA9008至BA90F0运行时末端遍历；WOL初始化799910中的799A48→4E43C0、799A54→4E45A0共用目录。Persona setter77A7A0..77A7B2不夹到8，保留脏标记/保存owner；网络human随机仍原生8，不扩大为16。
+- 两个renderer的折叠/弹出色块改传实际color_schemes及npatch_dropdown_colors给原house_color_tint；不另造RGB表。网络超容量忽略占用阈值由8改为目录count，保留既有容量耗尽政策，不新造同色规则。
+- NP与stock各session64、MyInfo6、WOL profile7、network view3通过。MyInfo普通thumb拖到底/选15/刷新保留15为组件测试，行由测试提供，不冒称AppState实际color_rows集成；profile通过临时文件保存/重开15，不接触用户文件。共享GPU实际MPC16在800x600/BGRA及1280x720/RGBA通过，不冒称完整网络/WOL compositor通过。
+- 一次只读critic无可操作发现。完整网络收发/peer/重连、完整compositor与AppState接线、所有popup画面、真人GUI及旧MenuColors仍开放。无GUI、MOD配置/原始存档/固定构建/协议放宽或发布改动。
 
 ### V10坠落飞兵：NP跳过步兵Health=1复活（更新2026-10-29）
 
@@ -1292,7 +1300,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
-| F12 / P2 / 遭遇战16色及科技设置链已接，网络边界开放 | 扩展遭遇战UI：原8色错配、科技设置及完整MPC连续目录已接，普通滚动点击、启动准入/随机/偏好重开/House传递和无窗口GPU通过 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；目录由启动root唯一helper派生，UI/runtime缓存共用；stock仍8，原生network human随机仍8，local/AI随机按扩展范围 | 完整遭遇战链见F12对应节；BC/BD与WOL My Information菜单仍8色，旧MenuColors及网络接收/重连/同色策略、全部popup GPU与玩家GUI仍开放，不把单屏通过称所有UI已兼容 |
+| F12 / P2 / 遭遇战16色及科技设置链已接，网络边界开放 | 扩展遭遇战UI：原8色错配、科技设置及完整MPC连续目录已接，普通滚动点击、启动准入/随机/偏好重开/House传递和无窗口GPU通过 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；目录由启动root唯一helper派生，UI/runtime缓存共用；stock仍8，原生network human随机仍8，local/AI随机按扩展范围 | 完整遭遇战链见F12对应节；BC/BD与WOL My Information已共用扩展目录、偏好恢复和palette；完整AppState/compositor、旧MenuColors及真实网络接收/重连/同色策略、全部popup GPU与玩家GUI仍开放，不把单屏通过称所有UI已兼容 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，

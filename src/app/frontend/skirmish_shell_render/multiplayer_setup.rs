@@ -148,6 +148,9 @@ pub(crate) fn render_multiplayer_setup(
         .as_ref()
         .expect("setup art");
     let font = &state.renderer.bit_font;
+    let rules = state.rules();
+    let color_schemes = rules.map_or(&[][..], |rules| rules.color_schemes.as_slice());
+    let dropdown_colors = rules.is_some_and(|rules| rules.npatch_dropdown_colors);
     let mut art =
         super::launcher_options::launcher_background_instances(atlas, width, height, scale);
     // LAN BC/BD and WOL C2/C9 take the user's intentional RA2 art, as offline
@@ -296,7 +299,7 @@ pub(crate) fn render_multiplayer_setup(
                     rect,
                     swatch: selected
                         .and_then(|item| item.swatch)
-                        .map(|index| house_color_tint(&[], false, index)),
+                        .map(|index| house_color_tint(color_schemes, dropdown_colors, index)),
                     open: ui.popup.control == Some(combo.id),
                     disabled: !view.enabled(combo.id),
                 },
@@ -625,7 +628,11 @@ pub(crate) fn render_multiplayer_setup(
                     scale.derive_rect(popup.row_rect(index)?, |row| {
                         RectPx::new(row.x + 2, row.y + 2, row.w - 4, 19)
                     }),
-                    house_color_tint(&[], false, combo.choices.get(index)?.swatch?),
+                    house_color_tint(
+                        color_schemes,
+                        dropdown_colors,
+                        combo.choices.get(index)?.swatch?,
+                    ),
                 ))
             });
             push_popup_instances(

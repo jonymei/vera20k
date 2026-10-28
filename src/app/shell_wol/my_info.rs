@@ -53,10 +53,14 @@ fn country_rows(state: &AppState) -> Vec<MyInfoRow> {
 }
 
 /// `0x4E43C0` releases every colour, so `0x4E45A0` lists
-/// `GUI:RandomAsSymbols` (-2) and all eight swatches.
+/// `GUI:RandomAsSymbols` (-2) and every startup palette swatch.
 fn color_rows(state: &AppState) -> Vec<MyInfoRow> {
     crate::ui::skirmish_shell::available_color_choices(
-        crate::skirmish_launch::HOUSE_COLOR_COUNT,
+        state
+            .rules()
+            .map_or(crate::skirmish_launch::HOUSE_COLOR_COUNT, |rules| {
+                rules.multiplayer_color_count
+            }),
         None,
         [],
     )

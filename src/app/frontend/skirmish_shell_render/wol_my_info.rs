@@ -27,6 +27,9 @@ pub(crate) fn paint_wol_my_info_children(
         return paint;
     };
     let font = &state.renderer.bit_font;
+    let rules = state.rules();
+    let color_schemes = rules.map_or(&[][..], |rules| rules.color_schemes.as_slice());
+    let dropdown_colors = rules.is_some_and(|rules| rules.npatch_dropdown_colors);
     let scale = layout.page.scale;
     let text = |value: &str, rect: RectPx, align: ShellAlign, rgb: [f32; 3], depth: f32| {
         shell_text::draw_in_rect_scaled(
@@ -69,7 +72,7 @@ pub(crate) fn paint_wol_my_info_children(
                 rect: face,
                 swatch: shown
                     .and_then(|row| row.swatch)
-                    .map(|index| house_color_tint(&[], false, index)),
+                    .map(|index| house_color_tint(color_schemes, dropdown_colors, index)),
                 open: page.popup.control == Some(id),
                 disabled,
             },
@@ -153,7 +156,11 @@ pub(crate) fn paint_wol_my_info_children(
                 scale.derive_rect(popup.row_rect(index)?, |row| {
                     RectPx::new(row.x + 2, row.y + 2, row.w - 4, 19)
                 }),
-                house_color_tint(&[], false, combo.rows.get(index)?.swatch?),
+                house_color_tint(
+                    color_schemes,
+                    dropdown_colors,
+                    combo.rows.get(index)?.swatch?,
+                ),
             ))
         });
         push_popup_instances(

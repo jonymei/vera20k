@@ -513,12 +513,14 @@ impl MultiplayerShellRuntime {
                     country: menu_country_from_item_data(persisted.country)
                         .unwrap_or(LaunchCountry::America),
                     country_random: persisted.country == RANDOM_ITEM_DATA,
-                    color_index: if (0..8).contains(&persisted.colour) {
+                    // Network restore5ED9FA..5EDA06 selects the saved color
+                    // through4E49A0's current startup catalog, not a fixed8.
+                    color_index: if (0..self.multiplayer_color_count as i32).contains(&persisted.colour) {
                         persisted.colour as u8
                     } else {
                         0
                     },
-                    color_random: !(0..8).contains(&persisted.colour),
+                    color_random: !(0..self.multiplayer_color_count as i32).contains(&persisted.colour),
                     start_position: LaunchStartPosition::Auto,
                     team: if mode.allies_allowed {
                         LaunchTeam::Team(3)
@@ -2138,6 +2140,8 @@ mod tests {
             MultiplayerSetupSnapshot::from_global_defaults(defaults(), SetupProfile::Skirmish),
             1,
         );
+        let color = if crate::rules::NPATCH_ENABLED { 15 } else { 7 };
+        owner.multiplayer_color_count = usize::from(color) + 1;
         let offline_before = owner.snapshot.clone();
         let modes = [mode()];
         for profile in [SetupProfile::Lan, SetupProfile::Wol] {
@@ -2162,7 +2166,7 @@ mod tests {
                 raw_slot_index: 1,
                 country: LaunchCountry::from_country_index(8),
                 country_random: false,
-                color_index: 7,
+                color_index: color,
                 color_random: false,
                 start_position: LaunchStartPosition::Auto,
                 team: LaunchTeam::Team(3),

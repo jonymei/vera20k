@@ -713,6 +713,43 @@ mod tests {
     }
 
     #[test]
+    fn extended_color_popup_scrolls_to_last_item_and_refreshes_its_selection() {
+        use crate::ui::shell::list::ListScrollPart;
+        let mut entries = rows();
+        entries.colors.extend((8..16).map(|color| MyInfoRow {
+            text: String::new(),
+            data: color,
+            swatch: Some(color as usize),
+        }));
+        let mut page = WolMyInfoPage::open(entries, "Tester", &persona(), Vec::new(), true);
+        let layout = WolMyInfoLayout::new(800, 600);
+        let selected = page.combo(COLOR).unwrap().selected;
+        page.popup.open(COLOR, selected);
+        let popup = page.popup_geometry(&layout).unwrap();
+        let thumb = popup.thumb().unwrap();
+        let scrollbar = popup.scrollbar().unwrap();
+        page.popup.scroll.press(
+            ListScrollPart::Thumb,
+            popup.scroll_geometry(),
+            &mut page.popup.top_index,
+            thumb.y + 1,
+            std::time::Instant::now(),
+        );
+        page.popup
+            .pointer_moved(popup, thumb.x + 1, scrollbar.y + scrollbar.h);
+        page.popup.cancel_pointer();
+        let popup = page.popup_geometry(&layout).unwrap();
+        assert!(popup.first > 0);
+        let last = popup.row_rect(16).unwrap();
+        let picked = popup.row_at(last.x + 1, last.y + 1).unwrap();
+        assert_eq!(page.select(COLOR, picked), Some(MyInfoAction::Color(15)));
+        let mut saved = persona();
+        saved.color = 15;
+        page.refresh(&saved, Vec::new());
+        assert_eq!(page.combo(COLOR).unwrap().data_or(-99), 15);
+    }
+
+    #[test]
     fn init_fills_from_the_persona_and_enables_by_slot() {
         let page = WolMyInfoPage::open(rows(), "Tester", &persona(), Vec::new(), true);
         assert_eq!(selected_data(&page), [1, 2, 5, 3, 2]);
