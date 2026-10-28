@@ -10605,7 +10605,26 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; real promoted tank bunker entry, scaled ground/AA fire, saved release"]
     fn aymod_hot_gattling_tank_enters_fires_and_deploys_out_of_bunker() {
         for airborne in [false, true] {
-            aymod_gattling_promotion_lifecycle(airborne, GattlingContinuation::Bunker, &["YTNK"]);
+            aymod_gattling_promotion_lifecycle(
+                airborne,
+                GattlingContinuation::Bunker(BunkerRelease::Deploy),
+                &["YTNK"],
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; bunker combat death/sale releases hot promoted tank across saved ground/AA recovery"]
+    fn aymod_retired_bunker_releases_hot_gattling_for_saved_move_and_fire() {
+        for airborne in [false, true] {
+            for release in [BunkerRelease::Destroyed, BunkerRelease::Sold] {
+                aymod_gattling_promotion_lifecycle(
+                    airborne,
+                    GattlingContinuation::Bunker(release),
+                    &["YTNK"],
+                );
+            }
         }
     }
 
@@ -11278,11 +11297,24 @@ mod retail_construction_tests {
     enum GattlingContinuation {
         Stay,
         ChangeOwner,
-        Bunker,
+        Bunker(BunkerRelease),
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_gattling_bunker_round_trip(scene: &mut HeadlessScenario, actor: u64, target: u64) {
+    #[derive(Clone, Copy)]
+    enum BunkerRelease {
+        Deploy,
+        Destroyed,
+        Sold,
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_gattling_bunker_round_trip(
+        scene: &mut HeadlessScenario,
+        actor: u64,
+        target: u64,
+        release: BunkerRelease,
+    ) {
         use crate::sim::combat::{TargetKind, veterancy::VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::docking::bunker_link::BunkerLink;
@@ -11359,9 +11391,7 @@ mod retail_construction_tests {
                 .sim()
                 .entities()
                 .get(bunker)
-                .unwrap()
-                .bunker
-                .occupant();
+                .map(|entity| entity.bunker.occupant());
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let bytes = save_scene(scene, name);
             scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
@@ -11382,9 +11412,7 @@ mod retail_construction_tests {
                     .sim()
                     .entities()
                     .get(bunker)
-                    .unwrap()
-                    .bunker
-                    .occupant(),
+                    .map(|entity| entity.bunker.occupant()),
                 occupant
             );
         };
@@ -11451,25 +11479,145 @@ mod retail_construction_tests {
         let inside = crate::sim::movement::ground_pose::position_world_xy(
             &scene.sim().entities().get(actor).unwrap().position,
         );
-        queue(scene, Command::DeployMcv { entity_id: actor });
+        match release {
+            BunkerRelease::Deploy => queue(scene, Command::DeployMcv { entity_id: actor }),
+            BunkerRelease::Sold => {
+                assert!(
+                    !scene
+                        .runtime
+                        .resources
+                        .rules
+                        .object("NATBNK")
+                        .unwrap()
+                        .unsellable
+                );
+                queue(scene, Command::SellBuilding { entity_id: bunker });
+            }
+            BunkerRelease::Destroyed => {
+                let country = scene
+                    .runtime
+                    .resources
+                    .rules
+                    .country_index("Russians")
+                    .unwrap();
+                let enemy = scene.add_human_house(
+                    "BunkerAttacker",
+                    LaunchCountry::from_country_index(u32::from(country.0)),
+                );
+                let attacker = {
+                    let runtime = &mut scene.runtime;
+                    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                    let at = sim.entities().get(bunker).unwrap().position;
+                    spawn_on_free_cells(
+                        sim,
+                        rules,
+                        enemy,
+                        cells_nearest((i32::from(at.rx()) + 16, i32::from(at.ry()))),
+                        &["GAPOWR"],
+                    );
+                    let attacker = spawn_on_free_cells(
+                        sim,
+                        rules,
+                        enemy,
+                        cells_nearest((i32::from(at.rx()) + 3, i32::from(at.ry()))),
+                        &["MTNK"],
+                    )[0];
+                    // Only the victim's HP is prepared; the real weapon,
+                    // receiver and fatal lifecycle must release the occupant.
+                    sim.substrate
+                        .entities
+                        .get_mut(bunker)
+                        .unwrap()
+                        .health
+                        .set_for_test(1);
+                    sim.queue_command(CommandEnvelope::new(
+                        enemy,
+                        sim.session.tick() + 1,
+                        Command::Attack {
+                            attacker_id: attacker,
+                            target_id: bunker,
+                        },
+                    ));
+                    attacker
+                };
+                let mut fired = false;
+                assert!(
+                    (0..360).any(|_| {
+                        let output = tick_with_due_commands(scene);
+                        fired |= output.fire_events.iter().any(|event| {
+                            event.attacker_id == attacker
+                                && event.target == TargetKind::Entity(bunker)
+                        });
+                        scene
+                            .sim()
+                            .entities()
+                            .get(bunker)
+                            .is_none_or(|entity| entity.health.current() <= 0)
+                    }) && fired,
+                    "ordinary tank fire must kill the wounded bunker"
+                );
+                let runtime = &mut scene.runtime;
+                let frame = runtime.simulation.session.binary_frame();
+                runtime
+                    .simulation
+                    .mission_queue_exact(
+                        attacker,
+                        crate::sim::mission::MissionId::from_known(MissionType::Sleep),
+                        1,
+                        frame,
+                        &crate::sim::mission::authority::LiveReadyInputProvider {
+                            rules: &runtime.resources.rules,
+                        },
+                    )
+                    .unwrap();
+            }
+        }
         assert!(
             (0..300).any(|_| {
                 tick_with_due_commands(scene);
                 scene.sim().entities().get(actor).unwrap().bunker.link() == BunkerLink::None
             }),
-            "deploy must release the installed tank"
+            "bunker lifecycle must release the installed tank"
         );
         assert_eq!(
             scene
                 .sim()
                 .entities()
                 .get(bunker)
-                .unwrap()
-                .bunker
-                .occupant(),
+                .and_then(|entity| entity.bunker.occupant()),
             None
         );
         restore(scene, "AY released Gattling bunker");
+        let unit = scene.sim().entities().get(actor).unwrap();
+        assert!(unit.health.current() > 0 && unit.locomotor.as_ref().unwrap().is_powered());
+        assert_eq!(unit.veterancy.rank_kind(), VeterancyRank::Elite);
+        if matches!(release, BunkerRelease::Destroyed | BunkerRelease::Sold) {
+            // Release4593A0 restores power/track but, unlike normal exit,
+            // does not queue Move. Supply an ordinary new player order.
+            let sim = scene.sim();
+            let at = sim.entities().get(actor).unwrap().position;
+            let destination = cells_nearest((i32::from(at.rx()) + 4, i32::from(at.ry())))
+                .into_iter()
+                .find(|&(x, y)| {
+                    u16::try_from(x)
+                        .ok()
+                        .zip(u16::try_from(y).ok())
+                        .is_some_and(|(x, y)| {
+                            sim.path_grid()
+                                .is_some_and(|grid| grid.is_walkable_for_infantry(x, y))
+                                && sim.terrain_cell_level(x, y) == Some(at.z())
+                        })
+                })
+                .unwrap();
+            queue(
+                scene,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: destination.0 as u16,
+                    target_ry: destination.1 as u16,
+                },
+            );
+        }
         assert!(
             (0..300).any(|_| {
                 tick_with_due_commands(scene);
@@ -11479,6 +11627,19 @@ mod retail_construction_tests {
             }),
             "restored released tank must actually leave the bunker cells"
         );
+        if matches!(release, BunkerRelease::Destroyed | BunkerRelease::Sold) {
+            assert!(
+                (0..300).any(|_| {
+                    tick_with_due_commands(scene);
+                    scene.sim().entities().get(bunker).is_none()
+                }),
+                "retired bunker must finish its ordinary removal"
+            );
+            assert_eq!(
+                scene.sim().entities().get(actor).unwrap().bunker.link(),
+                BunkerLink::None
+            );
+        }
         queue(
             scene,
             Command::Attack {
@@ -11731,8 +11892,8 @@ mod retail_construction_tests {
                 fired_this_frame && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0 && spinup_shots >= 2
             });
             assert!(hot, "actual firing must advance the Gattling stage");
-            if matches!(continuation, GattlingContinuation::Bunker) {
-                aymod_gattling_bunker_round_trip(&mut scene, actor, target);
+            if let GattlingContinuation::Bunker(release) = continuation {
+                aymod_gattling_bunker_round_trip(&mut scene, actor, target, release);
             }
             let unit = scene.sim().entities().get(actor).unwrap();
             assert_eq!(unit.veterancy.rank_cache(), LEVEL_ELITE);
