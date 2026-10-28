@@ -12892,6 +12892,144 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital approach loses its repair contact after alliance break"]
+    fn aymod_hospital_approach_alliance_break_preserves_native_contact_loss_across_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{EntryBaseAction, EntryClickAction};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, _, waiting_patient, local, foreign) =
+                aymod_allied_hospital(kind, "ENGINEER");
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(hospital).unwrap().position;
+            let patient = spawn_on_free_cells(
+                sim,
+                rules,
+                local,
+                cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (x - i32::from(at.rx())).abs() + (y - i32::from(at.ry())).abs() >= 8
+                    }),
+                &["ENGINEER"],
+            )[0];
+            sim.substrate
+                .entities
+                .get_mut(patient)
+                .unwrap()
+                .health
+                .set(1);
+            let strength = rules.object("ENGINEER").unwrap().strength;
+            assert_eq!(
+                sim.entry_click_action(
+                    patient,
+                    hospital,
+                    EntryBaseAction::Select,
+                    rules,
+                    Default::default()
+                ),
+                Some(EntryClickAction::Enter)
+            );
+            let start = sim.entities().get(patient).unwrap().position;
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                sim.session.tick() + 1,
+                Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+            assert!(
+                (0..300).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let actor = scene.sim().entities().get(patient).unwrap();
+                    !actor.lifecycle.in_limbo()
+                        && (actor.position.rx(), actor.position.ry()) != (start.rx(), start.ry())
+                        && actor.radio_contacts.contains(hospital)
+                }),
+                "{kind}: accepted patient must actually walk before diplomacy changes"
+            );
+            let sim = &mut scene.runtime.simulation;
+            for (owner, other) in [(local, foreign), (foreign, local)] {
+                let index = sim
+                    .houses()
+                    .order()
+                    .iter()
+                    .position(|&id| id == other)
+                    .unwrap();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Ally {
+                        house_index: index as i32,
+                    },
+                ));
+            }
+            tick_with_due_commands(&mut scene);
+            assert!(!crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner.resolve(local),
+                scene.sim().interner.resolve(foreign),
+            ));
+            assert!(
+                !scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .lifecycle
+                    .in_limbo()
+            );
+            let bytes = save_scene(&scene, "AY hospital former ally still approaching");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            // Foot Enter4D9290 asks CanDock, not CanLoad43C311 again;
+            // Building43C746 and Infantry51A298 retain the accepted contact.
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let actor = scene.sim().entities().get(patient).unwrap();
+                    assert_eq!(actor.owner(), local);
+                    actor.lifecycle.in_limbo()
+                        && actor.passenger_role.inside_transport_id() == Some(hospital)
+                }),
+                "{kind}: accepted approach must reach the hospital after load"
+            );
+            // RadioLimbo65AA80 breaks the original link. Infantry51A35F's
+            // new HELLO is rejected by Radio65A8C4..65A8F0 after de-alliance,
+            // yet Infantry51A38A still adds Cargo. Do not invent auto-healing.
+            assert!(scene.runtime.resources.rules.general.infantry_repair_rate * 900.0 < 180.0);
+            for _ in 0..180 {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(patient).unwrap();
+                assert_eq!(actor.health.current(), 1);
+                assert_eq!(actor.owner(), local);
+                assert!(actor.lifecycle.in_limbo());
+                assert_eq!(actor.passenger_role.inside_transport_id(), Some(hospital));
+            }
+            let bytes = save_scene(&scene, "AY hospital former ally with lost repair contact");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let actor = scene.sim().entities().get(patient).unwrap();
+            assert_eq!(actor.health.current(), 1);
+            assert!(actor.health.current() < strength);
+            assert!(actor.lifecycle.in_limbo());
+            assert_eq!(actor.passenger_role.inside_transport_id(), Some(hospital));
+            assert!(actor.radio_contacts.is_empty());
+            let building = scene.sim().entities().get(hospital).unwrap();
+            assert_eq!(building.passenger_role.cargo().unwrap().passengers(), [patient]);
+            assert!(building.radio_contacts.is_empty());
+            assert_eq!(building.mission.current().known(), Some(MissionType::Repair));
+            assert_eq!(building.mission.handler_state(), 2);
+            assert_eq!(scene.sim().entities().get(waiting_patient).unwrap().health.current(), 1);
+            assert_ne!(
+                scene.sim().entry_click_action(waiting_patient, hospital, EntryBaseAction::Select, &scene.runtime.resources.rules, Default::default()),
+                Some(EntryClickAction::Enter)
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; hospital alliance break during saved treatment"]
     fn aymod_hospital_finishes_admitted_patient_after_alliance_break() {
         use crate::sim::combat::TargetKind;
