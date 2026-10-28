@@ -5605,24 +5605,15 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; hospital Cargo must survive until DestructionEffects then be killed"]
-    fn aymod_hospital_disconnected_cargo_waits_for_destruction_effects() {
-        use crate::sim::combat::{
-            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
-        };
+    fn aymod_hospital_patient_inside(hospital_type: &str) -> (HeadlessScenario, u64, u64) {
+        use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
-        use crate::sim::world::SoundBoundary;
-        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        use crate::sim::world::{FrameEffects, SimSoundEvent};
-        use std::cell::Cell;
-        let (mut scene, hospital, patient) = aymod_nearby_pair("GAROBO", "E1", true);
-        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (mut scene, hospital, patient) = aymod_nearby_pair(hospital_type, "E1", true);
         {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-            let object = rules.object("GAROBO").unwrap();
+            let object = rules.object(hospital_type).unwrap();
             assert!(object.hospital && !object.absorbs_passengers() && !object.explodes);
             assert_eq!(
                 object.passengers, 0,
@@ -5668,6 +5659,157 @@ mod retail_construction_tests {
                     .cargo()
                     .is_some_and(|cargo| cargo.passengers() == [patient])
         }));
+        (scene, hospital, patient)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual admitted hospital patient across manual power-off and saved treatment"]
+    fn aymod_hospital_keeps_treating_its_admitted_patient_offline_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patient) = aymod_hospital_patient_inside(kind);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let owner = scene.sim().entities().get(hospital).unwrap().owner();
+            let strength = scene.runtime.resources.rules.object("E1").unwrap().strength;
+            let order = |scene: &mut HeadlessScenario, on| {
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::SetBuildingOnLine {
+                        entity_id: hospital,
+                        on,
+                    },
+                ));
+            };
+            order(&mut scene, false);
+            tick_with_due_commands(&mut scene);
+            let actor = scene.sim().entities().get(patient).unwrap();
+            assert!(actor.lifecycle.in_limbo() && actor.health.current() < strength);
+            assert!(
+                !scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .building_online()
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules),
+                Some(false)
+            );
+            let before = actor.health.current();
+            let bytes = save_scene(
+                &scene,
+                "AY offline hospital with treatment still in progress",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .health
+                    .current(),
+                before
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id(),
+                Some(hospital)
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .passengers(),
+                &[patient]
+            );
+            // Building43FE54 still visits Techno6F9E50, whose MissionAI call
+            // reaches Hospital44B870..44BA79. Its admitted RepairTick6F4CD7
+            // has no Building+660 gate; CanLoad43C422 denies new admissions.
+            let mut healed_offline = false;
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    assert!(!sim.entities().get(hospital).unwrap().building_online());
+                    let actor = sim.entities().get(patient).unwrap();
+                    healed_offline |= actor.health.current() > before;
+                    !actor.lifecycle.in_limbo() && actor.health.current() == strength
+                }),
+                "{kind}: admitted patient must finish native treatment and exit while offline"
+            );
+            assert!(healed_offline);
+            let actor = scene.sim().entities().get(patient).unwrap();
+            assert!(actor.is_object_alive());
+            assert_eq!(actor.owner(), owner);
+            assert_eq!(actor.passenger_role.inside_transport_id(), None);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .is_empty()
+            );
+            order(&mut scene, true);
+            tick_with_due_commands(&mut scene);
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules),
+                Some(true)
+            );
+            let bytes = save_scene(
+                &scene,
+                "AY hospital restored online after its saved patient left",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .building_online()
+            );
+            let actor = scene.sim().entities().get(patient).unwrap();
+            assert_eq!(actor.health.current(), strength);
+            assert!(!actor.lifecycle.in_limbo());
+            assert_eq!(actor.passenger_role.inside_transport_id(), None);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital Cargo must survive until DestructionEffects then be killed"]
+    fn aymod_hospital_disconnected_cargo_waits_for_destruction_effects() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::SoundBoundary;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{FrameEffects, SimSoundEvent};
+        use std::cell::Cell;
+        let (mut scene, hospital, patient) = aymod_hospital_patient_inside("GAROBO");
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
         {
             let runtime = &mut scene.runtime;
             // Isolate remaining Cargo from Building442511's separate saved-
