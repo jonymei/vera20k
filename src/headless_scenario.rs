@@ -18884,6 +18884,119 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; cloaking open-topped rider retains Cargo across load and unload"]
+    fn aymod_fortress_cloaking_rider_keeps_cargo_across_load_and_unload() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, carrier, rider) = aymod_nearby_pair("BFRT", "TANY", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(rider).unwrap().owner();
+        assert!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .object("TANY")
+                .unwrap()
+                .cloakable
+        );
+        assert!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .object("BFRT")
+                .unwrap()
+                .open_topped
+        );
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::clicked_mission(rider, MissionType::Enter, TargetKind::Entity(carrier)),
+        ));
+        assert!((0..400).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(rider)
+                .unwrap()
+                .passenger_role
+                .open_transport_id()
+                == Some(carrier)
+        }));
+        let assert_cargo = |scene: &HeadlessScenario| {
+            let hull = scene.sim().entities().get(carrier).unwrap();
+            let passenger = scene.sim().entities().get(rider).unwrap();
+            assert_eq!(hull.passenger_role.cargo().unwrap().passengers(), [rider]);
+            assert_eq!(hull.passenger_role.cargo().unwrap().total_size(), 1);
+            assert_eq!(
+                passenger.passenger_role.inside_transport_id(),
+                Some(carrier)
+            );
+            assert_eq!(passenger.passenger_role.open_transport_id(), Some(carrier));
+            assert!(passenger.lifecycle.in_limbo() && passenger.in_logic_vector.is_member());
+        };
+        assert!((0..400).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(rider)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        }));
+        assert_cargo(&scene);
+        let bytes = save_scene(&scene, "AY cloaked Tanya aboard fortress");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_cargo(&scene);
+        let before = scene.sim().entities().get(rider).unwrap().health.current();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::UnloadPassengers {
+                transport_id: carrier,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let passenger = scene.sim().entities().get(rider).unwrap();
+                passenger.is_alive()
+                    && !passenger.lifecycle.in_limbo()
+                    && passenger.passenger_role.inside_transport_id().is_none()
+            }),
+            "normal Unload must still find and release the cloaked rider"
+        );
+        let bytes = save_scene(&scene, "AY fortress released its cloaked rider");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .is_empty()
+        );
+        let passenger = scene.sim().entities().get(rider).unwrap();
+        assert!(passenger.is_alive() && !passenger.lifecycle.in_limbo());
+        assert_eq!(passenger.passenger_role.open_transport_id(), None);
+        assert_eq!(passenger.owner(), owner);
+        assert_eq!(passenger.health.current(), before);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY boarding and TrainPassengers kill credit"]
     fn aymod_fortress_passenger_trains_before_carrier_then_elite_falls_back() {
         use crate::sim::command::{Command, CommandEnvelope};

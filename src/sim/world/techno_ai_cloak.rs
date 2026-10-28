@@ -458,8 +458,10 @@ pub(super) fn cloak_field_ai_step(
 /// native body the UnInit broadcast runs, only with a different control
 /// value. A miniature copy would have cleared the receiver's Target and
 /// nothing else — no `RandomRanged(4, 8)` re-arm of the `+0x180/+0x188`
-/// targeting timer, no NavCom/cargo/manager slot clears, and none of it for
+/// targeting timer, no NavCom/manager slot clears, and none of it for
 /// the non-targeters `Detach_All` also visits.
+/// Cargo removal is control-1 only (7077D8..7077E9), so a cloaking rider
+/// remains in its transport's hold.
 ///
 /// The clause that matters most for cloak: the receiver's `Target(+0x2B4)` is
 /// cleared through `Assign_Target(NULL)` unless
