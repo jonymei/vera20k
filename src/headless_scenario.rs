@@ -10564,14 +10564,23 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY Gattling kill promotion, hot save, Stop/Guard and resumed fire"]
     fn aymod_gattling_promotes_through_fire_and_resumes_after_hot_save() {
-        aymod_gattling_promotion_lifecycle(false);
+        aymod_gattling_promotion_lifecycle(false, false);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
-        aymod_gattling_promotion_lifecycle(true);
+        aymod_gattling_promotion_lifecycle(true, false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hot promoted Gattling tank owner transfer and saved ground/AA fire"]
+    fn aymod_hot_gattling_tank_changes_owner_and_resumes_elite_fire_after_load() {
+        for airborne in [false, true] {
+            aymod_gattling_promotion_lifecycle(airborne, true);
+        }
     }
 
     #[cfg(feature = "npatch")]
@@ -10665,11 +10674,16 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_gattling_promotion_lifecycle(airborne: bool) {
+    fn aymod_gattling_promotion_lifecycle(airborne: bool, transfer_unit: bool) {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        for actor_type in ["YTNK", "YAGGUN"] {
+        let actors: &[&str] = if transfer_unit {
+            &["YTNK"]
+        } else {
+            &["YTNK", "YAGGUN"]
+        };
+        for &actor_type in actors {
             let victim_type = if airborne { "JUMPJET" } else { "APOC" };
             let (mut scene, actor, first_victim) =
                 aymod_nearby_pair(actor_type, victim_type, false);
@@ -10867,7 +10881,50 @@ mod retail_construction_tests {
                 unit.gattling.value(),
                 unit.gattling.report_latch(),
             );
+            if transfer_unit {
+                let country = scene
+                    .runtime
+                    .resources
+                    .rules
+                    .country_index("YuriCountry")
+                    .unwrap();
+                let recipient = scene.add_human_house(
+                    "HotGattlingRecipient",
+                    LaunchCountry::from_country_index(u32::from(country.0)),
+                );
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(actor).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    recipient,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["GAPOWR"],
+                );
+                // Unit7463A0 -> Foot4DBED0 -> Techno7014A0 clears orders,
+                // not the accumulated rank or gattling stage/value.
+                sim.change_owner_with_rules(
+                    actor,
+                    recipient,
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+                let transferred = sim.entities().get(actor).unwrap();
+                assert_eq!(transferred.owner(), recipient);
+                assert_eq!(
+                    (
+                        &transferred.veterancy,
+                        transferred.gattling.stage(),
+                        transferred.gattling.value()
+                    ),
+                    (&saved.0, saved.1, saved.2)
+                );
+                assert!(transferred.attack_target.target().is_none());
+            }
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let expected_owner = scene.sim().entities().get(actor).unwrap().owner();
             let bytes = save_scene(&scene, "AY promoted hot Gattling");
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             if airborne {
@@ -10879,6 +10936,7 @@ mod retail_construction_tests {
                 ));
             }
             let loaded = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(loaded.owner(), expected_owner);
             assert_eq!(
                 (
                     &loaded.veterancy,
