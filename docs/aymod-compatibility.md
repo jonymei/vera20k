@@ -6,15 +6,15 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD7656028fe后本轮补V04实际两电脑House传感器：A两圈/B盟友一圈，普通Move使A2→1，致死receiver/正常死亡退休使A1→0，B1仍不能替A准入全隐形TANY；再退役B后均0，关键阶段完整存读与A的GreatestThreat核查通过。最终NP core新实际1、sensor_lifecycle7、既有实际移动/重探测实射1，共9项通过，无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEADd4eac9f1f后补V04实际SNIPE普通Move穿越固定DOG探测圈：隔两格只提供本House探测、邻格触发原生解除隐形，均覆盖入圈/出圈移动中完整存读及终点自然重隐。最终新实际1（含两场景）、sensor_lifecycle7、techno_ai_cloak::tests17，共25项通过，无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V04目标自身普通Move穿越固定探测圈的准入/拒绝与移动中存读，复用既有传感器/隐形/FireSubject owners，分开射程门和探测门，不能用目标跑出射程冒充探测丢失。当前两电脑圈重叠的移动对象是DOG，目标TANY保持Sleep，故不扩大到目标自身运动。V09特殊生命周期、V07多AI竞争等保留，不重复修Alt飞机链；F12网络返回/16色独立开放。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
+- 下一安全动作：继续F07精英TANY对实际隐形潜艇的探测、SapperE准入/伤害与存读，复用现有普通TANY场景及武器/传感器owners；不把供应精英初始等级称作实杀晋升。V09特殊生命周期、V07多AI竞争等保留，不重复修Alt飞机链；F12网络返回/16色独立开放。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
-- V04目标自身运动/其他伪装族、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+- V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
 ### V10坠落飞兵：NP跳过步兵Health=1复活（2026-10-28）
 
@@ -242,6 +242,13 @@
 - 正式保存/完整资源恢复下落中的原炸弹；下一帧普通Stop阻止新放弹，后续观察同时断言无替代fire_events，因此不能以另一发命中掩盖在途弹丢失。原弹真实伤害触发IsFlatExplosion/CausesDelayKill别名的既有PostMortem，目标alive/health1及引信挂起，C4AppliedBy仍为None。
 - 第二次在引信阶段正式存读，health1/引信保持；普通建筑AI到期销毁。覆盖Techno701E92..701F67的延迟恢复与既有C4 owner，未新增绘制或第二套爆炸逻辑。
 - 新完整飞行1、flat_explosion3、postmortem4通过。仅测试/文档，无新直接RNG/计时/Detach/保存字段，游戏自然落弹和延迟引信沿既有owner运行。未验证精英KTSTLEXP链、长连投/多目标或GUI/GPU；本例不是原版飞行/爆炸像素对照。
+
+### V04移动隐形目标穿越固定探测圈（2026-10-29）
+
+- 实际AY Battle/XMP03T4两例，SNIPE自然隐形后普通Move穿越固定DOG圈；真实空地选路，不写地形/位置/探测计数。DOG与GAPILL保持Sleep，逐帧无三者开火且SNIPE血量不变。
+- 两格隔离例全程保持隐形：进入DOG圈时敌House可开火，离圈拒绝。FireSubject只绕过射程，保留GetFireError6FC24D..6FC29D的当前目标格探测门；不以跑出射程代替丢失探测。邻格例确实解除隐形，FootPerCell4D87E8..4D8829检查敌对Sensors邻居并调用StartUncloaking；圈本身不会全局解除隐形，不修改既有owner来消掉原生行为。
+- 两例均在真实移动中的入圈/出圈边沿完整保存恢复，保持world位置、全部CloakRuntime、固定探测源与单次计数；终点Sleep后普通帧自然重隐，再存读保持圈外拒绝。新增实际1项（内含两场景）、sensor_lifecycle7及techno_ai_cloak::tests17通过。
+- 仅测试/文档，无新增RNG调用、timer写入、Detach调用或保存字段；生产机制未改，无新critic。未启动GUI、未动MOD/原始存档/固定版，未发布。结论限SNIPE/DOG基本运动路径；其他联盟变动/圈家族/伪装族、画面及自主多AI长局仍开放。
 
 ### V04两电脑House：同方重叠、盟友隔离与死亡存读（2026-10-29）
 
@@ -1230,7 +1237,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V01 / P1 / 原生与作者设计冲突仍开放 | 三组供电已有owner；普通地面Drive的provider/EMP分离与恢复已修，原生共享House计数保留 | 原生允许失联Drive被AI重新下令移动；作者说明却要求三组指定建筑失去支持即瘫痪。不能把此差异归因于漏读PoweredUnit或把EMP修复标成蜘蛛已修；独立供电/禁移动须明确兼容策略 |
 | V02 / P2 / 入口/Cargo/EMP任务保留已修，联盟/缺电/Off/EMP治疗存读已验 | GAROBO/NARADR Hospital保留患者owner，普通步兵共用医院动作，Ammo=-1准入；Passengers=0仍可有Cargo；建筑EMP不再误调Deactivate重置治疗 | 手动Off拒新、已有患者继续；自然缺电/EMP下原有与新患者可治疗出院，正式存读/预约清理、独立House电网及恢复已验。EMP原生生命周期/雷达顺序与付款恢复见对应节；治疗中解盟/新申请拒绝、同帧双人预约等待及依次治满/存读已验；完整TTNK医院实战、步行途中解盟/更多争抢取消、占领旧患者其他恢复及自主多AI仍开放；不是科技医院全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback；两图typed库存仅无武器/不可驻军CAAIRP/CAPOWR具Ammo5，正常Occupier普通/精英均有武器，暂未找到常规FireAt消费者；游标/回调等运行时边界仍开放，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
-| V04 / P1 / 移动/换主死亡/运输及两电脑重叠存读已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL用自身House探测圈获取全隐形TANY；普通Guard实射、自然重隐后的拒绝与再发现通过；同方2圈+盟友1圈时按原生隔离计数，不跨盟友直接共享探测 | IFV控制/归还/死亡、登离LCRF/存读已验，共享Unlimbo已修。两电脑House的重叠、移走一个/退休最后本方源、盟友圈仍在但不为本方准入，以及最终退休/存读已验；目标自身运动、其他联盟变动/圈家族、空艇/精英潜艇/幻影等及画面仍待验，不宣称多AI自主走位或长局通过 |
+| V04 / P1 / 移动/换主死亡/运输及两电脑重叠存读已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL用自身House探测圈获取全隐形TANY；普通Guard实射、自然重隐后的拒绝与再发现通过；同方2圈+盟友1圈时按原生隔离计数，不跨盟友直接共享探测 | IFV控制/归还/死亡、登离LCRF/存读已验，共享Unlimbo已修。两电脑House的重叠、移走一个/退休最后本方源、盟友圈仍在但不为本方准入，以及最终退休/存读已验；SNIPE自身普通Move穿圈/邻格解隐/自然重隐及边沿存读已验；其他联盟变动/圈家族、空艇/精英潜艇/幻影等及画面仍待验，不宣称多AI自主走位或长局通过 |
 | V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；count1/cursor1的普通GetWeapon→Cant→drop、180帧含存读不归零/不发射及补员恢复已验；实际SNIPE两次尾删/游标1/经验/两次存读及原弹归属已验，正等级不应随机删非尾；其他名单损伤来源和原生循环分支仍待核。剩余Cargo在SpawnSurvivors后清理；其他子机家族与母体连续晋升/换主仍待验，不关闭全V05 |
 | V06 / P1 / 地空晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN地面及自然起飞JUMPJET对空实杀晋升、热stage存读、Stop/Guard退档和精英对应槽续射已验；对空目标是受控human House组件，不是AI自主飞行。既有stage0首发由配置实现；YTNK/YAGGUN热状态地空换主存读/新主人续射已验；机炮保存额外旧主AI后的状态，普通human House的实际地空reload及运行中双计时存读已验；实际NATBNK正常进出/非1倍率地空射击及驻留/释放存读已验；碉堡实弹毁坏/正常出售四路释放存读、Move和续射已验；V12特殊回调、碉堡Temporal/争抢、其他倍率/全档精确节奏及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源第三House/同宿主House换主后的解缠、两次存读与GPU已验；源自然瘫痪到期/新主人普通移动/再存读已验；多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |

@@ -6337,6 +6337,337 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; moving cloaked SNIPE crosses a fixed DOG circle across hot saves"]
+    fn aymod_moving_cloaked_target_crosses_fixed_sensors_after_load() {
+        use crate::rules::terrain_rules::LandType;
+        use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::movement::ground_pose::position_world_coord;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for contact in [false, true] {
+            let mut scene = aymod_battle(0);
+            let (sniper, observer, owner, enemy, destination, center, radius) = {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let radius = i16::from(resources.rules.object("DOG").unwrap().sensors_sight);
+                assert!(radius > 1);
+                let kind = resources.rules.object("SNIPE").unwrap();
+                assert!(kind.cloakable && !kind.cloak_stop);
+                assert_eq!(
+                    resources
+                        .rules
+                        .object("GAPILL")
+                        .unwrap()
+                        .foundation
+                        .dimensions(),
+                    (1, 1)
+                );
+                let free = |x, y, level| {
+                    sim.resolved_terrain()
+                        .unwrap()
+                        .cell(x, y)
+                        .is_some_and(|cell| {
+                            !cell.outside_playfield
+                                && cell.level == level
+                                && cell.land_type == LandType::Clear.as_index()
+                                && !cell.bridge_facts.has_structural_bridge()
+                        })
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                        && sim.occupancy().get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        })
+                        && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+                };
+                // Choose real flat terrain with a clear travel lane and detector
+                // beside its midpoint; no terrain, path or position is rewritten.
+                let (start, goal, detector, gun) = sim
+                    .resolved_terrain()
+                    .unwrap()
+                    .cells()
+                    .iter()
+                    .filter(|cell| free(cell.rx, cell.ry, cell.level))
+                    .find_map(|start| {
+                        [(1i16, 0i16), (-1, 0), (0, 1), (0, -1)]
+                            .into_iter()
+                            .find_map(|(dx, dy)| {
+                                let point = |along, side| {
+                                    Some((
+                                        start.rx.checked_add_signed(dx * along - dy * side)?,
+                                        start.ry.checked_add_signed(dy * along + dx * side)?,
+                                    ))
+                                };
+                                let route = (1..=radius * 2 + 8)
+                                    .map(|step| point(step, 0))
+                                    .collect::<Option<Vec<_>>>()?;
+                                let detector = point(radius + 4, if contact { 1 } else { 2 })?;
+                                let gun = point(radius + 4, 3)?;
+                                (route
+                                    .iter()
+                                    .chain([&detector, &gun])
+                                    .all(|&(x, y)| free(x, y, start.level)))
+                                .then_some((
+                                    (start.rx, start.ry),
+                                    *route.last().unwrap(),
+                                    detector,
+                                    gun,
+                                ))
+                            })
+                    })
+                    .expect("a real clear lane crosses a stationary detector circle");
+                let owner = house_of(sim, "Americans");
+                let enemy = house_of(sim, "Russians");
+                let owner_name = sim.interner.resolve(owner).to_owned();
+                let enemy_name = sim.interner.resolve(enemy).to_owned();
+                let sniper = sim
+                    .spawn_object("SNIPE", &owner_name, start.0, start.1, 0, &resources.rules)
+                    .unwrap();
+                let observer = sim
+                    .spawn_object("GAPILL", &enemy_name, gun.0, gun.1, 0, &resources.rules)
+                    .unwrap();
+                for id in [sniper, observer] {
+                    sim.mission_queue_exact(
+                        id,
+                        MissionId::from_known(MissionType::Sleep),
+                        1,
+                        sim.session.binary_frame(),
+                        &crate::sim::mission::authority::LiveReadyInputProvider {
+                            rules: &resources.rules,
+                        },
+                    )
+                    .unwrap();
+                }
+                (
+                    sniper,
+                    observer,
+                    owner,
+                    enemy,
+                    goal,
+                    detector,
+                    radius as u16,
+                )
+            };
+            assert!((0..360).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(sniper)
+                    .unwrap()
+                    .cloak
+                    .unwrap()
+                    .is_fully_cloaked()
+            }));
+            // Create the detector only after natural cloak: its initial Guard
+            // cannot start a pursuit of the still-visible preparation target.
+            let (dog, center) = {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let enemy_name = sim.interner.resolve(enemy).to_owned();
+                let dog = sim
+                    .spawn_object("DOG", &enemy_name, center.0, center.1, 0, &resources.rules)
+                    .unwrap();
+                sim.mission_queue_exact(
+                    dog,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &resources.rules,
+                    },
+                )
+                .unwrap();
+                let at = sim.entities().get(dog).unwrap().position;
+                (dog, (at.rx(), at.ry()))
+            };
+            let circle = scene.sim().fog.sensor_circle_cells(center, radius);
+            let initial_hp = scene.sim().entities().get(sniper).unwrap().health.current();
+            let check = |scene: &HeadlessScenario| {
+                let sim = scene.sim();
+                let actor = sim.entities().get(sniper).unwrap();
+                assert!(actor.is_alive());
+                assert_eq!(
+                    actor.health.current(),
+                    initial_hp,
+                    "contact decloak must not be damage-driven"
+                );
+                let hidden = actor.cloak.unwrap().is_fully_cloaked();
+                if !contact {
+                    assert!(hidden);
+                }
+                let detector = sim.entities().get(dog).unwrap();
+                assert!(detector.is_alive());
+                assert_eq!((detector.position.rx(), detector.position.ry()), center);
+                assert_eq!(detector.sensor_deposit.unwrap().center(), center);
+                let count = sim.fog.sensors_by_house().get(&enemy).unwrap()
+                    [usize::from(center.1) * usize::from(sim.fog.width()) + usize::from(center.0)];
+                assert_eq!(
+                    count, 1,
+                    "hot load must not duplicate the fixed source circle"
+                );
+                let at = (actor.position.rx(), actor.position.ry());
+                let sensed = circle.contains(&at);
+                assert_eq!(sim.fog.has_sensor_for_house(enemy, at.0, at.1), sensed);
+                let rules = &scene.runtime.resources.rules;
+                let error = FireSubject {
+                    world: sim,
+                    rules,
+                    overlay_registry: Some(&scene.runtime.resources.overlay_registry),
+                    fog: Some(sim.fog.fire_view(sim.house_alliances())),
+                    firer: sim.entities().get(observer).unwrap(),
+                    obj: rules.object("GAPILL").unwrap(),
+                    target: Some(TargetKind::Entity(sniper)),
+                    weapon_index: 0,
+                }
+                .fire_error(false);
+                // GetFireError6FC24D..6FC29D asks the live target cell's sensor
+                // word. Bypass only range, not the native cloak/sensor gate.
+                assert_eq!(
+                    error,
+                    if !sensed && hidden {
+                        FireError::Cant
+                    } else {
+                        FireError::Ok
+                    }
+                );
+                sensed
+            };
+            assert!(!check(&scene));
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: sniper,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+            let (mut entered, mut exited, mut arrived) = (false, false, false);
+            let (mut was_hidden, mut contact_uncloaked) = (true, false);
+            for _ in 0..900 {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| [sniper, dog, observer].contains(&event.attacker_id))
+                );
+                let sensed = check(&scene);
+                let actor = scene.sim().entities().get(sniper).unwrap();
+                let hidden = actor.cloak.unwrap().is_fully_cloaked();
+                if was_hidden && !hidden {
+                    // FootPerCell4D87E8..4D8829: a hostile Sensors neighbour
+                    // invokes StartUncloaking. A sensor circle alone does not.
+                    assert!(contact);
+                    assert_eq!(
+                        actor
+                            .position
+                            .rx()
+                            .abs_diff(center.0)
+                            .max(actor.position.ry().abs_diff(center.1)),
+                        1
+                    );
+                    contact_uncloaked = true;
+                }
+                was_hidden = hidden;
+                let crossing = if !entered && sensed {
+                    entered = true;
+                    true
+                } else if entered && !exited && !sensed {
+                    exited = true;
+                    true
+                } else {
+                    false
+                };
+                if crossing {
+                    let actor = scene.sim().entities().get(sniper).unwrap();
+                    assert_eq!(
+                        crate::sim::movement::motion_query::is_moving(actor),
+                        Some(true)
+                    );
+                    let before = position_world_coord(&actor.position);
+                    let cloak = actor.cloak;
+                    let bytes = save_scene(
+                        &scene,
+                        "AY moving cloaked target crossing a fixed sensor edge",
+                    );
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    assert_eq!(
+                        position_world_coord(&scene.sim().entities().get(sniper).unwrap().position),
+                        before
+                    );
+                    assert_eq!(check(&scene), sensed);
+                    assert_eq!(scene.sim().entities().get(sniper).unwrap().cloak, cloak);
+                }
+                let at = scene.sim().entities().get(sniper).unwrap().position;
+                if (at.rx(), at.ry()) == destination {
+                    arrived = true;
+                    break;
+                }
+            }
+            assert!(
+                entered && exited && arrived,
+                "the real Move must cross both sensor edges and finish"
+            );
+            assert_eq!(contact_uncloaked, contact);
+            assert!(!check(&scene));
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    sniper,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+            assert!(
+                (0..360).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(
+                        !output
+                            .fire_events
+                            .iter()
+                            .any(|event| [sniper, dog, observer].contains(&event.attacker_id))
+                    );
+                    assert!(!check(&scene));
+                    scene
+                        .sim()
+                        .entities()
+                        .get(sniper)
+                        .unwrap()
+                        .cloak
+                        .unwrap()
+                        .is_fully_cloaked()
+                }),
+                "the contact-surfaced target must naturally cloak again after leaving"
+            );
+            let bytes = save_scene(
+                &scene,
+                "AY cloaked target outside the fixed detector after movement",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(sniper)
+                    .unwrap()
+                    .cloak
+                    .unwrap()
+                    .is_fully_cloaked()
+            );
+            assert!(!check(&scene));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; overlapping own/allied sensors, real movement, death and saved AI admission"]
     fn aymod_overlapping_detectors_keep_house_counts_through_movement_and_death() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
