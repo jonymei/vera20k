@@ -2200,6 +2200,195 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; saved ForceShield fade fires once and real powered cannon resumes after blackout"]
+    fn aymod_force_shield_saved_fade_and_blackout_restore_powered_fire() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::superweapon::chronosphere_tests::charge_super;
+        use crate::sim::world::{
+            SimSoundEvent,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, lab, cannon) = aymod_nearby_pair("NATECH", "YAGGUN", true);
+        let owner = scene.sim().entities().get(lab).unwrap().owner();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(lab).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 16, i32::from(at.ry()))),
+                &["NANRCT"],
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: cannon,
+                    target_id: lab,
+                },
+            ));
+        }
+        assert!(
+            (0..240).any(|_| tick_with_due_commands(&mut scene)
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == cannon)),
+            "normally powered cannon must really fire before the blackout"
+        );
+        let (sw, special_sound) = {
+            let sim = &mut scene.runtime.simulation;
+            let sw = charge_super(sim, owner, "ForceShieldSpecial");
+            let at = sim.entities().get(cannon).unwrap().position;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::LaunchSuperWeapon {
+                    sw_type_id: sw,
+                    target_rx: at.rx(),
+                    target_ry: at.ry(),
+                },
+            ));
+            (
+                sw,
+                scene
+                    .runtime
+                    .resources
+                    .rules
+                    .super_weapon("ForceShieldSpecial")
+                    .unwrap()
+                    .special_sound
+                    .clone()
+                    .unwrap(),
+            )
+        };
+        tick_with_due_commands(&mut scene);
+        let now = scene.sim().session.binary_frame();
+        let fade = scene.sim().super_weapons.get(&owner).unwrap()[&sw].fade();
+        let blackout = scene.sim().power_states[&owner].blackout_remaining(now);
+        assert!(fade.0 > 12 && blackout > 12 && blackout < 10000);
+        let fade_frame = now + fade.0 as u32 - 1;
+        // House4F844B..4F84EA resets at remaining==1 and reassesses power.
+        let recovery_frame = now + blackout as u32 - 1;
+        let restore = |scene: &mut HeadlessScenario| {
+            let sim = scene.sim();
+            let fade = sim.super_weapons.get(&owner).unwrap()[&sw].fade();
+            let power = sim.power_states[&owner].blackout_remaining(sim.session.binary_frame());
+            let timer = sim
+                .entities()
+                .get(cannon)
+                .unwrap()
+                .invulnerability
+                .as_ref()
+                .unwrap()
+                .timer();
+            let pristine = sim.resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, "AY ForceShield fade and powered recovery");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            let sim = scene.sim();
+            assert_eq!(sim.super_weapons.get(&owner).unwrap()[&sw].fade(), fade);
+            assert_eq!(
+                sim.power_states[&owner].blackout_remaining(sim.session.binary_frame()),
+                power
+            );
+            assert_eq!(
+                sim.entities()
+                    .get(cannon)
+                    .unwrap()
+                    .invulnerability
+                    .as_ref()
+                    .unwrap()
+                    .timer(),
+                timer
+            );
+        };
+        let mut fade_events = 0;
+        let mut saved_after_fade = false;
+        let mut resumed = false;
+        let mut reordered = false;
+        for elapsed in 0..blackout.max(fade.0) + 240 {
+            if elapsed == 12 {
+                restore(&mut scene);
+            }
+            let frame = scene.sim().session.binary_frame();
+            let output = tick_with_due_commands(&mut scene);
+            let count = output
+                .sound_events
+                .iter()
+                .filter(|event| {
+                    matches!(event,
+                SimSoundEvent::VocAt { sound_id, .. } if sound_id == &special_sound)
+                })
+                .count();
+            if count > 0 {
+                assert_eq!((frame, count), (fade_frame, 1));
+                fade_events += count;
+                assert_eq!(
+                    scene.sim().super_weapons.get(&owner).unwrap()[&sw].fade().0,
+                    -1
+                );
+                restore(&mut scene);
+                saved_after_fade = true;
+            }
+            let sim = scene.sim();
+            let fired = output
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == cannon);
+            let operational =
+                sim.building_operational_state(cannon, &scene.runtime.resources.rules);
+            assert!(sim.entities().get(cannon).unwrap().building_online());
+            if frame < recovery_frame {
+                assert!(sim.power_states[&owner].is_low_power());
+                assert_eq!(operational, Some(false));
+                assert!(!fired, "blackout must prevent powered cannon fire");
+            } else {
+                assert_eq!(
+                    sim.power_states[&owner].blackout_remaining(sim.session.binary_frame()),
+                    0
+                );
+                assert!(!sim.power_states[&owner].is_low_power());
+                assert_eq!(operational, Some(true));
+                resumed |= fired;
+                if !reordered {
+                    // BuildingAttack44B0DE drops its target on Cant during
+                    // blackout. An explicit new order tests restored admission,
+                    // not auto-acquisition of this friendly fixture target.
+                    let sim = &mut scene.runtime.simulation;
+                    sim.queue_command(CommandEnvelope::new(
+                        owner,
+                        sim.session.tick() + 1,
+                        Command::Attack {
+                            attacker_id: cannon,
+                            target_id: lab,
+                        },
+                    ));
+                    reordered = true;
+                }
+            }
+            if saved_after_fade && frame > recovery_frame.max(fade_frame) + 60 && resumed {
+                break;
+            }
+        }
+        assert!(
+            resumed && saved_after_fade,
+            "resumed={resumed} saved_after_fade={saved_after_fade} fade_events={fade_events} fade={:?} special={special_sound} target={:?} mission={:?}",
+            scene.sim().super_weapons.get(&owner).unwrap()[&sw].fade(),
+            scene
+                .sim()
+                .entities()
+                .get(cannon)
+                .unwrap()
+                .attack_target
+                .target(),
+            scene.sim().entities().get(cannon).unwrap().mission
+        );
+        assert_eq!(fade_events, 1, "saving after fade must not replay its cue");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; launched IC/FS keeps an existing attack through protection, save and natural expiry"]
     fn aymod_existing_attack_survives_launched_protection_and_full_save() {
         use crate::sim::combat::TargetKind;
