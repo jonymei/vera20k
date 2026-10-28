@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD6d6b3d6c9后补V10光棱支援塔EMP：正式TTNK.Primary→AirburstWeapon/TankBoltEMP→EmEffect WH接现有落点producer，仅支援塔获得EMP、主塔counter0/采样true、House不缺电。正式存读保留非零counter/失效采样；主塔在EMP仍有效时独立开火，支援count0/无待发支援束。普通Stop主塔后等EMP自然到期/采样恢复，不写timer；第二次存读后重新Attack，真实招募/count增加/主塔开火及新增伤害，再存读保持。最终实际3、prism7、gap_generator13共23项通过，无待完成Cargo。仅测试/文档，无生产修改/新critic，整体MOD目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD0b707c1c4后补V10已排光棱支援束再受EMP：真实招募/原倒计时，正式TankBoltEMP落点producer仅命中支援塔，保存恢复保持pending/非零EMP。逐帧旧倒计时到期时EMP仍有效/LastOperational=false，仍恰好产生一次原端点SupportBeam的LaserCreated；到期前无提前光束，mode清空/count清零，发射后再次存读无重复。最终新实际1、既有实际3、prism7共11项通过，无待完成Cargo。无玩法修改/新critic，固定构建/配置/原档未动，整体目标开放。静读另发现NP支援发射后重装时间按rank读取Rules+644/+63C/+4A4，当前Rust固定prism_support.delay，尚需查构造/reader/实际配置，不能把本次倒计时测试称该数值分支已兼容。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：核光棱已排定SupportBeam后遭EMP的时序/存读，沿现有ProcessDelayedFire owner及实际NP指令确认发射端/取消端，不凭失效即加取消政策；区分招募时的LastOperational门与已排束执行。V01/F11批准门禁、其余功能与整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。
+- 下一安全动作：沿光棱同一链核NPAE174 Support44ACC4→7E0636..7E065D按rank选择Rules+644/+63C/+4A4的重装分支，定位真实构造、INI读取及实际AY值，再决定是否修共享支持冷却owner；不猜offset字段名、不依据相似键造政策。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -574,6 +574,11 @@
 - 单支援塔EMP续验：共用正式AY装配，支援塔选择距主塔4格的合法落点；从正式TTNK.Primary→projectile.AirburstWeapon读取TankBoltEMP与实际EmEffect WH、damage/扩散，不改MOD/范围。调用唯一apply_npatch_emp_detonation落点producer（无source），真实得到支援counter>0，主塔counter0、House非低电、支援手动online仍true但LastOperational为false。此处不是TTNK整次选敌/弹丸命中的证明，NP时长/准入仍是既有兼容政策，不冒称新增原生算术对照。
 - 第一次正式存读保留支援counter和失效采样、主塔counter0/采样true。普通Attack主塔，在支援EMP仍>0的帧真实开火，主塔support count保持0，支援没有待发SupportBeam。之后普通Stop主塔，沿普通帧等支援EMP自然到0、采样自然恢复；等待期不直接写任务/时钟/online，既有Stop命令只隔离额外主塔攻击。
 - 自然恢复后第二次完整存读、重新发主塔Attack，真实支援招募/count>0与主塔开火通过；伤害相对恢复时HP单独比较，不能以此前独立首发旧伤冒充。第三次完整存读保留新伤害。最终三个实际AY场景、prism_tests7及gap_generator_tests13通过，共23项。测试/文档-only，无新增生产RNG/timer/Detach/保存字段，无玩法修改/新critic；未启动GUI、未改MOD/原始存档/固定构建、未发布。不关闭已排定支援束后EMP的时序、真实弹丸/多AI联击或画面边界，不添加中途取消规则。
+
+- 已排支援束再EMP：实际NPAE BuildingUpdate440072对活HP跳4400F2/4400F4调用ProcessDelayedFire4503F0；45042C..450452将模式2的原坐标交Support44ABD0，不检查EMP/operational。44ABD0..44ACCA创建Laser并清本塔支援count，重装尾有NP补丁，见下一条；不能从招募门7E04BB推导取消已排束。
+- 新实际AY例共用唯一prism场景/实际TankBoltEMP读取夹具。普通Attack真实招募后捕捉原SupportBeam及剩余倒计时，再施加EMP，不手写pending、counter、坐标、timer或rank。主塔EMP0、支援EMP大于待发时长；正式保存恢复逐项保持pending/counter，随后普通帧每步验证仍EMP有效/LastOperational=false、原倒计时自然减一，未到期无原端点光束，到期恰好一次LaserCreated（width3及原端点）、pending清空/本塔count0。发射后再次存读及三普通帧无重复/无新招募。该观察是生产LaserBirth输出，不冒称GPU或真实TTNK投射物命中。
+- 最终新实际1、原三实际3和prism_tests7通过，共11项。只改测试/台账，无生产RNG/timer/Detach/保存字段变化，无玩法修改/新critic；未启动GUI/改MOD/原始存档/固定构建/发布。没有增加中途取消，也不扩大为死亡/换主/全部光束生命周期通过。
+- 新发现同链待核差异：实际NP Support44ACC4跳7E0636，读Building+13C rank，0用Rules+644、1用+63C、其他用+4A4，再回44ACCA写rearm。当前process_delayed_fire固定用rules.general.prism_support.delay（stock +4A4）。已读全选择分支，尚未核+644/+63C的构造/reader/实际AY值与共享owner，不能猜键名或宣称各rank冷却已等价；本次仅验证旧倒计时到期发射，不断言发射后的冷却数值。
 
 ### V10铁幕/力场保护目标准入（2026-10-27）
 

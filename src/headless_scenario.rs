@@ -1981,12 +1981,164 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_prism_power_recovery(house_outage: bool, emp_supporter: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; already armed Prism support survives subsequent EMP and hot load exactly once"]
+    fn aymod_armed_prism_support_survives_emp_and_saved_countdown() {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::{
-            DelayedFire,
+            DelayedFire, LifecycleOutput,
             bridge_test_evidence::{restored_retail, save_scene},
         };
+        let (mut scene, master, target, supporter, _) = aymod_prism_scene(true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let owner = scene.sim().entities().get(master).unwrap().owner();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: master,
+                target_id: target,
+            },
+        ));
+        assert!(
+            (0..240).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_some_and(|pending| {
+                        matches!(pending.fire(), DelayedFire::SupportBeam { .. })
+                            && pending.remaining_ticks() > 3
+                    })
+            }),
+            "normal Prism recruitment must arm the support beam before EMP"
+        );
+        let pending = scene
+            .sim()
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .pending_building_fire
+            .pending()
+            .unwrap();
+        let DelayedFire::SupportBeam { to } = pending.fire() else {
+            unreachable!()
+        };
+        let count = scene
+            .sim()
+            .entities()
+            .get(master)
+            .unwrap()
+            .prism_support_count
+            .count();
+        assert!(count > 0);
+        aymod_apply_tank_bolt_emp(&mut scene, supporter);
+        let sim = scene.sim();
+        let emp = sim.entities().get(supporter).unwrap().emp_remaining();
+        assert!(emp > pending.remaining_ticks());
+        assert_eq!(sim.entities().get(master).unwrap().emp_remaining(), 0);
+        assert_eq!(
+            sim.entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending(),
+            Some(pending)
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY Prism support armed before EMP at original countdown",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending(),
+            Some(pending)
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .emp_remaining(),
+            emp
+        );
+        let mut emitted = 0;
+        for elapsed in 1..=pending.remaining_ticks() {
+            let output = tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let tower = sim.entities().get(supporter).unwrap();
+            assert!(tower.emp_remaining() > 0);
+            assert!(!tower.building_last_operational.is_operational());
+            // ProcessDelayedFire45042C..450452 calls44ABD0 without an EMP
+            // or operational gate; recruitment's gate is not cancellation.
+            let beams = output
+                .lifecycle_outputs
+                .iter()
+                .filter(|event| {
+                    matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)
+                })
+                .count();
+            if elapsed < pending.remaining_ticks() {
+                assert_eq!(beams, 0);
+                assert_eq!(
+                    tower
+                        .pending_building_fire
+                        .pending()
+                        .unwrap()
+                        .remaining_ticks(),
+                    pending.remaining_ticks() - elapsed
+                );
+            } else {
+                assert_eq!(beams, 1);
+                assert!(tower.pending_building_fire.pending().is_none());
+                assert_eq!(tower.prism_support_count.count(), 0);
+            }
+            emitted += beams;
+        }
+        assert_eq!(emitted, 1);
+        let bytes = save_scene(&scene, "AY EMP Prism support after original beam emission");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..3 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .emp_remaining()
+                    > 0
+            );
+            assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)));
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_none()
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_prism_scene(separate_supporter: bool) -> (HeadlessScenario, u64, u64, u64, u64) {
         // A friendly heavy target keeps the supporting tower on Guard;
         // the master receives an explicit player Attack, not an AI override.
         let (mut scene, master, target) = aymod_nearby_pair("ATESLA", "APOC", true);
@@ -2000,11 +2152,59 @@ mod retail_construction_tests {
             let power = spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["GAPOWR"])[0];
             let sites = cells_nearest(center)
                 .into_iter()
-                .filter(|&(x, y)| !emp_supporter || (x - center.0).abs().max((y - center.1).abs()) == 4)
+                .filter(|&(x, y)| {
+                    !separate_supporter || (x - center.0).abs().max((y - center.1).abs()) == 4
+                })
                 .collect::<Vec<_>>();
             let supporter = spawn_on_free_cells(sim, rules, owner, sites, &["ATESLA"])[0];
             (supporter, power)
         };
+        (scene, master, target, supporter, power)
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_apply_tank_bolt_emp(scene: &mut HeadlessScenario, target: u64) {
+        let runtime = &mut scene.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let primary = rules
+            .weapon(rules.object("TTNK").unwrap().primary().unwrap())
+            .unwrap();
+        let projectile = rules
+            .projectile(primary.projectile.as_deref().unwrap())
+            .unwrap();
+        let emp = rules
+            .weapon(projectile.airburst_weapon.as_deref().unwrap())
+            .unwrap();
+        assert_eq!(emp.id, "TankBoltEMP");
+        let wh = rules.warhead(emp.warhead.as_deref().unwrap()).unwrap();
+        assert!(wh.em_effect);
+        let at = crate::sim::movement::ground_pose::object_get_coords(
+            sim.entities().get(target).unwrap(),
+            sim.resolved_terrain(),
+        );
+        sim.apply_npatch_emp_detonation(
+            crate::sim::projectile::ProjectileCoord {
+                x: at.x,
+                y: at.y,
+                z: at.z,
+            },
+            Some(target),
+            None,
+            emp.damage,
+            wh,
+            rules,
+            Default::default(),
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_prism_power_recovery(house_outage: bool, emp_supporter: bool) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{
+            DelayedFire,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, master, target, supporter, power) = aymod_prism_scene(emp_supporter);
         let queue = |scene: &mut HeadlessScenario, command| {
             let sim = &mut scene.runtime.simulation;
             let owner = sim.entities().get(master).unwrap().owner();
@@ -2026,37 +2226,8 @@ mod retail_construction_tests {
         }
         let switched = if house_outage { power } else { supporter };
         if emp_supporter {
-            let runtime = &mut scene.runtime;
-            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-            let primary = rules
-                .weapon(rules.object("TTNK").unwrap().primary().unwrap())
-                .unwrap();
-            let projectile = rules
-                .projectile(primary.projectile.as_deref().unwrap())
-                .unwrap();
-            let emp = rules
-                .weapon(projectile.airburst_weapon.as_deref().unwrap())
-                .unwrap();
-            assert_eq!(emp.id, "TankBoltEMP");
-            let wh = rules.warhead(emp.warhead.as_deref().unwrap()).unwrap();
-            assert!(wh.em_effect);
-            let at = crate::sim::movement::ground_pose::object_get_coords(
-                sim.entities().get(supporter).unwrap(),
-                sim.resolved_terrain(),
-            );
-            sim.apply_npatch_emp_detonation(
-                crate::sim::projectile::ProjectileCoord {
-                    x: at.x,
-                    y: at.y,
-                    z: at.z,
-                },
-                Some(supporter),
-                None,
-                emp.damage,
-                wh,
-                rules,
-                Default::default(),
-            );
+            aymod_apply_tank_bolt_emp(&mut scene, supporter);
+            let sim = scene.sim();
             assert!(sim.entities().get(supporter).unwrap().emp_remaining() > 3);
             assert_eq!(
                 sim.entities().get(master).unwrap().emp_remaining(),
@@ -2104,7 +2275,14 @@ mod retail_construction_tests {
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         if emp_supporter {
             assert!(!scene.sim().power_states[&owner].is_low_power());
-            assert!(scene.sim().entities().get(supporter).unwrap().building_online());
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .building_online()
+            );
             assert_eq!(
                 scene
                     .sim()
