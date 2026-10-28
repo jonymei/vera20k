@@ -2512,6 +2512,98 @@ mod retail_construction_tests {
             tick_with_due_commands(&mut scene);
             assert_eq!(state(&scene), 0);
         }
+        {
+            let sim = &mut scene.runtime.simulation;
+            let index = |id| {
+                sim.houses()
+                    .order()
+                    .iter()
+                    .position(|&house| house == id)
+                    .unwrap() as i32
+            };
+            let (old_index, new_index) = (index(owner), index(enemy));
+            let tick = sim.session.tick() + 1;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Ally {
+                    house_index: new_index,
+                },
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                enemy,
+                tick,
+                Command::Ally {
+                    house_index: old_index,
+                },
+            ));
+        }
+        tick_with_due_commands(&mut scene);
+        let allied = |scene: &HeadlessScenario| {
+            crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner().resolve(owner),
+                scene.sim().interner().resolve(enemy),
+            )
+        };
+        assert!(
+            allied(&scene),
+            "both normal ALLY events must actually establish the alliance"
+        );
+        // Building CanAuto457770/Should4578C0 compares House pointers,
+        // not diplomacy: an allied foreign Sensors neighbour still blocks it.
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(
+                state(&scene),
+                0,
+                "ally sensor must not be mistaken for own sensor"
+            );
+        }
+        let contact = {
+            use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let hp = sim.entities().get(building).unwrap().health.current();
+            let wh = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    building,
+                    hp - 1,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    wh,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+            let actor = sim.entities().get(building).unwrap();
+            assert_eq!(actor.health.current(), 1);
+            assert_eq!(
+                crate::sim::combat::health_category(
+                    actor.health.current(),
+                    resources.rules.object("GAPOWR").unwrap().strength,
+                    resources.rules.general.condition_red,
+                    resources.rules.general.condition_yellow
+                ),
+                0
+            );
+            let at = sim.entities().get(dog).unwrap().position;
+            (at.rx(), at.ry())
+        };
+        let bytes = save_scene(
+            &scene,
+            "AY red crate-cloaked building blocked by allied sensor",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(allied(&scene) && granted(&scene, building));
+        assert_eq!(state(&scene), 0);
         scene.runtime.simulation.queue_command(CommandEnvelope::new(
             owner,
             scene.sim().session.tick() + 1,
@@ -2535,6 +2627,91 @@ mod retail_construction_tests {
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert!(granted(&scene, building));
         assert_eq!(state(&scene), 2);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .health
+                .current(),
+            1
+        );
+        let detector = scene.sim().entities().get(dog).unwrap();
+        assert!(detector.is_object_alive() && detector.health.current() > 0);
+        assert_ne!((detector.position.rx(), detector.position.ry()), contact);
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Move {
+                entity_id: dog,
+                target_rx: contact.0,
+                target_ry: contact.1,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 0
+            }),
+            "actual allied DOG re-entry must reveal the red building again"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY allied detector returned to the red building contact ring",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(allied(&scene) && granted(&scene, building));
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(state(&scene), 0);
+        }
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Move {
+                entity_id: dog,
+                target_rx: destination.0,
+                target_ry: destination.1,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                state(&scene) == 2
+            }),
+            "red crate recipient must retain the ability through a second detector departure"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .health
+                .current(),
+            1
+        );
+        let detector = scene.sim().entities().get(dog).unwrap();
+        assert!(detector.is_object_alive() && detector.health.current() > 0);
+        let bytes = save_scene(
+            &scene,
+            "AY red building recloaked after second allied sensor departure",
+        );
+        assert_ne!((detector.position.rx(), detector.position.ry()), contact);
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(allied(&scene) && granted(&scene, building));
+        assert_eq!(state(&scene), 2);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .health
+                .current(),
+            1
+        );
     }
 
     #[cfg(feature = "npatch")]
