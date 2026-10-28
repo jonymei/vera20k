@@ -19129,7 +19129,7 @@ mod retail_construction_tests {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
-        for (kind, slots) in [("DEST", 1), ("DRED", 2)] {
+        for (kind, slots) in [("DEST", 1), ("DRED", 2), ("BSUB", 2)] {
             let mut launch = battle_session(
                 map,
                 &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
@@ -19155,12 +19155,71 @@ mod retail_construction_tests {
                 })
                 .map(|cell| (cell.rx, cell.ry))
                 .collect::<Vec<_>>();
+            // BSUB uses torpedoes at sea and CruiseLauncher only on land.
+            // Keep an ordinary land target outside its real minimum range.
+            let land = sim
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| {
+                    !cell.outside_playfield
+                        && !cell.bridge_facts.has_structural_bridge()
+                        && cell.land_type == crate::rules::terrain_rules::LandType::Clear.as_index()
+                })
+                .map(|cell| (cell.rx, cell.ry))
+                .collect::<Vec<_>>();
             let parent = water
                 .iter()
+                .filter(|&&(x, y)| {
+                    kind != "BSUB"
+                        || land
+                            .iter()
+                            .any(|&(tx, ty)| x.abs_diff(tx).max(y.abs_diff(ty)) == 10)
+                })
                 .find_map(|&(x, y)| sim.spawn_object(kind, &owner_name, x, y, 0, rules))
                 .unwrap();
             let at = sim.entities().get(parent).unwrap().position;
-            let children = sim
+            let initial_children = sim
+                .entities()
+                .get(parent)
+                .unwrap()
+                .spawn_manager
+                .as_ref()
+                .unwrap()
+                .slots()
+                .iter()
+                .map(|slot| slot.spawn().unwrap())
+                .collect::<Vec<_>>();
+            if kind == "BSUB" {
+                // Natural StartCloaking703789 broadcasts DetachAll(0) to the
+                // owner too: PointerExpired6B7CBC kills its docked pool.
+                assert!(
+                    (0..300).any(|_| {
+                        tick_with_due_commands(&mut scene);
+                        let parent = scene.sim().entities().get(parent).unwrap();
+                        parent.cloak.as_ref().unwrap().state() == 2
+                            && parent
+                                .spawn_manager
+                                .as_ref()
+                                .unwrap()
+                                .slots()
+                                .iter()
+                                .all(|slot| {
+                                    slot.spawn()
+                                        .is_some_and(|id| scene.sim().entities().get(id).is_some())
+                                })
+                    }),
+                    "BSUB must naturally finish cloaking and rebuild its docked pool"
+                );
+                assert!(
+                    initial_children
+                        .iter()
+                        .all(|id| scene.sim().entities().get(*id).is_none())
+                );
+            }
+            let children = scene
+                .sim()
                 .entities()
                 .get(parent)
                 .unwrap()
@@ -19315,22 +19374,32 @@ mod retail_construction_tests {
                     Some(parent)
                 );
             }
-            if kind == "DRED" {
+            if slots > 1 {
                 use crate::sim::command::{Command, CommandEnvelope};
+                let (target_cells, target_kind, distance) = if kind == "BSUB" {
+                    (&land, "APOC", 10)
+                } else {
+                    (&water, "CARRIER", 8)
+                };
                 let runtime = &mut scene.runtime;
                 let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
-                let target = water
+                let target = target_cells
                     .iter()
                     .filter(|&&(x, y)| {
                         (i32::from(x) - i32::from(at.rx()))
                             .abs()
                             .max((i32::from(y) - i32::from(at.ry())).abs())
-                            == 8
+                            == distance
                     })
                     .find_map(|&(x, y)| {
-                        sim.spawn_object("CARRIER", &enemy_name, x, y, 0, &resources.rules)
+                        sim.spawn_object(target_kind, &enemy_name, x, y, 0, &resources.rules)
                     })
                     .unwrap();
+                let target_health = sim.entities().get(target).unwrap().health.current();
+                let target_cell = {
+                    let target = sim.entities().get(target).unwrap();
+                    (target.position.rx(), target.position.ry())
+                };
                 let regen = sim
                     .entities()
                     .get(parent)
@@ -19349,6 +19418,7 @@ mod retail_construction_tests {
                     },
                 ));
                 let mut launched = [false; 2];
+                let mut last_cells = [None; 2];
                 let lost_slot = (0..1200)
                     .find_map(|_| {
                         let frame = scene.sim().session.binary_frame();
@@ -19358,6 +19428,15 @@ mod retail_construction_tests {
                             "the battle must remain active while checking missile timers"
                         );
                         for (index, &id) in children.iter().enumerate() {
+                            if let Some(child) = scene
+                                .sim()
+                                .entities()
+                                .get(id)
+                                .filter(|child| !child.lifecycle.in_limbo())
+                            {
+                                last_cells[index] =
+                                    Some((child.position.rx(), child.position.ry()));
+                            }
                             launched[index] |= scene
                                 .sim()
                                 .entities()
@@ -19377,7 +19456,19 @@ mod retail_construction_tests {
                             .enumerate()
                             .position(|(index, slot)| launched[index] && slot.spawn().is_none())
                     })
-                    .expect("normal DRED Attack must launch and consume a real missile");
+                    .unwrap_or_else(|| {
+                        panic!("{kind}: normal Attack must launch and consume a real missile")
+                    });
+                if kind == "BSUB" {
+                    assert!(
+                        scene
+                            .sim()
+                            .entities()
+                            .get(children[lost_slot])
+                            .is_some_and(|child| child.health.current() > 0),
+                        "manager slot expiry is not the flying cruise missile's death"
+                    );
+                }
                 let sim = &mut scene.runtime.simulation;
                 sim.queue_command(CommandEnvelope::new(
                     owner,
@@ -19403,7 +19494,7 @@ mod retail_construction_tests {
                 );
                 let bytes = save_scene(
                     &scene,
-                    "AY elite DRED missile consumed with regeneration pending",
+                    "AY elite naval missile consumed with regeneration pending",
                 );
                 scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                 assert_eq!(
@@ -19419,6 +19510,10 @@ mod retail_construction_tests {
                 let replacement = (0..regen + 60)
                     .find_map(|_| {
                         tick_with_due_commands(&mut scene);
+                        if let Some(child) = scene.sim().entities().get(children[lost_slot]) {
+                            last_cells[lost_slot] =
+                                Some((child.position.rx(), child.position.ry()));
+                        }
                         scene
                             .sim()
                             .entities()
@@ -19428,26 +19523,54 @@ mod retail_construction_tests {
                             .slots()[lost_slot]
                             .spawn()
                     })
-                    .expect("configured DRED regeneration must create a new missile after load");
+                    .expect("configured naval regeneration must create a new missile after load");
                 assert_ne!(replacement, children[lost_slot]);
                 let parent_xp = scene.sim().entities().get(parent).unwrap().veterancy.raw();
                 let child = scene.sim().entities().get(replacement).unwrap();
                 assert_eq!(child.spawn_owner_id.owner(), Some(parent));
                 assert_eq!(child.veterancy.raw(), parent_xp);
-                let bytes = save_scene(&scene, "AY regenerated elite DRED missile");
+                if kind == "BSUB" {
+                    assert!(
+                        (0..1200).any(|_| {
+                            let frame = scene.sim().session.binary_frame();
+                            tick_with_due_commands(&mut scene);
+                            assert!(scene.sim().session.binary_frame() > frame);
+                            if let Some(child) = scene.sim().entities().get(children[lost_slot]) {
+                                last_cells[lost_slot] =
+                                    Some((child.position.rx(), child.position.ry()));
+                                return false;
+                            }
+                            scene
+                                .sim()
+                                .entities()
+                                .get(target)
+                                .is_none_or(|target| target.health.current() < target_health)
+                        }),
+                        "cruise missile must finish its real flight and damage the land target after load"
+                    );
+                    let (x, y) = last_cells[lost_slot].unwrap();
+                    assert!(
+                        x.abs_diff(target_cell.0).max(y.abs_diff(target_cell.1)) <= 2,
+                        "the cruise missile must reach the target, not retire at launch: {last_cells:?}"
+                    );
+                }
+                let bytes = save_scene(&scene, "AY regenerated elite naval missile");
                 scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                let child = scene.sim().entities().get(replacement).unwrap();
+                assert_eq!(child.spawn_owner_id.owner(), Some(parent));
+                assert_eq!(child.veterancy.raw(), parent_xp);
                 let runtime = &mut scene.runtime;
                 let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
-                let target = water
+                let target = target_cells
                     .iter()
                     .filter(|&&(x, y)| {
                         (i32::from(x) - i32::from(at.rx()))
                             .abs()
                             .max((i32::from(y) - i32::from(at.ry())).abs())
-                            == 8
+                            == distance
                     })
                     .find_map(|&(x, y)| {
-                        sim.spawn_object("CARRIER", &enemy_name, x, y, 0, &resources.rules)
+                        sim.spawn_object(target_kind, &enemy_name, x, y, 0, &resources.rules)
                     })
                     .unwrap();
                 sim.queue_command(CommandEnvelope::new(
