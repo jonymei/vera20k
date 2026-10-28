@@ -13016,13 +13016,34 @@ mod retail_construction_tests {
             assert_eq!(actor.passenger_role.inside_transport_id(), Some(hospital));
             assert!(actor.radio_contacts.is_empty());
             let building = scene.sim().entities().get(hospital).unwrap();
-            assert_eq!(building.passenger_role.cargo().unwrap().passengers(), [patient]);
+            assert_eq!(
+                building.passenger_role.cargo().unwrap().passengers(),
+                [patient]
+            );
             assert!(building.radio_contacts.is_empty());
-            assert_eq!(building.mission.current().known(), Some(MissionType::Repair));
+            assert_eq!(
+                building.mission.current().known(),
+                Some(MissionType::Repair)
+            );
             assert_eq!(building.mission.handler_state(), 2);
-            assert_eq!(scene.sim().entities().get(waiting_patient).unwrap().health.current(), 1);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(waiting_patient)
+                    .unwrap()
+                    .health
+                    .current(),
+                1
+            );
             assert_ne!(
-                scene.sim().entry_click_action(waiting_patient, hospital, EntryBaseAction::Select, &scene.runtime.resources.rules, Default::default()),
+                scene.sim().entry_click_action(
+                    waiting_patient,
+                    hospital,
+                    EntryBaseAction::Select,
+                    &scene.runtime.resources.rules,
+                    Default::default()
+                ),
                 Some(EntryClickAction::Enter)
             );
         }
