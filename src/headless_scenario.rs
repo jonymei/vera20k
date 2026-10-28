@@ -1425,6 +1425,184 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; three hard AI bases and actual paid Grand Cannon placement"]
+    fn aymod_three_ai_bases_only_allies_produce_and_place_the_grand_cannon() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(3);
+                session.options.unit_count = 0;
+            },
+            &[
+                (LaunchCountry::from_country_index(0), AiDifficulty::Hard),
+                (LaunchCountry::from_country_index(1), AiDifficulty::Hard),
+                (LaunchCountry::from_country_index(2), AiDifficulty::Hard),
+            ],
+        );
+        for &owner in &computers {
+            // Isolate base production from combat and competing attack teams;
+            // leave the actual economy, plans, choosers and factories running.
+            scene
+                .runtime
+                .simulation
+                .houses
+                .get_mut(&owner)
+                .unwrap()
+                .set_ai_triggers_active(false);
+        }
+        let allied = computers
+            .iter()
+            .copied()
+            .find(|owner| scene.sim().houses.get(owner).unwrap().side_index() == 0)
+            .unwrap();
+        let cannon = scene
+            .runtime
+            .resources
+            .rules
+            .object("GTGCAN")
+            .unwrap()
+            .base_plan_type_index;
+        let human_cannon = scene
+            .runtime
+            .resources
+            .rules
+            .object("GTGCAN2")
+            .unwrap()
+            .base_plan_type_index;
+        let mut held = std::collections::BTreeMap::new();
+        let mut paid = std::collections::BTreeSet::new();
+        let mut on_map = std::collections::BTreeSet::new();
+        let mut placed = false;
+        for _ in 0..24000 {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            for &owner in &computers {
+                let house = sim.houses.get(&owner).unwrap();
+                assert!(
+                    !house.base_plan().nodes().iter().any(|node| {
+                        node.type_or_control == human_cannon
+                            || (owner != allied && node.type_or_control == cannon)
+                    }),
+                    "non-Allied prerequisites must not be bypassed during live replanning"
+                );
+                assert_ne!(house.ai_production().building_choice(), human_cannon);
+                if owner != allied {
+                    assert_ne!(house.ai_production().building_choice(), cannon);
+                }
+            }
+            for factory in sim.production().factories().iter_insertion_ordered() {
+                let Some(product) = factory.object() else {
+                    continue;
+                };
+                let name = sim.interner.resolve(product.type_id);
+                assert_ne!(name, "GTGCAN2");
+                if name == "GTGCAN" {
+                    assert_eq!(factory.owner(), allied);
+                    let id = product.entity_id.unwrap();
+                    let initial_balance = *held.entry(id).or_insert_with(|| {
+                        eprintln!(
+                            "AY Allied cannon factory object{id} at tick{}",
+                            sim.session.tick()
+                        );
+                        factory.balance()
+                    });
+                    if factory.balance() < initial_balance {
+                        paid.insert(id);
+                    }
+                }
+            }
+            for actor in sim.entities().values().filter(|actor| {
+                sim.interner.resolve(actor.type_ref()) == "GTGCAN" && actor.is_object_alive()
+            }) {
+                assert_eq!(actor.owner(), allied);
+                if !actor.lifecycle.in_limbo() && actor.lifecycle.cell_marked() {
+                    assert!(held.contains_key(&actor.stable_id()));
+                    if on_map.insert(actor.stable_id()) {
+                        eprintln!(
+                            "AY cannon{} placed at tick{}, mission={:?}",
+                            actor.stable_id(),
+                            sim.session.tick(),
+                            actor.mission
+                        );
+                    }
+                }
+                if on_map.contains(&actor.stable_id())
+                    && !actor.lifecycle.in_limbo()
+                    && actor.mission.effective()
+                        != crate::sim::mission::MissionId::from_known(
+                            crate::sim::mission::MissionType::Construction,
+                        )
+                {
+                    assert!(paid.contains(&actor.stable_id()));
+                    placed = true;
+                }
+            }
+            if placed {
+                break;
+            }
+        }
+        for &owner in &computers {
+            let sim = scene.sim();
+            let house = sim.houses.get(&owner).unwrap();
+            assert!(!house.base_plan().nodes().is_empty());
+            let buildings = sim
+                .entities()
+                .values()
+                .filter(|actor| {
+                    actor.owner() == owner
+                        && actor.category() == crate::map::entities::EntityCategory::Structure
+                        && actor.is_object_alive()
+                        && !actor.lifecycle.in_limbo()
+                })
+                .count();
+            assert!(
+                buildings > 1,
+                "side{} must actually develop beyond its starting yard",
+                house.side_index()
+            );
+            eprintln!(
+                "AY side{} live buildings{buildings}, credits{}",
+                house.side_index(),
+                house.economy().credits()
+            );
+        }
+        assert!(
+            placed && !paid.is_empty(),
+            "no paid Allied cannon placement: held={held:?}, paid={paid:?}, on_map={on_map:?}, bases={:?}",
+            computers
+                .iter()
+                .map(|owner| {
+                    let sim = scene.sim();
+                    let house = sim.houses.get(owner).unwrap();
+                    (
+                        house.side_index(),
+                        house.economy().credits(),
+                        house.ai_production().building_choice(),
+                        house
+                            .base_plan()
+                            .nodes()
+                            .iter()
+                            .map(|node| {
+                                (
+                                    scene
+                                        .runtime
+                                        .resources
+                                        .rules
+                                        .building_type_at(node.type_or_control)
+                                        .map(|ty| ty.id.as_str()),
+                                    node.filled,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_anchor(sim: &Simulation, owner: InternedId) -> (i32, i32) {
         sim.entities()
             .values()

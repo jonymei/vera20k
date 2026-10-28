@@ -6,12 +6,12 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于a974a05db补V08同一批BFRT乘员卸载后重新招募、部分装载/全装载存读及六人再次实射。最终实际AY隔离组件/竞争对照各1项、transport_tests9项通过；本轮仅测试/台账、无新玩法critic。未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于fd77cf65b补非盟军巨炮修复的三困难AI实际发展/选择/付款/落地与结束施工验证。实际AY三AI场景1项、Return Dubai三阵营计划1项、NP planner11项、基地选择tests12项通过；本轮仅测试/台账、无新玩法critic。未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
-- Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
+- Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：补A10非盟军巨炮修复的实际AI选择/建造落地验证，先核三阵营真实发展前置及基地生产owner，不把计划列表当实际落地，也不重开已暂停的Return Dubai弱攻势调查。V10地面单位完整自主索敌、坠落中存读及多AI仍未验；F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
+- 下一安全动作：继续V10精英后射程反降的剩余原因，先核作者原说明、实际使用兵种及共享武器/射程owner，不能通过改Range数值“修复”；不重开Return Dubai弱攻势调查。V10坠落地面单位完整自主索敌、坠落中存读及多AI仍未验；F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -352,7 +352,10 @@
   修复后NP/stock planner各11项通过，实际Return Dubai正式load_session+三阵营计划1项通过：盟军仍有GTGCAN，苏联/尤里无GTGCAN，三者均无GTGCAN2。
   NP/stock基地选择各15项、NP MCV部署25项通过；MCV六个ignored不涉及本次规划后备分支未重跑。一次只读critic无可操作发现。
 - 没有新增RNG调用、timer/Detach或保存字段；较短计划会自然改变原有炼厂/防御插入抽样范围，不伪装成原有错误计划的逐帧重放。
-  原存档中已保留的错误计划和已经造好的巨炮不自动删除；此修复作用于后续新生成的计划，新局验证。尚未单跑完整三阵营建造/落地实战，不把计划回归当GUI验收。
+  原存档中已保留的错误计划和已经造好的巨炮不自动删除；此修复作用于后续新生成的计划，新局验证。
+- 2026-10-28续验实际建造：正式AY Battle/XMP03T4新局，一人闲置、三阵营困难AI，从原始MCV、正常资金和经济启动，unit_count=0；仅在测试内关闭新AITrigger以隔离进攻团队，不注入科技/基地/钱、不写计划/选择/队列/进度或地图落点。盟军tick15378由实际工厂构造GTGCAN，逐帧观察剩余应付款下降；同一对象tick16459正式退出工厂、取得地图占格，随后退出Construction。三家最终各有25/24/27个活体落地建筑，排除非盟军根本没发展造成的空通过。
+- 全段普通帧检查苏联/尤里的计划、House building_choice和实际工厂，无GTGCAN；所有AI均无GTGCAN2生产。盟军第二座巨炮是合法独立生产，首跑错误要求所有生产共用首座ID被反例推翻；改为每个实际工厂对象独立跟踪付款与落地身份，保留完整施工结束门槛，而非禁止后续建造或放宽为计划出现即通过。
+- 最终三AI实际场景1项、Return Dubai正式规则三阵营计划1项、NP planner11项和ai_base_building::tests12项通过；未重跑既有perimeter/stock覆盖，无生产修改/新critic。没有新增RNG、timer/Detach或保存字段，所有发展/生产/落地仍走现有owners；未启动GUI、未动固定玩家版/MOD/原始存档。结论限未占领异阵营科技的这次新局、关闭进攻触发的基地组件；不是完整多AI战斗/长局、Return Dubai发展或真人GUI验收，不关闭A10裂缝/超级裂缝等独立项。
 
 ### F09：已接生产链，当前两Battle武器闭包无消费者
 
@@ -1017,7 +1020,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
 | A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。三项相关NP开关已核各物理层未设置，对应默认不能解释此停滞；原生相关门同样保留。仍不能擅改悬停参数或直接归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
-| A10 / P1 / 待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 盟军AI实际建巨炮/裂缝，实际使用超级裂缝相关单位/能力；核当前生效配置和消费者，不把旧作者 bug 当当前引擎必然存在 |
+| A10 / P1 / 巨炮实际建造已验，其余待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。隔离进攻组件不等于完整战斗验收；占领科技/GUI、裂缝建造与超级裂缝相关单位/能力仍待验，不把旧作者bug当当前引擎必然存在 |
 
 A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](npatch.md)；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
 
