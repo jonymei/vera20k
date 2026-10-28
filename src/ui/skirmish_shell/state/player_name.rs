@@ -253,6 +253,8 @@ impl CountryMenuCatalog {
 #[derive(Debug, Clone)]
 pub struct SkirmishShellState {
     pub(crate) country_catalog: CountryMenuCatalog,
+    /// Derived startup catalog size; refreshed alongside the country catalog.
+    pub(crate) color_count: usize,
     pub selected_map_idx: usize,
     pub selected_mode_id: i32,
     pub player_name_edit: PlayerNameEditState,
@@ -317,6 +319,7 @@ pub enum SkirmishShellDialog {
 impl SkirmishShellState {
     pub fn refresh_country_catalog(&mut self, rules: &crate::rules::ruleset::RuleSet) {
         self.country_catalog = CountryMenuCatalog(super::combos::country_choices(rules));
+        self.color_count = rules.multiplayer_color_count;
         self.open_combo_dropdown = None;
     }
 
@@ -345,6 +348,7 @@ impl Default for SkirmishShellState {
         let options = SkirmishLaunchOptions::default();
         Self {
             country_catalog: CountryMenuCatalog::default(),
+            color_count: crate::skirmish_launch::HOUSE_COLOR_COUNT,
             selected_map_idx: 0,
             selected_mode_id: 1,
             player_name_edit: PlayerNameEditState::default(),

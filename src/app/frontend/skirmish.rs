@@ -803,6 +803,14 @@ mod tests {
             rules.color_schemes[usize::from(colors["Player"].0)].name,
             "MPC03"
         );
+        session.local_slot_mut().color_index = 15;
+        let colors = house_color_map_for_launch_session(
+            &session,
+            &roster_with_neutral_and_playable(),
+            &rules.color_schemes,
+            rules.npatch_dropdown_colors,
+        );
+        assert_eq!(rules.color_schemes[usize::from(colors["Player"].0)].name, "MPC16");
     }
 
     #[test]

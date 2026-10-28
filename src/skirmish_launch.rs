@@ -710,10 +710,12 @@ impl TryFrom<SkirmishLaunchSessionInput> for SkirmishLaunchSession {
 pub struct ShellRandomAssignmentState {
     resolved: SkirmishLaunchSession,
     used_colors: Vec<u8>,
+    color_count: usize,
 }
 
 impl ShellRandomAssignmentState {
-    pub fn new(session: &SkirmishLaunchSession) -> Self {
+    pub fn new(session: &SkirmishLaunchSession, color_count: usize) -> Self {
+        assert!((8..=16).contains(&color_count));
         let mut used_colors = Vec::new();
         used_colors.extend(
             session
@@ -734,6 +736,7 @@ impl ShellRandomAssignmentState {
         Self {
             resolved,
             used_colors,
+            color_count,
         }
     }
 
@@ -778,13 +781,14 @@ impl ShellRandomAssignmentState {
     }
 
     pub fn resolve_local_color(&mut self, rng: &mut SimRng) {
-        self.resolve_human_color(self.resolved.local_player_index, rng);
+        // NPAE174 ChooseColor69B7FF -> C27B30 draws0..7+extra.
+        self.resolve_human_color(self.resolved.local_player_index, rng, self.color_count);
     }
 
-    fn resolve_human_color(&mut self, index: usize, rng: &mut SimRng) {
+    fn resolve_human_color(&mut self, index: usize, rng: &mut SimRng, color_count: usize) {
         let slot = &mut self.resolved.humans[index].slot;
         if slot.color_random {
-            let color = draw_collision_free_color(rng, &self.used_colors);
+            let color = draw_collision_free_color(rng, &self.used_colors, color_count);
             slot.color_index = color;
             slot.color_random = false;
             self.used_colors.push(color);
@@ -809,7 +813,9 @@ impl ShellRandomAssignmentState {
                 continue;
             }
             self.resolve_human_country(index, rng, draw_country)?;
-            self.resolve_human_color(index, rng);
+            // ProcessRandomAssignments69B94F remains unpatched: network
+            // human random colors still draw0..7, unlike local/AI choices.
+            self.resolve_human_color(index, rng, HOUSE_COLOR_COUNT);
         }
         Ok(())
     }
@@ -825,7 +831,8 @@ impl ShellRandomAssignmentState {
                 opponent.country_random = false;
             }
             if opponent.color_random {
-                let color = draw_collision_free_color(rng, &self.used_colors);
+                // NPAE17469BA13 -> C27B43 uses the extended palette bound.
+                let color = draw_collision_free_color(rng, &self.used_colors, self.color_count);
                 opponent.color_index = color;
                 opponent.color_random = false;
                 self.used_colors.push(color);
@@ -949,7 +956,7 @@ impl SkirmishLaunchSession {
         rng: &mut SimRng,
         mut draw_country: impl FnMut(RandomCountryRole, &mut SimRng) -> Result<LaunchCountry, E>,
     ) -> Result<Self, E> {
-        let mut state = ShellRandomAssignmentState::new(self);
+        let mut state = ShellRandomAssignmentState::new(self, HOUSE_COLOR_COUNT);
 
         // Phase A: source-order humans, COUNTRY then COLOR per node.
         state.resolve_humans(rng, &mut draw_country)?;
@@ -967,21 +974,23 @@ pub enum RandomCountryRole {
     Ai { index: usize },
 }
 
-/// Draw an unused shell colour in `0..=7`.
+/// Draw an unused shell colour in the caller's native palette domain.
 ///
 /// Each collision retry advances the supplied Scenario stream once. More
-/// The first eight allocations retain native retries and RNG order. Larger
+/// Allocations retain native retries and RNG order until exhausted. Larger
 /// VERA rooms reuse the least-used palette colours instead of exhausting it.
-fn draw_collision_free_color(rng: &mut SimRng, used: &[u8]) -> u8 {
-    if (0..HOUSE_COLOR_COUNT as u8).all(|color| used.contains(&color)) {
-        // VERA's >8-player extension: retain the retail palette and select
+fn draw_collision_free_color(rng: &mut SimRng, used: &[u8], color_count: usize) -> u8 {
+    if (0..color_count as u8).all(|color| used.contains(&color)) {
+        // VERA's larger-room extension: retain the active palette and select
         // among its least-used colours. One draw is enough; the native retry
         // loop cannot terminate once every colour has been assigned.
-        let counts: [usize; HOUSE_COLOR_COUNT] = std::array::from_fn(|color| {
-            used.iter()
-                .filter(|&&used| usize::from(used) == color)
-                .count()
-        });
+        let counts: Vec<usize> = (0..color_count)
+            .map(|color| {
+                used.iter()
+                    .filter(|&&used| usize::from(used) == color)
+                    .count()
+            })
+            .collect();
         let minimum = *counts.iter().min().expect("retail palette is nonempty");
         let available: Vec<_> = counts
             .iter()
@@ -991,7 +1000,7 @@ fn draw_collision_free_color(rng: &mut SimRng, used: &[u8]) -> u8 {
         return available[rng.next_range_u32_inclusive(0, available.len() as u32 - 1) as usize];
     }
     loop {
-        let color = rng.next_range_u32_inclusive(0, 7) as u8;
+        let color = rng.next_range_u32_inclusive(0, color_count as u32 - 1) as u8;
         if !used.contains(&color) {
             return color;
         }
@@ -1357,6 +1366,45 @@ mod tests {
     }
 
     #[test]
+    fn extended_palette_assignments_reach_the_last_unclaimed_local_and_ai_color() {
+        for local in [true, false] {
+            let mut session = random_test_session();
+            let template = session.local_player().clone();
+            session.humans = (0..15)
+                .map(|color| {
+                    let mut human = template.clone();
+                    human.raw_slot_index = Some(color);
+                    human.slot.country_random = false;
+                    human.slot.color_index = color;
+                    human.slot.color_random = local && color == 0;
+                    human
+                })
+                .collect();
+            session.opponents.truncate(1);
+            session.opponents[0].raw_slot_index = 15;
+            session.opponents[0].country_random = false;
+            session.opponents[0].color_index = 0;
+            session.opponents[0].color_random = !local;
+            session.rebuild_house_roster();
+            let mut assignments = ShellRandomAssignmentState::new(&session, 16);
+            let mut rng = SimRng::new(42);
+            assignments.resolve_local_color(&mut rng);
+            assignments
+                .resolve_ai(&mut rng, &mut |_, _| Ok::<_, ()>(LaunchCountry::America))
+                .unwrap();
+            let resolved = assignments.finish();
+            assert_eq!(
+                if local {
+                    resolved.local_slot().color_index
+                } else {
+                    resolved.opponents[0].color_index
+                },
+                15
+            );
+        }
+    }
+
+    #[test]
     fn shell_random_assignments_are_deterministic_for_a_seed() {
         let session = random_test_session();
         let mut rng_a = SimRng::new(0xC0FFEE);
@@ -1459,11 +1507,12 @@ mod tests {
         let mut used: Vec<u8> = vec![session.opponents[1].color_index];
         let exp_local_country =
             LaunchCountry::from_country_index(expected_rng.next_range_u32_inclusive(0, 9));
-        let exp_local_color = draw_collision_free_color(&mut expected_rng, &used);
+        let exp_local_color =
+            draw_collision_free_color(&mut expected_rng, &used, HOUSE_COLOR_COUNT);
         used.push(exp_local_color);
         let exp_ai0_country =
             LaunchCountry::from_country_index(expected_rng.next_range_u32_inclusive(0, 9));
-        let exp_ai0_color = draw_collision_free_color(&mut expected_rng, &used);
+        let exp_ai0_color = draw_collision_free_color(&mut expected_rng, &used, HOUSE_COLOR_COUNT);
 
         assert_eq!(resolved.local_slot().country, exp_local_country);
         assert_eq!(resolved.local_slot().color_index, exp_local_color);
@@ -1541,7 +1590,7 @@ mod tests {
             vec![RandomCountryRole::Human, RandomCountryRole::Ai { index: 0 }]
         );
         let mut expected_rng = SimRng::new(seed);
-        let _ = draw_collision_free_color(&mut expected_rng, &[1, 2]);
+        let _ = draw_collision_free_color(&mut expected_rng, &[1, 2], HOUSE_COLOR_COUNT);
         assert_eq!(rng.state(), expected_rng.state());
     }
 }

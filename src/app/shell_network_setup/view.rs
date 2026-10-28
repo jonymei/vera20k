@@ -286,11 +286,14 @@ pub(crate) fn view(state: &AppState) -> Option<SetupView> {
             );
         let color_claims =
             color_claims.filter(|_| launch.humans.len() + launch.opponents.len() <= 8);
-        let colors =
-            skirmish_shell::available_color_choices(usize::try_from(color).ok(), color_claims)
-                .into_iter()
-                .map(|item| choice(state, item))
-                .collect::<Vec<_>>();
+        let colors = skirmish_shell::available_color_choices(
+            crate::skirmish_launch::HOUSE_COLOR_COUNT,
+            usize::try_from(color).ok(),
+            color_claims,
+        )
+        .into_iter()
+        .map(|item| choice(state, item))
+        .collect::<Vec<_>>();
         let start_claims = launch
             .humans
             .iter()

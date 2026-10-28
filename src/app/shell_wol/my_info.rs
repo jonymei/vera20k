@@ -55,20 +55,24 @@ fn country_rows(state: &AppState) -> Vec<MyInfoRow> {
 /// `0x4E43C0` releases every colour, so `0x4E45A0` lists
 /// `GUI:RandomAsSymbols` (-2) and all eight swatches.
 fn color_rows(state: &AppState) -> Vec<MyInfoRow> {
-    crate::ui::skirmish_shell::available_color_choices(None, [])
-        .into_iter()
-        .map(|item| match item {
-            SkirmishComboItem::Color(index) => MyInfoRow {
-                text: String::new(),
-                data: index as i32,
-                swatch: Some(index),
-            },
-            _ => MyInfoRow::text(
-                crate::app::frontend::skirmish_shell_render::combo_item_label(state, item),
-                -2,
-            ),
-        })
-        .collect()
+    crate::ui::skirmish_shell::available_color_choices(
+        crate::skirmish_launch::HOUSE_COLOR_COUNT,
+        None,
+        [],
+    )
+    .into_iter()
+    .map(|item| match item {
+        SkirmishComboItem::Color(index) => MyInfoRow {
+            text: String::new(),
+            data: index as i32,
+            swatch: Some(index),
+        },
+        _ => MyInfoRow::text(
+            crate::app::frontend::skirmish_shell_render::combo_item_label(state, item),
+            -2,
+        ),
+    })
+    .collect()
 }
 
 /// The driver past `0x797640` (`0x00799E47..0x00799E70`): the art, then

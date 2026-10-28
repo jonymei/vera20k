@@ -389,12 +389,12 @@ pub fn apply_action(
         SkirmishShellAction::SelectColor(target) => {
             match target {
                 ColorComboId::Player => {
-                    state.player_color_index = (state.player_color_index + 1) % 8;
+                    state.player_color_index = (state.player_color_index + 1) % state.color_count;
                 }
                 ColorComboId::Ai(idx) => {
                     let visible = player_row_visible(state, maps, idx + 1);
                     if visible && let Some(opponent) = state.opponents.get_mut(idx) {
-                        opponent.color_index = (opponent.color_index + 1) % 8;
+                        opponent.color_index = (opponent.color_index + 1) % state.color_count;
                     }
                 }
             }

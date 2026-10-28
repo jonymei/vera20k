@@ -4194,6 +4194,8 @@ pub struct RuleSet {
     pub color_schemes: Vec<crate::rules::color_scheme::ColorSchemeEntry>,
     /// Startup RULESMD[UISettings], not scenario/map-layer state (52D144/C2ADE9).
     pub npatch_dropdown_colors: bool,
+    /// Derived once from startup MenuColors/MPC entries, never map overrides.
+    pub multiplayer_color_count: usize,
     /// Per-`[Colors]`-entry team-color ramps (palette indices 16..31), built once
     /// from `color_schemes`. Indexed by `HouseColorIndex` (= `[Colors]` entry
     /// index). Consumed by unit/building atlas bake, the voxel GPU ramp texture,
@@ -5885,6 +5887,7 @@ impl RuleSet {
             country_sides: country_side_registry.country_sides,
             color_schemes,
             npatch_dropdown_colors: processed.npatch_dropdown_colors(),
+            multiplayer_color_count: processed.multiplayer_color_count(),
             house_color_ramps,
             color_add,
             production,

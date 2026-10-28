@@ -37,6 +37,7 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
         &std::fs::read(root.join("rulesmd.ini")).unwrap(),
     )
     .unwrap();
+    let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
     let csf = crate::app::loading::init::load_csf(&assets).unwrap();
     assert!(
         csf.get("GUI:TechLevel")
@@ -82,113 +83,120 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
                     usage: wgpu::BufferUsages::VERTEX,
                 })
         };
-        let render = |shell: &SkirmishShellState, phase: &str| {
-            let instances = build_skirmish_shell_instances(
-                &atlas,
-                &font,
-                &layout,
-                None,
-                None,
-                None,
-                shell,
-                &[],
-                false,
-                &[],
-                None,
-                false,
-            );
-            let chrome_buffer = vertex(&instances);
-            let mut draws = Vec::new();
-            text::push_option_text_draws(&mut draws, &font, &layout, shell, |key, _fallback| {
-                csf.text(key).into_owned()
-            });
-            let buffers = draws
-                .iter()
-                .map(|draw| (!draw.instances.is_empty()).then(|| vertex(&draw.instances)))
-                .collect::<Vec<_>>();
-            let color = gpu.target(size, format);
-            let depth = gpu.target(size, wgpu::TextureFormat::Depth32Float);
-            let cv = color.create_view(&Default::default());
-            let dv = depth.create_view(&Default::default());
-            let mut encoder = gpu.device.create_command_encoder(&Default::default());
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Actual skirmish option layers"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &cv,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &dv,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-                batch.draw_with_buffer_passthrough(
-                    &mut pass,
-                    &atlas.texture,
-                    &chrome_buffer,
-                    instances.len() as u32,
+        let render =
+            |shell: &SkirmishShellState,
+             phase: &str,
+             schemes: &[crate::rules::color_scheme::ColorSchemeEntry]| {
+                let instances = build_skirmish_shell_instances(
+                    &atlas,
+                    &font,
+                    &layout,
+                    None,
+                    None,
+                    None,
+                    shell,
+                    schemes,
+                    rules.npatch_dropdown_colors,
+                    &[],
+                    None,
+                    false,
                 );
-                for (draw, buffer) in draws.iter().zip(&buffers) {
-                    if let Some(buffer) = buffer {
-                        pass.set_scissor_rect(
-                            draw.scissor.x,
-                            draw.scissor.y,
-                            draw.scissor.w,
-                            draw.scissor.h,
-                        );
-                        batch.draw_with_buffer_passthrough(
-                            &mut pass,
-                            font.atlas(),
-                            buffer,
-                            draw.instances.len() as u32,
-                        );
+                let chrome_buffer = vertex(&instances);
+                let mut draws = Vec::new();
+                text::push_option_text_draws(
+                    &mut draws,
+                    &font,
+                    &layout,
+                    shell,
+                    |key, _fallback| csf.text(key).into_owned(),
+                );
+                let buffers = draws
+                    .iter()
+                    .map(|draw| (!draw.instances.is_empty()).then(|| vertex(&draw.instances)))
+                    .collect::<Vec<_>>();
+                let color = gpu.target(size, format);
+                let depth = gpu.target(size, wgpu::TextureFormat::Depth32Float);
+                let cv = color.create_view(&Default::default());
+                let dv = depth.create_view(&Default::default());
+                let mut encoder = gpu.device.create_command_encoder(&Default::default());
+                {
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Actual skirmish option layers"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &cv,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &dv,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
+                                store: wgpu::StoreOp::Store,
+                            }),
+                            stencil_ops: None,
+                        }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+                    batch.draw_with_buffer_passthrough(
+                        &mut pass,
+                        &atlas.texture,
+                        &chrome_buffer,
+                        instances.len() as u32,
+                    );
+                    for (draw, buffer) in draws.iter().zip(&buffers) {
+                        if let Some(buffer) = buffer {
+                            pass.set_scissor_rect(
+                                draw.scissor.x,
+                                draw.scissor.y,
+                                draw.scissor.w,
+                                draw.scissor.h,
+                            );
+                            batch.draw_with_buffer_passthrough(
+                                &mut pass,
+                                font.atlas(),
+                                buffer,
+                                draw.instances.len() as u32,
+                            );
+                        }
                     }
                 }
-            }
-            let reads = [
-                gpu.read(&mut encoder, &color),
-                gpu.read(&mut encoder, &depth),
-            ];
-            let output = gpu.finish(encoder, &reads, size);
-            assert!(
-                output[1]
-                    .chunks_exact(4)
-                    .all(|pixel| pixel == 1.0f32.to_le_bytes()),
-                "UI stores must leave depth unchanged"
-            );
-            if let Some(directory) = std::env::var_os("VERA20K_TECH_SLIDER_CAPTURE_DIR") {
-                let directory = std::path::PathBuf::from(directory);
-                std::fs::create_dir_all(&directory).unwrap();
-                let mut rgba = output[0].clone();
-                if format == wgpu::TextureFormat::Bgra8UnormSrgb {
-                    for pixel in rgba.chunks_exact_mut(4) {
-                        pixel.swap(0, 2);
+                let reads = [
+                    gpu.read(&mut encoder, &color),
+                    gpu.read(&mut encoder, &depth),
+                ];
+                let output = gpu.finish(encoder, &reads, size);
+                assert!(
+                    output[1]
+                        .chunks_exact(4)
+                        .all(|pixel| pixel == 1.0f32.to_le_bytes()),
+                    "UI stores must leave depth unchanged"
+                );
+                if let Some(directory) = std::env::var_os("VERA20K_TECH_SLIDER_CAPTURE_DIR") {
+                    let directory = std::path::PathBuf::from(directory);
+                    std::fs::create_dir_all(&directory).unwrap();
+                    let mut rgba = output[0].clone();
+                    if format == wgpu::TextureFormat::Bgra8UnormSrgb {
+                        for pixel in rgba.chunks_exact_mut(4) {
+                            pixel.swap(0, 2);
+                        }
                     }
+                    image::save_buffer(
+                        directory.join(format!("tech-{name}-{phase}.png")),
+                        &rgba,
+                        size[0],
+                        size[1],
+                        image::ColorType::Rgba8,
+                    )
+                    .unwrap();
                 }
-                image::save_buffer(
-                    directory.join(format!("tech-{name}-{phase}.png")),
-                    &rgba,
-                    size[0],
-                    size[1],
-                    image::ColorType::Rgba8,
-                )
-                .unwrap();
-            }
-            output.into_iter().next().unwrap()
-        };
+                output.into_iter().next().unwrap()
+            };
         let mut shell = SkirmishShellState::default();
         shell.trackbar_bounds =
             skirmish_shell::SkirmishTrackbarBounds::from_multiplayer_dialog_settings(&ini);
@@ -197,7 +205,7 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
         );
         shell.apply_ui_settings(&ini);
         assert_eq!(shell.launch_options_base.tech_level, 10);
-        let ten = render(&shell, "10");
+        let ten = render(&shell, "10", &rules.color_schemes);
         let rect = layout.trackbars.tech_level;
         skirmish_shell::handle_option_mouse_down(
             &mut shell,
@@ -208,7 +216,7 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
         );
         assert_eq!(shell.launch_options_base.tech_level, 1);
         skirmish_shell::handle_option_mouse_up(&mut shell);
-        let one = render(&shell, "1");
+        let one = render(&shell, "1", &rules.color_schemes);
         let value = crate::ui::shell::trackbar::value_text_rect(rect, layout.scale);
         assert!(
             differences(&ten, &one, size, value) > 0,
@@ -217,7 +225,7 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
         shell.apply_ui_settings(&crate::rules::ini_parser::IniFile::from_str(
             "[UISettings]\nShowTechLevelSlider=no\n",
         ));
-        let hidden = render(&shell, "hidden");
+        let hidden = render(&shell, "hidden", &rules.color_schemes);
         assert!(differences(&one, &hidden, size, layout.trackbar_labels.tech_level) > 0);
         assert!(differences(&one, &hidden, size, rect) > 0);
         // ShellTrackbar61E1B9..61E269 uses6208F0's two-authored-pixel
@@ -259,10 +267,32 @@ fn aymod_tech_slider_option_layers_reach_gpu_at_native_and_scaled_size() {
             checkbox.rect.y + 3,
         );
         assert_ne!(shell.build_off_ally, old);
-        let toggled = render(&shell, "ally-toggled");
+        let toggled = render(&shell, "ally-toggled", &rules.color_schemes);
         assert!(
             differences(&hidden, &toggled, size, checkbox.rect) > 0,
             "the relocated actual checkbox must draw and respond"
         );
+        // The same retail emitter must paint MPC16, not the old grey
+        // out-of-range swatch. Compare it with MPC01 carrying that exact HSV.
+        shell.refresh_country_catalog(&rules);
+        shell.player_color_index = 15;
+        let last = render(&shell, "mpc16", &rules.color_schemes);
+        let mut alias = rules.color_schemes.clone();
+        let first = alias
+            .iter()
+            .position(|entry| entry.name == "MPC01")
+            .unwrap();
+        let last_entry = alias
+            .iter()
+            .position(|entry| entry.name == "MPC16")
+            .unwrap();
+        alias[first].hsv = alias[last_entry].hsv;
+        shell.player_color_index = 0;
+        let reference = render(&shell, "mpc16-reference", &alias);
+        let swatch = skirmish_shell::combo_swatch_rect(layout.color_combos[0], layout.scale);
+        assert_eq!(differences(&last, &reference, size, swatch), 0);
+        shell.player_color_claimed = false;
+        let grey = render(&shell, "unclaimed", &rules.color_schemes);
+        assert!(differences(&last, &grey, size, swatch) > 0);
     }
 }

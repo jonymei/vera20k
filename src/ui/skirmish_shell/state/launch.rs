@@ -2,7 +2,7 @@
 
 use crate::map::scenario_menu::MapMenuEntry;
 use crate::skirmish_launch::{
-    HOUSE_COLOR_COUNT, LaunchStartPosition, LaunchTeam, LaunchValidationError, PreFillHouseRoster,
+    LaunchStartPosition, LaunchTeam, LaunchValidationError, PreFillHouseRoster,
     SKIRMISH_PLAYER_SLOT_COUNT, SkirmishAiSlot, SkirmishLaunchMode, SkirmishLaunchSession,
     SkirmishLocalSlot,
 };
@@ -25,8 +25,12 @@ fn launch_start_position(
     }
 }
 
-fn launch_color_index(slot: usize, color_index: usize) -> Result<u8, LaunchValidationError> {
-    if color_index < HOUSE_COLOR_COUNT {
+fn launch_color_index(
+    color_count: usize,
+    slot: usize,
+    color_index: usize,
+) -> Result<u8, LaunchValidationError> {
+    if color_index < color_count {
         Ok(color_index as u8)
     } else {
         Err(LaunchValidationError::InvalidColorIndex { slot, color_index })
@@ -98,7 +102,7 @@ pub fn pack_launch_session_without_start_validation(
     let local = SkirmishLocalSlot {
         country: state.player_country,
         country_random: state.player_country_random,
-        color_index: launch_color_index(0, state.player_color_index)?,
+        color_index: launch_color_index(state.color_count, 0, state.player_color_index)?,
         color_random: !state.player_color_claimed,
         start_position: launch_start_position(0, state.player_start_position)?,
         team: LaunchTeam::from_shell_value(state.player_team),
@@ -114,7 +118,7 @@ pub fn pack_launch_session_without_start_validation(
             raw_slot_index: (idx + 1) as u8,
             country: opponent.country,
             country_random: opponent.country_random,
-            color_index: launch_color_index(slot, opponent.color_index)?,
+            color_index: launch_color_index(state.color_count, slot, opponent.color_index)?,
             color_random: !opponent.color_claimed,
             start_position: launch_start_position(slot, opponent.start_position)?,
             team: LaunchTeam::from_shell_value(opponent.team),

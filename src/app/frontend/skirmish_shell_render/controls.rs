@@ -364,7 +364,7 @@ pub(super) fn house_color_tint(
 ) -> [f32; 3] {
     // NPAE174 C2AE00..C2AE52 builds these swatches from MPC01..16 HSV,
     // unlike the fixed stock8316A8 table. Share the Session resolver with House.
-    if crate::rules::NPATCH_ENABLED && dropdown_colors && index < 8 {
+    if crate::rules::NPATCH_ENABLED && dropdown_colors && index < 16 {
         let entry = crate::rules::color_scheme::multiplayer_scheme_entry_for_priority(
             color_schemes,
             dropdown_colors,
@@ -1040,10 +1040,14 @@ mod tests {
         let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
         let swatch =
             |slot| house_color_tint(&rules.color_schemes, rules.npatch_dropdown_colors, slot);
+        assert!(ini.section("MenuColors").is_none());
+        assert_eq!(rules.multiplayer_color_count, 16);
         assert_eq!(swatch(2), [1.0; 3]);
         let expected = crate::rules::color_scheme::hsv_to_rgb([153, 214, 255])
             .map(|channel| f32::from(channel) / 255.0);
         assert_eq!(swatch(4), expected);
+        assert_eq!(swatch(15), crate::rules::color_scheme::hsv_to_rgb([20, 255, 144])
+            .map(|channel| f32::from(channel) / 255.0));
         assert_ne!(swatch(2), house_color_tint(&rules.color_schemes, false, 2));
     }
 

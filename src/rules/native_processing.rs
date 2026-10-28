@@ -319,6 +319,9 @@ impl RulesLayerStack {
                     .ini
                     .section_or_empty("UISettings")
                     .read_bool("UseDropDownColors", false),
+            multiplayer_color_count: crate::rules::color_scheme::startup_multiplayer_color_count(
+                &self.layers[0].ini,
+            ),
             native_type_construction_trace,
         })
     }
@@ -570,6 +573,7 @@ const PARADROP_INFANTRY_KEYS: [&str; 4] = [
 pub struct ProcessedRulesLayers {
     #[serde(default)]
     npatch_dropdown_colors: bool,
+    multiplayer_color_count: usize,
     ini: IniFile,
     powerups: PowerupTable,
     content_hash: u64,
@@ -579,6 +583,10 @@ pub struct ProcessedRulesLayers {
 impl ProcessedRulesLayers {
     pub(crate) fn npatch_dropdown_colors(&self) -> bool {
         self.npatch_dropdown_colors
+    }
+
+    pub(crate) fn multiplayer_color_count(&self) -> usize {
+        self.multiplayer_color_count
     }
 
     #[cfg(feature = "ares")]

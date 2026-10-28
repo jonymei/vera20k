@@ -34,6 +34,34 @@ pub const PRIORITY_TO_SCHEME_INDEX: [usize; 9] = [3, 11, 21, 29, 13, 25, 17, 15,
 /// Scheme index for priority `-2` (random / no explicit color choice).
 pub const RANDOM_PRIORITY_SCHEME_INDEX: usize = 5;
 
+/// Startup dropdown palette size, not scenario-layer state. NPAE174
+/// C2ADE9..C2AE73 uses the contiguous MPC01..16 prefix, with at least8 slots.
+/// The separate legacy MenuColors RGB-table extension remains unported;
+/// without the dropdown gate retain the existing stock eight-color path.
+pub fn startup_multiplayer_color_count(ini: &IniFile) -> usize {
+    if !crate::rules::NPATCH_ENABLED {
+        return 8;
+    }
+    if !ini
+        .section_or_empty("UISettings")
+        .read_bool("UseDropDownColors", false)
+    {
+        return 8;
+    }
+    let schemes = parse_color_schemes(ini);
+    (1..=16)
+        .take_while(|number| {
+            let name = format!("MPC{number:02}");
+            // FindColorScheme68CA50 scans all registered names; its53 argument
+            // matches scheme+310, not a bound on the number of entries.
+            schemes
+                .iter()
+                .any(|scheme| scheme.name.eq_ignore_ascii_case(&name))
+        })
+        .count()
+        .max(8)
+}
+
 /// Map a color priority to a runtime scheme-array index, matching gamemd's
 /// SessionClass priority→scheme conversion: `-2` → a fixed default, `0..=8` go
 /// through the table, anything higher passes through unchanged.
@@ -255,6 +283,37 @@ mod tests {
                 hsv: *hsv,
             })
             .collect()
+    }
+
+    #[test]
+    fn startup_color_count_keeps_the_root_prefix_and_stock_domain() {
+        use crate::rules::native_processing::{RulesLayerKind, RulesLayerStack};
+        let mut text = String::from("[UISettings]\nUseDropDownColors=yes\n[Colors]\n");
+        for number in 1..=16 {
+            text.push_str(&format!("MPC{number:02}=0,255,255\n"));
+        }
+        assert_eq!(
+            startup_multiplayer_color_count(&IniFile::from_str(&text)),
+            if crate::rules::NPATCH_ENABLED { 16 } else { 8 }
+        );
+        let missing = text.replace("MPC10=0,255,255\n", "");
+        assert_eq!(
+            startup_multiplayer_color_count(&IniFile::from_str(&missing)),
+            if crate::rules::NPATCH_ENABLED { 9 } else { 8 }
+        );
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&text));
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str("[UISettings]\nUseDropDownColors=no\n[Colors]\nExtra=0,0,0\n"),
+        );
+        let processed = layers.process().unwrap();
+        let restored = serde_json::from_slice(&serde_json::to_vec(&processed).unwrap()).unwrap();
+        let rules = crate::rules::ruleset::RuleSet::from_processed_rules(&restored).unwrap();
+        assert_eq!(
+            rules.multiplayer_color_count,
+            if crate::rules::NPATCH_ENABLED { 16 } else { 8 }
+        );
+        assert_eq!(startup_multiplayer_color_count(&IniFile::empty()), 8);
     }
 
     #[test]

@@ -104,6 +104,71 @@ fn country_catalog_uses_registered_identity_and_shared_native_eligibility() {
     assert_eq!(combo_items(&shell, &[], SkirmishComboId::Side(0)), expected);
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_extended_colors_survive_selection_claims_and_launch_packing() {
+    let mut text = String::from("[UISettings]\nUseDropDownColors=yes\n[Colors]\n");
+    for number in 1..=16 {
+        text.push_str(&format!("MPC{number:02}={number},255,255\n"));
+    }
+    let rules = crate::rules::ruleset::RuleSet::from_ini(&IniFile::from_str(&text)).unwrap();
+    let mut shell = SkirmishShellState::default();
+    shell.refresh_country_catalog(&rules);
+    let maps = [test_map_entry("extended.yrm")];
+    let layout = compute_layout(800, 600);
+    let id = SkirmishComboId::Color(0);
+    let rect = combo_rect(&layout, id).unwrap();
+    handle_option_mouse_down(&mut shell, &layout, &maps, rect.x + rect.w - 1, rect.y + 1);
+    let thumb = combo_dropdown_scroll_thumb_rect(&shell, &layout, &maps, id).unwrap();
+    let scrollbar = combo_dropdown_scrollbar_rect(&shell, &layout, &maps, id).unwrap();
+    handle_option_mouse_down(&mut shell, &layout, &maps, thumb.x + 1, thumb.y + 1);
+    handle_option_mouse_move(
+        &mut shell,
+        &layout,
+        &maps,
+        thumb.x + 1,
+        scrollbar.y + scrollbar.h,
+    );
+    handle_option_mouse_up(&mut shell);
+    assert!(shell.open_combo_dropdown.unwrap().top_index > 0);
+    let content = combo_dropdown_content_rect(&shell, &layout, &maps, id).unwrap();
+    let last_row = combo_dropdown_visible_row_count(&shell, &maps, id) - 1;
+    handle_option_mouse_down(
+        &mut shell,
+        &layout,
+        &maps,
+        content.x + 1,
+        content.y + last_row as i32 * COMBO_DROPDOWN_ROW_H + 1,
+    );
+    handle_option_mouse_up(&mut shell);
+    assert!(shell.open_combo_dropdown.is_none());
+    assert_eq!(
+        selected_combo_item(&shell, SkirmishComboId::Color(0)),
+        Some(SkirmishComboItem::Color(15))
+    );
+    assert!(
+        !combo_items(&shell, &[], SkirmishComboId::Color(1))
+            .contains(&SkirmishComboItem::Color(15))
+    );
+    apply_combo_selection_for_test(
+        &mut shell,
+        SkirmishComboId::Color(1),
+        SkirmishComboItem::Color(14),
+    );
+    let session =
+        pack_launch_session_without_start_validation(&shell, &maps, &stock_skirmish_modes())
+            .unwrap();
+    assert_eq!(session.local_slot().color_index, 15);
+    assert_eq!(session.opponents[0].color_index, 14);
+    // An unpatched catalog must not retain the extended admission domain.
+    let stock = crate::rules::ruleset::RuleSet::from_ini(&IniFile::empty()).unwrap();
+    shell.refresh_country_catalog(&stock);
+    assert!(
+        !combo_items(&shell, &[], SkirmishComboId::Color(0))
+            .contains(&SkirmishComboItem::Color(15))
+    );
+}
+
 #[test]
 fn choose_map_action_bubbles_without_cycling_selected_map() {
     let maps = [test_map_entry("a.mmx"), test_map_entry("b.mmx")];
