@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于01e544cfc补F01实际全隐形SNIPE被YURI真实心控、控制者死亡归还、原始隐形状态/双House探测计数/AI隐形目标准入的三次存读，以及步兵死亡动作中的额外存读和自然退休清圈。最终capture_return_and_death2、sensor_lifecycle7、infantry_death5，共14项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于b8eb610af核V10船厂伤害补丁737CE4→7E0495，补实际Return Dubai正常付费修船/共格保护前置、受击前存读、另一DEST真实炮击在维修联系仍活跃时损伤受修DEST、受击后存读。新实际1、TANY共享水域消费者5、Alt飞机实际1、原零售修船NP/stock各1，共9项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：回到V10尚未逐条证明的作者无新键修复，先查“舰船在造船厂维修时，舰船受攻击却伤害造船厂”这条具体链；先核实际AY修船配置/停靠伤害receiver与#174活动补丁，不凭描述新增伤害转发。F01普通SNIPE移动/开火/心控归还/退休边界已验，其他等级隐形家族及GUI未关闭；不继续堆同一组件的组合网格。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
+- 下一安全动作：转向清单仍缺生产入口的F12科技等级设置，先核ShowTechLevelSlider的#174读取/默认和选择结果如何进入现有启动/House科技等级owner，再接现有遭遇战控件；不新建第二套启动状态。已接入的常见功能继续保留未验边界，不堆已通过组件的组合网格。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变；完整16色仍单列，不与科技设置混为一条实现。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -344,6 +344,14 @@
 - 71e67bf1b后续实际AY验收：同一aymod_captured_center_transfers_support夹具按typed PowersUnit逐对运行GAROBO→ROBO、NARADR→DRON、NAPSIS→CAOS，正常Battle加载后供给原主真实电厂/中心和另一个同俄罗斯Country但独立human House的电厂/对应单位。新主原先无中心，通过普通Move真实到格触发739F21离线，不手写provider/counter/latch；原主仍获支持。首次完整保存恢复后，由新主SENGINEER普通Capture实际步行夺取，旧主House计数归零/旧单位offline，工程师正常消耗；捕获边界第二次保存保留已有counted值，普通更新让新主获得支持并Reactivate。没有对中心发Off/On或补另一座中心/伪造House标志，新主普通Move使对应单位实际到达新格，第三次保存保留中心/双方单位归属、旧offline/新online、House支持与位置。
 - 本次复合1项内部三组配置均通过，另重跑实际建筑AI1/驻军归属1/powered_unit8，共11项通过；与上轮93项有重叠，不相加为新总数。测试不对失去支持的旧Drive单位继续下Move，因此不能把offline旗标冒称“新命令必被拒绝/绝对不能动”；保留V01原生聚合及失联移动政策门禁。新旧House均为受控组件，不是多AI自主夺取/长局；无新玩法实现/RNG/timer/Detach调用/保存字段，无需新critic，无GUI/MOD/原始存档/固定构建改动。
 - 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
+
+### V10实际AY修船时的正常舰炮伤害及存读（2026-10-28）
+
+- 作者原文为“舰船在造船厂维修时，舰船受到攻击却伤害造船厂”。当前既有生产实现已经是正确的NP伤害准入，不是待移植的伤害转发：静读AY737CE4跳7E0495，7E0495读WeaponsFactory+16BD，为真后7E04A3读UnitRepair+16A9，维修类型跳737D31进入正常伤害；只有非维修工厂继续737CEE厂内保护。production_spawn::unit_in_contact_war_factory的ReceiveDamage查询独有该排除，其他查询和stock原分支保持。
+- 新aymod_repairing_destroyer_takes_real_naval_fire_after_load正式加载Return Dubai/Battle。共用既有水域pair夹具并将actor类型参数化，原三个TANY水域消费者不复制；船厂选址共用原Alt飞机测试的全水面/同高/未占地foundation筛选与正常构造。受修DEST经正式换主receiver交独立Russian human House，建真实GAPOWR并给正常维修资金，只准备初始半血伤口，普通Enter后必须有双方radio联系、真实回血及实际扣款；要求船和GAYARD共格、生产ReceiveDamage厂内保护查询为假。
+- 在真实付费修船中正式保存/完整资源恢复，再给敌方DEST普通Attack。必须产生指向受修船的实际fire_event，且双向维修联系仍活跃的帧发生受修船HP下降；受击后再次保存恢复，核HP、mission/state、双向联系及船厂HP。船厂不应被另加免伤，合法AoE仍沿原owner；此例只要求船厂存活，不把“炮弹对船厂绝无范围伤害”当作作者补丁定义。
+- 初次使用HYD时确有开火，但1200帧内未观察到仍维修联络时的净掉血，最终受修船已离厂；这不足以判定免伤回归，也未证明具体是到达时机还是维修抵消。最终采用实际DEST舰炮得到清晰的维修中掉血边界，未改武器数值、维修速度、MOD或伤害路径，不把首次夹具未达观察条件记为生产修复。
+- 最终retail gate下新actual1、aymod_tanya_5（含三个水域消费者）、Alt飞机GADEPT/GAYARD实际1、原零售付费修船NP/stock各1，共9项通过。零售例继续确认NP直伤落船/船厂不因该direct receiver扣血、stock厂内免伤，以及修满/释放；新实际例覆盖真实炮击，不冒称原生整场对照、受击后完整持续攻防/再次修船、所有船厂/船种/弹头或GUI。仅测试/台账，无新生产状态/RNG/timer/Detach/保存字段、新玩法critic、GUI/MOD/原始存档/固定构建/发布改动。
 
 ### F01实际隐形狙击手心控、归还与死亡探测圈清理（2026-10-28）
 
@@ -1164,7 +1172,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 红血碉堡准入已按457D8D→7E0712..31接入既有CanBeOccupiedBy owner：NP仅同House跳过红血拒绝，stock与不同passive House保留原规则；
 真实AY普通驻军/留驻、AI择楼、客户端点击与边界回归通过，critic无可操作发现。尚未进入当前cfb479750玩家标签，不新增序列化字段或触碰平民红血撤出。
 船厂维修免伤已按737CE4→7E0495修正：仅NP伤害查询排除UnitRepair，不误用Naval；其他工厂查询保留，真实付费维修受击/修满/释放及stock保护回归通过。
-不是直接把船伤害转给船厂；实际投射物对共格船厂的合法AoE不在此修复中取消，完整实战待验。
+不是直接把船伤害转给船厂；实际AY Return Dubai已补正常付费修船/受击前存读/另一DEST真实炮击在维修联系仍活跃时损伤船及受击后存读，见当前V10节。共格船厂的合法AoE不取消，其他家族/持续攻防与GUI仍待验。
 飞机维修建筑点击已按417E24的NP无条件跳转接入：Select不被stock NoEnter覆盖，Alt仍走Move；实际GADEPT/GAYARD运动与无误入回归通过，详见当前检查点。
 铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；实际AY已有Attack在正式IC/FS发射后保持目标、保护免伤、保存恢复和自然到期恢复伤害已验；实际ForceShield fade提示一次/提示后存读不重播、blackout remaining1精确清除和用电实射恢复已验；三House单向联盟两发重叠、独立blackout/fade/接收刷新与三次存读已验；混合保护、正常外交输入、反击/直接脚本与自主多AI仍待验。
 光棱支援招募已按44B388→7E04BB接LastOperational采样，真实Off/存读/独立开火/On/重新联击通过；不现场重算供电，不取消已排定束，EMP/缺电/绘制边界仍开放。

@@ -2962,6 +2962,51 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_spawn_service_building(
+        sim: &mut crate::sim::world::Simulation,
+        rules: &crate::rules::ruleset::RuleSet,
+        owner: crate::sim::intern::InternedId,
+        building_type: &str,
+        anchor: (i32, i32),
+    ) -> u64 {
+        let mut sites = if rules.object(building_type).unwrap().naval {
+            let terrain = sim.resolved_terrain().unwrap();
+            let (width, height) = rules.object(building_type).unwrap().foundation.dimensions();
+            terrain
+                .cells()
+                .iter()
+                .filter(|cell| {
+                    (0..height).all(|dy| {
+                        (0..width).all(|dx| {
+                            terrain
+                                .cell(cell.rx + dx, cell.ry + dy)
+                                .is_some_and(|part| {
+                                    !part.outside_playfield
+                                        && part.level == cell.level
+                                        && part.land_type
+                                            == crate::rules::terrain_rules::LandType::Water
+                                                .as_index()
+                                        && sim.occupancy().get(part.rx, part.ry).is_none()
+                                })
+                        })
+                    })
+                })
+                .map(|cell| (i32::from(cell.rx), i32::from(cell.ry)))
+                .collect::<Vec<_>>()
+        } else {
+            cells_nearest(anchor)
+        };
+        sites.sort_by_key(|&(x, y)| (x - anchor.0).pow(2) + (y - anchor.1).pow(2));
+        let owner_name = sim.interner.resolve(owner).to_owned();
+        sites
+            .into_iter()
+            .find_map(|(x, y)| {
+                sim.spawn_object(building_type, &owner_name, x as u16, y as u16, 0, rules)
+            })
+            .expect("an actual terrain-admitted depot/yard foundation")
+    }
+
+    #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual aircraft Alt move over a service depot"]
     fn aymod_aircraft_alt_move_does_not_enter_or_repair_at_a_depot() {
@@ -2975,42 +3020,7 @@ mod retail_construction_tests {
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
                 let owner = house_of(sim, "Americans");
                 let anchor = aymod_anchor(sim, owner);
-                let mut sites = if rules.object(building_type).unwrap().naval {
-                    let terrain = sim.resolved_terrain().unwrap();
-                    let (width, height) =
-                        rules.object(building_type).unwrap().foundation.dimensions();
-                    terrain
-                        .cells()
-                        .iter()
-                        .filter(|cell| {
-                            (0..height).all(|dy| {
-                                (0..width).all(|dx| {
-                                    terrain
-                                        .cell(cell.rx + dx, cell.ry + dy)
-                                        .is_some_and(|part| {
-                                            !part.outside_playfield
-                                                && part.level == cell.level
-                                                && part.land_type
-                                                    == crate::rules::terrain_rules::LandType::Water
-                                                        .as_index()
-                                                && sim.occupancy().get(part.rx, part.ry).is_none()
-                                        })
-                                })
-                            })
-                        })
-                        .map(|cell| (i32::from(cell.rx), i32::from(cell.ry)))
-                        .collect::<Vec<_>>()
-                } else {
-                    cells_nearest(anchor)
-                };
-                sites.sort_by_key(|&(x, y)| (x - anchor.0).pow(2) + (y - anchor.1).pow(2));
-                let owner_name = sim.interner.resolve(owner).to_owned();
-                let depot = sites
-                    .into_iter()
-                    .find_map(|(x, y)| {
-                        sim.spawn_object(building_type, &owner_name, x as u16, y as u16, 0, rules)
-                    })
-                    .expect("an actual terrain-admitted depot/yard foundation");
+                let depot = aymod_spawn_service_building(sim, rules, owner, building_type, anchor);
                 let at = sim.entities().get(depot).unwrap().position;
                 let plane = spawn_on_free_cells(
                     sim,
@@ -5843,7 +5853,11 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_tanya_water_pair(target_type: &str, separation: u16) -> (HeadlessScenario, u64, u64) {
+    fn aymod_water_pair(
+        actor_type: &str,
+        target_type: &str,
+        separation: u16,
+    ) -> (HeadlessScenario, u64, u64) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "重返迪拜.yrm";
         let mut launch = battle_session(
@@ -5883,7 +5897,7 @@ mod retail_construction_tests {
         let owner_name = sim.interner.resolve(house_of(sim, "Americans")).to_owned();
         let enemy_name = sim.interner.resolve(house_of(sim, "Russians")).to_owned();
         let actor = sim
-            .spawn_object("TANY", &owner_name, site.0, site.1, 0, rules)
+            .spawn_object(actor_type, &owner_name, site.0, site.1, 0, rules)
             .unwrap();
         let target = sim
             .spawn_object(
@@ -5900,12 +5914,219 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real naval fire damages a ship during paid shipyard repair across saves"]
+    fn aymod_repairing_destroyer_takes_real_naval_fire_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, attacker, ship) = aymod_water_pair("DEST", "DEST", 8);
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let defender = scene.add_human_house(
+            "ShipRepairController",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (yard, wounded) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = sim.entities().get(attacker).unwrap().owner();
+            let land = aymod_anchor(sim, owner);
+            spawn_on_free_cells(sim, rules, defender, cells_nearest(land), &["GAPOWR"]);
+            sim.houses
+                .get_mut(&defender)
+                .unwrap()
+                .economy_mut_for_test()
+                .add_credits(20_000);
+            sim.change_owner_with_rules(
+                ship,
+                defender,
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            let at = sim.entities().get(ship).unwrap().position;
+            let yard = aymod_spawn_service_building(
+                sim,
+                rules,
+                defender,
+                "GAYARD",
+                (i32::from(at.rx()), i32::from(at.ry())),
+            );
+            let yard_type = rules.object("GAYARD").unwrap();
+            assert!(yard_type.weapons_factory && yard_type.unit_repair);
+            let wounded = rules.object("DEST").unwrap().strength / 2;
+            // Only the initial wound is prepared; Enter must actually dock,
+            // pay and heal before any hostile attack is issued.
+            sim.substrate
+                .entities
+                .get_mut(ship)
+                .unwrap()
+                .health
+                .set_for_test(wounded);
+            sim.mission_queue_exact(
+                attacker,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                defender,
+                sim.session.tick() + 1,
+                Command::clicked_mission(
+                    ship,
+                    MissionType::Enter,
+                    crate::sim::combat::TargetKind::Entity(yard),
+                ),
+            ));
+            (yard, wounded)
+        };
+        let linked = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            sim.entities()
+                .get(ship)
+                .unwrap()
+                .radio_contacts
+                .contains(yard)
+                && sim
+                    .entities()
+                    .get(yard)
+                    .unwrap()
+                    .radio_contacts
+                    .contains(ship)
+        };
+        let money = scene
+            .sim()
+            .houses
+            .get(&defender)
+            .unwrap()
+            .economy()
+            .credits();
+        assert!(
+            (0..3000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                linked(&scene)
+                    && scene.sim().entities().get(ship).unwrap().health.current() > wounded
+            }),
+            "the actual wounded ship must enter paid shipyard service"
+        );
+        assert!(
+            scene
+                .sim()
+                .houses
+                .get(&defender)
+                .unwrap()
+                .economy()
+                .credits()
+                < money
+        );
+        let sim = scene.sim();
+        let actor = sim.entities().get(ship).unwrap();
+        assert_eq!(
+            sim.occupancy().first_building_on_layer(
+                actor.position.rx(),
+                actor.position.ry(),
+                crate::sim::movement::locomotor::MovementLayer::Ground
+            ),
+            Some(yard)
+        );
+        assert!(!sim.unit_in_contact_war_factory(
+            ship,
+            &scene.runtime.resources.rules,
+            crate::sim::production::FactoryContactQuery::ReceiveDamage
+        ));
+        let restore = |scene: &mut HeadlessScenario| {
+            let witness = |scene: &HeadlessScenario| {
+                let sim = scene.sim();
+                let actor = sim.entities().get(ship).unwrap();
+                (
+                    actor.health.current(),
+                    actor.mission.effective(),
+                    actor.mission.handler_state(),
+                    actor.radio_contacts.contains(yard),
+                    sim.entities()
+                        .get(yard)
+                        .unwrap()
+                        .radio_contacts
+                        .contains(ship),
+                    sim.entities().get(yard).unwrap().health.current(),
+                )
+            };
+            let before = witness(scene);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, "AY shipyard service and naval attack");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(witness(scene), before);
+        };
+        restore(&mut scene);
+        let initial_fire_error = scene.sim().selected_weapon_fire_error(
+            &scene.runtime.resources.rules,
+            attacker,
+            crate::sim::combat::TargetKind::Entity(ship),
+            true,
+            Some(&scene.runtime.resources.overlay_registry),
+        );
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(attacker).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: attacker,
+                target_id: ship,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..1200).any(|_| {
+                let was_linked = linked(&scene);
+                let hp = scene.sim().entities().get(ship).unwrap().health.current();
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == attacker
+                        && event.target == crate::sim::combat::TargetKind::Entity(ship)
+                });
+                fired
+                    && was_linked
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(ship)
+                        .is_some_and(|actor| actor.health.current() < hp)
+            }),
+            "real DEST fire must damage DEST while the shipyard repair links are live; initial={initial_fire_error:?}, fired={fired}, linked={}, attacker={:?}, ship={:?}",
+            linked(&scene),
+            scene.sim().entities().get(attacker).map(|actor| (
+                actor.health.current(),
+                actor.mission.effective(),
+                actor.mission.handler_state(),
+                actor.attack_target.target(),
+                actor.navigation.nav_com(),
+                (actor.position.rx(), actor.position.ry())
+            )),
+            scene.sim().entities().get(ship).map(|actor| (
+                actor.health.current(),
+                actor.mission.effective(),
+                (actor.position.rx(), actor.position.ry())
+            ))
+        );
+        assert!(scene.sim().entities().get(yard).unwrap().health.current() > 0);
+        restore(&mut scene);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual AY Tanya ordinary/elite naval weapons on Return Dubai"]
     fn aymod_tanya_uses_sapper_to_damage_mechanical_ships() {
         use crate::sim::combat::{TargetKind, combat_weapon};
         use crate::sim::command::{Command, CommandEnvelope};
         for (elite, expected) in [(false, "Sapper"), (true, "SapperE")] {
-            let (mut scenario, actor, ship) = aymod_tanya_water_pair("HYD", 1);
+            let (mut scenario, actor, ship) = aymod_water_pair("TANY", "HYD", 1);
             let runtime = &mut scenario.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
             if elite {
@@ -5980,7 +6201,7 @@ mod retail_construction_tests {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, actor, sub) = aymod_tanya_water_pair("SUB", 14);
+        let (mut scene, actor, sub) = aymod_water_pair("TANY", "SUB", 14);
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let (owner, sub_cell, health) = {
             let runtime = &mut scene.runtime;
@@ -6127,7 +6348,7 @@ mod retail_construction_tests {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         for target_type in ["LCRF", "DLPH"] {
-            let (mut scene, actor, target) = aymod_tanya_water_pair(target_type, 1);
+            let (mut scene, actor, target) = aymod_water_pair("TANY", target_type, 1);
             let (expected, health) = {
                 let runtime = &mut scene.runtime;
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
