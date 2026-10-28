@@ -488,7 +488,7 @@ impl HeadlessScenario {
 mod retail_construction_tests {
     #[cfg(feature = "npatch")]
     use super::battle_test_evidence::{
-        aymod_grappled_ship_at_shore, visit_aymod_dolphin_rescue_after_load,
+        RescueTransfer, aymod_grappled_ship_at_shore, visit_aymod_dolphin_rescue_after_load,
     };
     use super::battle_test_evidence::{
         cells_nearest, house_of, spawn_on_free_cells, tick_with_due_commands,
@@ -9843,14 +9843,23 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual dolphin rescue, retained Sonic wave and save/load cleanup"]
     fn aymod_dolphin_rescues_a_grappled_destroyer_and_retires_its_saved_wave() {
-        visit_aymod_dolphin_rescue_after_load(false, |_, _, _| {});
+        visit_aymod_dolphin_rescue_after_load(RescueTransfer::None, |_, _, _| {});
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; grabbed host owner transfer followed by real dolphin rescue"]
     fn aymod_dolphin_rescues_a_transferred_grappled_destroyer_after_load() {
-        visit_aymod_dolphin_rescue_after_load(true, |_, _, _| {});
+        visit_aymod_dolphin_rescue_after_load(RescueTransfer::Host, |_, _, _| {});
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; attached squid changes house before saved dolphin rescue"]
+    fn aymod_dolphin_rescues_after_the_attached_squid_changes_owner() {
+        for transfer in [RescueTransfer::Parasite, RescueTransfer::ParasiteToHost] {
+            visit_aymod_dolphin_rescue_after_load(transfer, |_, _, _| {});
+        }
     }
 
 

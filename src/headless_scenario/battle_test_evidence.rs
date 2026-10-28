@@ -164,59 +164,110 @@ pub(super) fn aymod_grappled_ship_at_shore() -> (HeadlessScenario, u64, u64, (u1
 }
 
 #[cfg(feature = "npatch")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RescueTransfer {
+    None,
+    Host,
+    Parasite,
+    ParasiteToHost,
+}
+
+#[cfg(feature = "npatch")]
 /// Visit the actual shot, restored wave, each following frame and final retirement.
 /// The callback is read-only and cannot replace simulation geometry or combat.
 pub fn visit_aymod_dolphin_rescue_after_load(
-    transfer_host: bool,
+    transfer: RescueTransfer,
     mut visit: impl FnMut(&str, &HeadlessScenario, u64),
 ) {
     use crate::sim::command::{Command, CommandEnvelope};
     use crate::sim::mission::{MissionId, MissionType};
     use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
     let (mut scene, squid, ship, land, anim) = aymod_grappled_ship_at_shore();
-    if transfer_host {
-        let country = scene
-            .runtime
-            .resources
-            .rules
-            .country_index("Americans")
-            .unwrap();
-        let recipient = scene.add_human_house(
-            "RescueRecipient",
-            LaunchCountry::from_country_index(u32::from(country.0)),
-        );
-        // Exercise the shared FootChangeOwner4DBED0 -> Techno7014A0
-        // receiver, not raw entity or parasite-link writes. Full capture
-        // weapon admission is outside this ownership-lifecycle fixture.
+    let original_squid_owner = scene.sim().entities().get(squid).unwrap().owner();
+    if transfer != RescueTransfer::None {
+        let recipient = if transfer == RescueTransfer::ParasiteToHost {
+            scene.sim().entities().get(ship).unwrap().owner()
+        } else {
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("Americans")
+                .unwrap();
+            let recipient = scene.add_human_house(
+                "RescueRecipient",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            let runtime = &mut scene.runtime;
+            // This is a normal short-game launch. Give the new participant
+            // a real base so defeat cleanup cannot masquerade as release.
+            spawn_on_free_cells(
+                &mut runtime.simulation,
+                &runtime.resources.rules,
+                recipient,
+                cells_nearest((i32::from(land.0), i32::from(land.1))),
+                &["GAPOWR"],
+            );
+            recipient
+        };
+        // Unit7463A0 -> Foot4DBED0 -> Techno7014A0 changes allegiance,
+        // not Parasite+28 or Foot+694. Grapple6297F0 has no diplomacy gate.
+        // Full capture-weapon admission is outside this receiver fixture.
+        let target = if transfer == RescueTransfer::Host {
+            ship
+        } else {
+            squid
+        };
         let runtime = &mut scene.runtime;
-        // This is a normal short-game launch. Give the new participant
-        // a real base so defeat cleanup cannot masquerade as release.
-        spawn_on_free_cells(
-            &mut runtime.simulation,
-            &runtime.resources.rules,
-            recipient,
-            cells_nearest((i32::from(land.0), i32::from(land.1))),
-            &["GAPOWR"],
-        );
         runtime.simulation.change_owner_with_rules(
-            ship,
+            target,
             recipient,
             &runtime.resources.rules,
             Some(&runtime.resources.overlay_registry),
             Default::default(),
         );
         assert_eq!(
-            runtime.simulation.entities().get(ship).unwrap().owner(),
+            runtime.simulation.entities().get(target).unwrap().owner(),
             recipient
         );
     }
     let expected_owner = scene.sim().entities().get(ship).unwrap().owner();
+    let expected_squid_owner = scene.sim().entities().get(squid).unwrap().owner();
+    assert_eq!(
+        expected_squid_owner != original_squid_owner,
+        matches!(
+            transfer,
+            RescueTransfer::Parasite | RescueTransfer::ParasiteToHost
+        )
+    );
+    if matches!(
+        transfer,
+        RescueTransfer::Parasite | RescueTransfer::ParasiteToHost
+    ) {
+        for _ in 0..45 {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let source = sim.entities().get(squid).unwrap();
+            assert_eq!(source.owner(), expected_squid_owner);
+            assert!(source.lifecycle.in_limbo());
+            assert_eq!(source.parasite.class().unwrap().victim(), Some(ship));
+            assert_eq!(
+                sim.entities().get(ship).unwrap().parasite.eater(),
+                Some(squid)
+            );
+            assert!(sim.anim(anim).is_some());
+        }
+    }
     let pristine = scene.sim().resolved_terrain().unwrap().clone();
     let bytes = save_scene(&scene, "AY live squid before dolphin rescue");
     scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
     assert_eq!(
         scene.sim().entities().get(ship).unwrap().owner(),
         expected_owner
+    );
+    assert_eq!(
+        scene.sim().entities().get(squid).unwrap().owner(),
+        expected_squid_owner
     );
     assert_eq!(
         scene.sim().entities().get(ship).unwrap().parasite.eater(),
@@ -293,7 +344,7 @@ pub fn visit_aymod_dolphin_rescue_after_load(
     );
     assert!(
         fired,
-        "release preceded dolphin firing after transfer={transfer_host}: host={:?} squid={:?} dolphin={:?}",
+        "release preceded dolphin firing after transfer={transfer:?}: host={:?} squid={:?} dolphin={:?}",
         scene
             .sim()
             .entities()
@@ -370,6 +421,10 @@ pub fn visit_aymod_dolphin_rescue_after_load(
         "AY dolphin rescue with original Sonic wave in flight",
     );
     scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+    assert_eq!(
+        scene.sim().entities().get(squid).unwrap().owner(),
+        expected_squid_owner
+    );
     assert!(scene.sim().waves().iter().any(|(&id, _)| id == wave));
     visit("loaded", &scene, wave);
     let mut drew_geometry = false;

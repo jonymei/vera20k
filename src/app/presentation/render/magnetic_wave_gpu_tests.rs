@@ -528,10 +528,17 @@ fn wave_pixels_reach_retained_display_and_shared_gpu_with_immutable_z_and_a() {
 #[ignore = "requires AYMOD and GPU; real dolphin rescue through production Wave emission and retained drawing"]
 fn aymod_dolphin_rescue_wave_reaches_gpu_across_save_and_retirement() {
     use crate::app::presentation::fire_effects::build_weapon_wave_draws;
-    use crate::headless_scenario::battle_test_evidence::visit_aymod_dolphin_rescue_after_load;
+    use crate::headless_scenario::battle_test_evidence::{
+        RescueTransfer, visit_aymod_dolphin_rescue_after_load,
+    };
     const SIZE: [u32; 2] = [512, 512];
     let gpu = Gpu::new();
-    for transfer in [false, true] {
+    for transfer in [
+        RescueTransfer::None,
+        RescueTransfer::Host,
+        RescueTransfer::Parasite,
+        RescueTransfer::ParasiteToHost,
+    ] {
         let (mut raster_frames, mut changed_frames, mut retired) = (0, 0, false);
         let mut shot = None;
         visit_aymod_dolphin_rescue_after_load(transfer, |label, scene, wave_id| {
@@ -562,7 +569,7 @@ fn aymod_dolphin_rescue_wave_reaches_gpu_across_save_and_retirement() {
             for (_, draw) in &draws {
                 draw.rasterize([0, 0, 512, 512], [512, 512], 512, 0, |_| {})
                     .unwrap_or_else(|error| {
-                        panic!("actual {label}/transfer{transfer} {draw:?}: {error:?}")
+                        panic!("actual {label}/transfer{transfer:?} {draw:?}: {error:?}")
                     });
                 raster_frames += 1;
             }
@@ -679,7 +686,7 @@ fn aymod_dolphin_rescue_wave_reaches_gpu_across_save_and_retirement() {
                         .filter(|(a, b)| a != b)
                         .count();
                     eprintln!(
-                        "actual Sonic transfer{transfer}/{label}/{format:?}: phase{:?}, changed={changed}",
+                        "actual Sonic transfer{transfer:?}/{label}/{format:?}: phase{:?}, changed={changed}",
                         draws.first().map(|(_, d)| d.phase)
                     );
                     changed_frames += usize::from(changed > 0);
