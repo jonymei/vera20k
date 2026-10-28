@@ -16,6 +16,107 @@ use crate::sim::snapshot::GameSnapshot;
 struct Scene(SimRuntime);
 
 #[test]
+fn placement_expiry_shifts_non_tail_occupants_without_restarting_the_saved_fire_cursor() {
+    let Some(mut scene) = Scene::new("") else {
+        return;
+    };
+    let building = scene.spawn("CAHSE01", "Americans", (16, 14));
+    let first = scene.enter("E1", "Americans", building, true);
+    let middle = scene.enter("E2", "Americans", building, true);
+    let last = scene.enter("E1", "Americans", building, true);
+    let gi_weapon = scene
+        .0
+        .resources
+        .rules
+        .object("E1")
+        .unwrap()
+        .occupy_weapon
+        .clone()
+        .unwrap();
+    let conscript_weapon = scene
+        .0
+        .resources
+        .rules
+        .object("E2")
+        .unwrap()
+        .occupy_weapon
+        .clone()
+        .unwrap();
+    assert_ne!(gi_weapon, conscript_weapon);
+    let target = scene.spawn("SMCV", "Russians", (21, 14));
+    scene.command(
+        "Americans",
+        Command::Attack {
+            attacker_id: building,
+            target_id: target,
+        },
+    );
+    scene.shot(building, target, &gi_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    {
+        let runtime = &mut scene.0;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        // BuildingPointerExpired44EAB8 gates vector deletion on ScenarioInit;
+        // this is a supplied placement-scope UnInit, not a claimed combat kill.
+        sim.with_object_placement_scope(|sim| sim.uninit_with_rules(first, rules));
+    }
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[middle, last]
+    );
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    scene.frame();
+    assert!(scene.0.simulation.entities().get(first).is_none());
+    scene.save_and_restore();
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[middle, last]
+    );
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    // GetWeapon452742 uses the unchanged live index: the next shot is the
+    // shifted last GI, then FireAt6FF065 wraps to the remaining Conscript.
+    scene.shot(building, target, &gi_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        0
+    );
+    scene.shot(building, target, &conscript_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+}
+
+#[test]
 fn destroyed_garrison_stays_hidden_until_its_death_weapon_returns() {
     use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
     let Some(mut scene) = Scene::new(

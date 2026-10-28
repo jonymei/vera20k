@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于f7b9c21bd修V10坠落飞兵错误复活，修改既有infantry_health_reset唯一owner。NP/stock相关模块各64项、零售实弹坠落各1项、实际AY场景1项通过；只读critic无可操作发现。已完成本链本地验证，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；基于ce5d72a84补V05单剩驻军自然续火/热存读，以及ScenarioInit内非尾名单前移与开火顺序。实际AY驻军6项、NP/stock building_occupant_storage各5/4项通过；本轮仅测试/台账、无新玩法critic。未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划回归，固定版不含，旧计划/巨炮不追溯删除，建造落地实战仍待验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V05非尾驻军移除/单剩成员自动续火的功能链，先核现有名单游标和开火owner，不重开已暂停的弱攻势调查。V10坠落修复不是修改目标层/高度门槛；真实地面单位完整自主索敌、坠落中存读及多AI仍未验。F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
-- V05双弹/第二射手死亡与本轮剩余Cargo顺序已通过各自范围；非尾移除、单剩驻军原生自动续火、母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08重新装载/带队卸载/竞争补员/多AI长局亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
+- 下一安全动作：继续V08实际BFRT卸载后的重新装载与存读，沿既有Team/Enter/Cargo owner核查，不重开已暂停的弱攻势调查。V10坠落修复不是修改目标层/高度门槛；真实地面单位完整自主索敌、坠落中存读及多AI仍未验。F02受损FX/EMP绘制、多AI选敌、V02联盟/自然缺电/其他恢复、V07整个App/原局及启用自然粒子配置仍开放。
+- V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08重新装载/带队卸载/竞争补员/多AI长局亦保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。缓存清理首跑提示Unsupported PE debug closure而安全停止、移除0字节，不为它手动清理固定构建；后续最终测试无此阻塞。旧Python936项失败/错误保留，本轮无Python工具改动。
 
 ### V10坠落飞兵：NP跳过步兵Health=1复活（2026-10-28）
@@ -207,13 +207,16 @@
 
 ### V05部分驻军死亡、游标存读与补员恢复（2026-10-28）
 
+- 续验单剩GGI：在既有双弹/第二射手被AWPWH穿透杀死场景中，两枚原导弹落地后，不补员、不改游标/武器/冷却；仅给另一台原血量APOC一次普通Attack。幸存者真实发射三次OCMissileLauncher，第一发在途时正式存读，校验原弹和原rearm timer保留，再自然发出后两发并造成实伤；名单始终count1/cursor0。这验证该合法游标起点的自动续火，不声称所有单人起点都可用。
+- 续验非尾移除：生产retail reader的E1/E2/E1混合驻军正常入驻、开火得到cursor1；明确提供ScenarioInit作用域，通过既有UnInit/PointerExpired移除首名。实读实际AY BuildingPointerExpired44EAB8..44EAC0门禁及44EAE8..44EB00移位，列表成为E2/E1而游标仍1。普通帧物理退场、正式存读后，无第二条Attack，接下来的真实武器依次为剩余E1、E2，游标自然1→0→1。未直接写名单/游标；这不是普通战斗杀死非尾成员的producer证明。
+- 本轮最终实际AY驻军6项、NP/stock building_occupant_storage各5/4项通过；无生产逻辑修改/新critic，无新增RNG、timer写入、Detach实现或保存字段。两条场景只沿既有owner及其原有副作用；固定构建、MOD配置、原始存档均未动。以下保留较早cursor1/count1边界的证据与补员路径。
 - 提取既有GGI在途场景为aymod_garrison_missile_in_flight，两个已验全员出驻/替换例继续使用同一生产规则/生成/开火路径。新aymod_garrison_tail_death_preserves_the_pending_shot_and_cursor_after_load先确认count2/cursor1，未通过测试setter伪造游标。
 - 实际AWPWH的穿透等级1大于CAHSE01保护等级；直接从正式伤害receiver边界给零普通伤害，触发真实NP穿透前缀，删除末位GGI但不伤楼、不清cursor。此例隔离弹道窗口中的列表变更，不冒称完整狙击手发射；狙击手实际武器路径已有单独场景。最初错误要求UnInit后立刻实体不存在，已按既有生命周期改为先断言dead、正常advance一帧后确认物理删除，未修改生产队列或UnInit语义。
 - 实读C2E751..C2E7B3及BuildingPointerExpired44EAC0..44EB02：名单缩短而不复位+69C。保存/完整资源恢复后count1/cursor1仍保持，原导弹真正杀死原目标，NPAE702FB5..702FD1仍从当前cursor-1=0支付幸存GGI，楼/未入驻E1无XP。
 - 实读GetWeapon452742..452750有signed cursor>=count的回退，4527B4进入本楼基础武器槽，不是绕回第一名。新回归通过既有firing_occupant_id确认此时无可用驻军索引；不擅自clamp或reset来替代原补丁。字面字段扫描仅作为写入线索，未据它宣称已穷尽派生指针写/整个原生AI循环，因此不扩大成单人永久停火结论。
 - 随后从既有入驻leaf加入新E1，保持cursor1、当前合法成员改为E1；普通Attack产生真实UCPara事件并击杀另一个预置1HP的E2，新E1获XP、旧GGI经验不变，cursor自然回绕0。没有直接设rank/XP/索引、清角色列表或修改MOD武器/投射物；没有伪造完整步行补员时间。
 - 最终实际garrison3项、building_occupant_storage3、RecordKill6通过，前轮出驻/替换存读一并防回归。仅测试/文档，无玩法critic，无新RNG/timer/Detach实现或保存字段；所有伤害、穿透、记录、退场、补员、开火均调用既有owners。未启动GUI、未改MOD/原存档/固定构建、未发布。
-- 边界：不同帧多弹交错、建筑毁坏时活体弹出、非尾成员移除/原射手死亡、单剩驻军的整个原生自动续火循环、完整步行补员与GPU/GUI仍不在结论内，不关闭全V05。
+- 边界：多弹交错、楼毁活体弹出、第二射手死亡已有各自独立覆盖；本轮补充的非尾移除仅限ScenarioInit作用域，单剩续火仅限自然得到cursor0的起点。cursor>=count的整个原生自动循环、普通战斗非尾移除producer、完整步行补员与GPU/GUI仍不在结论内，不关闭全V05。
 
 ### V05在途导弹、全员出驻/替换与击杀归属（2026-10-28）
 
@@ -960,7 +963,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V02 / P2 / 入口/Cargo死亡顺序已修，Off治疗、被夺医院新服务/出售存读已验 | GAROBO/NARADR Hospital原owner保留，普通步兵共用医院鼠标动作，Ammo=-1正常准入；Passengers=0仍可有真实Cargo | Off拒新/On治疗、Off下已有患者治满出院通过；工程师占领GAROBO后的旧House断联Cargo、毁坏后缀，以及新主人再送医/新患者出院/出售清理旧Cargo与存读均通过。旧病人其他恢复、自然缺电/EMP、满员/联盟及自主AI仍开放；不是科技医院全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 / 移动/换主死亡/运输存读与AI准入已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL共享传感器获取全隐形TANY；覆盖内外存读后无丢失/残留；普通Guard实际开火/自然重新隐形后的拒绝/重发现后Stop再获取通过 | 范围按实际typed规则，不硬编码旧说明；不要求强制转火。IFV实际控制/归还/死亡、登离LCRF/两次存读及计数/AI准入已验；卸载缺失sensor恢复已修共享Unlimbo。移动目标自身、多House/联盟重叠、空艇/精英潜艇/幻影等其他路径及画面仍待验 |
-| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、两原GGI导弹与第二射手死亡后的当前名单XP已验。剩余Cargo改在SpawnSurvivors后清理，GAROBO懒分配Cargo回归通过；非尾删除/单人自动续火、其他子机家族与母体连续晋升/换主仍待验，不关闭全V05 |
+| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；cursor>=count完整原生循环及普通战斗非尾producer仍待核。剩余Cargo在SpawnSurvivors后清理；其他子机家族与母体连续晋升/换主仍待验，不关闭全V05 |
 | V06 / P1 / 地面晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN已通过普通武器击杀残血敌人晋升、热stage保存恢复、Stop/Guard退档及精英续射；既有stage0首发由配置实现。对空/换主/所有ROF倍率及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源换主、多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读/六人实际开火、解散后全卸载和再次存读通过；优先级招走与持续AreaGuard均保留原生行为，重新装载/带队卸载/竞争补员/多AI长局仍待验；不把线圈充能当V01中心供电 |

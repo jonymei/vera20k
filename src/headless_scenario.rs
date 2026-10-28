@@ -7492,6 +7492,118 @@ mod retail_construction_tests {
         for id in [building, replacement] {
             assert_eq!(xp(&scene, id), 0);
         }
+        if retire_second {
+            // The two real shots wrapped the cursor to zero before the tail
+            // died. Do not refill, normalize the cursor or reset the weapon:
+            // the sole survivor must resume ordinary repeated firing itself.
+            let next = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let actor = sim.entities().get(building).unwrap();
+                let owner = actor.owner();
+                let at =
+                    crate::sim::movement::ground_pose::object_get_coords(actor, sim.resolved_terrain());
+                let center = (at.x / 256, at.y / 256);
+                let sites = cells_nearest(center)
+                    .into_iter()
+                    .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 6)
+                    .collect::<Vec<_>>();
+                let enemy = house_of(sim, "Russians");
+                let next = spawn_on_free_cells(sim, rules, enemy, sites, &["APOC"])[0];
+                sim.mission_queue_exact(
+                    next,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: building,
+                        target_id: next,
+                    },
+                ));
+                next
+            };
+            let initial_hp = scene.sim().entities().get(next).unwrap().health.current();
+            let mut shots = 0;
+            let mut restored = false;
+            for _ in 0..600 {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|e| e.attacker_id == building)
+                {
+                    assert_eq!(event.target, crate::sim::combat::TargetKind::Entity(next));
+                    assert_eq!(
+                        scene.sim().interner.resolve(event.weapon_id),
+                        "OCMissileLauncher"
+                    );
+                    shots += 1;
+                }
+                let roster = scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .passenger_role
+                    .occupants();
+                assert_eq!(roster.ids(), &riders[..1]);
+                assert_eq!(
+                    roster.fire_index(),
+                    0,
+                    "FireAt6FF065 wraps by the live count"
+                );
+                if shots == 1 && !restored {
+                    let rearm = scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .rearm_timer
+                        .timer();
+                    let missile = scene
+                        .sim()
+                        .projectiles()
+                        .iter()
+                        .find_map(|(&id, p)| {
+                            (p.source_id() == building && p.target() == ProjectileTarget::Entity(next))
+                                .then_some(id)
+                        })
+                        .expect("the survivor's first resumed missile is still in flight");
+                    let bytes = save_scene(&scene, "AY sole garrison survivor resumed firing");
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    assert_eq!(
+                        scene
+                            .sim()
+                            .entities()
+                            .get(building)
+                            .unwrap()
+                            .rearm_timer
+                            .timer(),
+                        rearm
+                    );
+                    assert!(scene.sim().projectiles().get(missile).is_some());
+                    // Restore only once, retaining the actual attack mission,
+                    // rearm timer and the first resumed missile in flight.
+                    restored = true;
+                }
+                if shots >= 3 && scene.sim().entities().get(next).unwrap().health.current() < initial_hp
+                {
+                    break;
+                }
+            }
+            assert!(restored);
+            assert_eq!(
+                shots, 3,
+                "one initial shot and two further shots after restore"
+            );
+            assert!(scene.sim().entities().get(next).unwrap().health.current() < initial_hp);
+        }
     }
 
     #[cfg(feature = "npatch")]
