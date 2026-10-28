@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于572485c25补F06普通/实杀精英ORCA对空后切回对地、实际对应武器伤害、再次自然空弹回程/满弹落地及三次附加存读。最终aymod_orca4、attack_mission7、dock_cycle5（3 ignored未跑）、airfield_reload2，共18项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于9a356617e补F01实际SNIPE自然隐形、正常Move真实位移/移动中存读后续走、普通Attack实射伤害及开火后存读保持隐形。最终新SNIPE1、既有TANY1、移动传感器1、techno_ai_cloak::tests17，共20项通过。仅测试/台账，无生产改动/新critic/待完成Cargo；Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：回到F01补实际SNIPE移动/开火隐形状态及存读边界；先核其正式typed武器和DecloakToFire，不重复已有TANY静止开火/移动传感器用例。ORCA单机地→空→地/自然重装及实杀精英已验，多机竞争/AI自主战术和GPU仍开放。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
+- 下一安全动作：继续F01步兵换主后的隐形/传感器归属与死亡清理，先核现有换主和UnInit owners，不另建隐形状态；SNIPE实际移动/开火及存读已验，其他等级隐形家族、GUI/全移动路径仍开放。ORCA单机双向战斗/自然重装及实杀精英保留，多机竞争/AI自主战术和GPU未关闭。Return Dubai攻势暂停，V01与F11批准门禁、固定构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -344,6 +344,13 @@
 - 71e67bf1b后续实际AY验收：同一aymod_captured_center_transfers_support夹具按typed PowersUnit逐对运行GAROBO→ROBO、NARADR→DRON、NAPSIS→CAOS，正常Battle加载后供给原主真实电厂/中心和另一个同俄罗斯Country但独立human House的电厂/对应单位。新主原先无中心，通过普通Move真实到格触发739F21离线，不手写provider/counter/latch；原主仍获支持。首次完整保存恢复后，由新主SENGINEER普通Capture实际步行夺取，旧主House计数归零/旧单位offline，工程师正常消耗；捕获边界第二次保存保留已有counted值，普通更新让新主获得支持并Reactivate。没有对中心发Off/On或补另一座中心/伪造House标志，新主普通Move使对应单位实际到达新格，第三次保存保留中心/双方单位归属、旧offline/新online、House支持与位置。
 - 本次复合1项内部三组配置均通过，另重跑实际建筑AI1/驻军归属1/powered_unit8，共11项通过；与上轮93项有重叠，不相加为新总数。测试不对失去支持的旧Drive单位继续下Move，因此不能把offline旗标冒称“新命令必被拒绝/绝对不能动”；保留V01原生聚合及失联移动政策门禁。新旧House均为受控组件，不是多AI自主夺取/长局；无新玩法实现/RNG/timer/Detach调用/保存字段，无需新critic，无GUI/MOD/原始存档/固定构建改动。
 - 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
+
+### F01实际狙击手移动、隐形开火及完整存读（2026-10-28）
+
+- 新aymod_sniper_moves_and_fires_cloaked_after_load正式加载AY Battle的SNIPE/E1。通过生产typed reader确认SNIPE Cloakable=true、CloakStop=false、实际Primary的DecloakToFire=false；不改兵种/武器/MOD或隐形状态。临时将射手和靶经mission owner置Sleep，仅隔离准备期的自主索敌及靶还击，再由正常帧自然完全隐形。
+- 正常Move命令使射手世界坐标实际变化且任务仍为Move；每帧保持完全隐形，在此边界正式保存/完整资源恢复，核完整CloakRuntime、世界坐标、mission/state、rearm、target和NavCom。恢复后再次要求真实位移且保持隐形，随后普通Attack打断移动，必须用实际SNIPE Primary产生指向E1的真实fire_event并使其掉血/死亡。开火/命中后再次完整存读，再走30帧保持完全隐形。
+- 静读实际AY GameMD FireError6FCA26..6FCA2E确认WH以外的Weapon+133为假时直接跳6FCA5E，跳过cloak拒绝门；没有从键名猜“射击必须显形”，也没有进入仅DecloakToFire=true才可达的C2D9BC来改变本例。现有techno_ai_cloak/FireError/移动/保存owners无需新生产实现，无新增RNG/timer/Detach/保存字段。
+- 最终retail gate下新SNIPE1、既有TANY静止隐形实射1、实际移动传感器/电脑碉堡重新探测实射1、techno_ai_cloak::tests17，共20项通过。首个组件过滤器误写跑0项，已纠正运行真实17项，不计0项为通过。无新玩法critic、GUI/MOD/原始存档/固定构建/发布改动；本例只验普通SNIPE在移动中接新Attack，不冒称已走完全部路径、等级隐形家族、死亡/换主清理或GPU/GUI。
 
 ### F06实际ORCA空弹返航、重装与地空续战（2026-10-28）
 
@@ -1108,7 +1115,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | ID / 优先级 | 类别、触发与影响 | 配置和现有 owner / 证据入口 | 收口要求 |
 | --- | --- | --- | --- |
-| F01 / P1 / 已实现，待GUI验收 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；剩余实际GUI/运动路径验收包括静止隐形、按实际武器DecloakToFire保持隐形或显形、传感器、死亡/换主和存读档；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
+| F01 / P1 / 已实现，普通SNIPE移动/实射存读已验，GUI待验 | 步兵自主隐形：已修原先Unit-only准入；天然/等级隐形进入既有更新，影响生存、AI选敌和侦测 | `[TANY]` / `[SNIPE] Cloakable`；`[GHOST]` / `[IVAN] EliteAbilities`、`[VIRUS] VeteranAbilities` 同族。`src/sim/world/techno_ai_cloak.rs` 的事实采集和更新现已允许Unit/Infantry | 已核#174步兵准入并扩展既有owner；实际TANY静止隐形实射、移动传感器/AI重获射击，以及SNIPE自然隐形/移动中存读续走/普通Attack实射保持隐形/开火后存读已验。其他路径/等级家族、死亡/换主清理和实际画面仍待验；不要新增第二套隐形状态。IVAN配置为精英CLOAK，与旧说明的老兵矛盾，不擅改配置 |
 | F02 / P1 / 建筑受击/策略EMP、盟友探测与红血重隐已验，健康建筑GPU门禁已验 | 隐形箱已授予实例能力，接入共享隐形AI及持久化 | CellPickup48294F/481D3A；原生产半径/敌我/未占格/重复/保存/hash与换主/Unlimbo及critic修正保留 | 实际MTNK/E1、GAPOWR与ORCA、正常ALLY/活DOG双向接触及HP1重隐已验；新增GAPOWR/GAROBO全隐形受击state3存读重隐，以及既有策略EMP在powered门下的状态/到期恢复。上游EMP政策不宣称#174等价；受损/EMP FX绘制、启用自然粒子、多AI选敌和完整生命周期仍开放。健康建筑两格式GPU门禁已验，既有字段改变保存布局 |
 | F03 / P1 / 已接入并通过实际场景，画面待验 | 爆炸箱直接C4与5次径向爆炸、动画/光照和死亡后续已接通 | 482565..482719；3项新生产回归含实际AY放箱/Move/真实500幅度和5个帧输出光照请求。同步后果通知不丢失，扩展真实桥梁回归并验证第二帧不重复；critic未发现具体缺陷 | 最终GPU/GUI画面、复杂Dummy重入及中断帧真实通知未逐项实测；不等于所有箱子或所有地图/难度通过 |
 | F04 / P1 / 已实现，功能验收通过 | 驻军保护/穿透：通用建筑收伤前置钩子；正等级尾序单杀、负等级尾序清空，严格大于保护值 | 两个有符号byte逐物理层读取；WH穿透复用原Fire的+14C字节，不建立竞争状态。`src/sim/passenger/garrison_eject.rs`复用声音、RecordKill/UnInit owner；`src/sim/combat/world_receiver.rs`在自伤门和联系人快照之后接入 | 已通过真实AYMOD狙击手攻击普通/保护驻军、鲍里斯召唤BPLN/Maverick3清空保护驻军；生化炉Cargo不属于此钩子，坦克掩体保留独立链接/旧PenetratesBunker门。优化场景、普通游戏构建和独立只读critic均已完成；不冒称GUI或全地图模式认证 |

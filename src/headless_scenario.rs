@@ -4584,6 +4584,168 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real SNIPE moves and fires while cloaked across saves"]
+    fn aymod_sniper_moves_and_fires_cloaked_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::movement::ground_pose::position_world_coord;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, sniper, target) = aymod_nearby_pair("SNIPE", "E1", false);
+        let (owner, goal) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("SNIPE").unwrap();
+            assert!(kind.cloakable && !kind.cloak_stop);
+            assert!(
+                !rules
+                    .weapon(kind.primary().unwrap())
+                    .unwrap()
+                    .decloak_to_fire
+            );
+            // Isolate the actual moving/firing cloaker from retaliation and
+            // auto-acquisition before the explicit player commands below.
+            for id in [sniper, target] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let actor = sim.entities().get(sniper).unwrap();
+            let owner = actor.owner();
+            let at = actor.position;
+            let goal = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    if (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        != 4
+                    {
+                        return None;
+                    }
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    sim.foot_path_zone_precheck(
+                        sniper,
+                        crate::sim::components::DriveCoord::cell(x, y, 0),
+                        rules,
+                    )
+                    .unwrap()
+                    .then_some((x, y))
+                })
+                .expect("a reachable nearby infantry movement destination");
+            (owner, goal)
+        };
+        let hidden = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .get(sniper)
+                .unwrap()
+                .cloak
+                .unwrap()
+                .is_fully_cloaked()
+        };
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            hidden(&scene)
+        }));
+        let restore = |scene: &mut HeadlessScenario| {
+            let witness = |scene: &HeadlessScenario| {
+                let actor = scene.sim().entities().get(sniper).unwrap();
+                (
+                    position_world_coord(&actor.position),
+                    actor.cloak,
+                    actor.mission.effective(),
+                    actor.mission.handler_state(),
+                    actor.rearm_timer,
+                    actor.attack_target.target(),
+                    actor.navigation.nav_com(),
+                )
+            };
+            let before = witness(scene);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, "AY moving and firing cloaked sniper");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(witness(scene), before);
+        };
+        let start = position_world_coord(&scene.sim().entities().get(sniper).unwrap().position);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Move {
+                entity_id: sniper,
+                target_rx: goal.0,
+                target_ry: goal.1,
+            },
+        ));
+        assert!((0..480).any(|_| {
+            tick_with_due_commands(&mut scene);
+            assert!(
+                hidden(&scene),
+                "movement must retain the actual SNIPE cloak"
+            );
+            let actor = scene.sim().entities().get(sniper).unwrap();
+            position_world_coord(&actor.position) != start
+                && actor.mission.effective().known() == Some(MissionType::Move)
+        }));
+        let moving_at = position_world_coord(&scene.sim().entities().get(sniper).unwrap().position);
+        restore(&mut scene);
+        assert!((0..30).any(|_| {
+            tick_with_due_commands(&mut scene);
+            assert!(hidden(&scene));
+            position_world_coord(&scene.sim().entities().get(sniper).unwrap().position) != moving_at
+        }));
+        let hp = scene.sim().entities().get(target).unwrap().health.current();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: sniper,
+                target_id: target,
+            },
+        ));
+        let mut fired = false;
+        assert!((0..480).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                hidden(&scene),
+                "the authored DecloakToFire=no must retain cloak"
+            );
+            fired |= output.fire_events.iter().any(|event| {
+                event.attacker_id == sniper
+                    && event.target == crate::sim::combat::TargetKind::Entity(target)
+                    && scene.sim().interner.resolve(event.weapon_id)
+                        == scene
+                            .runtime
+                            .resources
+                            .rules
+                            .object("SNIPE")
+                            .unwrap()
+                            .primary()
+                            .unwrap()
+            });
+            fired
+                && scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .is_none_or(|actor| actor.health.current() < hp)
+        }));
+        restore(&mut scene);
+        for _ in 0..30 {
+            tick_with_due_commands(&mut scene);
+            assert!(hidden(&scene));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; detector cargo limbo and unload restore sensor coverage"]
     fn aymod_transported_ifv_removes_and_restores_sensor_coverage_after_load() {
         use crate::sim::command::Command;
