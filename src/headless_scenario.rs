@@ -9723,13 +9723,19 @@ mod retail_construction_tests {
                 sim.entities().get(building).unwrap().health.current(),
             )
         };
+        let mut after_save_frames = 0;
+        let mut saved_building_hp = building_hp;
         let (mut vehicle_retired, mut final_saved, mut final_fired, mut final_hit) =
             (false, false, false, false);
         assert!(
-            (0..3000).any(|_| {
+            (0..9000).any(|_| {
                 let was_saved = final_saved;
                 let output = tick_with_due_commands(&mut scene);
-                assert!(output.tick.frame_committed, "final attack frame did not commit: tick={} outcome_waiting={} network_waiting={}", output.tick.tick, output.outcome_waiting, output.network_waiting);
+                assert!(
+                    output.tick.frame_committed,
+                    "final attack frame did not commit: tick={} outcome_waiting={} network_waiting={}",
+                    output.tick.tick, output.outcome_waiting, output.network_waiting
+                );
                 let sim = scene.sim();
                 vehicle_retired |= sim.entities().get(vehicle).is_none();
                 let team = sim.team_script_vm.team(team_id).unwrap();
@@ -9743,12 +9749,26 @@ mod retail_construction_tests {
                     && fortress.attack_target.target() == Some(TargetKind::Entity(building))
                 {
                     assert!(sim.entities().get(building).unwrap().health.current() > 0);
+                    let before_position =
+                        crate::sim::movement::ground_pose::position_world_coord(&fortress.position);
+                    let before_locomotor = fortress.locomotor.clone();
+                    saved_building_hp = sim.entities().get(building).unwrap().health.current();
                     let bytes = save_scene(
                         &scene,
                         "AY BFRT final general attack selects a building after vehicle death",
                     );
                     scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                     let sim = scene.sim();
+                    assert_eq!(
+                        crate::sim::movement::ground_pose::position_world_coord(
+                            &sim.entities().get(carrier).unwrap().position
+                        ),
+                        before_position
+                    );
+                    assert_eq!(
+                        sim.entities().get(carrier).unwrap().locomotor,
+                        before_locomotor
+                    );
                     assert!(sim.entities().get(vehicle).is_none());
                     assert_eq!(sim.team_script_vm.team(team_id).unwrap().cursor(), 6);
                     assert_eq!(
@@ -9765,15 +9785,20 @@ mod retail_construction_tests {
                     }));
                     final_saved = true;
                 }
-                final_fired |= output.fire_events.iter().any(|event| {
-                    riders.contains(&event.attacker_id) && event.target == TargetKind::Entity(building)
-                });
+                if was_saved {
+                    after_save_frames += 1;
+                }
+                final_fired |= was_saved
+                    && output.fire_events.iter().any(|event| {
+                        riders.contains(&event.attacker_id)
+                            && event.target == TargetKind::Entity(building)
+                    });
                 final_hit |= was_saved
                     && scene
                         .sim()
                         .entities()
                         .get(building)
-                        .is_none_or(|unit| unit.health.current() < building_hp);
+                        .is_none_or(|unit| unit.health.current() < saved_building_hp);
                 final_saved && final_fired && final_hit
             }),
             "BFRT final attack incomplete: retired={vehicle_retired} saved={final_saved} fired={final_fired} hit={final_hit}; building={building}; team={:?} carrier={:?}",
@@ -9786,6 +9811,9 @@ mod retail_construction_tests {
                 .entities()
                 .get(carrier)
                 .map(|unit| (unit.attack_target.target(), unit.mission.current()))
+        );
+        eprintln!(
+            "AY BFRT final attack resumed with new passenger fire and additional damage after {after_save_frames} post-save frames"
         );
         let hp = scene
             .sim()
