@@ -10564,11 +10564,147 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY Gattling kill promotion, hot save, Stop/Guard and resumed fire"]
     fn aymod_gattling_promotes_through_fire_and_resumes_after_hot_save() {
+        aymod_gattling_promotion_lifecycle(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
+    fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
+        aymod_gattling_promotion_lifecycle(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_lift_gattling_target(scene: &mut HeadlessScenario, actor: u64, target: u64) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        let runtime = &mut scene.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        sim.mission_queue_exact(
+            actor,
+            MissionId::from_known(MissionType::Sleep),
+            1,
+            sim.session.binary_frame(),
+            &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+        )
+        .unwrap();
+        let victim = sim.entities().get(target).unwrap();
+        let (owner, at) = (victim.owner(), victim.position);
+        let destination = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+            .into_iter()
+            .find(|&(x, y)| {
+                (x - i32::from(at.rx()))
+                    .abs()
+                    .max((y - i32::from(at.ry())).abs())
+                    == 8
+                    && u16::try_from(x)
+                        .ok()
+                        .zip(u16::try_from(y).ok())
+                        .is_some_and(|(x, y)| {
+                            sim.resolved_terrain()
+                                .unwrap()
+                                .cell(x, y)
+                                .is_some_and(|cell| !cell.outside_playfield && cell.level == at.z())
+                        })
+            })
+            .unwrap();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Move {
+                entity_id: target,
+                target_rx: destination.0 as u16,
+                target_ry: destination.1 as u16,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                let before = scene.sim().entities().get(target).map(|entity| {
+                    (
+                        entity.health.current(),
+                        entity.position,
+                        entity.mission.clone(),
+                        entity.owner(),
+                    )
+                });
+                let output = tick_with_due_commands(scene);
+                let sim = scene.sim();
+                crate::sim::movement::air_movement::is_high_flying(
+                    sim.entities().get(target).unwrap_or_else(|| {
+                        panic!(
+                            "lift target{target} lost at tick{}: before={before:?}, fires={:?}",
+                            sim.session.tick(),
+                            output.fire_events
+                        )
+                    }),
+                    sim.resolved_terrain.as_ref(),
+                    Some((&scene.runtime.resources.rules, &sim.interner)),
+                )
+            }),
+            "ordinary Move must lift air target{target}; no synthetic height or flight flag: {:?}",
+            scene.sim().entities().get(target).map(|entity| (
+                entity.position,
+                &entity.mission,
+                &entity.navigation,
+                &entity.locomotor
+            ))
+        );
+        let runtime = &mut scene.runtime;
+        runtime
+            .simulation
+            .mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_gattling_promotion_lifecycle(airborne: bool) {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for actor_type in ["YTNK", "YAGGUN"] {
-            let (mut scene, actor, first_victim) = aymod_nearby_pair(actor_type, "APOC", false);
+            let victim_type = if airborne { "JUMPJET" } else { "APOC" };
+            let (mut scene, actor, first_victim) =
+                aymod_nearby_pair(actor_type, victim_type, false);
+            let target_owner = if airborne {
+                let country = scene
+                    .runtime
+                    .resources
+                    .rules
+                    .country_index("Russians")
+                    .unwrap();
+                let owner = scene.add_human_house(
+                    "AirTargetController",
+                    LaunchCountry::from_country_index(u32::from(country.0)),
+                );
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = aymod_anchor(sim, sim.entities().get(actor).unwrap().owner());
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((at.0 + 18, at.1)),
+                    &["GAPOWR"],
+                );
+                sim.change_owner_with_rules(
+                    first_victim,
+                    owner,
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+                Some(owner)
+            } else {
+                None
+            };
             {
                 let runtime = &mut scene.runtime;
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -10577,6 +10713,9 @@ mod retail_construction_tests {
                     let sites = cells_nearest(aymod_anchor(sim, owner));
                     spawn_on_free_cells(sim, rules, owner, sites, &["GAPOWR"]);
                 }
+            }
+            if airborne {
+                aymod_lift_gattling_target(&mut scene, actor, first_victim);
             }
             let queue = |scene: &mut HeadlessScenario, command| {
                 let sim = &mut scene.runtime.simulation;
@@ -10587,18 +10726,22 @@ mod retail_construction_tests {
                 let runtime = &mut scene.runtime;
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
                 let owner = if enemy {
-                    house_of(sim, "Russians")
+                    target_owner.unwrap_or_else(|| house_of(sim, "Russians"))
                 } else {
                     sim.entities().get(actor).unwrap().owner()
                 };
                 let at = sim.entities().get(actor).unwrap().position;
-                spawn_on_free_cells(
+                let target = spawn_on_free_cells(
                     sim,
                     rules,
                     owner,
                     cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
                     &[kind],
-                )[0]
+                )[0];
+                if airborne {
+                    aymod_lift_gattling_target(scene, actor, target);
+                }
+                target
             };
             assert_eq!(
                 scene
@@ -10612,11 +10755,11 @@ mod retail_construction_tests {
             );
             // Only victim health is prepared. Every shot, death and XP award
             // runs through ordinary Attack frames and Record_The_Kill702D40.
-            for round in 0..8 {
+            for round in 0..16 {
                 let victim = if round == 0 {
                     first_victim
                 } else {
-                    spawn_near(&mut scene, "APOC", true)
+                    spawn_near(&mut scene, victim_type, true)
                 };
                 scene
                     .runtime
@@ -10637,11 +10780,40 @@ mod retail_construction_tests {
                 );
                 let mut fired = false;
                 let killed = (0..240).any(|_| {
+                    if airborne {
+                        let sim = scene.sim();
+                        assert!(crate::sim::movement::air_movement::is_high_flying(
+                            sim.entities().get(victim).unwrap(),
+                            sim.resolved_terrain.as_ref(),
+                            Some((&scene.runtime.resources.rules, &sim.interner))
+                        ));
+                    }
                     let output = tick_with_due_commands(&mut scene);
-                    fired |= output.fire_events.iter().any(|event| {
+                    for event in output.fire_events.iter().filter(|event| {
                         event.attacker_id == actor
                             && event.target == crate::sim::combat::TargetKind::Entity(victim)
-                    });
+                    }) {
+                        fired = true;
+                        if airborne {
+                            let rules = &scene.runtime.resources.rules;
+                            let object = rules.object(actor_type).unwrap();
+                            let name = scene.sim().interner.resolve(event.weapon_id);
+                            assert!(
+                                (1..crate::rules::object_type::WEAPON_SLOT_COUNT)
+                                    .step_by(2)
+                                    .any(|slot| object.weapon_at(slot) == Some(name)
+                                        || object.elite_weapon_at(slot) == Some(name))
+                            );
+                            assert!(
+                                rules
+                                    .projectile(
+                                        rules.weapon(name).unwrap().projectile.as_deref().unwrap()
+                                    )
+                                    .unwrap()
+                                    .aa
+                            );
+                        }
+                    }
                     scene
                         .sim()
                         .entities()
@@ -10672,9 +10844,9 @@ mod retail_construction_tests {
                     .rank_kind(),
                 VeterancyRank::Elite
             );
-            // A friendly unarmed building keeps the spin-up isolated from enemy
-            // retaliation. No stage/value/rank field is set by this test.
-            let target = spawn_near(&mut scene, "NACNST", false);
+            // A friendly target (the airship held by Sleep) isolates spin-up
+            // from retaliation. No stage/value/rank field is set by this test.
+            let target = spawn_near(&mut scene, if airborne { "ZEP" } else { "NACNST" }, false);
             queue(
                 &mut scene,
                 Command::Attack {
@@ -10698,6 +10870,14 @@ mod retail_construction_tests {
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let bytes = save_scene(&scene, "AY promoted hot Gattling");
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            if airborne {
+                let sim = scene.sim();
+                assert!(crate::sim::movement::air_movement::is_high_flying(
+                    sim.entities().get(target).unwrap(),
+                    sim.resolved_terrain.as_ref(),
+                    Some((&scene.runtime.resources.rules, &sim.interner))
+                ));
+            }
             let loaded = scene.sim().entities().get(actor).unwrap();
             assert_eq!(
                 (
@@ -10737,7 +10917,7 @@ mod retail_construction_tests {
                 scene.sim().entities().get(actor).unwrap().veterancy,
                 saved.0
             );
-            let victim = spawn_near(&mut scene, "APOC", true);
+            let victim = spawn_near(&mut scene, victim_type, true);
             queue(
                 &mut scene,
                 Command::Attack {
@@ -10754,7 +10934,7 @@ mod retail_construction_tests {
                     .rules
                     .object(actor_type)
                     .unwrap()
-                    .elite_weapon_at((stage * 2) as usize)
+                    .elite_weapon_at((stage * 2) as usize + usize::from(airborne))
                     .unwrap()
                     .to_owned();
                 let output = tick_with_due_commands(&mut scene);
@@ -10764,6 +10944,14 @@ mod retail_construction_tests {
                     .find(|event| event.attacker_id == actor)
                 {
                     assert_eq!(scene.sim().interner.resolve(fire.weapon_id), expected);
+                    if airborne {
+                        let sim = scene.sim();
+                        assert!(crate::sim::movement::air_movement::is_high_flying(
+                            sim.entities().get(victim).unwrap(),
+                            sim.resolved_terrain.as_ref(),
+                            Some((&scene.runtime.resources.rules, &sim.interner))
+                        ));
+                    }
                     resumed = true;
                     break;
                 }
