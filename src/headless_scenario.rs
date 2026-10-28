@@ -2394,6 +2394,150 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; lethal receiver retires armed Prism supporter without a saved ghost beam"]
+    fn aymod_armed_prism_supporter_death_prevents_saved_ghost_beam() {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{
+            DelayedFire, LifecycleOutput,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, master, target, supporter, _) = aymod_prism_scene(true);
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(master).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: master,
+                target_id: target,
+            },
+        ));
+        assert!((0..240).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending()
+                .is_some_and(|pending| {
+                    matches!(pending.fire(), DelayedFire::SupportBeam { .. })
+                        && pending.remaining_ticks() > 3
+                })
+        }));
+        let pending = scene
+            .sim()
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .pending_building_fire
+            .pending()
+            .unwrap();
+        let DelayedFire::SupportBeam { to } = pending.fire() else {
+            unreachable!()
+        };
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(master)
+                .unwrap()
+                .prism_support_count
+                .count()
+                > 0
+        );
+        // Kill through Building ReceiveDamage, not UnInit or a health write.
+        // BuildingAI440072 returns on Health0 before4503F0 can emit.
+        let runtime = &mut scene.runtime;
+        let sim = &mut runtime.simulation;
+        let obj = runtime.resources.rules.object("APOC").unwrap();
+        let weapon = runtime
+            .resources
+            .rules
+            .weapon(obj.primary().unwrap())
+            .unwrap();
+        let warhead = sim.interner.intern(weapon.warhead.as_deref().unwrap());
+        let hit = EntityDamageEvent::direct_receiver(
+            supporter,
+            sim.entities().get(supporter).unwrap().health.current(),
+            0,
+            target,
+            Some(owner),
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: true,
+            },
+        );
+        sim.commit_direct_damage_receiver(
+            &runtime.resources.rules,
+            Some(&runtime.resources.overlay_registry),
+            hit,
+            Default::default(),
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .is_none_or(|entity| entity.health.current() == 0 || entity.death.is_dying())
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY armed Prism supporter after lethal receiver");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let before_hp = scene.sim().entities().get(target).unwrap().health.current();
+        let mut master_fired = false;
+        for _ in 0..240 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)));
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == supporter)
+            );
+            master_fired |= output
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == master);
+        }
+        assert!(master_fired);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(target)
+                .is_none_or(|entity| entity.health.current() < before_hp)
+        );
+        assert!(!scene.sim().entities().contains(supporter));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(master)
+                .unwrap()
+                .prism_support_count
+                .count(),
+            0
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY retired Prism supporter without lingering support",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(!scene.sim().entities().contains(supporter));
+        for _ in 0..3 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_prism_scene(separate_supporter: bool) -> (HeadlessScenario, u64, u64, u64, u64) {
         // A friendly heavy target keeps the supporting tower on Guard;
         // the master receives an explicit player Attack, not an AI override.
