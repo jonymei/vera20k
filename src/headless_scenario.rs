@@ -4152,6 +4152,187 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two real Veteran pickups, saved ranks and actual elite projectile fire"]
+    fn aymod_veteran_crates_promote_and_select_the_saved_elite_weapon() {
+        use crate::sim::combat::combat_weapon;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, building) = aymod_nearby_pair("MTNK", "GAPOWR", true);
+        let rules = &scene.runtime.resources.rules;
+        let kind = rules.object("MTNK").unwrap();
+        let primary = kind.primary().unwrap().to_owned();
+        let elite = kind.elite_primary().unwrap().to_owned();
+        assert_ne!(primary, elite);
+        assert!(!rules.object("GAPOWR").unwrap().trainable);
+        assert_eq!(rules.powerups.weights[14], 10);
+        assert_eq!(f64::from_bits(rules.powerups.magnitudes[14].bits()), 1.0);
+        let probe = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let actor = sim.entities().get(tank).unwrap();
+            let rules = &scene.runtime.resources.rules;
+            let weapon = combat_weapon::current_weapon(
+                actor,
+                rules.object("MTNK").unwrap(),
+                sim.entities(),
+                rules,
+                &sim.interner,
+            )
+            .unwrap();
+            (actor.veterancy.rank(), weapon.id.clone())
+        };
+        assert_eq!(probe(&scene), (0, primary.clone()));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        for (rank, weapon) in [(100, primary.as_str()), (200, elite.as_str())] {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let at = sim.entities().get(tank).unwrap().position;
+            let other = sim.entities().get(building).unwrap().position;
+            let cell = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter_map(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+                .find(|&(x, y)| {
+                    let near = |p: crate::sim::components::Position| {
+                        x.abs_diff(p.rx()).max(y.abs_diff(p.ry())) <= 1
+                    };
+                    near(at)
+                        && near(other)
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                        && sim.occupancy().get(x, y).is_none_or(|cell| {
+                            cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                        })
+                        && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+                })
+                .expect("an adjacent Veteran crate cell also inside the untrainable building radius");
+            assert!(crate::sim::crates::place_crate(
+                sim,
+                &resources.rules,
+                &resources.overlay_registry,
+                (cell.0 as i16, cell.1 as i16),
+                Some(14)
+            ));
+            let owner = sim.entities().get(tank).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(tank).unwrap();
+                (actor.position.rx(), actor.position.ry()) == cell && actor.veterancy.rank() == rank
+            }));
+            assert_eq!(probe(&scene), (rank, weapon.to_owned()));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .veterancy
+                    .rank(),
+                0
+            );
+            let bytes = save_scene(&scene, "AY actual Veteran crate promotion");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(probe(&scene), (rank, weapon.to_owned()));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .veterancy
+                    .rank(),
+                0
+            );
+        }
+        // Only make the unarmed recipient hostile after the two pickups;
+        // no combat XP or manual rank write can cause these promotions.
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let defender = scene.add_human_house(
+            "VeteranCrateDefender",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let runtime = &mut scene.runtime;
+        runtime.simulation.change_owner_with_rules(
+            building,
+            defender,
+            &runtime.resources.rules,
+            Some(&runtime.resources.overlay_registry),
+            Default::default(),
+        );
+        let sim = &mut runtime.simulation;
+        let hp = sim.entities().get(building).unwrap().health.current();
+        let owner = sim.entities().get(tank).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: tank,
+                target_id: building,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..300).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == tank)
+                {
+                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), elite);
+                    fired = true;
+                }
+                fired
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .health
+                        .current()
+                        < hp
+            }),
+            "the saved elite tank must actually launch and hit with ElitePrimary"
+        );
+        let hp = scene
+            .sim()
+            .entities()
+            .get(building)
+            .unwrap()
+            .health
+            .current();
+        let bytes = save_scene(
+            &scene,
+            "AY crate-promoted elite after real projectile impact",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(probe(&scene), (200, elite));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .health
+                .current(),
+            hp
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Speed pickup changes real Drive travel across a moving save"]
     fn aymod_speed_crate_reduces_real_travel_time_across_moving_load() {
         use crate::rules::terrain_rules::LandType;
