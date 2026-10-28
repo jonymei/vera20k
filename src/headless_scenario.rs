@@ -10564,14 +10564,14 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY Gattling kill promotion, hot save, Stop/Guard and resumed fire"]
     fn aymod_gattling_promotes_through_fire_and_resumes_after_hot_save() {
-        aymod_gattling_promotion_lifecycle(false, false, &["YTNK", "YAGGUN"]);
+        aymod_gattling_promotion_lifecycle(false, GattlingContinuation::Stay, &["YTNK", "YAGGUN"]);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
-        aymod_gattling_promotion_lifecycle(true, false, &["YTNK", "YAGGUN"]);
+        aymod_gattling_promotion_lifecycle(true, GattlingContinuation::Stay, &["YTNK", "YAGGUN"]);
     }
 
     #[cfg(feature = "npatch")]
@@ -10579,7 +10579,11 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; hot promoted Gattling tank owner transfer and saved ground/AA fire"]
     fn aymod_hot_gattling_tank_changes_owner_and_resumes_elite_fire_after_load() {
         for airborne in [false, true] {
-            aymod_gattling_promotion_lifecycle(airborne, true, &["YTNK"]);
+            aymod_gattling_promotion_lifecycle(
+                airborne,
+                GattlingContinuation::ChangeOwner,
+                &["YTNK"],
+            );
         }
     }
 
@@ -10588,7 +10592,20 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; hot promoted Gattling building owner transfer and saved ground/AA fire"]
     fn aymod_hot_gattling_building_changes_owner_and_resumes_elite_fire_after_load() {
         for airborne in [false, true] {
-            aymod_gattling_promotion_lifecycle(airborne, true, &["YAGGUN"]);
+            aymod_gattling_promotion_lifecycle(
+                airborne,
+                GattlingContinuation::ChangeOwner,
+                &["YAGGUN"],
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real promoted tank bunker entry, scaled ground/AA fire, saved release"]
+    fn aymod_hot_gattling_tank_enters_fires_and_deploys_out_of_bunker() {
+        for airborne in [false, true] {
+            aymod_gattling_promotion_lifecycle(airborne, GattlingContinuation::Bunker, &["YTNK"]);
         }
     }
 
@@ -11235,12 +11252,19 @@ mod retail_construction_tests {
         );
         // GetROF6FD0CB..CE consumes but omits jitter in AY. 6FD136..14C
         // applies VeteranROF only for the firing rank's ROF ability.
-        let expected =
+        let mut expected =
             if has_weapon_ability(firing_rank, object, crate::rules::object_type::Ability::Rof) {
                 ftol_scale(weapon.rof, rules.general.veteran_rof)
             } else {
                 weapon.rof
             };
+        if entity.bunker.link().installed_in().is_some() {
+            let multiplier = rules.garrison_rules.bunker_rof_multiplier;
+            assert!(multiplier.is_finite() && multiplier > 0.0);
+            // GetROF6FD1B1..1EF divides the already rank-scaled reload.
+            // These small positive fixture values stay clear of overflow.
+            expected = (f64::from(expected) / f64::from(multiplier)) as i32;
+        }
         assert_eq!(entity.rearm_timer.duration(), expected);
         // Runtime commits N+1 only after all gameplay under native frame N.
         assert_eq!(
@@ -11250,7 +11274,246 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_gattling_promotion_lifecycle(airborne: bool, transfer_owner: bool, actors: &[&str]) {
+    #[derive(Clone, Copy)]
+    enum GattlingContinuation {
+        Stay,
+        ChangeOwner,
+        Bunker,
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_gattling_bunker_round_trip(scene: &mut HeadlessScenario, actor: u64, target: u64) {
+        use crate::sim::combat::{TargetKind, veterancy::VeterancyRank};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::docking::bunker_link::BunkerLink;
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let bunker = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let entity = sim.entities().get(actor).unwrap();
+            let owner = entity.owner();
+            let at = entity.position;
+            assert!(rules.object("NATBNK").unwrap().bunker);
+            assert_ne!(
+                rules.garrison_rules.bunker_rof_multiplier, 1.0,
+                "actual AY fixture must exercise a nontrivial bunker ROF multiplier"
+            );
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["NATBNK"],
+            )[0]
+        };
+        let queue = |scene: &mut HeadlessScenario, command| {
+            let sim = &mut scene.runtime.simulation;
+            let owner = sim.entities().get(actor).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+        };
+        queue(
+            scene,
+            Command::clicked_mission(actor, MissionType::Enter, TargetKind::Entity(bunker)),
+        );
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(scene);
+                scene.sim().entities().get(actor).unwrap().bunker.link()
+                    == BunkerLink::Installed(bunker)
+            }),
+            "ordinary Enter must finish the real bunker installation"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(bunker)
+                .unwrap()
+                .bunker
+                .occupant(),
+            Some(actor)
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .veterancy
+                .rank_kind(),
+            VeterancyRank::Elite
+        );
+
+        let restore = |scene: &mut HeadlessScenario, name| {
+            let entity = scene.sim().entities().get(actor).unwrap();
+            let before = (
+                entity.bunker.link(),
+                entity.veterancy.clone(),
+                entity.gattling.stage(),
+                entity.gattling.value(),
+                entity.rearm_timer,
+                entity.saved_rearm_delay(),
+            );
+            let occupant = scene
+                .sim()
+                .entities()
+                .get(bunker)
+                .unwrap()
+                .bunker
+                .occupant();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, name);
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            let entity = scene.sim().entities().get(actor).unwrap();
+            assert_eq!(
+                (
+                    entity.bunker.link(),
+                    entity.veterancy.clone(),
+                    entity.gattling.stage(),
+                    entity.gattling.value(),
+                    entity.rearm_timer,
+                    entity.saved_rearm_delay()
+                ),
+                before
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(bunker)
+                    .unwrap()
+                    .bunker
+                    .occupant(),
+                occupant
+            );
+        };
+        queue(
+            scene,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        );
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(scene);
+                let mut fired = false;
+                for fire in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == actor)
+                {
+                    aymod_assert_gattling_reload(
+                        scene,
+                        actor,
+                        fire.weapon_id,
+                        VeterancyRank::Elite,
+                    );
+                    fired = true;
+                }
+                fired && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0
+            }),
+            "installed Gattling must actually fire and spin up"
+        );
+        restore(scene, "AY hot installed Gattling bunker");
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(scene);
+                if let Some(fire) = output
+                    .fire_events
+                    .iter()
+                    .find(|event| event.attacker_id == actor)
+                {
+                    assert_eq!(
+                        scene.sim().entities().get(actor).unwrap().bunker.link(),
+                        BunkerLink::Installed(bunker)
+                    );
+                    aymod_assert_gattling_reload(
+                        scene,
+                        actor,
+                        fire.weapon_id,
+                        VeterancyRank::Elite,
+                    );
+                    return true;
+                }
+                false
+            }),
+            "restored installed tank must resume scaled fire before release"
+        );
+        // Unit Mission_Unload73D63B..66D -> EmptyBunker4595C0 is reached
+        // through the ordinary deploy key, not a direct release helper.
+        assert!(
+            scene
+                .sim()
+                .can_deploy_slash_unload(actor, &scene.runtime.resources.rules)
+        );
+        let inside = crate::sim::movement::ground_pose::position_world_xy(
+            &scene.sim().entities().get(actor).unwrap().position,
+        );
+        queue(scene, Command::DeployMcv { entity_id: actor });
+        assert!(
+            (0..300).any(|_| {
+                tick_with_due_commands(scene);
+                scene.sim().entities().get(actor).unwrap().bunker.link() == BunkerLink::None
+            }),
+            "deploy must release the installed tank"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(bunker)
+                .unwrap()
+                .bunker
+                .occupant(),
+            None
+        );
+        restore(scene, "AY released Gattling bunker");
+        assert!(
+            (0..300).any(|_| {
+                tick_with_due_commands(scene);
+                let entity = scene.sim().entities().get(actor).unwrap();
+                let xy = crate::sim::movement::ground_pose::position_world_xy(&entity.position);
+                (xy[0] - inside[0]).abs().max((xy[1] - inside[1]).abs()) > 256
+            }),
+            "restored released tank must actually leave the bunker cells"
+        );
+        queue(
+            scene,
+            Command::Attack {
+                attacker_id: actor,
+                target_id: target,
+            },
+        );
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(scene);
+                if let Some(fire) = output
+                    .fire_events
+                    .iter()
+                    .find(|event| event.attacker_id == actor)
+                {
+                    aymod_assert_gattling_reload(
+                        scene,
+                        actor,
+                        fire.weapon_id,
+                        VeterancyRank::Elite,
+                    );
+                    return true;
+                }
+                false
+            }),
+            "released tank must resume unbunkered fire"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_gattling_promotion_lifecycle(
+        airborne: bool,
+        continuation: GattlingContinuation,
+        actors: &[&str],
+    ) {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -11468,6 +11731,9 @@ mod retail_construction_tests {
                 fired_this_frame && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0 && spinup_shots >= 2
             });
             assert!(hot, "actual firing must advance the Gattling stage");
+            if matches!(continuation, GattlingContinuation::Bunker) {
+                aymod_gattling_bunker_round_trip(&mut scene, actor, target);
+            }
             let unit = scene.sim().entities().get(actor).unwrap();
             assert_eq!(unit.veterancy.rank_cache(), LEVEL_ELITE);
             let saved = (
@@ -11477,7 +11743,7 @@ mod retail_construction_tests {
                 unit.gattling.report_latch(),
             );
             assert!(saved.3);
-            if transfer_owner {
+            if matches!(continuation, GattlingContinuation::ChangeOwner) {
                 let country = scene
                     .runtime
                     .resources
