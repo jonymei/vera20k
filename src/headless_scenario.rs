@@ -13226,65 +13226,74 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; two simultaneous hospital patients and saved pending entry"]
-    fn aymod_hospital_serializes_two_same_tick_enter_orders_across_load() {
+    fn aymod_hospital_contending_patients(
+        kind: &str,
+        count: usize,
+    ) -> (HeadlessScenario, u64, Vec<u64>, InternedId) {
         use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
-        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         use crate::sim::world::{EntryBaseAction, EntryClickAction};
-        for kind in ["GAROBO", "NARADR"] {
-            let (mut scene, hospital, _, first, local, _) = aymod_allied_hospital(kind, "ENGINEER");
-            let pristine = scene.sim().resolved_terrain().unwrap().clone();
-            let runtime = &mut scene.runtime;
-            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-            let at = sim.entities().get(hospital).unwrap().position;
-            let second = spawn_on_free_cells(
-                sim,
-                rules,
-                local,
-                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
-                &["ENGINEER"],
-            )[0];
-            sim.substrate
-                .entities
-                .get_mut(second)
-                .unwrap()
-                .health
-                .set(1);
-            let strength = rules.object("ENGINEER").unwrap().strength;
-            // Both normal cursors offer Enter before the same-tick events.
-            for id in [first, second] {
-                assert_eq!(
-                    sim.entry_click_action(
-                        id,
-                        hospital,
-                        EntryBaseAction::Select,
-                        rules,
-                        Default::default()
-                    ),
-                    Some(EntryClickAction::Enter)
-                );
-                sim.queue_command(CommandEnvelope::new(
-                    local,
-                    sim.session.tick() + 1,
-                    Command::clicked_mission(id, MissionType::Enter, TargetKind::Entity(hospital)),
-                ));
-            }
-            tick_with_due_commands(&mut scene);
-            // Infantry51AC6D..51ACC5 queues the busy Building in +500;
-            // do not create a separate hospital FIFO or force-clear contact.
+        assert!(count >= 2);
+        let (mut scene, hospital, _, first, local, _) = aymod_allied_hospital(kind, "ENGINEER");
+        let runtime = &mut scene.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let at = sim.entities().get(hospital).unwrap().position;
+        let mut patients = vec![first];
+        patients.extend(spawn_on_free_cells(
+            sim,
+            rules,
+            local,
+            cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+            &vec!["ENGINEER"; count - 1],
+        ));
+        // All cursors offer Enter before any of the same-tick events execute.
+        for &id in &patients {
+            sim.substrate.entities.get_mut(id).unwrap().health.set(1);
             assert_eq!(
-                scene
-                    .sim()
-                    .entities()
-                    .get(second)
-                    .unwrap()
-                    .pending_entry
-                    .get(),
+                sim.entry_click_action(
+                    id,
+                    hospital,
+                    EntryBaseAction::Select,
+                    rules,
+                    Default::default()
+                ),
+                Some(EntryClickAction::Enter)
+            );
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                sim.session.tick() + 1,
+                Command::clicked_mission(id, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+        }
+        tick_with_due_commands(&mut scene);
+        // Infantry51AC6D..51ACC5 stores +500, not a separate hospital FIFO.
+        for &id in &patients[1..] {
+            assert_eq!(
+                scene.sim().entities().get(id).unwrap().pending_entry.get(),
                 Some(hospital)
             );
+        }
+        (scene, hospital, patients, local)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two simultaneous hospital patients and saved pending entry"]
+    fn aymod_hospital_serializes_two_same_tick_enter_orders_across_load() {
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patients, local) =
+                aymod_hospital_contending_patients(kind, 2);
+            let (first, second) = (patients[0], patients[1]);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let strength = scene
+                .runtime
+                .resources
+                .rules
+                .object("ENGINEER")
+                .unwrap()
+                .strength;
             let bytes = save_scene(&scene, "AY hospital simultaneous Enter reservation");
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             assert_eq!(
@@ -13346,6 +13355,149 @@ mod retail_construction_tests {
                     .radio_contacts
                     .is_empty()
             );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital pending-entry cancellation across load"]
+    fn aymod_hospital_move_cancels_pending_patient_without_blocking_the_next() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::locomotor::MovementLayer;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patients, local) =
+                aymod_hospital_contending_patients(kind, 3);
+            let (first, cancelled, next) = (patients[0], patients[1], patients[2]);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY hospital three contending patients");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let sim = &mut scene.runtime.simulation;
+            assert_eq!(
+                sim.entities().get(cancelled).unwrap().pending_entry.get(),
+                Some(hospital)
+            );
+            assert_eq!(
+                sim.entities().get(next).unwrap().pending_entry.get(),
+                Some(hospital)
+            );
+            let at = sim.entities().get(hospital).unwrap().position;
+            let goal = cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx())).abs() >= 6 || (y - i32::from(at.ry())).abs() >= 6
+                })
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    (sim.path_grid()
+                        .is_some_and(|grid| grid.is_walkable_for_infantry(x, y))
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim
+                            .substrate
+                            .occupancy
+                            .get(x, y)
+                            .is_none_or(|cell| cell.is_empty_on(MovementLayer::Ground)))
+                    .then_some((x, y))
+                })
+                .expect("a free destination away from the hospital");
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: cancelled,
+                    target_rx: goal.0,
+                    target_ry: goal.1,
+                },
+            ));
+            tick_with_due_commands(&mut scene);
+            // EventClass4C7353 clears +500 before queuing the new mission;
+            // neither the admitted patient nor another pending Foot is reset.
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(cancelled)
+                    .unwrap()
+                    .pending_entry
+                    .get(),
+                None
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(next)
+                    .unwrap()
+                    .pending_entry
+                    .get(),
+                Some(hospital)
+            );
+            let bytes = save_scene(&scene, "AY hospital pending patient retasked to Move");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let strength = scene
+                .runtime
+                .resources
+                .rules
+                .object("ENGINEER")
+                .unwrap()
+                .strength;
+            let mut admitted = [false; 2];
+            let mut moved_away = false;
+            assert!(
+                (0..3600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    let actor = sim.entities().get(cancelled).unwrap();
+                    assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+                    assert_eq!(actor.owner(), local);
+                    assert_eq!(actor.health.current(), 1);
+                    assert_eq!(actor.pending_entry.get(), None);
+                    assert_eq!(actor.passenger_role.inside_transport_id(), None);
+                    assert!(!actor.radio_contacts.contains(hospital));
+                    moved_away |= (actor.position.rx(), actor.position.ry()) == goal;
+                    let building = sim.entities().get(hospital).unwrap();
+                    let cargo = building.passenger_role.cargo();
+                    assert!(cargo.is_none_or(|cargo| cargo.passengers().len() <= 1));
+                    for (index, id) in [first, next].into_iter().enumerate() {
+                        let patient = sim.entities().get(id).unwrap();
+                        assert!(patient.is_alive());
+                        assert_eq!(patient.owner(), local);
+                        if patient.lifecycle.in_limbo() {
+                            admitted[index] = true;
+                            assert_eq!(
+                                patient.passenger_role.inside_transport_id(),
+                                Some(hospital)
+                            );
+                            assert_eq!(cargo.unwrap().passengers(), [id]);
+                        }
+                    }
+                    moved_away
+                        && admitted.iter().all(|&value| value)
+                        && [first, next].into_iter().all(|id| {
+                            let patient = sim.entities().get(id).unwrap();
+                            !patient.lifecycle.in_limbo()
+                                && patient.health.current() == strength
+                                && patient.passenger_role.inside_transport_id().is_none()
+                        })
+                        && building.radio_contacts.is_empty()
+                }),
+                "{kind}: cancelled patient must move away while both other patients finish normally"
+            );
+            let bytes = save_scene(&scene, "AY hospital released non-cancelled patients");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            for id in patients {
+                let actor = scene.sim().entities().get(id).unwrap();
+                assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+                assert_eq!(actor.pending_entry.get(), None);
+                assert_eq!(actor.passenger_role.inside_transport_id(), None);
+                assert_eq!(
+                    actor.health.current(),
+                    if id == cancelled { 1 } else { strength }
+                );
+            }
+            let building = scene.sim().entities().get(hospital).unwrap();
+            assert!(building.radio_contacts.is_empty());
+            assert!(building.passenger_role.cargo().unwrap().is_empty());
         }
     }
 
