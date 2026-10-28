@@ -20125,6 +20125,281 @@ mod retail_construction_tests {
             }),
             "the regenerated Hornet must relaunch and fire through the ordinary carrier Attack"
         );
+
+        // Capture the real carrier mid-sortie, not by writing its House or
+        // invoking KillAllSpawns directly (Techno::ChangeOwner70157E).
+        let old_owner = scene.sim().entities().get(carrier).unwrap().owner();
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let new_owner = scene.add_human_house(
+            "CarrierCaptor",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let old_wing = scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .spawn_manager
+            .as_ref()
+            .unwrap()
+            .slots()
+            .iter()
+            .filter_map(|slot| slot.spawn())
+            .collect::<Vec<_>>();
+        assert!(old_wing.iter().any(|id| {
+            !scene
+                .sim()
+                .entities()
+                .get(*id)
+                .unwrap()
+                .lifecycle
+                .in_limbo()
+        }));
+        let controller = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let sites = sim
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| {
+                    !cell.outside_playfield
+                        && !cell.bridge_facts.has_structural_bridge()
+                        && cell.land_type == crate::rules::terrain_rules::LandType::Clear.as_index()
+                        && cell.level == at.z()
+                        && i32::from(cell.rx.abs_diff(at.rx())).pow(2)
+                            + i32::from(cell.ry.abs_diff(at.ry())).pow(2)
+                            <= 36
+                        && cell
+                            .rx
+                            .abs_diff(target_cell.0)
+                            .max(cell.ry.abs_diff(target_cell.1))
+                            >= 3
+                })
+                .map(|cell| (i32::from(cell.rx), i32::from(cell.ry)))
+                .collect::<Vec<_>>();
+            let controller =
+                spawn_on_free_cells(sim, rules, new_owner, sites, &["YURI", "SMCV"])[0];
+            assert!(sim.can_capture(controller, carrier, rules));
+            sim.queue_command(CommandEnvelope::new(
+                new_owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: controller,
+                    target_id: carrier,
+                },
+            ));
+            controller
+        };
+        let mut control_fired = false;
+        assert!(
+            (0..600).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                control_fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == controller
+                        && event.target == crate::sim::combat::TargetKind::Entity(carrier)
+                });
+                scene.sim().entities().get(carrier).unwrap().owner() == new_owner
+            }),
+            "ordinary human-house Yuri weapon must actually control the carrier"
+        );
+        assert!(control_fired);
+        let captured = scene.sim().entities().get(carrier).unwrap();
+        assert_eq!(captured.mind_control.controller(), Some(controller));
+        let captured_xp = captured.veterancy.raw();
+        let reset = captured.spawn_manager.clone().unwrap();
+        assert!(
+            reset
+                .slots()
+                .iter()
+                .all(|slot| slot.spawn().is_none() && slot.timer().duration() == 0),
+            "a live newly captured carrier must rebuild, not wait SpawnRegenRate"
+        );
+        for id in &old_wing {
+            if let Some(child) = scene.sim().entities().get(*id) {
+                assert_eq!(child.owner(), old_owner);
+                assert!(
+                    child.crash.is_crashing() || !child.lifecycle.object_alive(),
+                    "the old wing must crash/retire, not become a second controlled wing"
+                );
+            }
+        }
+        let bytes = save_scene(
+            &scene,
+            "AY real mind-controlled carrier before new wing rebuild",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let captured = scene.sim().entities().get(carrier).unwrap();
+        assert_eq!(captured.owner(), new_owner);
+        assert_eq!(captured.mind_control.controller(), Some(controller));
+        assert_eq!(captured.spawn_manager.as_ref(), Some(&reset));
+        assert!(
+            (0..60).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .slots()
+                    .iter()
+                    .all(|slot| slot.spawn().is_some())
+            }),
+            "the new house must rebuild all carrier slots after load"
+        );
+        let new_wing = scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .spawn_manager
+            .as_ref()
+            .unwrap()
+            .slots()
+            .iter()
+            .map(|slot| slot.spawn().unwrap())
+            .collect::<Vec<_>>();
+        for &id in &new_wing {
+            assert!(!old_wing.contains(&id));
+            let child = scene.sim().entities().get(id).unwrap();
+            assert_eq!(child.owner(), new_owner);
+            assert_eq!(child.spawn_owner_id.owner(), Some(carrier));
+            assert_eq!(child.veterancy.raw(), captured_xp);
+        }
+        let bytes = save_scene(
+            &scene,
+            "AY controlled carrier with a rebuilt new-house wing",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let target = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let target = spawn_on_free_cells(
+                sim,
+                rules,
+                old_owner,
+                cells_nearest((i32::from(target_cell.0), i32::from(target_cell.1))),
+                &["APOC"],
+            )[0];
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            target
+        };
+        attack(&mut scene, target);
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .mind_control
+                        .controller(),
+                    Some(controller)
+                );
+                output.fire_events.iter().any(|event| {
+                    new_wing.contains(&event.attacker_id)
+                        && event.target == crate::sim::combat::TargetKind::Entity(target)
+                })
+            }),
+            "new-house Hornets must fly and fire under ordinary Attack after load"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let hp = sim.entities().get(controller).unwrap().health.current();
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    controller,
+                    hp,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: true,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        assert!(
+            (0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().get(carrier).unwrap().owner() == old_owner
+            }),
+            "controller death must actually return the carrier to its original house"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .mind_control
+                .controller(),
+            None
+        );
+        let bytes = save_scene(&scene, "AY carrier returned after its controller died");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            (0..60).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let parent = scene.sim().entities().get(carrier).unwrap();
+                assert_eq!(parent.owner(), old_owner);
+                assert_eq!(parent.mind_control.controller(), None);
+                parent
+                    .spawn_manager
+                    .as_ref()
+                    .unwrap()
+                    .slots()
+                    .iter()
+                    .all(|slot| slot.spawn().is_some())
+            }),
+            "the original house must rebuild its own wing after returned-carrier load"
+        );
+        for slot in scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .spawn_manager
+            .as_ref()
+            .unwrap()
+            .slots()
+        {
+            let id = slot.spawn().unwrap();
+            assert!(!old_wing.contains(&id) && !new_wing.contains(&id));
+            let child = scene.sim().entities().get(id).unwrap();
+            assert_eq!(child.owner(), old_owner);
+            assert_eq!(child.spawn_owner_id.owner(), Some(carrier));
+            assert_eq!(
+                child.veterancy.raw(),
+                scene.sim().entities().get(carrier).unwrap().veterancy.raw()
+            );
+        }
     }
 
     /// Whether `entity` aims at an object of another house.
