@@ -6492,6 +6492,366 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real reward pool overflow, two lab captures and saved paid queue loss"]
+    fn aymod_secret_labs_keep_independent_grants_and_retract_only_the_lost_reward() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::production::{self, CanBuild, ProductionCategory};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let owner = house_of(scene.sim(), "Americans");
+        let neutral = scene.sim().interner.get("Neutral").unwrap();
+        let labs = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(!sim.entities().values().any(|actor| {
+                sim.object_type(actor.type_ref(), rules)
+                    .is_some_and(|object| object.secret_lab().enabled())
+            }));
+            assert!(
+                rules
+                    .object("CASLAB")
+                    .unwrap()
+                    .secret_lab()
+                    .production_override()
+                    .is_none()
+            );
+            let total: usize = rules
+                .general
+                .secret_lab_choices()
+                .iter()
+                .map(Vec::len)
+                .sum();
+            assert_eq!(total, 28);
+            let center = aymod_anchor(sim, owner);
+            let factory = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((center.0 + 12, center.1)),
+                &["GAPOWR", "GAPILE"],
+            )[1];
+            let factory_at = sim.entities().get(factory).unwrap().position;
+            let mut sites: Vec<_> = sim
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| !cell.outside_playfield)
+                .map(|cell| (i32::from(cell.rx), i32::from(cell.ry)))
+                // Many large labs must not wall in the actual barracks exit.
+                .filter(|&(x, y)| {
+                    (x - i32::from(factory_at.rx()))
+                        .abs()
+                        .max((y - i32::from(factory_at.ry())).abs())
+                        > 10
+                })
+                .collect();
+            sites.sort_by_key(|&(x, y)| ((x - center.0).abs() + (y - center.1).abs(), x, y));
+            let labs = spawn_on_free_cells(sim, rules, neutral, sites, &vec!["CASLAB"; total + 1]);
+            // Fixture placement precedes this one assignment call. This is the
+            // real AY pool/owner, not a second Post_Map_Init of an authored map.
+            // NP68C077 removes labs>choices; C2E5FC cycles the used flags.
+            Simulation::assign_secret_lab_production(
+                &mut sim.interner,
+                &mut sim.scenario_rng,
+                &mut sim.substrate,
+                rules,
+            );
+            let rewards: Vec<_> = labs
+                .iter()
+                .map(|&id| {
+                    sim.entities()
+                        .get(id)
+                        .unwrap()
+                        .secret_lab_fallback()
+                        .unwrap()
+                })
+                .collect();
+            let first_cycle: std::collections::HashSet<_> = rewards[..total].iter().collect();
+            assert_eq!(first_cycle.len(), total);
+            assert!(first_cycle.contains(&rewards[total]));
+            ["TERROR", "DESO"].map(|name| {
+                let index = rewards
+                    .iter()
+                    .position(|(_, id)| sim.interner.resolve(*id) == name)
+                    .unwrap();
+                (labs[index], rewards[index])
+            })
+        };
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        let grants = |scene: &HeadlessScenario, name| {
+            production::can_build(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                owner,
+                scene.runtime.resources.rules.object(name).unwrap(),
+                false,
+                true,
+            )
+        };
+        assert_eq!(grants(&scene, "TERROR"), CanBuild::No);
+        assert_eq!(grants(&scene, "DESO"), CanBuild::No);
+        for (index, (lab, _)) in labs.into_iter().enumerate() {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(lab).unwrap().position;
+            let engineer = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["ENGINEER"],
+            )[0];
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::CaptureBuilding {
+                    engineer_id: engineer,
+                    target_building_id: lab,
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().entities().get(lab).unwrap().owner() == owner
+                }),
+                "actual Engineer must capture secret lab{lab}"
+            );
+            assert_eq!(grants(&scene, "TERROR"), CanBuild::Yes);
+            assert_eq!(
+                grants(&scene, "DESO"),
+                if index == 0 {
+                    CanBuild::No
+                } else {
+                    CanBuild::Yes
+                }
+            );
+        }
+        let owned = scene
+            .sim()
+            .houses
+            .get(&owner)
+            .unwrap()
+            .base_projection()
+            .secret_labs();
+        assert_eq!(owned.len(), 2);
+        for (lab, _) in labs {
+            assert!(owned.contains(&lab));
+        }
+        let owner_name = scene.sim().interner.resolve(owner).to_string();
+        let spent_before = scene
+            .sim()
+            .houses
+            .get(&owner)
+            .unwrap()
+            .economy()
+            .spent_credits();
+        let type_id = scene.sim().interner.get("TERROR").unwrap();
+        assert!(
+            production::all_build_options_for_owner(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                &owner_name
+            )
+            .iter()
+            .any(|option| option.type_id == type_id && option.enabled)
+        );
+        for _ in 0..2 {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::QueueProduction { type_id },
+            ));
+        }
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            production::queue_view_for_owner(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                &owner_name,
+            )
+            .iter()
+            .any(|item| item.type_id == type_id && item.progress > 0 && item.progress < 54)
+        }));
+        assert!(
+            scene
+                .sim()
+                .houses
+                .get(&owner)
+                .unwrap()
+                .economy()
+                .spent_credits()
+                > spent_before
+        );
+        let held = scene
+            .sim()
+            .production
+            .factories()
+            .view(owner, ProductionCategory::Infantry)
+            .unwrap()
+            .object
+            .unwrap()
+            .entity_id
+            .unwrap();
+        let bytes = save_scene(&scene, "AY two lab grants with paid TERROR head");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(grants(&scene, "TERROR"), CanBuild::Yes);
+        assert_eq!(grants(&scene, "DESO"), CanBuild::Yes);
+        for (lab, reward) in labs {
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(lab)
+                    .unwrap()
+                    .secret_lab_fallback(),
+                Some(reward)
+            );
+        }
+        {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.change_owner_with_rules(
+                labs[0].0,
+                neutral,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        assert_eq!(grants(&scene, "TERROR"), CanBuild::No);
+        assert_eq!(grants(&scene, "DESO"), CanBuild::Yes);
+        assert!(
+            (0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                !scene.sim().entities().contains(held)
+                    && production::queue_view_for_owner(
+                        scene.sim(),
+                        &scene.runtime.resources.rules,
+                        &owner_name,
+                    )
+                    .iter()
+                    .all(|item| item.type_id != type_id)
+            }),
+            "loss of lab must cancel both paid head and queued duplicate through the normal owner"
+        );
+        let bytes = save_scene(&scene, "AY lost one of two independent lab grants");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(grants(&scene, "TERROR"), CanBuild::No);
+        assert_eq!(grants(&scene, "DESO"), CanBuild::Yes);
+        assert_eq!(
+            scene
+                .sim()
+                .houses
+                .get(&owner)
+                .unwrap()
+                .base_projection()
+                .secret_labs(),
+            &[labs[1].0]
+        );
+        for (lab, reward) in labs {
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(lab)
+                    .unwrap()
+                    .secret_lab_fallback(),
+                Some(reward)
+            );
+        }
+        let sim = &mut scene.runtime.simulation;
+        let type_id = sim.interner.get("DESO").unwrap();
+        let spent_before = sim.houses.get(&owner).unwrap().economy().spent_credits();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::QueueProduction { type_id },
+        ));
+        tick_with_due_commands(&mut scene);
+        let retained_product = scene
+            .sim()
+            .production
+            .factories()
+            .view(owner, ProductionCategory::Infantry)
+            .unwrap()
+            .object
+            .unwrap()
+            .entity_id
+            .unwrap();
+        assert!(
+            production::object_find_factory(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                retained_product,
+                false,
+                true
+            )
+            .is_some(),
+            "DESO needs an eligible live factory, not only a lab grant"
+        );
+        assert!((0..1800).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .production
+                .factories()
+                .view(owner, ProductionCategory::Infantry)
+                .is_some_and(|head| head.progress == 54)
+        }));
+        // Human mobile delivery is the sidebar's normal PLACE event, not
+        // Building Factory_AI. Headless frames intentionally have no UI.
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::PlaceProducedMobile {
+                category: ProductionCategory::Infantry,
+            },
+        ));
+        assert!(
+            (0..90).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(retained_product)
+                    .is_some_and(|actor| {
+                        actor.is_alive() && !actor.lifecycle.in_limbo() && actor.owner() == owner
+                    })
+            }),
+            "the surviving lab must still authorize actual paid production and live delivery: queue={:?}, power={:?}, credits={}, actor={:?}",
+            production::queue_view_for_owner(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                &owner_name
+            ),
+            scene.sim().power_states().get(&owner),
+            scene.sim().houses.get(&owner).unwrap().economy().credits(),
+            scene.sim().entities().get(retained_product).map(|actor| (
+                actor.health.current(),
+                actor.lifecycle.in_limbo(),
+                actor.position
+            ))
+        );
+        let sim = scene.sim();
+        assert_eq!(
+            sim.object_type(
+                sim.entities().get(retained_product).unwrap().type_ref(),
+                &scene.runtime.resources.rules
+            )
+            .unwrap()
+            .id,
+            "DESO"
+        );
+        assert!(sim.houses.get(&owner).unwrap().economy().spent_credits() > spent_before);
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_hospital_patient_inside(
         hospital_type: &str,
         patient_type: &str,

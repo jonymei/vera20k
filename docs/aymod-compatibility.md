@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于3323bb977补V02患者途中解盟及同帧双人争抢的真实AY回归，GAROBO/NARADR均通过；医院9项通过，无生产玩法修改/新critic，无待完成Cargo。未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于3a63fac21补V10实际AY奖励池溢出、双实验室捕获/独立授权、付款队列存读撤销及剩余奖励实产出厂。新实际场景1项及原生抽样/reader/直接消费者9项通过；仅测试/台账，无生产玩法修改/新critic，无待完成Cargo。未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V10实际AY多秘密实验室授权/存读链，先核现有secret_lab owner及生产场景入口，不重写已通过的原生抽样。V02途中解盟/双人争抢已由下节补齐，真实TTNK对医院完整攻击、占领旧患者其他恢复及自主多AI仍开放。Return Dubai弱攻势调查暂停，V01/F11门禁不变；固定玩家构建不变。
+- 下一安全动作：继续V10原样作者地图内置实验室的Post_Map_Init启动分配/工程师捕获/存读；本轮29座为测试fixture放置后单次调用真实分配owner，不冒称原样地图启动。V02途中解盟/双人争抢保留；Return Dubai弱攻势调查暂停，V01/F11门禁与固定玩家构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07寄生源换主/多AI/原鱿鱼-海豚崩溃完整回放、V06对空/完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。本轮一次缓存清理仍因Unsupported PE debug closure安全停止、移除0字节，不手工清理固定构建；不影响实际定向测试执行。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -41,6 +41,14 @@
 - 在已显形时，通过现有direct damage receiver/Super/IgnoreDefenses非致死伤害使GAPOWR恰好HP1，生产health_category确认红血，未改Strength/ConditionRed/伤害倍率或直接设Cloak状态。正式存读保留盟约、箱子能力与显形状态；普通DOG Move离开后恢复全隐形并存读，HP仍1。
 - 同一活DOG再普通Move返回原接触区域，红血建筑再次退隐到0，正式存读并保持30帧拒绝重隐；再次Move离开后回到完全隐形，最后存读保留HP1、能力、全隐形和盟约。两次离开都确认探测单位活着，且未停留在原接触位置，不能用传感器死亡替代真实运动解除；没有写sensor计数、Cloak阶段或随机状态。
 - 最终实际aymod_cloak_crate_两项通过（原移动单位、扩展建筑/飞机场景）。仅测试，无新RNG调用、timer/Detach实现或保存字段，无GUI/固定构建/MOD/原始存档/发布变更。不扩称全部红血时机/RNG、EMP、隐形中受击、敌方多AI战术或受损建筑/烟火的GPU/GUI通过。
+
+### V10实际AY秘密实验室奖励池、双授权与付款撤销存读（2026-10-28）
+
+- 正式AY Battle/XMP03T4读取实际General的SecretInfantry/Units/Buildings，typed合计28项，CASLAB无指定覆盖奖励；不改MOD/地图/规则。测试fixture经正式spawn放29座中立CASLAB，确认场景先前无实验室，再单次调用既有assign_secret_lab_production。前28座奖励互异，第29座仍获池内奖励，覆盖#174取消labs>choices早退的实际配置边界；不手写fallback、不重置随机流。该调用在fixture布局后，不冒称原样地图Post_Map_Init启动覆盖或所有概率已统计验证；具体RNG/reset语义仍以既有原生golden为准。
+- 从实际分配中找到TERROR与DESO的两座，普通ENGINEER CaptureBuilding事件步行捕获；美国玩家原先两项CanBuild=No，捕获第一座仅TERROR获准，第二座后两项均获准，House实验室列表确为两座。真实GAPOWR/GAPILE提供独立供电与工厂，不注入科技或改兵种Owner/前置条件。
+- 正常QueueProduction排两次TERROR，实际花钱且付款头在1..53进度时正式保存/完整恢复；两授权及各lab原fallback保留。经既有change_owner_with_rules receiver让第一座归中立，TERROR立即失去授权，正常帧删除付款头及排队副本；DESO和第二lab列表保持。第二次正式存读保留上述差异及两lab原奖励，未重抽奖励；这是换主receiver，不称敌方工程师再捕获。
+- 保留的DESO经正常生产事件付款到54步、实际人类PlaceProducedMobile事件从兵营出厂，同一生产对象活体/非limbo/玩家归属和类型正确。早期fixture误用不存在的GABRCK导致free-cell失败，改用实际GAPILE；生产完成未出厂的调查中，留出兵营通道并未解决，实际缺少无窗口测试的人类PLACE事件。补正常事件后通过，不改玩法或手工Unlimbo，也不把此前失败记作授权bug的红证据。
+- 最终retail gate下新actual场景1项、secret_lab原生抽样/reader/建造准入/付款存读/战役门禁等9项通过。仅测试/台账，无新增生产状态、reader、RNG/timer/Detach调用或保存字段；不需玩法critic。未启动GUI、改MOD/原始存档/固定构建或发布。原样作者地图启动、GUI、全部奖励类别的出厂/落地、实验室毁坏/多AI长局仍开放，不关闭全V10。
 
 ### V02治疗途中解盟与同帧双患者预约存读（2026-10-28）
 
@@ -1028,7 +1036,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 不是改变目标层；NP/stock死亡与实际AY坠落验证、未验边界见当前检查点对应节。秘密实验室已按实际#174修改接入：
 68C077移除lab数上限门禁，C2E5FC以完整候选数抽样后环扫未用标记，用尽时清零但不标记返回项；
 `src/sim/secret_lab.rs`沿原owner保留NP/stock分支，原生RNG三例和直接消费者NP/无NP各九项通过。
-不改变既有保存fallback/夺取/授权owner；真实AY多实验室/GUI场景仍待验。
+不改变既有保存fallback/夺取/授权owner；实际AY奖励池29座fixture、双捕获独立授权/付款撤销存读及剩余奖励实产已验，见当前检查点；原样作者地图启动/GUI、全部奖励家族/多AI长局仍待验。
 红血碉堡准入已按457D8D→7E0712..31接入既有CanBeOccupiedBy owner：NP仅同House跳过红血拒绝，stock与不同passive House保留原规则；
 真实AY普通驻军/留驻、AI择楼、客户端点击与边界回归通过，critic无可操作发现。尚未进入当前cfb479750玩家标签，不新增序列化字段或触碰平民红血撤出。
 船厂维修免伤已按737CE4→7E0495修正：仅NP伤害查询排除UnitRepair，不误用Naval；其他工厂查询保留，真实付费维修受击/修满/释放及stock保护回归通过。
