@@ -3934,11 +3934,50 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Jumpjet takeoff, fatal receiver and low-altitude fall in NP mode"]
     fn aymod_shot_down_rocketeer_keeps_zero_health_until_impact() {
-        use crate::sim::combat::{
-            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
-        };
+        aymod_rocketeer_fall(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; high and low falling Jumpjet hot saves preserve death and final retirement"]
+    fn aymod_shot_down_rocketeer_keeps_zero_health_across_falling_saves() {
+        aymod_rocketeer_fall(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_rocketeer_fall(with_saves: bool) {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
         use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scene, actor, _) = aymod_nearby_pair("JUMPJET", "GAPOWR", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore_fall = |scene: &mut HeadlessScenario, label| {
+            let facts = |scene: &HeadlessScenario| {
+                let unit = scene.sim().entities().get(actor).unwrap();
+                (
+                    crate::sim::movement::ground_pose::position_world_coord(&unit.position),
+                    unit.health.current(),
+                    unit.crash,
+                    unit.fall_rate(),
+                    unit.locomotor.as_ref().unwrap().jumpjet_runtime().cloned(),
+                    unit.mission_leaf.as_infantry().copied(),
+                )
+            };
+            let before = facts(scene);
+            assert_eq!(before.1, 0);
+            assert!(before.2.is_crashing());
+            assert!(before.4.is_some());
+            let bytes = save_scene(scene, label);
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(facts(scene), before);
+            assert!(
+                !crate::sim::mission::concrete_effects::assign_target_commits(
+                    scene.sim().entities(),
+                    scene.sim().terrain_objects.objects(),
+                    Some(TargetKind::Entity(actor))
+                )
+            );
+        };
         {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -4003,7 +4042,10 @@ mod retail_construction_tests {
                 Default::default(),
             );
         }
-        let (mut low_fall, mut retired) = (false, false);
+        if with_saves {
+            restore_fall(&mut scene, "AY high falling rocketeer after fatal receiver");
+        }
+        let (mut low_fall, mut retired, mut low_saved) = (false, false, false);
         for _ in 0..600 {
             tick_with_due_commands(&mut scene);
             let Some(unit) = scene
@@ -4029,12 +4071,35 @@ mod retail_construction_tests {
                     )
                 );
                 low_fall |= height < crate::util::lepton::HIGH_FLIGHT_THRESHOLD_LEPTONS as i32;
+                if with_saves && low_fall && !low_saved {
+                    restore_fall(
+                        &mut scene,
+                        "AY low falling rocketeer below ground-target threshold",
+                    );
+                    low_saved = true;
+                }
             }
         }
         assert!(
             low_fall && retired,
             "the real AY fall must cross the ground-target threshold and retire"
         );
+        if with_saves {
+            assert!(low_saved);
+            assert!(
+                (0..120).any(|_| {
+                    if scene.sim().entities().get(actor).is_none() {
+                        return true;
+                    }
+                    tick_with_due_commands(&mut scene);
+                    false
+                }),
+                "the crash must finish physical removal, not leave a corpse"
+            );
+            let bytes = save_scene(&scene, "AY rocketeer removed after saved fall");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(scene.sim().entities().get(actor).is_none());
+        }
     }
 
     #[cfg(feature = "npatch")]
