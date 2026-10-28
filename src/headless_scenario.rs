@@ -9307,6 +9307,20 @@ mod retail_construction_tests {
         u64,
         Vec<u64>,
     ) {
+        aymod_ai_fortress_team(isolate_team_creation, "07C32EFC-G")
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_ai_fortress_team(
+        isolate_team_creation: bool,
+        team_type_name: &str,
+    ) -> (
+        HeadlessScenario,
+        crate::sim::intern::InternedId,
+        u64,
+        u64,
+        Vec<u64>,
+    ) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, _) = retail_battle_in(
             &root,
@@ -9329,8 +9343,7 @@ mod retail_construction_tests {
             (0..900).any(|_| {
                 tick_with_due_commands(&mut scene);
                 scene.sim().entities().values().any(|actor| {
-                    actor.owner() == ai
-                        && scene.sim().interner.resolve(actor.type_ref()) == "GACNST"
+                    actor.owner() == ai && scene.sim().interner.resolve(actor.type_ref()) == "GACNST"
                 })
             }),
             "normal AI MCV deployment must provide the friendly-base gather prerequisite"
@@ -9346,9 +9359,16 @@ mod retail_construction_tests {
                     .unwrap()
                     .set_ai_triggers_active(false);
             }
-            let team_type = sim.interner.get("07C32EFC-G").unwrap();
+            let team_type = sim.interner.get(team_type_name).unwrap();
             let definition = sim.team_script_vm.team_type_definition(team_type).unwrap();
-            assert_eq!(sim.interner.resolve(definition.script_id), "07C32C8C-G");
+            assert_eq!(
+                sim.interner.resolve(definition.script_id),
+                if team_type_name == "07C32EFC-G" {
+                    "07C32C8C-G"
+                } else {
+                    "07C30DBC-G"
+                }
+            );
             let names = sim
                 .team_script_vm
                 .task_force_of(team_type)
@@ -9362,9 +9382,15 @@ mod retail_construction_tests {
                     )
                 })
                 .collect::<Vec<_>>();
-            assert_eq!(names.iter().filter(|name| *name == "BFRT").count(), 1);
-            assert_eq!(names.iter().filter(|name| *name == "GGI").count(), 5);
-            assert_eq!(names.iter().filter(|name| *name == "GHOST").count(), 1);
+            assert_eq!(
+                names.iter().filter(|name| *name == "BFRT").count(),
+                1,
+                "{team_type_name}: {names:?}"
+            );
+            if team_type_name == "07C32EFC-G" {
+                assert_eq!(names.iter().filter(|name| *name == "GGI").count(), 5);
+                assert_eq!(names.iter().filter(|name| *name == "GHOST").count(), 1);
+            }
             assert_eq!(rules.object("BFRT").unwrap().passengers, 6);
             assert!(rules.object("BFRT").unwrap().open_topped);
             let (x, y) = sim.houses.get(&ai).unwrap().base_center().unwrap();
@@ -9398,6 +9424,166 @@ mod retail_construction_tests {
             (team_id, carrier, riders)
         };
         (scene, ai, team_id, carrier, riders)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; authored attack BFRT loads, targets infantry and fires after a moving hot save"]
+    fn aymod_ai_attack_fortress_loads_and_attacks_after_moving_save() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, _, team_id, carrier, riders) = aymod_ai_fortress_team(true, "07C257EC-G");
+        assert_eq!(riders.len(), 6);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let (victim, initial_hp) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let level = sim.terrain_cell_level(at.rx(), at.ry());
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 8
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == level)
+                })
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let victim = spawn_on_free_cells(sim, rules, enemy, sites, &["E2"])[0];
+            sim.mission_queue_exact(
+                victim,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            (victim, sim.entities().get(victim).unwrap().health.current())
+        };
+        let (mut loading, mut waiting, mut saved, mut fired, mut hit) =
+            (false, false, false, false, false);
+        assert!(
+            (0..6000).any(|_| {
+                let was_saved = saved;
+                let output = tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                let team = sim
+                    .team_script_vm
+                    .team(team_id)
+                    .expect("the authored attack team stays alive");
+                let action = team.current_action(&sim.team_script_vm);
+                loading |= action == 14;
+                waiting |= action == 43;
+                let fortress = sim.entities().get(carrier).unwrap();
+                let full = riders.iter().all(|id| {
+                    sim.entities()
+                        .get(*id)
+                        .is_some_and(|rider| rider.passenger_role.open_transport_id() == Some(carrier))
+                });
+                if !saved
+                    && full
+                    && team.cursor() == 3
+                    && action == 0
+                    && fortress.attack_target.target() == Some(TargetKind::Entity(victim))
+                    && crate::sim::movement::motion_query::is_moving(fortress) == Some(true)
+                {
+                    assert!(loading && waiting);
+                    assert_eq!(
+                        sim.entities().get(victim).unwrap().health.current(),
+                        initial_hp
+                    );
+                    let position =
+                        crate::sim::movement::ground_pose::position_world_coord(&fortress.position);
+                    let cargo = fortress
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .passengers()
+                        .to_vec();
+                    let locomotor = fortress.locomotor.clone();
+                    let cursor = team.cursor();
+                    let bytes = save_scene(&scene, "AY authored BFRT infantry attack while moving");
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    let sim = scene.sim();
+                    assert_eq!(sim.team_script_vm.team(team_id).unwrap().cursor(), cursor);
+                    assert_eq!(
+                        crate::sim::movement::ground_pose::position_world_coord(
+                            &sim.entities().get(carrier).unwrap().position
+                        ),
+                        position
+                    );
+                    assert_eq!(
+                        sim.entities()
+                            .get(carrier)
+                            .unwrap()
+                            .passenger_role
+                            .cargo()
+                            .unwrap()
+                            .passengers(),
+                        cargo.as_slice()
+                    );
+                    assert_eq!(sim.entities().get(carrier).unwrap().locomotor, locomotor);
+                    assert_eq!(
+                        sim.entities().get(carrier).unwrap().attack_target.target(),
+                        Some(TargetKind::Entity(victim))
+                    );
+                    assert!(riders.iter().all(|id| {
+                        sim.entities()
+                            .get(*id)
+                            .unwrap()
+                            .passenger_role
+                            .open_transport_id()
+                            == Some(carrier)
+                    }));
+                    saved = true;
+                }
+                fired |= was_saved
+                    && output.fire_events.iter().any(|event| {
+                        riders.contains(&event.attacker_id)
+                            && event.target == TargetKind::Entity(victim)
+                    });
+                hit |= was_saved
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(victim)
+                        .is_none_or(|victim| victim.health.current() < initial_hp);
+                saved && fired && hit
+            }),
+            "authored BFRT attack incomplete: load={loading} wait={waiting} save={saved} fire={fired} hit={hit}, team={:?}, carrier={:?}",
+            scene.sim().team_script_vm.team(team_id).map(|team| (
+                team.cursor(),
+                team.current_action(&scene.sim().team_script_vm),
+                team.members().collect::<Vec<_>>()
+            )),
+            scene.sim().entities().get(carrier).map(|actor| (
+                actor.position,
+                actor.mission.current(),
+                actor.attack_target.target(),
+                actor.passenger_role.passenger_count()
+            ))
+        );
+        let hp = scene
+            .sim()
+            .entities()
+            .get(victim)
+            .map(|victim| victim.health.current());
+        let bytes = save_scene(&scene, "AY authored BFRT after actual passenger impact");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(victim)
+                .map(|victim| victim.health.current()),
+            hp
+        );
     }
 
     #[cfg(feature = "npatch")]
