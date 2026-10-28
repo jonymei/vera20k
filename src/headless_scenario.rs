@@ -5974,6 +5974,19 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real ORCA empties on ground target, saves return/partial reload and attacks air after rearming"]
     fn aymod_orca_returns_reloads_and_resumes_air_combat_after_load() {
+        aymod_orca_reload_lifecycle(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; ORCA earns elite through actual kills, saves rank and resumes with authored elite AA weapon"]
+    fn aymod_orca_earns_elite_and_resumes_reloaded_air_combat_after_load() {
+        aymod_orca_reload_lifecycle(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_orca_reload_lifecycle(promote: bool) {
+        use crate::sim::combat::veterancy::VeterancyRank;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::movement::air_movement;
@@ -6160,6 +6173,143 @@ mod retail_construction_tests {
             "real return/reload incomplete: entered={entered} partial={partial} full={full}"
         );
         restore(&mut scene);
+        if promote {
+            let ensure_ammo = |scene: &mut HeadlessScenario| {
+                if scene
+                    .sim()
+                    .entities()
+                    .get(plane)
+                    .unwrap()
+                    .ammo()
+                    .unwrap()
+                    .current()
+                    > 0
+                {
+                    return;
+                }
+                assert!(
+                    (0..6000).any(|_| {
+                        tick_with_due_commands(scene);
+                        let actor = scene.sim().entities().get(plane).unwrap();
+                        actor.ammo().unwrap().current() == capacity
+                            && actor.mission.effective().known() == Some(MissionType::Guard)
+                            && actor.radio_contacts.contains(airfield)
+                    }),
+                    "spent promotion aircraft must naturally return and rearm"
+                );
+            };
+            for round in 0..16 {
+                ensure_ammo(&mut scene);
+                // Do not spawn the next wounded victim into a previous
+                // volley's impact cell while its missiles are still live.
+                assert!(
+                    (0..600).any(|_| {
+                        tick_with_due_commands(&mut scene);
+                        let sim = scene.sim();
+                        !sim.projectiles()
+                            .iter()
+                            .any(|(_, projectile)| projectile.source_id() == plane)
+                            && sim
+                                .entities()
+                                .get(plane)
+                                .unwrap()
+                                .mission
+                                .effective()
+                                .known()
+                                != Some(MissionType::Attack)
+                    }),
+                    "the prior strike must finish before a new promotion target is prepared"
+                );
+                let victim = {
+                    let runtime = &mut scene.runtime;
+                    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                    let at = sim.entities().get(airfield).unwrap().position;
+                    let victim = spawn_on_free_cells(
+                        sim,
+                        rules,
+                        defender,
+                        cells_nearest((i32::from(at.rx()) + 6, i32::from(at.ry()))),
+                        &["APOC"],
+                    )[0];
+                    // Only victim HP is prepared. Mission Attack, native ammo
+                    // consumption and RecordKill702D40 must earn every rank.
+                    sim.substrate
+                        .entities
+                        .get_mut(victim)
+                        .unwrap()
+                        .health
+                        .set_for_test(1);
+                    let frame = sim.session.binary_frame();
+                    sim.mission_queue_exact(
+                        victim,
+                        crate::sim::mission::MissionId::from_known(MissionType::Sleep),
+                        1,
+                        frame,
+                        &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                    )
+                    .unwrap();
+                    sim.queue_command(CommandEnvelope::new(
+                        owner,
+                        sim.session.tick() + 1,
+                        Command::Attack {
+                            attacker_id: plane,
+                            target_id: victim,
+                        },
+                    ));
+                    victim
+                };
+                let before = scene.sim().entities().get(plane).unwrap().veterancy.raw();
+                let mut fired = false;
+                assert!(
+                    (0..1200).any(|_| {
+                        let output = tick_with_due_commands(&mut scene);
+                        fired |= output.fire_events.iter().any(|event| {
+                            event.attacker_id == plane
+                                && event.target == crate::sim::combat::TargetKind::Entity(victim)
+                        });
+                        scene
+                            .sim()
+                            .entities()
+                            .get(victim)
+                            .is_none_or(|entity| entity.health.current() <= 0)
+                    }) && fired,
+                    "real ORCA fire must kill promotion victim round{round}; fired={fired}, victim={:?}, plane={:?}",
+                    scene
+                        .sim()
+                        .entities()
+                        .get(victim)
+                        .map(|entity| entity.health.current()),
+                    scene.sim().entities().get(plane).map(|entity| (
+                        entity.mission.effective(),
+                        entity.mission.handler_state(),
+                        entity.ammo().unwrap().current(),
+                        entity.attack_target.target(),
+                        entity.navigation.nav_com(),
+                        entity.radio_contacts.slot(0),
+                        air_movement::current_fly_height(entity, scene.sim().resolved_terrain())
+                    ))
+                );
+                let actor = scene.sim().entities().get(plane).unwrap();
+                assert_ne!(actor.veterancy.raw(), before);
+                if actor.veterancy.rank_kind() == VeterancyRank::Elite {
+                    break;
+                }
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(plane)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind(),
+                VeterancyRank::Elite
+            );
+            ensure_ammo(&mut scene);
+            let rank = scene.sim().entities().get(plane).unwrap().veterancy.clone();
+            restore(&mut scene);
+            assert_eq!(scene.sim().entities().get(plane).unwrap().veterancy, rank);
+        }
         let air_target = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -6199,10 +6349,26 @@ mod retail_construction_tests {
                     Some((&scene.runtime.resources.rules, &sim.interner)),
                 );
                 let output = tick_with_due_commands(&mut scene);
-                let shot = output.fire_events.iter().any(|event| {
+                let mut shot = false;
+                for event in output.fire_events.iter().filter(|event| {
                     event.attacker_id == plane
                         && event.target == crate::sim::combat::TargetKind::Entity(air_target)
-                });
+                }) {
+                    if promote {
+                        assert_eq!(
+                            scene.sim().interner.resolve(event.weapon_id),
+                            scene
+                                .runtime
+                                .resources
+                                .rules
+                                .object("ORCA")
+                                .unwrap()
+                                .elite_primary()
+                                .unwrap()
+                        );
+                    }
+                    shot = true;
+                }
                 if shot {
                     assert!(was_airborne);
                 }
