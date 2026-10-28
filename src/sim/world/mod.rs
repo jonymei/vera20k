@@ -5896,7 +5896,26 @@ impl Simulation {
             self.assess_house_spy_sat(owner, rules);
             return;
         }
-        let buildings = self.houses[&owner].base_projection().buildings();
+        self.refresh_house_radar(owner, rules, effects);
+        self.assess_house_spy_sat(owner, rules);
+    }
+
+    /// Host the shared radar assessment and its process-local publication.
+    /// HouseUpdate supplies its dirty/defeat gate; native Building EMP also
+    /// calls this action directly, before storing its new EMP counter.
+    pub(crate) fn refresh_house_radar(
+        &mut self,
+        owner: InternedId,
+        rules: &RuleSet,
+        effects: FrameEffects<'_>,
+    ) {
+        let Some(house) = self.houses.get(&owner) else {
+            return;
+        };
+        let require_discovery =
+            house.building_services_require_discovery(self.session.game_mode_nonzero());
+        let buildings = house.base_projection().buildings();
+        self.power_states.house_mut(owner).recheck_radar();
         let radar_assessed = power_system::assess_house_radar_projection(
             self.power_states
                 .get_mut(&owner)
@@ -5919,7 +5938,6 @@ impl Simulation {
                 power_system::has_active_radar(self.power_states.as_map(), owner),
             );
         }
-        self.assess_house_spy_sat(owner, rules);
     }
 
     /// Append one successfully committed BuildConst Building to its owning

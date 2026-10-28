@@ -729,8 +729,8 @@ fn radar_provider_available(
     if state.low_power() {
         return false;
     }
-    // Native House+68 order chooses the first otherwise eligible provider;
-    // its EMP/warp result terminates, even when a later provider is healthy.
+    // Native House+68 acquisition order: NPAE C2BCB8 skips EMP providers
+    // through508F08; the surviving provider's later warp result is terminal.
     for &id in building_order {
         let Some(entity) = entities.get(id) else {
             continue;
@@ -746,12 +746,10 @@ fn radar_provider_available(
             || !interner
                 .object_type(entity.type_ref(), rules)
                 .is_some_and(|obj| obj.radar)
+            || (crate::rules::NPATCH_ENABLED && entity.emp_remaining() != 0)
         {
             continue;
         }
-        // Building+504 EMP starts zero. VERA has no EMP writer yet; its
-        // online latch has independent map/trigger and Temporal writers.
-        // EMP and the independent HasPower transitions remain open.
         return !entity.is_warped_out();
     }
     false

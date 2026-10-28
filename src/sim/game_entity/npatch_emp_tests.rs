@@ -18,7 +18,7 @@ fn scene() -> (Simulation, RuleSet, u64, u64) {
          [ORGANIC]\nStrength=100\nOrganic=yes\nSpeed=5\n\
          [PERSON]\nStrength=100\nSpeed=5\n\
          [CYB]\nStrength=300\nSpeed=5\nSpeedType=Foot\nCyborg=yes\nLocomotor={4A582744-9839-11D1-B709-00A024DDAFD1}\n\
-         [TOWER]\nStrength=500\nArmor=concrete\nPowered=yes\nPower=-10\nPrimary=TankBolt\n\
+         [TOWER]\nStrength=500\nArmor=concrete\nPowered=yes\nPower=-10\nRadar=yes\nPrimary=TankBolt\n\
          [POWER]\nStrength=500\nPower=200\n\
          [FACTORY]\nStrength=1000\nPowered=yes\nPower=-10\nFactory=UnitType\nOwner=Americans,Russians\n\
          [TankBolt]\nDamage=1\nROF=50\nRange=6\nProjectile=ElectricbounceT\nWarhead=ElectricT\n\
@@ -191,6 +191,106 @@ fn emp_expiry_resumes_system_hold_but_not_player_hold() {
             .unwrap()
             .suspended
     );
+}
+
+#[cfg(not(feature = "ares"))]
+#[test]
+fn native_building_emp_saved_power_wait_preserves_the_paid_head_without_provider_latch() {
+    use crate::sim::production::ProductionCategory;
+    let (mut sim, rules, source, factory) = paid_factory_scene();
+    let owner = sim.entities().get(factory).unwrap().owner();
+    let category = ProductionCategory::Vehicle;
+    let head = sim
+        .production
+        .factories()
+        .view(owner, category)
+        .unwrap()
+        .object
+        .unwrap()
+        .clone();
+    hit(&mut sim, &rules, source, factory, 1);
+    assert!(sim.go_building_offline(factory, &rules, FrameEffects::default()));
+    sim.tick_ares_emp(factory, &rules, FrameEffects::default());
+    let entity = sim.entities().get(factory).unwrap();
+    assert_eq!(entity.emp_remaining(), 0);
+    assert!(entity.emp_factory_recovery_pending() && !entity.deactivated.is_offline());
+    let bytes = crate::sim::snapshot::GameSnapshot::save(
+        &sim,
+        0,
+        rules.simulation_config_hash(),
+        "NP factory power wait",
+        0,
+    );
+    let mut loaded = crate::sim::snapshot::GameSnapshot::load(&bytes)
+        .unwrap()
+        .sim;
+    loaded.restore_after_snapshot_load().unwrap();
+    loaded.resolve_type_handles(&rules);
+    let entity = loaded.entities().get(factory).unwrap();
+    assert!(!entity.building_online() && entity.emp_factory_recovery_pending());
+    assert!(!entity.deactivated.is_offline());
+    let held = loaded.production.factories().view(owner, category).unwrap();
+    assert!(held.suspended);
+    assert_eq!(held.object, Some(&head));
+    assert!(loaded.go_building_online(factory, &rules, FrameEffects::default()));
+    loaded.update_ares_emp_operability(factory, &rules, FrameEffects::default());
+    assert!(
+        !loaded
+            .entities()
+            .get(factory)
+            .unwrap()
+            .emp_factory_recovery_pending()
+    );
+    let resumed = loaded.production.factories().view(owner, category).unwrap();
+    assert!(!resumed.suspended);
+    assert_eq!(resumed.object, Some(&head));
+}
+
+#[cfg(not(feature = "ares"))]
+#[test]
+fn native_building_emp_radar_refresh_skips_disabled_providers_in_acquisition_order() {
+    use crate::sim::mission::{MissionId, MissionType};
+    let (mut sim, rules, source, _) = scene();
+    sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
+        .unwrap();
+    let first = sim
+        .spawn_object("TOWER", "Russians", 20, 20, 0, &rules)
+        .unwrap();
+    let second = sim
+        .spawn_object("TOWER", "Russians", 22, 20, 0, &rules)
+        .unwrap();
+    for id in [first, second] {
+        sim.entities_mut_for_test()
+            .get_mut(id)
+            .unwrap()
+            .mission
+            .set_current_for_test(MissionId::from_known(MissionType::Guard), 0);
+    }
+    crate::sim::power_system::tick_power_states(
+        &mut sim.power_states,
+        &mut sim.substrate.entities,
+        &rules,
+        &sim.interner,
+        0,
+    );
+    let owner = sim.entities().get(first).unwrap().owner();
+    let available = |sim: &Simulation| {
+        crate::sim::radar::has_radar_for_owner(sim, &rules, sim.interner.resolve(owner))
+    };
+    assert!(available(&sim));
+    hit(&mut sim, &rules, source, first, 3);
+    assert!(
+        available(&sim),
+        "fresh refresh precedes the new counter write"
+    );
+    hit(&mut sim, &rules, source, first, 3);
+    assert!(
+        available(&sim),
+        "C2BCB8 rejects the EMP provider via508F08 and scans the healthy second provider"
+    );
+    hit(&mut sim, &rules, source, second, 3);
+    hit(&mut sim, &rules, source, second, 3);
+    assert!(!available(&sim), "both eligible providers now carry EMP");
 }
 
 #[test]
@@ -515,7 +615,12 @@ fn emp_spares_organic_and_allied_units_but_disables_a_powered_tower() {
     );
     assert_eq!(sim.building_operational_state(tower, &rules), Some(true));
     hit(&mut sim, &rules, source, tower, 2);
-    assert!(sim.entities().get(tower).unwrap().deactivated.is_offline());
+    // Pure NP Building B951C6 stores EMP without provider Deactivate;
+    // Ares/mixed builds deliberately retain their separate lifecycle.
+    assert_eq!(
+        sim.entities().get(tower).unwrap().deactivated.is_offline(),
+        cfg!(feature = "ares")
+    );
     for _ in 0..2 {
         sim.tick_ares_emp(tower, &rules, FrameEffects::default());
     }
@@ -527,7 +632,10 @@ fn emp_spares_organic_and_allied_units_but_disables_a_powered_tower() {
         sim.tick_ares_emp(tower, &rules, FrameEffects::default());
     }
     assert!(!sim.entities().get(tower).unwrap().building_online());
-    assert!(sim.entities().get(tower).unwrap().deactivated.is_offline());
+    assert_eq!(
+        sim.entities().get(tower).unwrap().deactivated.is_offline(),
+        cfg!(feature = "ares")
+    );
     assert!(sim.go_building_online(tower, &rules, FrameEffects::default()));
     sim.update_ares_emp_operability(tower, &rules, FrameEffects::default());
     assert!(!sim.entities().get(tower).unwrap().deactivated.is_offline());
@@ -588,20 +696,29 @@ fn snapshot_retains_emp_remaining_and_manual_power_intent_through_expiry() {
         let entity = loaded.entities().get(id).unwrap();
         assert_eq!(entity.emp_remaining(), 2);
         assert_eq!(entity.building_online(), id == online);
-        assert!(entity.deactivated.is_offline());
-        assert!(!entity.building_art.stuff_enabled());
+        assert_eq!(entity.deactivated.is_offline(), cfg!(feature = "ares"));
+        assert_eq!(
+            entity.building_art.stuff_enabled(),
+            !cfg!(feature = "ares") && id == online
+        );
         assert_eq!(loaded.building_operational_state(id, &rules), Some(false));
     }
     assert!(!loaded.go_building_online(manual_off, &rules, FrameEffects::default()));
     for id in [online, manual_off] {
         loaded.tick_ares_emp(id, &rules, FrameEffects::default());
         assert_eq!(loaded.entities().get(id).unwrap().emp_remaining(), 1);
-        assert!(loaded.entities().get(id).unwrap().deactivated.is_offline());
+        assert_eq!(
+            loaded.entities().get(id).unwrap().deactivated.is_offline(),
+            cfg!(feature = "ares")
+        );
         loaded.tick_ares_emp(id, &rules, FrameEffects::default());
         let entity = loaded.entities().get(id).unwrap();
         assert_eq!(entity.emp_remaining(), 0);
         assert_eq!(entity.building_online(), id == online);
-        assert_eq!(entity.deactivated.is_offline(), id == manual_off);
+        assert_eq!(
+            entity.deactivated.is_offline(),
+            cfg!(feature = "ares") && id == manual_off
+        );
         assert_eq!(entity.building_art.stuff_enabled(), id == online);
         assert_eq!(
             loaded.building_operational_state(id, &rules),
@@ -616,7 +733,7 @@ fn snapshot_retains_emp_remaining_and_manual_power_intent_through_expiry() {
 }
 
 #[test]
-fn expired_emp_restores_building_stuff_when_house_power_returns() {
+fn emp_expiry_and_later_house_power_respect_the_selected_stuff_lifecycle() {
     let (mut sim, rules, source, _) = scene();
     sim.spawn_object("POWER", "Russians", 18, 20, 0, &rules)
         .unwrap();
@@ -640,12 +757,13 @@ fn expired_emp_restores_building_stuff_when_house_power_returns() {
     );
     let owner = sim.entities().get(tower).unwrap().owner();
     hit(&mut sim, &rules, source, tower, 1);
-    assert!(
-        !sim.entities()
+    assert_eq!(
+        sim.entities()
             .get(tower)
             .unwrap()
             .building_art
-            .stuff_enabled()
+            .stuff_enabled(),
+        !cfg!(feature = "ares")
     );
     sim.power_states
         .map_mut_for_test()
@@ -654,13 +772,17 @@ fn expired_emp_restores_building_stuff_when_house_power_returns() {
         .set_total_output_for_test(0);
     sim.tick_ares_emp(tower, &rules, FrameEffects::default());
     assert_eq!(sim.entities().get(tower).unwrap().emp_remaining(), 0);
-    assert!(sim.entities().get(tower).unwrap().deactivated.is_offline());
-    assert!(
-        !sim.entities()
+    assert_eq!(
+        sim.entities().get(tower).unwrap().deactivated.is_offline(),
+        cfg!(feature = "ares")
+    );
+    assert_eq!(
+        sim.entities()
             .get(tower)
             .unwrap()
             .building_art
-            .stuff_enabled()
+            .stuff_enabled(),
+        !cfg!(feature = "ares")
     );
     sim.power_states
         .map_mut_for_test()

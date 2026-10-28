@@ -29,12 +29,16 @@ Team membership, harvesters, mind control and transport managers do not silently
 make ordinary mechanical targets immune.
 
 The private `EmpState` remains the single counter/lifecycle owner. In pure
-NPatch builds, a first accepted ordinary ground Drive hit selects the native
-lifecycle below; that policy is retained for the whole positive counter lifetime.
-This is a compatibility boundary while positive-height/special locomotor and
-building paths remain separate. Reclassifying an already-live legacy EMP on
+NPatch builds, a first accepted Building or ordinary ground Drive hit selects
+the native lifecycle below; that policy is retained for the whole positive
+counter lifetime. Positive-height/special locomotors retain their separate
+boundary. Reclassifying an already-live legacy EMP on
 landing would mistake its synthetic offline flag for permanent provider loss.
 A boundary regression reproduced that failure before this policy fix.
+The private lifecycle enum also retains a factory-only power-recovery wait;
+it does not replace the provider latch. This enum changes pure-NPatch snapshot
+layout: old layouts are rejected by the existing guard, not force-loaded or
+rewritten. Same-build snapshots retain the lifecycle and pending paid head.
 
 The selected Drive path does not acquire the provider offline latch, deselect,
 save or replace the mission, or PowerOff a ground vehicle. It clears the base
@@ -45,17 +49,29 @@ latch gates sound and PowerOn; no Reactivate/Guard/Hunt recovery is inserted.
 The Anim store owns every attached sparkle: each admitted hit creates one,
 and expiry ends all matching owner/type loops. No NP retained-ID list is added.
 
-Other locomotors, buildings and Ares/mixed builds retain their explicitly bounded
-legacy lifecycle. Buildings keep paid-head pause/resume, manual online intent
-and later operational recovery, including the existing player-friendly Stuff
-restoration policy. These mechanisms are not newly certified as NPAE equivalents.
+The selected Building path stores the counter, invokes Capture/Spawn callbacks
+and clears the combat target without Deactivate, ResetOrdersToGuard, radio/Cargo
+reset, provider-latch or Stuff writes. It skips the Foot sparkle constructor and
+its RNG draw. Hospital Repair consequently continues under EMP, including new
+admissions while the independent online latch remains set. Expiry visits the
+existing Building animation power-loss owner and dirties radar when applicable;
+it does not use Foot activation or the global Foot EMP-animation loop.
+
+Other locomotors and Ares/mixed builds retain their explicitly bounded legacy
+lifecycle, including their existing player-friendly Stuff restoration policy.
+This does not certify those remaining paths as NPAE equivalents.
 
 EMP transitions also notify the existing House factory-queue owner. An affected
 factory remains physically present, so its paid product and FIFO survive; only
 online searches reject its live EMP/deactivated state. With no other eligible
 online producer, production takes an automatic system hold. Expiry or later
 power recovery resumes that same head, but never overrides a player hold or a
-manual offline latch. Construction yards update both Building and Defense slots.
+manual offline latch. A native factory whose counter expires while low-power
+or manually Off retains `NativeFactoryAwaitingPower` in the EMP owner. Shared
+factory admission consumes that cause; the next operational head clears it
+and notifies the same queue owner, without a fake provider latch or mission
+reset. Ordinary low-power factories that were not EMP-held keep their existing
+production rules. Construction yards update both Building and Defense slots.
 This is an explicit playable-compatibility policy shared with Ares, not a claim
 about NPAE's queue callbacks.
 
@@ -82,15 +98,22 @@ This does not finish NPAE174 EMP movement or recovery. Hover consumers and
 existing active Drive/Ship track tails still need their own evidence, rather
 than a blanket freeze. Unit746C90's death-frame override remains unrepresented.
 
-## Ground Drive provider/EMP lifecycle: implemented boundary
+## Native Building and ground Drive lifecycle: implemented boundary
 
 Actual NPAE174 instructions establish independent provider latch `Techno+1C8`
-and EMP countdown `+504`. Pure NP ordinary ground Drive now uses:
+and EMP countdown `+504`. Pure NP admitted Buildings and ordinary ground Drive
+share one counter transaction, with their native class branches:
 
 - `B9517D`: reject only an existing stronger timer. Equal admitted hits repeat
   side effects; the upstream 90/default/clamp/target policy above is unchanged
   and is NOT native receiver arithmetic. Weaker hits do not allocate or draw.
-- `C2EFB7`: a new attached EMP Anim per admitted hit, one Scenario `[0,25]`
+- `B95185..B951C6`: Building RTTI6 bypasses the Foot prelude. Radar calls
+  House508DF0 BEFORE the incoming counter store; a fresh refresh therefore
+  sees the old zero, while an immediate equal rehit sees the live counter.
+  C2BCB8 skips non-Radar or EMP-disabled providers through508F08 and continues
+  in House acquisition order; it must not hide a later healthy radar. The
+  subsequent eligible provider's warp result retains its existing semantics.
+- `C2EFB7`: a new attached EMP Anim per admitted Foot hit, one Scenario `[0,25]`
   constructor-delay draw, loop1/flags600, existing GetCoords/Anim constructor
   and SetOwnerObject owners. Constructor-owned draws stay with those owners.
 - `B990DC..B991DF`: direct base Foot4D94B0 null destination (not Unit override
@@ -99,15 +122,25 @@ and EMP countdown `+504`. Pure NP ordinary ground Drive now uses:
   KillAll6B7100, class target clear. Ground Unit height<=0 bypasses PowerOff.
   No direct selection/mission/Archive/provider-latch write or detach is added;
   existing setters/managers own their timer changes and transitive detach.
+- Building enters directly at `B9914C`: incoming counter, Capture then Spawn
+  callbacks, then Building443B90's null-target call into Techno6FCDB0. It does
+  not erase an admitted Hospital Repair task. BuildingAI43FE56 reaches
+  Techno6FA655/MissionAI5B3060 before countdown; Hospital44B870..44BA79 has no
+  EMP gate. Pausing all service dispatch would differ from this native path.
 - Provider loss still uses Deactivate70FC90: reset/deselect, Foot PowerOff and
   provider latch set. NP Reactivate70FBE8 always resets orders; C2BC8B skips only
   PowerOn/sound during nonzero EMP, while70FC5A still clears the provider latch.
   Ares/mixed admission is isolated and unchanged.
 - TechnoAI6FAF0D/C2BB3E decrements a positive counter, storing only for HP!=0.
   Expiry tests the computed result even when HP0 skipped the store. C2BC5D/6E
-  checks provider latch for activation sound/PowerOn, without Hunt/order reset.
+  checks provider latch for Foot activation sound/PowerOn, without Hunt/order reset.
   6FAFB9..6FAFFB sets loop remaining0 on ALL matching attached EMP anims; normal
   animation boundary lifecycle, not immediate UnInit, ends them.
+- Building expiry `6FAF2A..6FAF81` instead invokes4547C0 through the existing
+  `apply_building_anim_power(false)` owner, then sets Radar House+5779 for a
+  later assessment and returns before the Foot suffix. Building4549B0 retains
+  ownership of operational slot edges; no unconditional Reactivate/Guard or
+  generic EnableStuff is substituted at this boundary.
 - UnitAI7360C9 calls Techno70FBD0, whose NPAE7E0F9D disjunct is provider-offline
   OR nonzero EMP. The shared query now feeds both first-hit sound and disabled
   Unit sparks. Keeping only the provider flag here would drop the existing
@@ -120,14 +153,26 @@ during EMP, overlap save/load, no-provider expiry and legacy-to-ground rehit
 policy stability. Two primary tests and both later boundary controls failed
 before their respective fixes. The actual AY TTNK→APOC battle/ordinary expiry
 scenario also passes; this is not the actual DRON provider-overlap scenario.
+Actual AY GAROBO/NARADR coverage additionally starts a running Repair, delivers
+the configured TankBoltEMP child through the impact-producer seam, saves during
+EMP, sustains the50-frame pulses long enough to observe healing, then covers
+expiry, another admission during a pulse and its saved completion. This is not
+an actual TTNK hospital sortie. Synthetic boundaries cover two radar providers
+and a saved factory-only power wait without provider deactivation. Re-routing
+the ordinary Building to the old legacy backend makes the running Repair become
+Guard; the production regression rejects that loss.
 
 Residuals: duration/target/receiver preprocessing remains compatibility policy;
 positive-height/lift/locomotor changes during a live timer keep its initial
-policy, not complete airborne semantics. Walk/Ship/Hover/buildings, all manager
-reentrancy combinations and parasite/tether cases need their own closure.
+policy, not complete airborne semantics. Walk/Ship/Hover, special Building
+height/type transitions, all linked-manager reentrancy combinations and
+parasite/tether cases need their own closure. Building sparkle removal changes
+the old incorrect RNG stream; animation-power callbacks keep their own draws
+and detach semantics. Building EMP rendered output and multi-AI long matches
+are not established by the hospital logic tests.
 Nonempty Rules ActivateSound/DeactivateSound fallbacks remain unresolved; AY's
 root globals are empty and the three drone types supply their type sounds.
-Do not mark V01/A06 or the entire NPatch EMP complete from this Drive chain.
+Do not mark V01/A06 or the entire NPatch EMP complete from these bounded paths.
 
 ## Provider-only Drive motion: native/design conflict
 

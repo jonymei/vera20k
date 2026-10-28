@@ -6830,6 +6830,302 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; native Building EMP preserves hospital treatment across saves"]
+    #[cfg(not(feature = "ares"))]
+    fn aymod_hospital_emp_preserves_treatment_and_new_admission_across_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patient) = aymod_hospital_patient_inside(kind, "BRUTE");
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let owner = scene.sim().entities().get(hospital).unwrap().owner();
+            // Cargo admission can precede the queued Repair's promotion.
+            // Hit an already-running treatment, not the preceding Guard frame.
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .mission
+                    .current()
+                    .known()
+                    == Some(MissionType::Repair)
+            }));
+            let pulse = |scene: &mut HeadlessScenario| {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let primary = rules
+                    .weapon(rules.object("TTNK").unwrap().primary().unwrap())
+                    .unwrap();
+                let projectile = rules
+                    .projectile(primary.projectile.as_deref().unwrap())
+                    .unwrap();
+                let weapon = rules
+                    .weapon(projectile.airburst_weapon.as_deref().unwrap())
+                    .unwrap();
+                assert_eq!(weapon.id, "TankBoltEMP");
+                let wh = rules.warhead(weapon.warhead.as_deref().unwrap()).unwrap();
+                let at = crate::sim::movement::ground_pose::object_get_coords(
+                    sim.entities().get(hospital).unwrap(),
+                    sim.resolved_terrain(),
+                );
+                let rng = sim.scenario_rng.logical_state();
+                let mission = sim.entities().get(hospital).unwrap().mission.current();
+                sim.apply_npatch_emp_detonation(
+                    crate::sim::projectile::ProjectileCoord {
+                        x: at.x,
+                        y: at.y,
+                        z: at.z,
+                    },
+                    Some(hospital),
+                    None,
+                    weapon.damage,
+                    wh,
+                    rules,
+                    Default::default(),
+                );
+                assert!(sim.entities().get(hospital).unwrap().emp_remaining() > 0);
+                assert_eq!(
+                    sim.entities().get(hospital).unwrap().mission.current(),
+                    mission,
+                    "B951C6 must not replace the running Building mission with Guard"
+                );
+                assert_eq!(
+                    sim.scenario_rng.logical_state(),
+                    rng,
+                    "B951C6 Building skips Foot's sparkle constructor and RNG draw"
+                );
+            };
+            let before = scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .health
+                .current();
+            let mission = scene
+                .sim()
+                .entities()
+                .get(hospital)
+                .unwrap()
+                .mission
+                .current();
+            assert_eq!(mission.known(), Some(MissionType::Repair));
+            let radar = scene.runtime.resources.rules.object(kind).unwrap().radar;
+            if radar {
+                assert!(crate::sim::radar::has_radar_for_owner(
+                    scene.sim(),
+                    &scene.runtime.resources.rules,
+                    scene.sim().interner.resolve(owner)
+                ));
+            }
+            pulse(&mut scene);
+            if radar {
+                // Native B951AB refreshes with the OLD counter before storing
+                // the first hit. The equal rehit then sees its live counter.
+                assert!(crate::sim::radar::has_radar_for_owner(
+                    scene.sim(),
+                    &scene.runtime.resources.rules,
+                    scene.sim().interner.resolve(owner)
+                ));
+                pulse(&mut scene);
+                assert!(!crate::sim::radar::has_radar_for_owner(
+                    scene.sim(),
+                    &scene.runtime.resources.rules,
+                    scene.sim().interner.resolve(owner)
+                ));
+            }
+            // B9518C's Building arm jumps directly to B9914C, not Deactivate
+            // or ResetOrdersToGuard; MissionAI5B3060 still visits Repair.
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .mission
+                    .current(),
+                mission
+            );
+            assert!(
+                !scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .deactivated
+                    .is_offline()
+            );
+            let bytes = save_scene(&scene, "AY hospital with admitted patient under live EMP");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let mut healed_during_emp = false;
+            assert!((0..600).any(|_| {
+                // The authored50-frame pulse can be shorter than one
+                // IRepairRate interval. Sustain it with the same configured
+                // producer hits; never enlarge Damage or the timer.
+                if scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining()
+                    <= 10
+                {
+                    pulse(&mut scene);
+                }
+                tick_with_due_commands(&mut scene);
+                healed_during_emp = scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining()
+                    > 0
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(patient)
+                        .unwrap()
+                        .health
+                        .current()
+                        > before;
+                healed_during_emp
+            }));
+            assert!(healed_during_emp);
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining()
+                    == 0
+            }));
+            assert!((0..1800).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(patient).unwrap();
+                !actor.lifecycle.in_limbo()
+                    && actor.health.current()
+                        == scene
+                            .runtime
+                            .resources
+                            .rules
+                            .object("BRUTE")
+                            .unwrap()
+                            .strength
+            }));
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .slot(0)
+                    .is_none()
+            }));
+            let second = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let actor = sim.entities().get(hospital).unwrap();
+                let owner = actor.owner();
+                let at = actor.position;
+                let second = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["E1"],
+                )[0];
+                sim.substrate
+                    .entities
+                    .get_mut(second)
+                    .unwrap()
+                    .health
+                    .set(1);
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::clicked_mission(second, MissionType::Enter, TargetKind::Entity(hospital)),
+                ));
+                second
+            };
+            pulse(&mut scene);
+            assert!((0..600).any(|_| {
+                if scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining()
+                    <= 10
+                {
+                    pulse(&mut scene);
+                }
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(second)
+                    .unwrap()
+                    .lifecycle
+                    .in_limbo()
+            }));
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining()
+                    > 0
+            );
+            let bytes = save_scene(&scene, "AY hospital newly admitted patient during EMP");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(second).unwrap();
+                !actor.lifecycle.in_limbo()
+                    && actor.health.current()
+                        == scene.runtime.resources.rules.object("E1").unwrap().strength
+            }));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining(),
+                0
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .building_operational_state(hospital, &scene.runtime.resources.rules),
+                Some(true)
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied hospital admission, natural blackout and saved treatment"]
     fn aymod_allied_hospital_keeps_admitting_and_healing_during_natural_low_power() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};

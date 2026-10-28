@@ -6,15 +6,24 @@
 use super::GameEntity;
 use std::hash::{Hash, Hasher};
 
+#[cfg(all(feature = "npatch", not(feature = "ares")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+enum EmpLifecycle {
+    Legacy,
+    Native,
+    // Retained NP queue policy after counter expiry, not provider+1C8.
+    NativeFactoryAwaitingPower,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub(super) struct EmpState {
     remaining: i32,
     sparkle: Option<u64>,
     last_mission: i32,
     // Delivery policy belongs to the same counter owner and survives save/load.
-    // Other locomotors/buildings and mixed builds keep the documented policy.
+    // Native Building/ground Drive vs legacy locomotors/mixed-build lifecycle.
     #[cfg(all(feature = "npatch", not(feature = "ares")))]
-    native_ground_drive: bool,
+    lifecycle: EmpLifecycle,
 }
 impl Default for EmpState {
     fn default() -> Self {
@@ -24,7 +33,7 @@ impl Default for EmpState {
             sparkle: None,
             last_mission: -1,
             #[cfg(all(feature = "npatch", not(feature = "ares")))]
-            native_ground_drive: false,
+            lifecycle: EmpLifecycle::Legacy,
         }
     }
 }
@@ -34,6 +43,18 @@ impl GameEntity {
     }
     pub(crate) fn emp_sparkle(&self) -> Option<u64> {
         self.emp.sparkle
+    }
+    /// The documented NP paid-head recovery wait is not provider+1C8.
+    /// Only factory admission consumes it; it never suspends service missions.
+    pub(crate) fn emp_factory_recovery_pending(&self) -> bool {
+        #[cfg(all(feature = "npatch", not(feature = "ares")))]
+        {
+            self.emp.lifecycle == EmpLifecycle::NativeFactoryAwaitingPower
+        }
+        #[cfg(not(all(feature = "npatch", not(feature = "ares"))))]
+        {
+            false
+        }
     }
     pub(crate) fn emp_anim_pointer_expired(&mut self, expired: u64) {
         if self.emp.sparkle == Some(expired) {
@@ -287,20 +308,21 @@ mod receiver {
                     // permanent provider outage. Special-path migration remains
                     // explicit policy, not a second owner for this same timer.
                     let native = if victim.emp.remaining > 0 {
-                        victim.emp.native_ground_drive
+                        victim.emp.lifecycle != EmpLifecycle::Legacy
                     } else {
-                        victim.category() == EntityCategory::Unit
-                            && victim
-                                .locomotor
-                                .as_ref()
-                                .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
-                            && crate::sim::movement::air_movement::current_fly_height(
-                                victim,
-                                self.resolved_terrain.as_ref(),
-                            ) <= 0
+                        victim.category() == EntityCategory::Structure
+                            || victim.category() == EntityCategory::Unit
+                                && victim
+                                    .locomotor
+                                    .as_ref()
+                                    .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
+                                && crate::sim::movement::air_movement::current_fly_height(
+                                    victim,
+                                    self.resolved_terrain.as_ref(),
+                                ) <= 0
                     };
                     if native {
-                        self.commit_npatch_ground_drive_emp(target, duration, rules, effects);
+                        self.commit_npatch_native_emp(target, duration, rules, effects);
                         continue;
                     }
                 }
@@ -577,11 +599,11 @@ mod receiver {
             EmpDelivery::Applied
         }
 
-        /// NPAE174 B9517D/B990DC..B991DF: ordinary ground Drive chain.
+        /// NPAE174 B9517D..C6/B990DC..B991DF: Building/ground Drive chain.
         /// Duration/target admission upstream remains the documented NP policy.
         /// Equal rehits repeat side effects; stronger existing timers reject.
         #[cfg(all(feature = "npatch", not(feature = "ares")))]
-        fn commit_npatch_ground_drive_emp(
+        fn commit_npatch_native_emp(
             &mut self,
             target: u64,
             duration: i32,
@@ -594,9 +616,24 @@ mod receiver {
             if victim.emp.remaining > duration {
                 return;
             }
-            if let Some(name) = rules.emp_sparkles() {
+            let building = victim.category() == EntityCategory::Structure;
+            let radar_owner = building
+                .then(|| self.object_type(victim.type_ref(), rules))
+                .flatten()
+                .filter(|object| object.radar)
+                .map(|_| victim.owner());
+            if let Some(owner) = radar_owner {
+                // B951A5..B951C6 calls House508DF0 BEFORE B9914E stores
+                // the new counter. A fresh hit sees the old zero; rehit sees
+                // the previous live counter. Reuse the radar action owner.
+                self.refresh_house_radar(owner, rules, effects);
+            }
+            if !building && let Some(name) = rules.emp_sparkles() {
                 // C2EFD3: one Scenario [0,25] constructor-delay draw per
-                // admitted hit, including equality. Anim store owns all IDs.
+                // admitted Foot hit, including equality. Building skips it.
+                let Some(victim) = self.substrate.entities.get(target) else {
+                    return;
+                };
                 let coord = crate::sim::movement::ground_pose::object_get_coords(
                     victim,
                     self.resolved_terrain.as_ref(),
@@ -623,23 +660,28 @@ mod receiver {
                     self.set_anim_owner_object(anim, Some(target), rules);
                 }
             }
-            // B990DC calls base Foot4D94B0, not Unit's override or Guard reset.
-            if self.begin_foot_destination(
-                target,
-                false,
-                rules,
-                effects.overlay_registry(),
-                effects,
-            ) {
+            // B951C6 skips B990DC..B9914C for Buildings: no Foot NavCom,
+            // disguise or Off sound, and crucially no mission/radio reset.
+            // Foot calls base4D94B0, not Unit's override or Guard reset.
+            if !building
+                && self.begin_foot_destination(
+                    target,
+                    false,
+                    rules,
+                    effects.overlay_registry(),
+                    effects,
+                )
+            {
                 self.foot_null_destination(target, rules, effects.overlay_registry(), effects);
             }
             let Some(victim) = self.substrate.entities.get_mut(target) else {
                 return;
             };
-            if self
-                .interner
-                .object_type(victim.type_ref(), rules)
-                .is_some_and(|object| !object.perma_disguise)
+            if !building
+                && self
+                    .interner
+                    .object_type(victim.type_ref(), rules)
+                    .is_some_and(|object| !object.perma_disguise)
                 && let Some(disguise) = victim
                     .disguise
                     .as_mut()
@@ -648,7 +690,7 @@ mod receiver {
                 // Unit746720, reached by B990EB's virtual ClearDisguise.
                 disguise.clear_unit();
             }
-            let play_sound = !victim.power_effect_disabled();
+            let play_sound = !building && !victim.power_effect_disabled();
             if play_sound {
                 Self::emit_power_transition_sound(
                     &self.interner,
@@ -665,7 +707,7 @@ mod receiver {
                 .get_mut(target)
                 .expect("same EMP receiver");
             victim.emp.remaining = duration; // B9914C; never writes provider+1C8.
-            victim.emp.native_ground_drive = true;
+            victim.emp.lifecycle = EmpLifecycle::Native;
             // B99154..6D call the existing managers in this order.
             self.free_all_captures(target, rules, effects.overlay_registry(), effects);
             crate::sim::spawn_manager::kill_all_spawns_with_context(
@@ -674,8 +716,9 @@ mod receiver {
                 crate::sim::world::UninitContext::new(rules, effects.overlay_registry())
                     .with_effects(effects),
             );
-            // Ground Unit B9917E bypasses PowerOff. Its existing locomotor
-            // byte stays unchanged; Nav clear and EMP movement guards stop it.
+            // Building/ground Unit B9917E bypass PowerOff. No provider latch
+            // write: Building service missions survive while firing and
+            // factory admission independently consume the positive counter.
             let _ = self.assign_target_represented(
                 target,
                 None,
@@ -683,6 +726,11 @@ mod receiver {
                 effects.overlay_registry(),
                 effects,
             );
+            if building {
+                // Retained NP queue policy: pause the same paid head, without
+                // borrowing Deactivate's unrelated mission/provider writes.
+                self.update_emp_factory_queue(target, rules, effects);
+            }
         }
 
         fn commit_emp_duration(
@@ -894,6 +942,24 @@ mod receiver {
             rules: &RuleSet,
             effects: FrameEffects<'_>,
         ) {
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            if self
+                .substrate
+                .entities
+                .get(target)
+                .is_some_and(|entity| entity.emp_factory_recovery_pending())
+            {
+                if self.building_operational_state(target, rules) == Some(true) {
+                    self.substrate
+                        .entities
+                        .get_mut(target)
+                        .unwrap()
+                        .emp
+                        .lifecycle = EmpLifecycle::Legacy;
+                    self.update_emp_factory_queue(target, rules, effects);
+                }
+                return;
+            }
             let Some(entity) = self.substrate.entities.get(target) else {
                 return;
             };
@@ -953,7 +1019,7 @@ mod receiver {
                 return;
             };
             #[cfg(all(feature = "npatch", not(feature = "ares")))]
-            if entity.emp.native_ground_drive {
+            if entity.emp.lifecycle != EmpLifecycle::Legacy {
                 // TechnoAI6FAF0D/C2BB3E: positive countdown; HP0 skips only
                 // the store. Expiry is not Reactivate and never queues Hunt.
                 if entity.emp.remaining <= 0 {
@@ -966,7 +1032,40 @@ mod receiver {
                 if next != 0 {
                     return;
                 }
-                entity.emp.native_ground_drive = entity.emp.remaining != 0;
+                entity.emp.lifecycle = if entity.emp.remaining != 0 {
+                    EmpLifecycle::Native
+                } else {
+                    EmpLifecycle::Legacy
+                };
+                if entity.category() == EntityCategory::Structure {
+                    let owner = entity.owner();
+                    let object = self.interner.object_type(entity.type_ref(), rules);
+                    let visible = object.is_some_and(|object| !object.invisible_in_game);
+                    let radar = object.is_some_and(|object| object.radar);
+                    let factory = object.is_some_and(|object| object.has_factory());
+                    // Building6FAF2A..6FAF81 bypasses Foot activation and the
+                    // global sparkle loop.4547C0 is the existing slot loss
+                    // owner, not EnableStuff or ResetOrdersToGuard. The next
+                    // ordinary4549B0 edge owns any operational slot restore.
+                    if visible {
+                        self.apply_building_anim_power(target, false, rules);
+                        if radar {
+                            self.power_states.house_mut(owner).recheck_radar();
+                        }
+                    }
+                    if factory && self.building_operational_state(target, rules) != Some(true) {
+                        if let Some(entity) = self.substrate.entities.get_mut(target)
+                            && entity.emp.remaining == 0
+                        {
+                            // Preserve the documented paid-head wait through
+                            // low power/manual Off without inventing a provider
+                            // latch or destroying the Building mission.
+                            entity.emp.lifecycle = EmpLifecycle::NativeFactoryAwaitingPower;
+                        }
+                    }
+                    self.update_emp_factory_queue(target, rules, effects);
+                    return;
+                }
                 let online = !entity.deactivated.is_offline();
                 if online {
                     Self::emit_power_transition_sound(

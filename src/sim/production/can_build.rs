@@ -716,7 +716,9 @@ fn query_factory(
                 || !require_online
                 || (building.building_online()
                     && (!crate::rules::NPATCH_ENABLED
-                        || (building.emp_remaining() <= 0 && !building.deactivated.is_offline()))))
+                        || (building.emp_remaining() <= 0
+                            && !building.deactivated.is_offline()
+                            && !building.emp_factory_recovery_pending()))))
             && building.mission.effective() != selling
             && building.mission.queued() != selling
             && (crate::rules::ARES_ENABLED
