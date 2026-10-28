@@ -10325,6 +10325,183 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real sniper shots remove garrison tails and preserve native cursor across saves"]
+    fn aymod_sniper_fire_removes_tail_occupants_in_order_across_saves() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType, authority::LiveReadyInputProvider};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, missile_target, riders, _) =
+            aymod_garrison_missile_in_flight("APOC");
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let owner = scene.add_human_house(
+            "SniperController",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let sniper = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(building).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 16, i32::from(at.ry()))),
+                &["GAPOWR"],
+            );
+            let sniper = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["SNIPE"],
+            )[0];
+            // Isolate the existing cursor1 from a second garrison shot and
+            // retaliation; the already emitted missile keeps its real flight.
+            let frame = sim.session.binary_frame();
+            sim.mission_queue_exact(
+                building,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                frame,
+                &LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            sniper
+        };
+        let queue = |scene: &mut HeadlessScenario| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: sniper,
+                    target_id: building,
+                },
+            ));
+        };
+        for remaining in [1, 0] {
+            queue(&mut scene);
+            let before = scene.sim().entities().get(sniper).unwrap().veterancy.raw();
+            let mut fired = false;
+            assert!(
+                (0..360).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    for event in output.fire_events.iter().filter(|event| {
+                        event.attacker_id == sniper && event.target == TargetKind::Entity(building)
+                    }) {
+                        let rules = &scene.runtime.resources.rules;
+                        let weapon = rules
+                            .weapon(scene.sim().interner.resolve(event.weapon_id))
+                            .unwrap();
+                        assert_eq!(
+                            rules
+                                .warhead(weapon.warhead.as_deref().unwrap())
+                                .unwrap()
+                                .bunker_penetration_level(),
+                            1
+                        );
+                        fired = true;
+                    }
+                    scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .passenger_role
+                        .occupants()
+                        .count()
+                        == remaining
+                }) && fired,
+                "ordinary sniper fire must remove exactly the next tail"
+            );
+            let actor = scene.sim().entities().get(building).unwrap();
+            assert!(actor.health.current() > 0);
+            assert_eq!(
+                actor.passenger_role.occupants().ids(),
+                &riders[..remaining as usize]
+            );
+            assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(riders[remaining as usize])
+                    .is_none_or(|entity| !entity.is_object_alive())
+            );
+            assert_ne!(
+                scene.sim().entities().get(sniper).unwrap().veterancy.raw(),
+                before
+            );
+            {
+                let runtime = &mut scene.runtime;
+                let frame = runtime.simulation.session.binary_frame();
+                runtime
+                    .simulation
+                    .mission_queue_exact(
+                        sniper,
+                        MissionId::from_known(MissionType::Sleep),
+                        1,
+                        frame,
+                        &LiveReadyInputProvider {
+                            rules: &runtime.resources.rules,
+                        },
+                    )
+                    .unwrap();
+            }
+            let rearm = scene.sim().entities().get(sniper).unwrap().rearm_timer;
+            let rank = scene
+                .sim()
+                .entities()
+                .get(sniper)
+                .unwrap()
+                .veterancy
+                .clone();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY actual sniper tail removal");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let actor = scene.sim().entities().get(building).unwrap();
+            assert_eq!(
+                actor.passenger_role.occupants().ids(),
+                &riders[..remaining as usize]
+            );
+            assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
+            assert_eq!(
+                scene.sim().entities().get(sniper).unwrap().rearm_timer,
+                rearm
+            );
+            assert_eq!(scene.sim().entities().get(sniper).unwrap().veterancy, rank);
+            if remaining == 1 {
+                assert!((0..180).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene
+                        .sim()
+                        .entities()
+                        .get(missile_target)
+                        .is_none_or(|entity| entity.health.current() <= 0)
+                }));
+                assert!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(riders[0])
+                        .unwrap()
+                        .veterancy
+                        .raw()
+                        .bits()
+                        > 0
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY sniper and MiG garrison penetration"]
     fn aymod_sniper_respects_bunker_protection_and_boris_sortie_clears_it() {
         use crate::sim::command::{Command, CommandEnvelope};
