@@ -5742,11 +5742,171 @@ mod retail_construction_tests {
                 .passenger_count(),
             0
         );
-        for id in riders {
+        for &id in &riders {
             let rider = scene.sim().entities().get(id).unwrap();
             assert!(!rider.lifecycle.in_limbo());
             assert_eq!(rider.passenger_role.open_transport_id(), None);
         }
+        let reformed = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(sim.team_script_vm.team(team_id).is_none());
+            for &id in &riders {
+                assert_ne!(sim.team_script_vm.team_to_rejoin(id), Some(team_id));
+            }
+            let team_type = sim.interner.get("07C32EFC-G").unwrap();
+            // Reuse the unchanged authored force and these living units. The
+            // new TeamClass must recruit and walk them aboard, not resurrect
+            // the destroyed team's cursor or write a new Cargo list.
+            sim.create_team(team_type, Some(ai), rules).unwrap()
+        };
+        assert_ne!(reformed, team_id);
+        let mut saved_partial = false;
+        let reloaded = (0..3600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let cargo = scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .passengers()
+                .to_vec();
+            assert!(cargo.iter().all(|id| riders.contains(id)));
+            if !saved_partial && (1..6).contains(&cargo.len()) {
+                let cursor = scene.sim().team_script_vm.team(reformed).unwrap().cursor();
+                // +434 is remembered by Techno::Fire6FF7A3, not by Enter.
+                // Preserve its real value instead of inventing a rejoin write.
+                let rejoin = cargo
+                    .iter()
+                    .map(|&id| scene.sim().team_script_vm.team_to_rejoin(id))
+                    .collect::<Vec<_>>();
+                let bytes = save_scene(&scene, "AY AI fortress reloading with partial Cargo");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(
+                    scene.sim().team_script_vm.team(reformed).unwrap().cursor(),
+                    cursor
+                );
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .passengers(),
+                    cargo.as_slice()
+                );
+                for (&id, &expected_rejoin) in cargo.iter().zip(&rejoin) {
+                    let rider = scene.sim().entities().get(id).unwrap();
+                    assert!(rider.lifecycle.in_limbo());
+                    assert_eq!(rider.passenger_role.open_transport_id(), Some(carrier));
+                    assert_eq!(
+                        scene.sim().team_script_vm.team_to_rejoin(id),
+                        expected_rejoin
+                    );
+                    assert_ne!(expected_rejoin, Some(team_id));
+                }
+                saved_partial = true;
+            }
+            aboard(&scene)
+                && scene
+                    .sim()
+                    .team_script_vm
+                    .team(reformed)
+                    .is_some_and(|team| team.cursor() >= 3)
+        });
+        assert!(
+            saved_partial,
+            "observe and restore an actual partly reloaded transport"
+        );
+        assert!(
+            reloaded,
+            "the same six living riders must finish the second ordinary script14/43 cycle"
+        );
+        let cargo = scene
+            .sim()
+            .entities()
+            .get(carrier)
+            .unwrap()
+            .passenger_role
+            .cargo()
+            .unwrap()
+            .passengers()
+            .to_vec();
+        assert_eq!(cargo.len(), 6);
+        let bytes = save_scene(&scene, "AY AI fortress after complete reloading");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(aboard(&scene));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .passengers(),
+            cargo.as_slice()
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .team_script_vm
+                .team(reformed)
+                .unwrap()
+                .members()
+                .collect::<Vec<_>>(),
+            [carrier]
+        );
+        let targets = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 3)
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let targets = spawn_on_free_cells(sim, rules, enemy, sites, &["BFRT", "E2"]);
+            for &id in &targets {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            targets
+        };
+        fired.clear();
+        assert!(
+            (0..360).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired.extend(
+                    output
+                        .fire_events
+                        .iter()
+                        .filter(|event| {
+                            riders.contains(&event.attacker_id)
+                                && targets.iter().any(|&id| {
+                                    event.target == crate::sim::combat::TargetKind::Entity(id)
+                                })
+                        })
+                        .map(|event| event.attacker_id),
+                );
+                fired.len() == 6
+            }),
+            "all six reloaded and restored riders must still fire: {fired:?}"
+        );
     }
 
     #[cfg(feature = "npatch")]
