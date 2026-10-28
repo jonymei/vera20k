@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD9862559fd后定位并关闭V08该场景最终保存后续射疑点：保存时carrier(31,88)、建筑(124,72)，乘员先Rearm随后Range，ammo=-1不耗尽，BFRT继续实际运动。原3000帧上限包含等待车辆死亡，不是保存后3000帧；延长整段观察至9000上限后，保存后1890帧出现新的乘员实射及相对保存时HP的额外伤害。正式保存保持world位置/整个locomotor/脚本cursor6/同一目标/原六人open关系，最终再存读保留新伤害。最终实际扩展1、transport_tests9共10项通过，无待完成Cargo。只修测试观察范围与旧伤假通过条件，无生产玩法修改/新critic，未动固定版，整体MOD目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD94dae66f0后补V10光棱实际House缺电/恢复：普通命令Off真实GAPOWR，主/支援ATESLA手动online仍true、LastOperational均false，正式存读后连续240帧不发射/不招募/不排支援束且目标HP不变。普通On恢复电网及采样，恢复后再存读；明确补发原主塔Attack（缺电可合法丢目标），支援塔正常被招募/count增加、主塔开火并造成实伤，第三次存读保留结果。最终实际2（原单塔Off/新House缺电）、prism7、gap_generator13共22项通过，无待完成Cargo。仅测试/文档，无生产修改/新critic，未动固定版/配置/原始存档，整体MOD目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：从V08已验的单支原队完整首轮目标链转向V10光棱联击的实际缺电/恢复消费者，先复用既有支援塔owner及实际AY供电场景，不新增阵营特判或供电状态。其余进攻脚本/自动生产创建/多AI竞争仍开放，不继续穷举此单队的无依据边界；Return Dubai弱攻势专项仍暂停，V01/F11批准门禁与整体PLAN不变。Alt飞机入口及GADEPT/GAYARD已验不重复修。
+- 下一安全动作：继续V10光棱支援塔的实际EMP失效/自然到期恢复与存读，复用NP EMP producer及LastOperational/prism owners；先确认主/支援的EMP范围隔离，不让全塔同时瘫痪冒充支援准入拒绝。不添加已排支援束中途取消政策。其余进攻脚本/自动创建/多AI竞争、V01/F11门禁和整体PLAN保留，Return Dubai弱攻势专项仍暂停；Alt飞机入口及GADEPT/GAYARD已验不重复修。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -554,7 +554,7 @@
   最终NP/Stock InRange各32、GreatestThreat各43通过；NP line_of_fire1、context input39及实际AY数据1通过。一次只读critic无可操作发现，其组合桥面/射线覆盖缺口已补；未重复critic。
 - 不新增随机抽样、timer/Detach或保留字段，未改MOD/原始保存/固定cfb479750构建、未启动GUI、未推送/PR。7012C0 GetWeaponRange及70E140 GetWeapon已读连续体未见静态补丁，不据此排除所有间接扩展。V10“精英射程反降”其余原因仍开放。
 
-### V10光棱联击：断电支援塔准入（2026-10-27）
+### V10光棱联击：断电支援塔准入（更新2026-10-29）
 
 - 实读NPAE174 BuildingClass::Mission_Attack44B388→7E04BB：先读候选Building+6C8，假则跳44B4AE下一个候选，真则恢复原alive+90检查，再回44B38E。
   原producer43FBEF在Building Update的运行状态边沿处理后存储该采样；现有LastOperational由world/gap_generator唯一写入，Prism只读，不用+660手动online、+6EA stuff_enabled或现场重算替代。
@@ -566,7 +566,10 @@
 - 最终NP/stock Prism各7、Building missions各16通过；NP LastOperational直接消费者gap_generator13通过；相关ignored零售Dustbowl光棱转发各1单独运行通过，剩余四个ignored是非Prism场景未扩跑。实际AY复合场景1通过；一次只读critic无可操作发现。
 - 建筑任务覆盖首次发现四项旧围墙测试期待清目标重置burst，实际返回7而非0。已追到此前V03的同一Assign_Target owner及实际NP6FCF5B..60六个NOP，仅修测试profile预期：NP保留7，stock仍清0；围墙目标/命令/恢复/反击逻辑均未修改，没有靠改断言掩盖本轮玩法缺陷。
 - 本检查不新增随机抽样、timer、Detach或序列化字段。已经招募/已排定的支援束仍由原ProcessDelayedFire处理，原补丁没有加中途掉电取消，不能擅加。
-  实际EMP、全House缺电、抽电/出售与支援束GUI画面未单独重放；本条不关闭全部光棱、供电或V10。固定cfb479750玩家版不包含本次修复。
+  实际EMP、抽电/出售与支援束GUI画面仍未单独重放；House缺电后续验证见下条。本条不关闭全部光棱、供电或V10。固定cfb479750玩家版不包含本次修复。
+- 2026-10-29复用原正式AY两ATESLA/真实GAPOWR/友方APOC场景，新增House电网失效例。普通Off的是供电建筑，不是支援塔；自然House更新后power_states低电，主/支援塔building_online仍true而LastOperational均false。正式保存/完整资源恢复后，主塔显式Attack的连续240普通帧无两塔fire_events、无招募count/支援待发束，APOC血量不变。没有直接写低电/operational/冷却或移除攻击目标。
+- 普通On供电建筑后自然更新恢复电网、两塔LastOperational；第二次正式存读保留非低电。显式重新发主塔Attack，因为BuildingAttack缺电的Cant允许丢掉原目标，不要求它自动恢复旧攻击。正常帧真实招募支援、主塔count增加并开火，目标实际掉血，第三次存读保持伤害结果；友方目标仅隔离支援塔自行攻击竞争，不冒称自主多AI联击。原单塔Off/On测试共用同一装配与观察owner，保持主塔缺少支援仍可单独开火的对照。
+- 最终两个实际AY例、NP prism_tests7及gap_generator_tests13通过，共22项。只改测试/台账，无新增生产RNG调用、timer写入、Detach或保存字段，无生产玩法修改/新critic；未启动GUI、未改MOD/原始存档/固定版、未发布。该例不证明EMP单塔失效、已排支援束中途断电取消、全部失效来源或画面通过；原不取消已排束的政策保持。
 
 ### V10铁幕/力场保护目标准入（2026-10-27）
 
