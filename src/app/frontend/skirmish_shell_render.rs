@@ -1042,6 +1042,9 @@ fn clear_shell_target(
     });
 }
 
+#[cfg(all(test, feature = "npatch"))]
+mod tech_slider_gpu_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

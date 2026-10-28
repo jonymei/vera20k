@@ -164,7 +164,10 @@ pub fn status_help_key_for_hover(target: SkirmishHoverTarget) -> Option<&'static
         SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::UnitCount0x50c) => {
             Some("STT:SkirmishSliderUnit")
         }
-        SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::TechLevel0x512) => None,
+        // Dialog102 gate60429D, control604593 -> BA1490 returns BA4014.
+        SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::TechLevel0x512) => {
+            crate::rules::NPATCH_ENABLED.then_some("STT:SkirmishSliderTech")
+        }
         SkirmishHoverTarget::FlagPicture => Some("STT:SkirmishPictureFlag"),
         SkirmishHoverTarget::GameTypeLabel0x6ec => Some("STT:SkirmishLabelGameType"),
         SkirmishHoverTarget::ScenarioLabel0x5a8 => Some("STT:SkirmishLabelScenario"),

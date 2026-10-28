@@ -337,28 +337,6 @@ fn tech_slider_input_uses_launch_value_and_hidden_control_rejects_drag() {
     ));
 }
 
-#[test]
-#[ignore = "requires VERA20K_AYMOD_DIR; authored UISettings opens the actual tech slider"]
-fn aymod_tech_slider_reads_the_authored_rules_through_production_ini_reader() {
-    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
-    let ini = IniFile::from_bytes(&std::fs::read(root.join("rulesmd.ini")).unwrap()).unwrap();
-    let mut shell = SkirmishShellState::default();
-    shell.trackbar_bounds = SkirmishTrackbarBounds::from_multiplayer_dialog_settings(&ini);
-    shell.apply_ui_settings(&ini);
-    assert_eq!(
-        shell
-            .trackbar_ids()
-            .any(|id| id == SkirmishTrackbarId::TechLevel0x512),
-        crate::rules::NPATCH_ENABLED
-    );
-    assert_eq!(
-        shell
-            .trackbar_bounds
-            .range(SkirmishTrackbarId::TechLevel0x512),
-        TrackbarRange::new(1, 10, 1)
-    );
-}
-
 /// A Skirmish state with the slider ranges retail Rules gives through the
 /// production reader, or `None` without the retail INIs.
 fn retail_ranges_shell() -> Option<SkirmishShellState> {
@@ -714,6 +692,12 @@ fn status_help_keys_use_verified_stt_mappings() {
             SkirmishTrackbarId::Credits0x511
         )),
         Some("STT:SkirmishSliderCredits")
+    );
+    assert_eq!(
+        status_help_key_for_hover(SkirmishHoverTarget::Trackbar(
+            SkirmishTrackbarId::TechLevel0x512
+        )),
+        crate::rules::NPATCH_ENABLED.then_some("STT:SkirmishSliderTech")
     );
     assert_eq!(
         status_help_key_for_hover(SkirmishHoverTarget::MapPreview0x468),

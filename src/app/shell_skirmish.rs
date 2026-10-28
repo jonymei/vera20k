@@ -199,7 +199,8 @@ impl App {
 
         state.frontend.skirmish_shell_chrome =
             crate::render::skirmish_shell_chrome::build_skirmish_shell_chrome_atlas(
-                &state.renderer.gpu,
+                &state.renderer.gpu.device,
+                &state.renderer.gpu.queue,
                 &state.renderer.batch_renderer,
                 assets,
             );

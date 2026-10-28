@@ -143,13 +143,58 @@ pub(super) fn trackbar_value_text_color() -> [f32; 3] {
     SHELL_LABEL_TEXT_RGB
 }
 
-pub(super) fn trackbar_label(state: &AppState, id: SkirmishTrackbarId) -> String {
+pub(super) fn trackbar_label(id: SkirmishTrackbarId) -> (&'static str, &'static str) {
     match id {
-        SkirmishTrackbarId::GameSpeed0x529 => localized_label(state, "GUI:GameSpeed", "Game Speed"),
-        SkirmishTrackbarId::Credits0x511 => localized_label(state, "GUI:Credits", "Credits"),
-        SkirmishTrackbarId::UnitCount0x50c => localized_label(state, "GUI:UnitCount", "Unit Count"),
-        SkirmishTrackbarId::TechLevel0x512 => localized_label(state, "GUI:TechLevel", "Tech Level"),
+        SkirmishTrackbarId::GameSpeed0x529 => ("GUI:GameSpeed", "Game Speed"),
+        SkirmishTrackbarId::Credits0x511 => ("GUI:Credits", "Credits"),
+        SkirmishTrackbarId::UnitCount0x50c => ("GUI:UnitCount", "Unit Count"),
+        SkirmishTrackbarId::TechLevel0x512 => ("GUI:TechLevel", "Tech Level"),
     }
+}
+
+pub(super) fn push_option_text_draws(
+    out: &mut Vec<ShellTextDraw>,
+    font: &BitFont,
+    layout: &SkirmishShellLayout,
+    shell: &SkirmishShellState,
+    mut localized: impl FnMut(&str, &str) -> String,
+) {
+    let mut labels = Vec::new();
+    for checkbox in layout.checkboxes {
+        let (key, fallback) = checkbox_label(checkbox.id);
+        labels.push(PaintLabel {
+            text: localized(key, fallback).into(),
+            rect: checkbox_text_rect(checkbox.rect, layout.scale),
+            align: ShellAlign::V_CENTER,
+            rgb: SHELL_LABEL_TEXT_RGB,
+            path_a_reveal: None,
+        });
+    }
+    for id in shell.trackbar_ids() {
+        let (key, fallback) = trackbar_label(id);
+        labels.extend([
+            PaintLabel {
+                text: localized(key, fallback).into(),
+                rect: trackbar_label_rect_for_id(layout, id),
+                align: ShellAlign::V_CENTER,
+                rgb: SHELL_LABEL_TEXT_RGB,
+                path_a_reveal: None,
+            },
+            PaintLabel {
+                text: trackbar_display_value(shell, id).into(),
+                rect: value_text_rect(trackbar_rect_for_id(layout, id), layout.scale),
+                align: ShellAlign::H_CENTER | ShellAlign::V_CENTER,
+                rgb: trackbar_value_text_color(),
+                path_a_reveal: None,
+            },
+        ]);
+    }
+    out.extend(shell_paint::paint_labels_at_depth_scaled(
+        font,
+        &labels,
+        SHELL_CONTROL_TEXT_DEPTH,
+        layout.scale.factor(),
+    ));
 }
 
 pub(super) fn trackbar_label_rect_for_id(
@@ -657,42 +702,13 @@ pub(super) fn build_shell_text_draws(
 
     push_player_name_edit_text_draw(&mut shell_draws, state, shell, layout);
 
-    for checkbox in layout.checkboxes {
-        let (key, fallback) = checkbox_label(checkbox.id);
-        let label = localized_label(state, key, fallback);
-        push_label_draw(
-            &mut shell_draws,
-            state,
-            &label,
-            checkbox_text_rect(checkbox.rect, scale),
-            SHELL_CONTROL_TEXT_DEPTH,
-            scale.factor(),
-        );
-    }
-
-    for id in shell.trackbar_ids() {
-        let label = trackbar_label(state, id);
-        push_label_draw(
-            &mut shell_draws,
-            state,
-            &label,
-            trackbar_label_rect_for_id(layout, id),
-            SHELL_CONTROL_TEXT_DEPTH,
-            scale.factor(),
-        );
-
-        let value = trackbar_display_value(shell, id);
-        push_text_draw(
-            &mut shell_draws,
-            state,
-            &value,
-            rect_to_text_rect(value_text_rect(trackbar_rect_for_id(layout, id), scale)),
-            trackbar_value_text_color(),
-            ShellAlign::H_CENTER | ShellAlign::V_CENTER,
-            SHELL_CONTROL_TEXT_DEPTH,
-            scale.factor(),
-        );
-    }
+    push_option_text_draws(
+        &mut shell_draws,
+        &state.renderer.bit_font,
+        layout,
+        shell,
+        |key, fallback| localized_label(state, key, fallback),
+    );
 
     push_combo_face_label_draw(
         &mut shell_draws,
