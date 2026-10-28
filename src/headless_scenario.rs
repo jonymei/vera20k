@@ -16579,6 +16579,13 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; all Gattling tank stages and exact saved dual-clock cadence"]
+    fn aymod_gattling_tank_all_stages_keep_saved_burst_cadence() {
+        aymod_gattling_promotion_lifecycle(false, GattlingContinuation::Cadence, &["YTNK"]);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
         aymod_gattling_promotion_lifecycle(true, GattlingContinuation::Stay, &["YTNK", "YAGGUN"]);
@@ -17622,6 +17629,7 @@ mod retail_construction_tests {
     #[derive(Clone, Copy)]
     enum GattlingContinuation {
         Stay,
+        Cadence,
         ChangeOwner,
         Bunker(BunkerRelease),
     }
@@ -18189,7 +18197,60 @@ mod retail_construction_tests {
             );
             // A friendly target (the airship held by Sleep) isolates spin-up
             // from retaliation. No stage/value/rank field is set by this test.
-            let target = spawn_near(&mut scene, if airborne { "ZEP" } else { "NACNST" }, false);
+            let cadence = matches!(continuation, GattlingContinuation::Cadence);
+            if cadence {
+                let rules = &scene.runtime.resources.rules;
+                let unit = scene.sim().entities().get(actor).unwrap();
+                let wait = unit.gattling.value()
+                    / rules
+                        .object(actor_type)
+                        .unwrap()
+                        .gattling_stages
+                        .rate_down()
+                    + rules.general.guard_area_targeting_delay
+                    + 64;
+                queue(&mut scene, Command::Stop { entity_id: actor });
+                queue(
+                    &mut scene,
+                    Command::Guard {
+                        entity_id: actor,
+                        target: None,
+                    },
+                );
+                assert!(
+                    (0..wait).any(|_| {
+                        tick_with_due_commands(&mut scene);
+                        let unit = scene.sim().entities().get(actor).unwrap();
+                        unit.gattling.stage() == 0 && unit.gattling.value() == 0
+                    }),
+                    "all-stage cadence must start after ordinary Stop/Guard winds down"
+                );
+            }
+            let target_kind = if cadence {
+                // Real authored durability, not added HP or altered weapons:
+                // keep one stationary target alive through the full spin-up.
+                scene
+                    .runtime
+                    .resources
+                    .rules
+                    .all_objects()
+                    .filter(|kind| {
+                        kind.category == crate::rules::object_type::ObjectCategory::Building
+                            && kind.primary().is_none()
+                            && !kind.immune
+                            && !kind.invisible_in_game
+                            && kind.strength >= 1500
+                    })
+                    .max_by_key(|kind| kind.strength)
+                    .unwrap()
+                    .id
+                    .clone()
+            } else if airborne {
+                "ZEP".to_owned()
+            } else {
+                "NACNST".to_owned()
+            };
+            let target = spawn_near(&mut scene, &target_kind, false);
             queue(
                 &mut scene,
                 Command::Attack {
@@ -18199,6 +18260,8 @@ mod retail_construction_tests {
             );
             let mut previous_shot = None;
             let mut spinup_shots = 0;
+            let mut stage_shots = [0; 3];
+            let mut cadence_loaded = false;
             let hot = (0..1200).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
                 let mut fired_this_frame = false;
@@ -18211,13 +18274,56 @@ mod retail_construction_tests {
                     if let Some((previous_frame, delay)) = previous_shot {
                         assert!(frame - previous_frame >= delay as u64,
                             "continuous Gattling fire must wait for its retained burst/reload interval");
+                        if cadence {
+                            assert_eq!(frame - previous_frame, delay as u64,
+                                "stationary YTNK must fire when the native full/short-clock gate opens");
+                        }
                     }
-                    previous_shot = Some((frame, entity.saved_rearm_delay()));
+                    let interval = if cadence && entity.weapon_burst.index() != 0 {
+                        // NPAE C2C649/C2C14E: a continuing burst is admitted
+                        // when either retained countdown ends; a final shot
+                        // must wait for the full rearm countdown instead.
+                        entity.saved_rearm_delay().min(entity.rearm_timer.duration())
+                    } else if cadence {
+                        entity.rearm_timer.duration()
+                    } else {
+                        entity.saved_rearm_delay()
+                    };
+                    previous_shot = Some((frame, interval));
+                    if cadence {
+                        let object = scene.runtime.resources.rules.object(actor_type).unwrap();
+                        assert!(!object.use_rof_as_burst_delays());
+                        assert_eq!(object.gattling_stages.weapon_stages(), 3);
+                        let stage = (0..3).find(|&stage| object.elite_weapon_at(stage * 2)
+                            == Some(sim.interner.resolve(fire.weapon_id))).unwrap();
+                        stage_shots[stage] += 1;
+                    }
                     spinup_shots += 1;
                 }
-                fired_this_frame && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0 && spinup_shots >= 2
+                let entity = scene.sim().entities().get(actor).unwrap();
+                if cadence && fired_this_frame && entity.gattling.stage() == 1
+                    && entity.weapon_burst.index() != 0
+                    && entity.saved_rearm_delay() != entity.rearm_timer.duration() && !cadence_loaded {
+                    assert!(entity.rearm_timer.remaining(scene.sim().session.binary_frame() as i32) > 0);
+                    assert!(entity.burst_rearm_remaining(scene.sim().session.binary_frame() as i32) > 0);
+                    let saved = (entity.rearm_timer, entity.saved_rearm_delay(), entity.weapon_burst.index());
+                    let pristine = scene.sim().resolved_terrain().unwrap().clone();
+                    let bytes = save_scene(&scene, "AY middle-stage Gattling exact cadence with both clocks live");
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    let entity = scene.sim().entities().get(actor).unwrap();
+                    assert_eq!((entity.rearm_timer, entity.saved_rearm_delay(), entity.weapon_burst.index()), saved);
+                    cadence_loaded = true;
+                }
+                if cadence {
+                    cadence_loaded && stage_shots.iter().all(|&shots| shots >= 4)
+                } else {
+                    fired_this_frame && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0 && spinup_shots >= 2
+                }
             });
-            assert!(hot, "actual firing must advance the Gattling stage");
+            assert!(
+                hot,
+                "actual firing must advance the Gattling stage: {target_kind} {stage_shots:?}"
+            );
             if let GattlingContinuation::Bunker(release) = continuation {
                 aymod_gattling_bunker_round_trip(&mut scene, actor, target, release);
             }
