@@ -11215,6 +11215,41 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_assert_gattling_reload(
+        scene: &HeadlessScenario,
+        actor: u64,
+        weapon_id: crate::sim::intern::InternedId,
+        firing_rank: crate::sim::combat::veterancy::VeterancyRank,
+    ) {
+        use crate::sim::combat::veterancy::{ftol_scale, has_weapon_ability};
+        let sim = scene.sim();
+        let entity = sim.entities().get(actor).unwrap();
+        let rules = &scene.runtime.resources.rules;
+        let object = rules
+            .object(sim.interner.resolve(entity.type_ref()))
+            .unwrap();
+        let weapon = rules.weapon(sim.interner.resolve(weapon_id)).unwrap();
+        assert_eq!(
+            sim.houses().get(&entity.owner()).unwrap().rof_bias(),
+            crate::util::native_x87::NativeF64Bits::ONE
+        );
+        // GetROF6FD0CB..CE consumes but omits jitter in AY. 6FD136..14C
+        // applies VeteranROF only for the firing rank's ROF ability.
+        let expected =
+            if has_weapon_ability(firing_rank, object, crate::rules::object_type::Ability::Rof) {
+                ftol_scale(weapon.rof, rules.general.veteran_rof)
+            } else {
+                weapon.rof
+            };
+        assert_eq!(entity.rearm_timer.duration(), expected);
+        // Runtime commits N+1 only after all gameplay under native frame N.
+        assert_eq!(
+            entity.rearm_timer.start_frame(),
+            sim.session.binary_frame().wrapping_sub(1) as i32
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_gattling_promotion_lifecycle(airborne: bool, transfer_owner: bool, actors: &[&str]) {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
         use crate::sim::command::{Command, CommandEnvelope};
@@ -11338,12 +11373,20 @@ mod retail_construction_tests {
                             Some((&scene.runtime.resources.rules, &sim.interner))
                         ));
                     }
+                    let firing_rank = scene
+                        .sim()
+                        .entities()
+                        .get(actor)
+                        .unwrap()
+                        .veterancy
+                        .rank_kind();
                     let output = tick_with_due_commands(&mut scene);
                     for event in output.fire_events.iter().filter(|event| {
                         event.attacker_id == actor
                             && event.target == crate::sim::combat::TargetKind::Entity(victim)
                     }) {
                         fired = true;
+                        aymod_assert_gattling_reload(&scene, actor, event.weapon_id, firing_rank);
                         if airborne {
                             let rules = &scene.runtime.resources.rules;
                             let object = rules.object(actor_type).unwrap();
@@ -11404,9 +11447,25 @@ mod retail_construction_tests {
                     target_id: target,
                 },
             );
+            let mut previous_shot = None;
+            let mut spinup_shots = 0;
             let hot = (0..1200).any(|_| {
-                tick_with_due_commands(&mut scene);
-                scene.sim().entities().get(actor).unwrap().gattling.stage() > 0
+                let output = tick_with_due_commands(&mut scene);
+                let mut fired_this_frame = false;
+                for fire in output.fire_events.iter().filter(|event| event.attacker_id == actor) {
+                    fired_this_frame = true;
+                    aymod_assert_gattling_reload(&scene, actor, fire.weapon_id, VeterancyRank::Elite);
+                    let sim = scene.sim();
+                    let entity = sim.entities().get(actor).unwrap();
+                    let frame = sim.session.tick();
+                    if let Some((previous_frame, delay)) = previous_shot {
+                        assert!(frame - previous_frame >= delay as u64,
+                            "continuous Gattling fire must wait for its retained burst/reload interval");
+                    }
+                    previous_shot = Some((frame, entity.saved_rearm_delay()));
+                    spinup_shots += 1;
+                }
+                fired_this_frame && scene.sim().entities().get(actor).unwrap().gattling.stage() > 0 && spinup_shots >= 2
             });
             assert!(hot, "actual firing must advance the Gattling stage");
             let unit = scene.sim().entities().get(actor).unwrap();
@@ -11466,6 +11525,13 @@ mod retail_construction_tests {
                 unit.gattling.stage(),
                 unit.gattling.value(),
             );
+            let saved_rearm = (unit.rearm_timer, unit.saved_rearm_delay());
+            assert!(
+                saved_rearm
+                    .0
+                    .remaining(scene.sim().session.binary_frame() as i32)
+                    > 0
+            );
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let expected_owner = scene.sim().entities().get(actor).unwrap().owner();
             let bytes = save_scene(&scene, "AY promoted hot Gattling");
@@ -11480,6 +11546,10 @@ mod retail_construction_tests {
             }
             let loaded = scene.sim().entities().get(actor).unwrap();
             assert_eq!(loaded.owner(), expected_owner);
+            assert_eq!(
+                (loaded.rearm_timer, loaded.saved_rearm_delay()),
+                saved_rearm
+            );
             assert_eq!(
                 (
                     &loaded.veterancy,
@@ -11543,6 +11613,12 @@ mod retail_construction_tests {
                     .iter()
                     .find(|event| event.attacker_id == actor)
                 {
+                    aymod_assert_gattling_reload(
+                        &scene,
+                        actor,
+                        fire.weapon_id,
+                        VeterancyRank::Elite,
+                    );
                     assert_eq!(scene.sim().interner.resolve(fire.weapon_id), expected);
                     if airborne {
                         let sim = scene.sim();
