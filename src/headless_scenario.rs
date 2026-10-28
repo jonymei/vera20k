@@ -11861,6 +11861,172 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; released AI squid recovers, grabs again and is rescued after load"]
+    fn aymod_released_squid_grabs_again_and_survives_a_second_saved_rescue() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, squid, ship, dolphin) =
+            visit_aymod_dolphin_rescue_after_load(RescueTransfer::None, |_, _, _| {});
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        assert!((0..2000).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let source = sim.entities().get(squid).unwrap();
+            assert!(source.is_alive() && !source.lifecycle.in_limbo());
+            !source.parasite.is_paralyzed(sim.session.binary_frame())
+        }));
+        // The AI cannot receive human DoList input. Resume its real Guard
+        // scanner; neither target selection nor parasite state is injected.
+        let runtime = &mut scene.runtime;
+        runtime
+            .simulation
+            .mission_queue_exact(
+                squid,
+                MissionId::from_known(MissionType::Guard),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        let mut fired = false;
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == squid
+                        && scene.sim().interner.resolve(event.weapon_id) == "SquidGrab"
+                });
+                let sim = scene.sim();
+                sim.entities().get(ship).unwrap().parasite.eater() == Some(squid)
+                    && sim
+                        .entities()
+                        .get(squid)
+                        .unwrap()
+                        .parasite
+                        .class()
+                        .and_then(|state| state.grapple_anim())
+                        .is_some_and(|anim| sim.anim(anim).is_some())
+            }),
+            "the released squid must autonomously grab the same surviving ship again"
+        );
+        assert!(fired);
+        let source = scene.sim().entities().get(squid).unwrap();
+        assert!(source.lifecycle.in_limbo());
+        assert_eq!(source.parasite.class().unwrap().victim(), Some(ship));
+        let anim = source.parasite.class().unwrap().grapple_anim().unwrap();
+        let bytes = save_scene(&scene, "AY second autonomous squid grapple");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().anim(anim).is_some());
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(dolphin).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: dolphin,
+                target_id: ship,
+            },
+        ));
+        let mut rescued_by_shot = false;
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                rescued_by_shot |= output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == dolphin);
+                scene
+                    .sim()
+                    .entities()
+                    .get(ship)
+                    .unwrap()
+                    .parasite
+                    .eater()
+                    .is_none()
+            }),
+            "the same dolphin must rescue the second saved grapple"
+        );
+        assert!(rescued_by_shot);
+        let wave = scene
+            .sim()
+            .waves()
+            .iter()
+            .find_map(|(&id, wave)| {
+                (wave.owner_id() == Some(dolphin) && wave.wave_type() == 0).then_some(id)
+            })
+            .expect("the second rescue must create a real Sonic wave");
+        for id in [squid, ship, dolphin] {
+            let actor = scene.sim().entities().get(id).unwrap();
+            assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+        }
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(squid)
+                .unwrap()
+                .parasite
+                .class()
+                .unwrap()
+                .victim(),
+            None
+        );
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(ship)
+                .unwrap()
+                .parasite
+                .is_paralyzed(scene.sim().session.binary_frame())
+        );
+        let bytes = save_scene(&scene, "AY second rescue retains detached live squid");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().waves().iter().any(|(&id, _)| id == wave));
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            None
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(squid)
+                .unwrap()
+                .parasite
+                .class()
+                .unwrap()
+                .victim(),
+            None
+        );
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            for id in [squid, ship, dolphin] {
+                let actor = sim.entities().get(id).unwrap();
+                assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+            }
+            assert_eq!(sim.entities().get(ship).unwrap().parasite.eater(), None);
+            assert_eq!(
+                sim.entities()
+                    .get(squid)
+                    .unwrap()
+                    .parasite
+                    .class()
+                    .unwrap()
+                    .victim(),
+                None
+            );
+        }
+        assert!(scene.sim().anim(anim).is_none());
+        assert!(!scene.sim().waves().iter().any(|(&id, _)| id == wave));
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; grabbed host owner transfer followed by real dolphin rescue"]
     fn aymod_dolphin_rescues_a_transferred_grappled_destroyer_after_load() {
         visit_aymod_dolphin_rescue_after_load(RescueTransfer::Host, |_, _, _| {});

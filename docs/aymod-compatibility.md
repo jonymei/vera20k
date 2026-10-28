@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD3be4aaf87后本轮仅补LAN科技保留的证据/既有回归断言。前轮F12无窗口GPU与hover已提交；本轮NP/stock各app::lan_service::options::tests9项通过，无ignored/待完成Cargo。实际LAN选项头未传TechLevel，不能按“收到远端科技”假设新增进程回写。完整GUI/WOL共享值/16色仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEADca701900d后本轮补V07同一鱿鱼自然恢复→自主再次缠同船→热存读→同一海豚再次实射救船→原声波恢复/退役。最终NP core新增1项及既有actual dolphin3项通过；无待完成Cargo。仅测试/文档，无新生产机制或critic。F12原生WOL回调7A7F07确实转同一5E3D10解析器，但VERA在线协议另传完整launch，未据此盲改。完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续核F12 WOL原生选项路径及返回离线的进程值；LAN选项头本身不传科技，尚不能据此关闭网络入口/离开全流程。当前WOL live_service::options传完整launch，与LAN文本格式不同，不能把LAN回归扩称WOL结论，也不盲写远端值为离线偏好。当前单值由MultiplayerShellRuntime持有、UI只用launch_options_base.tech_level，不给每个profile复制状态；16色独立开放。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
+- 下一安全动作：按功能优先继续V07多House/多AI竞争缠绕、声波与释放清理的组合边界，复用现有真实场景owner，不重复修已通过的Alt飞机链。新重复捕获覆盖仍只有一组SQD/DEST/DLPH，不等于原崩溃整局或长局验收。F12共享进程科技值/网络返回及16色保留独立开放，不给每个profile复制状态，也不以原生未传tech为由破坏VERA在线完整选项一致性。Return Dubai攻势暂停，V01/F11批准门禁与整体PLAN不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -123,6 +123,13 @@
 - 第二例在第二枚刚发射时用实际AWPWH的正式damage receiver零普通伤害触发既有NP穿透前缀，确实杀死末位GGI[1]（第二原弹射手），不手写列表/游标/生命状态。普通帧完成退场后，正式存读保留两原弹、幸存GGI[0]与cursor0；两个独立原弹击杀都改付当前唯一GGI[0]。这验证穿透receiver到退休的完整边界，不冒称该短窗口内真实狙击手开火/步行准入。
 - 调查中拒绝两个错误前提：普通伤害不能杀limbo驻军；裸UnInit在ScenarioInit之外不会触发Building44EAB8..44EB02名单移除，强行保存会留下不可解析引用，不能当作正常穿透删除来要求引擎改政策。本例改走实际穿透producer，其C2E751列表删除owner已存在。原高价目标的精英奖励封顶也不能按“第二次XP必须增加”误报；最终低价目标两次增长都实际通过。
 - 最终真实AY garrison6项（含新增两项）、RecordKill NP奖励6项通过；读取/列表/奖励仍为既有owners，未增加RNG、timer/Detach调用或保存字段，无新玩法修改/critic，无GUI、固定构建/MOD/原始存档或发布变更。未扩称反序命中、任意非尾删除、完整自动续火、多House、全部子机家族或全V05完成。
+
+### V07同一鱿鱼恢复后自主再捕获、再次存读救船（2026-10-28）
+
+- 新aymod_released_squid_grabs_again_and_survives_a_second_saved_rescue复用唯一visit_aymod_dolphin_rescue_after_load(None)的实际Return Dubai/Battle/困难场景及原SQD/DEST/DLPH，不复制setup、手写寄生指针/目标、替换武器/HP或清瘫痪timer。首轮实际救船与原波退役后普通帧等源瘫痪自然结束，通过既有mission owner把为隔离原波而Sleep的电脑鱿鱼恢复Guard，其真实选敌/移动/开火再次SquidGrab同一艘存活DEST；不向无DoList资格的AI塞玩家Attack。
+- 要求重新建立双向链接和活缠绕动画，正式保存/完整恢复，再由同一只海豚的普通玩家Attack实际Sonic开火救船；三者均活体非limbo、宿主瘫痪解除、双向链接清除。第二只原Wave存在并跨第二次救船存读保留，随后120普通帧链接不复活、三者仍存活，原缠绕动画和原声波自然退役。
+- 首跑在刚写eater、下一轮寄生AI还未建动画时过早unwrap失败；对照既有场景owner的等待条件，改为同时等双向附着与活grapple_anim，未修改生产时序或放宽动画存在要求。最终新增1项与既有actual dolphin3项通过（NP/core/retail gate；忽略项显式执行），中间重复不叠加。没有新增生产代码、RNG调用、timer写入、Detach调用或保存字段，无新critic；没有启动GUI、修改MOD/原档/固定版或发布。
+- 结论限同一组对象的两个完整循环及中途保存恢复，不等于多AI竞争、全部换主组合、长期抗压或用户无档原局精确回放；V07及整体目标保持开放。
 
 ### V07寄生源换主：第三House/宿主House、存读解缠及GPU（2026-10-28）
 
@@ -360,6 +367,8 @@
 - 本轮最终NP render87+chrome10+UI142+实际GPU1=240项通过，stock三个模块239项通过；不叠加前轮或重复计数。NP renderer其余2项、stock renderer1项、两模式chrome各3项ignored未跑。旧294/206项为前轮覆盖，不代表本轮重复执行session；未跑全仓库/Clippy或Python套件。
 - 本条是UI/设置和启动参数链，未改sim科技准入/AI权重/兵种数值；依review.md的UI排除项不新增玩法critic。未启动GUI、改MOD配置/原始存档或固定构建，也未推送/发布。越界设置的完整交互、LAN/WOL接收远端科技再返回离线时的共享值回流及完整GUI仍开放；普通/电脑House初值证明不等于长局AI或所有科技准入测试，F12和整个目标继续开放。
 - 后续LAN调查纠正一个前提：实际AY ParsePacket5E4D3C..5E4D9B先辨别BC/BD并查询C2/C9，5E4DA6开始解析选项头；5E4DE1/5E4E01写当前/选定速度，5E4E21写资金、5E4E41写单位数，随后flags、mode、cooperative difficulty（5E4F44），这一头部没有TechLevel822CF4字段。现有正式projected_options→LanMessage→parse_options→accept_network_host_setup保持接收方已有tech，不需猜测加入回写。扩展既有full_options回归用host3/guest7验证解析及接受后仍7，NP/stock各options模块9项通过。只读field扫描仍找到5B6A96、5B8E8E、5B96A5、5C48BA、76EDE2等其他写入口，未证明全部属于活跃YR联机路径，不能凭地址或旧控件550接入；现有WOL live_service完整launch传输是另一路，保留调查。未改变生产行为、保存字段、RNG/timer/Detach，无新critic。
+
+- WOL后续静读：实际AY回调7A7EA0在7A7EF0复制消息，7A7F07直接调用5E3D10，返回后才在7A7F72按会话模式分流；因此不能把旧5B控件550读写当作WOL扩展科技控件的证据。当前VERA的live_service::options事件反序列化wire::Options完整launch，canonical_options也保留tech_level，wire::Options::into_options只重绑定local_player_index/roster，不同于原生文本头；该现代服务协议的一致性及离线偏好隔离尚需端到端验证，未擅自删传输字段或写回离线tech，也未关闭F12。
 
 ### V10实际AY修船时的正常舰炮伤害及存读（2026-10-28）
 
