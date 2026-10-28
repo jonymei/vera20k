@@ -5972,6 +5972,257 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real ORCA empties on ground target, saves return/partial reload and attacks air after rearming"]
+    fn aymod_orca_returns_reloads_and_resumes_air_combat_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::movement::air_movement;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, plane, ground_target) = aymod_nearby_pair("ORCA", "NACNST", false);
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let defender = scene.add_human_house(
+            "OrcaTargetController",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (owner, airfield, capacity) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.change_owner_with_rules(
+                ground_target,
+                defender,
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            let entity = sim.entities().get(plane).unwrap();
+            let owner = entity.owner();
+            let at = entity.position;
+            let kind = rules.object("ORCA").unwrap();
+            assert!(kind.npatch_aa_combat && kind.airport_bound && kind.ammo > 1);
+            let dock = kind.dock.first().unwrap();
+            assert!(rules.object(dock).unwrap().unit_reload);
+            let airfield = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &[dock],
+            )[0];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 20, i32::from(at.ry()))),
+                &["NANRCT"],
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: ground_target,
+                },
+            ));
+            (owner, airfield, kind.ammo)
+        };
+        let restore = |scene: &mut HeadlessScenario| {
+            let entity = scene.sim().entities().get(plane).unwrap();
+            let state = (
+                entity.ammo().unwrap().current(),
+                entity.ammo().unwrap().dock(),
+                entity.mission.effective(),
+                entity.mission.handler_state(),
+                entity.rearm_timer,
+            );
+            let linked = entity.radio_contacts.contains(airfield);
+            let reciprocal = scene
+                .sim()
+                .entities()
+                .get(airfield)
+                .unwrap()
+                .radio_contacts
+                .contains(plane);
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(scene, "AY ORCA return and reload");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            let entity = scene.sim().entities().get(plane).unwrap();
+            assert_eq!(
+                (
+                    entity.ammo().unwrap().current(),
+                    entity.ammo().unwrap().dock(),
+                    entity.mission.effective(),
+                    entity.mission.handler_state(),
+                    entity.rearm_timer
+                ),
+                state
+            );
+            assert_eq!(entity.radio_contacts.contains(airfield), linked);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(airfield)
+                    .unwrap()
+                    .radio_contacts
+                    .contains(plane),
+                reciprocal
+            );
+        };
+        let before = scene
+            .sim()
+            .entities()
+            .get(ground_target)
+            .unwrap()
+            .health
+            .current();
+        let mut shots = 0;
+        assert!(
+            (0..3000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                shots += output
+                    .fire_events
+                    .iter()
+                    .filter(|event| {
+                        event.attacker_id == plane
+                            && event.target == crate::sim::combat::TargetKind::Entity(ground_target)
+                    })
+                    .count();
+                scene
+                    .sim()
+                    .entities()
+                    .get(plane)
+                    .unwrap()
+                    .ammo()
+                    .unwrap()
+                    .current()
+                    == 0
+            }),
+            "ordinary ground attacks must consume the real aircraft magazine"
+        );
+        assert!(shots >= capacity as usize);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(ground_target)
+                .unwrap()
+                .health
+                .current()
+                < before
+        );
+        restore(&mut scene);
+        let mut entered = false;
+        let mut partial = false;
+        let mut full = false;
+        for _ in 0..6000 {
+            tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let entity = sim.entities().get(plane).unwrap();
+            entered |= entity.mission.effective().known() == Some(MissionType::Enter);
+            let landed = air_movement::current_fly_height(entity, sim.resolved_terrain()) == 0;
+            let linked = entity.radio_contacts.contains(airfield)
+                && sim
+                    .entities()
+                    .get(airfield)
+                    .unwrap()
+                    .radio_contacts
+                    .contains(plane);
+            let ammo = entity.ammo().unwrap().current();
+            if !partial && landed && linked && ammo > 0 && ammo < capacity {
+                restore(&mut scene);
+                partial = true;
+            }
+            if partial
+                && landed
+                && linked
+                && ammo == capacity
+                && scene
+                    .sim()
+                    .entities()
+                    .get(plane)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    == Some(MissionType::Guard)
+            {
+                full = true;
+                break;
+            }
+        }
+        assert!(
+            entered && partial && full,
+            "real return/reload incomplete: entered={entered} partial={partial} full={full}"
+        );
+        restore(&mut scene);
+        let air_target = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(airfield).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                defender,
+                cells_nearest((i32::from(at.rx()) + 6, i32::from(at.ry()))),
+                &["ZEP"],
+            )[0]
+        };
+        aymod_lift_gattling_target(&mut scene, plane, air_target);
+        let air_hp = scene
+            .sim()
+            .entities()
+            .get(air_target)
+            .unwrap()
+            .health
+            .current();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: plane,
+                target_id: air_target,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..1200).any(|_| {
+                let sim = scene.sim();
+                let was_airborne = air_movement::is_high_flying(
+                    sim.entities().get(air_target).unwrap(),
+                    sim.resolved_terrain(),
+                    Some((&scene.runtime.resources.rules, &sim.interner)),
+                );
+                let output = tick_with_due_commands(&mut scene);
+                let shot = output.fire_events.iter().any(|event| {
+                    event.attacker_id == plane
+                        && event.target == crate::sim::combat::TargetKind::Entity(air_target)
+                });
+                if shot {
+                    assert!(was_airborne);
+                }
+                fired |= shot;
+                let hit = scene
+                    .sim()
+                    .entities()
+                    .get(air_target)
+                    .is_none_or(|entity| entity.health.current() < air_hp);
+                if hit {
+                    assert!(was_airborne);
+                }
+                hit
+            }) && fired,
+            "restored rearmed ORCA must leave its pad and damage a genuinely airborne target"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY ORCA airborne and ground Attack damage"]
     fn aymod_orca_attacks_airborne_and_ground_targets() {
         use crate::sim::command::{Command, CommandEnvelope};
