@@ -9584,6 +9584,120 @@ mod retail_construction_tests {
                 .map(|victim| victim.health.current()),
             hp
         );
+        let (vehicle, vehicle_hp) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let level = sim.terrain_cell_level(at.rx(), at.ry());
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 6
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == level)
+                })
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let vehicle = spawn_on_free_cells(sim, rules, enemy, sites, &["BFRT"])[0];
+            assert!(rules.object("BFRT").unwrap().omni_crush_resistant);
+            sim.mission_queue_exact(
+                vehicle,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            (
+                vehicle,
+                sim.entities().get(vehicle).unwrap().health.current(),
+            )
+        };
+        let (mut infantry_retired, mut vehicle_saved, mut vehicle_fired, mut vehicle_hit) =
+            (false, false, false, false);
+        assert!(
+            (0..3000).any(|_| {
+                let was_saved = vehicle_saved;
+                let output = tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                infantry_retired |= sim.entities().get(victim).is_none();
+                let team = sim.team_script_vm.team(team_id).unwrap();
+                let fortress = sim.entities().get(carrier).unwrap();
+                if !vehicle_saved
+                    && infantry_retired
+                    && team.cursor() == 5
+                    && team.current_action(&sim.team_script_vm) == 0
+                    && fortress.attack_target.target() == Some(TargetKind::Entity(vehicle))
+                {
+                    let bytes = save_scene(
+                        &scene,
+                        "AY BFRT naturally retargets vehicle after infantry death",
+                    );
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    let sim = scene.sim();
+                    assert!(sim.entities().get(victim).is_none());
+                    assert_eq!(sim.team_script_vm.team(team_id).unwrap().cursor(), 5);
+                    assert_eq!(
+                        sim.entities().get(carrier).unwrap().attack_target.target(),
+                        Some(TargetKind::Entity(vehicle))
+                    );
+                    assert!(riders.iter().all(|id| {
+                        sim.entities()
+                            .get(*id)
+                            .unwrap()
+                            .passenger_role
+                            .open_transport_id()
+                            == Some(carrier)
+                    }));
+                    vehicle_saved = true;
+                }
+                vehicle_fired |= was_saved
+                    && output.fire_events.iter().any(|event| {
+                        riders.contains(&event.attacker_id)
+                            && event.target == TargetKind::Entity(vehicle)
+                    });
+                vehicle_hit |= was_saved
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(vehicle)
+                        .is_none_or(|unit| unit.health.current() < vehicle_hp);
+                vehicle_saved && vehicle_fired && vehicle_hit
+            }),
+            "BFRT follow-up incomplete: retired={infantry_retired} saved={vehicle_saved} fired={vehicle_fired} hit={vehicle_hit}; team={:?} carrier={:?}",
+            scene.sim().team_script_vm.team(team_id).map(|team| (
+                team.cursor(),
+                team.current_action(&scene.sim().team_script_vm)
+            )),
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .map(|unit| (unit.attack_target.target(), unit.mission.current()))
+        );
+        let hp = scene
+            .sim()
+            .entities()
+            .get(vehicle)
+            .map(|unit| unit.health.current());
+        let bytes = save_scene(
+            &scene,
+            "AY BFRT vehicle hit after natural script advancement",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(vehicle)
+                .map(|unit| unit.health.current()),
+            hp
+        );
     }
 
     #[cfg(feature = "npatch")]
