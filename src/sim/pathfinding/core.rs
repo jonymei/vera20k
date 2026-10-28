@@ -1276,11 +1276,11 @@ pub struct PathCell {
 /// sub-cell allocator picks a free slot. Stock `rulesmd.ini` gives 56 of 60
 /// temperate terrain types `TemperateOccupationBits=4` (a single bit), so most
 /// tree cells hold two infantry; only `=7` closes the cell.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub const INFANTRY_SUBCELL_MASK: u8 = 0x1C;
 
 /// Whether a terrain object with these cell-plane bits closes the cell to infantry.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn terrain_object_blocks_infantry(cell_bits: u8) -> bool {
     cell_bits & INFANTRY_SUBCELL_MASK == INFANTRY_SUBCELL_MASK
 }
@@ -1582,7 +1582,7 @@ impl PathGrid {
     /// to infantry when its mask fills every functional sub-cell. Any other
     /// blocking clause (cliff, overlay, `ground_walk_blocked`, destroyed bridge)
     /// still blocks.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn is_walkable_for_infantry(&self, x: u16, y: u16) -> bool {
         if x >= self.width || y >= self.height {
             return false;
