@@ -175,10 +175,11 @@ pub enum RescueTransfer {
 #[cfg(feature = "npatch")]
 /// Visit the actual shot, restored wave, each following frame and final retirement.
 /// The callback is read-only and cannot replace simulation geometry or combat.
+/// Returns the retired-wave scene and squid/host/dolphin IDs for recovery tests.
 pub fn visit_aymod_dolphin_rescue_after_load(
     transfer: RescueTransfer,
     mut visit: impl FnMut(&str, &HeadlessScenario, u64),
-) {
+) -> (HeadlessScenario, u64, u64, u64) {
     use crate::sim::command::{Command, CommandEnvelope};
     use crate::sim::mission::{MissionId, MissionType};
     use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -470,4 +471,5 @@ pub fn visit_aymod_dolphin_rescue_after_load(
             .grapple_anim(),
         None
     );
+    (scene, squid, ship, dolphin)
 }

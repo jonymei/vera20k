@@ -9857,11 +9857,102 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; attached squid changes house before saved dolphin rescue"]
     fn aymod_dolphin_rescues_after_the_attached_squid_changes_owner() {
+        use crate::rules::terrain_rules::LandType;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::locomotor::MovementLayer;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for transfer in [RescueTransfer::Parasite, RescueTransfer::ParasiteToHost] {
-            visit_aymod_dolphin_rescue_after_load(transfer, |_, _, _| {});
+            let (mut scene, squid, ship, _) =
+                visit_aymod_dolphin_rescue_after_load(transfer, |_, _, _| {});
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let source = scene.sim().entities().get(squid).unwrap();
+            let owner = source.owner();
+            let start = source.position;
+            let timer = source.parasite.paralysis();
+            let object = scene.runtime.resources.rules.object("SQD").unwrap();
+            let weapon = scene
+                .runtime
+                .resources
+                .rules
+                .weapon(object.primary().unwrap())
+                .unwrap();
+            // ExitUnit62A7AE..7DD writes +6A0 for three times weapon-0 ROF;
+            // never clear the timer or reinitialize the released locomotor.
+            assert_eq!(timer.duration(), weapon.rof.wrapping_mul(3));
+            assert!(timer.remaining(scene.sim().session.binary_frame() as i32) > 0);
+            let bytes = save_scene(&scene, "AY released captured squid still paralyzed");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(squid)
+                    .unwrap()
+                    .parasite
+                    .paralysis(),
+                timer
+            );
+            assert!(
+                (0..2000).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    let actor = sim.entities().get(squid).unwrap();
+                    assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+                    assert_eq!(actor.owner(), owner);
+                    assert_eq!(actor.parasite.class().unwrap().victim(), None);
+                    assert_eq!(sim.entities().get(ship).unwrap().parasite.eater(), None);
+                    !actor.parasite.is_paralyzed(sim.session.binary_frame())
+                }),
+                "{transfer:?}: release paralysis must expire through ordinary frames"
+            );
+            let sim = scene.sim();
+            let destination = cells_nearest((i32::from(start.rx()), i32::from(start.ry())))
+                .into_iter()
+                .filter_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let distance = x.abs_diff(start.rx()).max(y.abs_diff(start.ry()));
+                    let cell = sim.resolved_terrain()?.cell(x, y)?;
+                    (distance == 1
+                        && !cell.outside_playfield
+                        && cell.land_type == LandType::Water.as_index()
+                        && cell.level == start.z()
+                        && !cell.bridge_facts.has_structural_bridge()
+                        && sim
+                            .occupancy()
+                            .get(x, y)
+                            .is_none_or(|entry| entry.is_empty_on(MovementLayer::Ground)))
+                    .then_some((x, y))
+                })
+                .next()
+                .expect("released squid has an adjacent free water destination");
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: squid,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let actor = scene.sim().entities().get(squid).unwrap();
+                    actor.is_alive()
+                        && !actor.lifecycle.in_limbo()
+                        && (actor.position.rx(), actor.position.ry()) == destination
+                }),
+                "{transfer:?}: new owner must move the released squid after natural expiry"
+            );
+            let bytes = save_scene(&scene, "AY captured squid moved after natural recovery");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let actor = scene.sim().entities().get(squid).unwrap();
+            assert_eq!(actor.owner(), owner);
+            assert_eq!((actor.position.rx(), actor.position.ry()), destination);
+            assert_eq!(actor.parasite.class().unwrap().victim(), None);
         }
     }
-
 
     #[cfg(feature = "npatch")]
     #[test]
