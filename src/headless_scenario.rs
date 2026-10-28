@@ -7125,111 +7125,426 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    fn aymod_allied_hospital(
+        kind: &str,
+        patient_type: &str,
+    ) -> (HeadlessScenario, u64, u64, u64, InternedId, InternedId) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{EntryBaseAction, EntryClickAction};
+        let mut scene = aymod_battle(0);
+        let local = house_of(scene.sim(), "Americans");
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index(if kind == "GAROBO" {
+                "Americans"
+            } else {
+                "Russians"
+            })
+            .unwrap();
+        let foreign = scene.add_human_house(
+            "HospitalAlly",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (hospital, provider, patient) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let object = rules.object(kind).unwrap();
+            assert!(object.hospital && object.powered && object.power < 0);
+            let center = aymod_anchor(sim, local);
+            let hospital =
+                spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &[kind])[0];
+            let provider =
+                spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &["GAPOWR"])[0];
+            // A powered allied House must not donate electricity to the
+            // hospital owner's independent House power state.
+            spawn_on_free_cells(
+                sim,
+                rules,
+                local,
+                cells_nearest((center.0 + 12, center.1)),
+                &["GAPOWR"],
+            );
+            let patient =
+                spawn_on_free_cells(sim, rules, local, cells_nearest(center), &[patient_type])[0];
+            sim.substrate
+                .entities
+                .get_mut(patient)
+                .unwrap()
+                .health
+                .set(1);
+            (hospital, provider, patient)
+        };
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        assert_eq!(
+            scene
+                .sim()
+                .building_operational_state(hospital, &scene.runtime.resources.rules),
+            Some(true)
+        );
+        assert_ne!(
+            scene.sim().entry_click_action(
+                patient,
+                hospital,
+                EntryBaseAction::Select,
+                &scene.runtime.resources.rules,
+                Default::default()
+            ),
+            Some(EntryClickAction::Enter)
+        );
+        {
+            let sim = &mut scene.runtime.simulation;
+            let index = |owner| {
+                sim.houses()
+                    .order()
+                    .iter()
+                    .position(|&id| id == owner)
+                    .unwrap() as i32
+            };
+            let (local_index, foreign_index) = (index(local), index(foreign));
+            let tick = sim.session.tick() + 1;
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                tick,
+                Command::Ally {
+                    house_index: foreign_index,
+                },
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                foreign,
+                tick,
+                Command::Ally {
+                    house_index: local_index,
+                },
+            ));
+        }
+        tick_with_due_commands(&mut scene);
+        assert!(crate::map::houses::are_houses_mutually_allied(
+            scene.sim().house_alliances(),
+            scene.sim().interner.resolve(local),
+            scene.sim().interner.resolve(foreign)
+        ));
+        (scene, hospital, provider, patient, local, foreign)
+    }
+
+    #[cfg(feature = "npatch")]
     #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; allied hospital admission, natural blackout and saved treatment"]
-    fn aymod_allied_hospital_keeps_admitting_and_healing_during_natural_low_power() {
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital alliance break during saved treatment"]
+    fn aymod_hospital_finishes_admitted_patient_after_alliance_break() {
+        use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         use crate::sim::world::{EntryBaseAction, EntryClickAction};
         for kind in ["GAROBO", "NARADR"] {
-            let mut scene = aymod_battle(0);
+            let (mut scene, hospital, _, patient, local, foreign) =
+                aymod_allied_hospital(kind, "ENGINEER");
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
-            let local = house_of(scene.sim(), "Americans");
-            let country = scene
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                sim.session.tick() + 1,
+                Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                sim.entities().get(patient).unwrap().lifecycle.in_limbo()
+                    && sim
+                        .entities()
+                        .get(hospital)
+                        .unwrap()
+                        .mission
+                        .current()
+                        .known()
+                        == Some(MissionType::Repair)
+            }));
+            // Building Hospital44B870 and RepairTick6F4CD7 do not recheck
+            // diplomacy for an admitted patient; new CanLoad43C311 does.
+            let sim = &mut scene.runtime.simulation;
+            let index = sim
+                .houses()
+                .order()
+                .iter()
+                .position(|&id| id == foreign)
+                .unwrap();
+            sim.queue_command(CommandEnvelope::new(
+                local,
+                sim.session.tick() + 1,
+                Command::Ally {
+                    house_index: index as i32,
+                },
+            ));
+            tick_with_due_commands(&mut scene);
+            assert!(!crate::map::houses::are_houses_mutually_allied(
+                scene.sim().house_alliances(),
+                scene.sim().interner.resolve(local),
+                scene.sim().interner.resolve(foreign),
+            ));
+            let before = scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .health
+                .current();
+            let strength = scene
                 .runtime
                 .resources
                 .rules
-                .country_index(if kind == "GAROBO" {
-                    "Americans"
-                } else {
-                    "Russians"
-                })
-                .unwrap();
-            let foreign = scene.add_human_house(
-                "HospitalAlly",
-                LaunchCountry::from_country_index(u32::from(country.0)),
-            );
-            let (hospital, provider, patient) = {
-                let runtime = &mut scene.runtime;
-                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-                let object = rules.object(kind).unwrap();
-                assert!(object.hospital && object.powered && object.power < 0);
-                let center = aymod_anchor(sim, local);
-                let hospital =
-                    spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &[kind])[0];
-                let provider =
-                    spawn_on_free_cells(sim, rules, foreign, cells_nearest(center), &["GAPOWR"])[0];
-                // A powered allied House must not donate electricity to the
-                // hospital owner's independent House power state.
-                spawn_on_free_cells(
-                    sim,
-                    rules,
-                    local,
-                    cells_nearest((center.0 + 12, center.1)),
-                    &["GAPOWR"],
-                );
-                let patient = spawn_on_free_cells(sim, rules, local, cells_nearest(center), &["E1"])[0];
-                sim.substrate
-                    .entities
-                    .get_mut(patient)
-                    .unwrap()
-                    .health
-                    .set(1);
-                (hospital, provider, patient)
-            };
-            for _ in 0..3 {
-                tick_with_due_commands(&mut scene);
-            }
+                .object("ENGINEER")
+                .unwrap()
+                .strength;
+            assert!(before < strength);
+            let bytes = save_scene(&scene, "AY hospital after alliance removal");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             assert_eq!(
                 scene
                     .sim()
-                    .building_operational_state(hospital, &scene.runtime.resources.rules),
-                Some(true)
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id(),
+                Some(hospital)
             );
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let actor = scene.sim().entities().get(patient).unwrap();
+                    assert_eq!(actor.owner(), local);
+                    !actor.lifecycle.in_limbo() && actor.health.current() == strength
+                }),
+                "{kind}: alliance break must not evict or strand the admitted patient"
+            );
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .is_empty()
+            }));
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id(),
+                None
+            );
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(hospital).unwrap().position;
+            let second = spawn_on_free_cells(
+                sim,
+                rules,
+                local,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["E1"],
+            )[0];
+            sim.substrate
+                .entities
+                .get_mut(second)
+                .unwrap()
+                .health
+                .set(1);
             assert_ne!(
-                scene.sim().entry_click_action(
-                    patient,
+                sim.entry_click_action(
+                    second,
                     hospital,
                     EntryBaseAction::Select,
-                    &scene.runtime.resources.rules,
+                    rules,
                     Default::default()
                 ),
                 Some(EntryClickAction::Enter)
             );
-            {
-                let sim = &mut scene.runtime.simulation;
-                let index = |owner| {
-                    sim.houses()
-                        .order()
-                        .iter()
-                        .position(|&id| id == owner)
-                        .unwrap() as i32
-                };
-                let (local_index, foreign_index) = (index(local), index(foreign));
-                let tick = sim.session.tick() + 1;
-                sim.queue_command(CommandEnvelope::new(
-                    local,
-                    tick,
-                    Command::Ally {
-                        house_index: foreign_index,
-                    },
-                ));
-                sim.queue_command(CommandEnvelope::new(
-                    foreign,
-                    tick,
-                    Command::Ally {
-                        house_index: local_index,
-                    },
-                ));
-            }
-            tick_with_due_commands(&mut scene);
-            assert!(crate::map::houses::are_houses_mutually_allied(
+            let bytes = save_scene(&scene, "AY hospital released former ally patient");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .health
+                    .current(),
+                strength
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .is_empty()
+            );
+            assert!(!crate::map::houses::are_houses_mutually_allied(
                 scene.sim().house_alliances(),
                 scene.sim().interner.resolve(local),
                 scene.sim().interner.resolve(foreign)
             ));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two simultaneous hospital patients and saved pending entry"]
+    fn aymod_hospital_serializes_two_same_tick_enter_orders_across_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{EntryBaseAction, EntryClickAction};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, _, first, local, _) = aymod_allied_hospital(kind, "ENGINEER");
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(hospital).unwrap().position;
+            let second = spawn_on_free_cells(
+                sim,
+                rules,
+                local,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["ENGINEER"],
+            )[0];
+            sim.substrate
+                .entities
+                .get_mut(second)
+                .unwrap()
+                .health
+                .set(1);
+            let strength = rules.object("ENGINEER").unwrap().strength;
+            // Both normal cursors offer Enter before the same-tick events.
+            for id in [first, second] {
+                assert_eq!(
+                    sim.entry_click_action(
+                        id,
+                        hospital,
+                        EntryBaseAction::Select,
+                        rules,
+                        Default::default()
+                    ),
+                    Some(EntryClickAction::Enter)
+                );
+                sim.queue_command(CommandEnvelope::new(
+                    local,
+                    sim.session.tick() + 1,
+                    Command::clicked_mission(id, MissionType::Enter, TargetKind::Entity(hospital)),
+                ));
+            }
+            tick_with_due_commands(&mut scene);
+            // Infantry51AC6D..51ACC5 queues the busy Building in +500;
+            // do not create a separate hospital FIFO or force-clear contact.
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(second)
+                    .unwrap()
+                    .pending_entry
+                    .get(),
+                Some(hospital)
+            );
+            let bytes = save_scene(&scene, "AY hospital simultaneous Enter reservation");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(second)
+                    .unwrap()
+                    .pending_entry
+                    .get(),
+                Some(hospital)
+            );
+            let mut admitted = [false; 2];
+            assert!(
+                (0..3600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    let building = sim.entities().get(hospital).unwrap();
+                    let cargo = building.passenger_role.cargo();
+                    assert!(
+                        cargo.is_none_or(|cargo| cargo.passengers().len() <= 1),
+                        "{kind}: one radio reservation must not overwrite or duplicate Cargo"
+                    );
+                    for (index, id) in [first, second].into_iter().enumerate() {
+                        let actor = sim.entities().get(id).unwrap();
+                        assert_eq!(actor.owner(), local);
+                        assert!(actor.is_alive());
+                        if actor.lifecycle.in_limbo() {
+                            admitted[index] = true;
+                            assert_eq!(actor.passenger_role.inside_transport_id(), Some(hospital));
+                            assert_eq!(cargo.unwrap().passengers(), &[id]);
+                        }
+                    }
+                    admitted.iter().all(|&value| value)
+                        && [first, second].into_iter().all(|id| {
+                            let actor = sim.entities().get(id).unwrap();
+                            !actor.lifecycle.in_limbo()
+                                && actor.health.current() == strength
+                                && actor.passenger_role.inside_transport_id().is_none()
+                        })
+                        && building.radio_contacts.is_empty()
+                }),
+                "{kind}: both admitted patients must finish and release their reservations"
+            );
+            let bytes = save_scene(&scene, "AY hospital completed contending patients");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            for id in [first, second] {
+                let actor = scene.sim().entities().get(id).unwrap();
+                assert_eq!(actor.health.current(), strength);
+                assert!(!actor.lifecycle.in_limbo());
+                assert_eq!(actor.pending_entry.get(), None);
+            }
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .is_empty()
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; allied hospital admission, natural blackout and saved treatment"]
+    fn aymod_allied_hospital_keeps_admitting_and_healing_during_natural_low_power() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{EntryBaseAction, EntryClickAction};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, provider, patient, local, foreign) =
+                aymod_allied_hospital(kind, "E1");
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let enter = |scene: &mut HeadlessScenario, patient| {
                 assert_eq!(
                     scene.sim().entry_click_action(
@@ -7251,7 +7566,11 @@ mod retail_construction_tests {
                 sim.queue_command(CommandEnvelope::new(
                     local,
                     sim.session.tick() + 1,
-                    Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+                    Command::clicked_mission(
+                        patient,
+                        MissionType::Enter,
+                        TargetKind::Entity(hospital),
+                    ),
                 ));
                 assert!(
                     (0..600).any(|_| {
@@ -7344,7 +7663,10 @@ mod retail_construction_tests {
                         assert!(sim.power_states().get(&foreign).unwrap().is_low_power());
                         assert!(sim.entities().get(hospital).unwrap().building_online());
                         assert_eq!(
-                            sim.building_operational_state(hospital, &scene.runtime.resources.rules),
+                            sim.building_operational_state(
+                                hospital,
+                                &scene.runtime.resources.rules
+                            ),
                             Some(false)
                         );
                         let actor = sim.entities().get(patient).unwrap();
@@ -7462,7 +7784,6 @@ mod retail_construction_tests {
             }
         }
     }
-
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual admitted hospital patient across manual power-off and saved treatment"]
