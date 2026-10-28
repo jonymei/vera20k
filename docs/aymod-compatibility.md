@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEADe0a124c71后补V10实际AY飞兵坠落存读：正常Move起飞/正式致死receiver，高空致死边沿和低于208的离地坠落各完整存读，保持HP0/坐标/CrashLatch/速率/JumpjetRuntime/步兵leaf；后续帧不复活、共享目标setter拒绝，最终物理移除后再次存读无旧实体。最终两个实际AY场景和jumpjet_infantry16项，共18项通过；模块另5项ignored本轮未执行，不计通过。无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD3ceafa47b后补V10电脑GAPILL实战消费者：实际typed投射物AG=true/AA=false，普通Guard期间不把高/低空坠落的JUMPJET设为目标或向其开火，跨两次坠落中存读仍HP0且最终退休。同一碉堡必须自主向场上原已存活的地面目标发射且目标实际掉血/移除，排除闲置射手的空通过。最终新实际1、既有实际坠落2、jumpjet_infantry16，共19项通过；模块另5项ignored未执行，不计通过。无待完成Cargo。仅测试/文档，无新生产机制或critic；全量功能/完整GUI/WOL共享值/16色及多AI长局仍开放。Ares旧两项gap夹具失败保留，未发布，整体goal开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V10真实AG-only Guard对坠落飞兵的自主索敌/开火拒绝，需同一射手能对活体地面目标实际开火的正对照，避免用闲置射手冒充拒绝证明；复用原目标/死亡owners，不新增AG免疫。F07受击后幸存再潜、V09特殊生命周期、V07多AI竞争、F12网络返回/16色及V01/F11批准门禁保留，Return Dubai攻势暂停。Alt飞机入口及GADEPT/GAYARD实际验证已完成，不重复修。
+- 下一安全动作：转V08电脑BFRT保留团队关系时的脚本卸载/重新装载与存读，先核实际AY ScriptType消费者及既有transport/team owners；不要把已有解散卸载/重建队案例重复称新功能。F07受击后幸存再潜、V09特殊生命周期、V07多AI竞争、F12网络返回/16色及V01/F11批准门禁保留，Return Dubai攻势暂停。Alt飞机入口及GADEPT/GAYARD实际验证已完成，不重复修。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -24,8 +24,10 @@
 - 实际AY Battle场景：JUMPJET经普通Move自行起飞，使用正式致死receiver进入坠落，穿过208高度后落地退休；未手写高度、动作或坠落状态。该例不是实际AA武器命中；另有零售Dustbowl的HTK真实开火击落、整段下降/目标清理/无尸体回归在NP与stock均通过。没有新增原生执行golden；原stock crash corpus保持不变且只在stock断言，NP使用独立行为回归。
 - 最终retail gate下，NP/stock各运行jumpjet_infantry16、infantry_action16、infantry_death5、chronosphere13、cell_receiver14项；另各跑零售实弹坠落1项，实际AY场景1项通过。旧零帧死亡序列测试与零售坠落测试原先硬断言HP1，在NP下先失败，现依据51BC67区分模式，其余生命周期/下降/退休断言保留。只读critic无可操作发现，之后补齐上述consumer测试；未启动GUI、未改MOD/原始保存/固定玩家版。
 - 2026-10-29新增实际AY坠落存读例，共用原自然Move起飞/正式致死receiver夹具：高空致死后尚未下一次普通AI、低于208且仍离地的坠落阶段各完整保存/资源恢复，保持世界坐标、HP0、完整CrashLatch、下落速率、JumpjetRuntime及InfantryMissionLeaf。恢复后共享目标setter仍拒绝，所有后续离地帧保持HP0；最终正常物理移除，再存读没有尸体/旧实体。未手写高度/动作/坠落、重置时钟或放松保存验证；这仍不是实际AA弹击杀。
-- 最终NP/core/retail gate下，两个实际AY坠落场景2项和jumpjet_infantry16项通过；模块另5个ignored不计通过。本轮仅测试/文档，无新增生产RNG/timer/Detach/保存字段，无玩法修改或新critic；未启动GUI、未动MOD/原始存档/固定构建、未发布。
-- 残余：真实AG-only攻击者完整自主索敌/开火循环、NP原生下降/RNG逐帧对照、多AI实局仍未验；本次仅补基本坠落的高/低空存读及最终退休，不把共享setter拒绝冒称自主战斗通过。V10其他独立机制继续保持各自状态。
+- 续验实际电脑GAPILL普通Guard：正式规则确认其投射物AG=true/AA=false，合法同高地形放置，未手写目标/射程/弹药/时钟。逐帧验证活体碉堡不选择或发射攻击正在高/低空坠落的JUMPJET；共用高/低空完整存读和最终物理移除端点。另捕获原已存活且在地面的对象HP，要求同一碉堡自主向其中一个发射且该实际目标掉血或退休，证明不是射手未工作。
+- 正对照不强迫AI改打人为指定的GAPOWR/E1：最初这项要求失败，观察到碉堡已处于Attack、另有实际目标并处于Rearm。最终记录普通Guard实际选择的存活地面目标及真实fire事件/伤害，不清原目标、发显式Attack、覆盖任务或延长reload来制造通过；不把正常目标选择误判为不能开火。该场景不证明所有竞争候选的最优选择。
+- 最终NP/core/retail gate下，新电脑Guard实际1项、既有AY坠落/存读2项和jumpjet_infantry16项通过，共19项；模块另5个ignored不计通过。仅测试/文档，无新增生产RNG/timer/Detach/保存字段，无玩法修改或新critic；未启动GUI、未动MOD/原始存档/固定构建、未发布。
+- 残余：NP原生下降/RNG逐帧对照、实际AY AA武器击杀至坠落的完整组合、其他AG攻击者与多AI实局仍未验。GAPILL基本自主实战与存读不扩称所有攻击者/候选优先级；V10其他独立机制继续保持各自状态。
 
 ### F02完全隐形建筑受击与当前NP EMP策略的状态组合（2026-10-28）
 

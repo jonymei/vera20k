@@ -3934,22 +3934,29 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Jumpjet takeoff, fatal receiver and low-altitude fall in NP mode"]
     fn aymod_shot_down_rocketeer_keeps_zero_health_until_impact() {
-        aymod_rocketeer_fall(false);
+        aymod_rocketeer_fall(false, false);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; high and low falling Jumpjet hot saves preserve death and final retirement"]
     fn aymod_shot_down_rocketeer_keeps_zero_health_across_falling_saves() {
-        aymod_rocketeer_fall(true);
+        aymod_rocketeer_fall(true, false);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_rocketeer_fall(with_saves: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; AI ground-only Guard hits a live ground target but not a saved falling rocketeer"]
+    fn aymod_ground_guard_ignores_falling_rocketeer_and_hits_live_ground_target() {
+        aymod_rocketeer_fall(true, true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_rocketeer_fall(with_saves: bool, ground_guard: bool) {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, actor, _) = aymod_nearby_pair("JUMPJET", "GAPOWR", true);
+        let (mut scene, actor, ground_target) = aymod_nearby_pair("JUMPJET", "GAPOWR", true);
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let restore_fall = |scene: &mut HeadlessScenario, label| {
             let facts = |scene: &HeadlessScenario| {
@@ -4019,6 +4026,50 @@ mod retail_construction_tests {
             }),
             "the actual configured unit must take off through ordinary Move"
         );
+        let observer = if ground_guard {
+            use crate::sim::mission::{MissionId, MissionType};
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("GAPILL").unwrap();
+            let weapon = rules.weapon(kind.primary().unwrap()).unwrap();
+            let projectile = rules
+                .projectile(weapon.projectile.as_deref().unwrap())
+                .unwrap();
+            assert!(projectile.ag && !projectile.aa);
+            let at = sim.entities().get(actor).unwrap().position;
+            let ground = sim.entities().get(ground_target).unwrap();
+            let target_at = ground.position;
+            let level = sim.terrain_cell_level(target_at.rx(), target_at.ry());
+            let enemy = house_of(sim, "Russians");
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    let distance = |position: crate::sim::components::Position| {
+                        (x - i32::from(position.rx()))
+                            .abs()
+                            .max((y - i32::from(position.ry())).abs())
+                    };
+                    (2..=3).contains(&distance(at))
+                        && (2..=3).contains(&distance(target_at))
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == level)
+                })
+                .collect::<Vec<_>>();
+            let observer = spawn_on_free_cells(sim, rules, enemy, sites, &["GAPILL"])[0];
+            sim.mission_queue_exact(
+                observer,
+                MissionId::from_known(MissionType::Guard),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            Some(observer)
+        } else {
+            None
+        };
         {
             let runtime = &mut scene.runtime;
             let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
@@ -4045,9 +4096,50 @@ mod retail_construction_tests {
         if with_saves {
             restore_fall(&mut scene, "AY high falling rocketeer after fatal receiver");
         }
+        let ground_health: std::collections::BTreeMap<_, _> = scene
+            .sim()
+            .entities()
+            .iter_sorted()
+            .filter(|(_, unit)| {
+                unit.owner() != house_of(scene.sim(), "Russians")
+                    && unit.is_alive()
+                    && crate::sim::movement::air_movement::current_fly_height(
+                        unit,
+                        scene.sim().resolved_terrain(),
+                    ) == 0
+            })
+            .map(|(id, unit)| (id, unit.health.current()))
+            .collect();
+        let mut ground_shots = std::collections::BTreeSet::new();
         let (mut low_fall, mut retired, mut low_saved) = (false, false, false);
+        let check_guard = |scene: &HeadlessScenario,
+                           output: &crate::sim::world::SimFrameOutput,
+                           shots: &mut std::collections::BTreeSet<u64>| {
+            let Some(observer) = observer else {
+                return;
+            };
+            let guard = scene.sim().entities().get(observer).unwrap();
+            assert!(guard.is_alive());
+            assert_ne!(
+                guard.attack_target.target(),
+                Some(TargetKind::Entity(actor))
+            );
+            for event in output
+                .fire_events
+                .iter()
+                .filter(|event| event.attacker_id == observer)
+            {
+                assert_ne!(event.target, TargetKind::Entity(actor));
+                if let TargetKind::Entity(target) = event.target {
+                    if ground_health.contains_key(&target) {
+                        shots.insert(target);
+                    }
+                }
+            }
+        };
         for _ in 0..600 {
-            tick_with_due_commands(&mut scene);
+            let output = tick_with_due_commands(&mut scene);
+            check_guard(&scene, &output, &mut ground_shots);
             let Some(unit) = scene
                 .sim()
                 .entities()
@@ -4084,6 +4176,25 @@ mod retail_construction_tests {
             low_fall && retired,
             "the real AY fall must cross the ground-target threshold and retire"
         );
+        if ground_guard {
+            assert!(
+                (0..300).any(|_| {
+                    if ground_shots.iter().any(|id| {
+                        scene
+                            .sim()
+                            .entities()
+                            .get(*id)
+                            .is_none_or(|unit| unit.health.current() < ground_health[id])
+                    }) {
+                        return true;
+                    }
+                    let output = tick_with_due_commands(&mut scene);
+                    check_guard(&scene, &output, &mut ground_shots);
+                    false
+                }),
+                "the same Guard must autonomously fire and damage an initially living ground target; shots={ground_shots:?}"
+            );
+        }
         if with_saves {
             assert!(low_saved);
             assert!(
