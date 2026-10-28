@@ -2277,6 +2277,123 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; armed Prism support changes owner without cancelling its saved beam"]
+    fn aymod_armed_prism_support_survives_capture_and_saved_countdown() {
+        use crate::sim::combat::laser::LaserColor;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{
+            DelayedFire, LifecycleOutput,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, master, target, supporter, _) = aymod_prism_scene(true);
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let captor = scene.add_human_house(
+            "PrismCaptor",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let sim = &mut scene.runtime.simulation;
+        let owner = sim.entities().get(master).unwrap().owner();
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: master,
+                target_id: target,
+            },
+        ));
+        assert!((0..240).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending()
+                .is_some_and(|pending| {
+                    matches!(pending.fire(), DelayedFire::SupportBeam { .. })
+                        && pending.remaining_ticks() > 3
+                })
+        }));
+        let pending = scene
+            .sim()
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .pending_building_fire
+            .pending()
+            .unwrap();
+        let DelayedFire::SupportBeam { to } = pending.fire() else {
+            unreachable!()
+        };
+        let tick = scene.sim().session.tick();
+        // NPAE448BD9 -> C2ECB9 calls full BuildingAI on the old owner.
+        // ProcessDelayedFire4503F0 advances once, without a global tick.
+        let runtime = &mut scene.runtime;
+        runtime.simulation.change_owner_with_rules(
+            supporter,
+            captor,
+            &runtime.resources.rules,
+            Some(&runtime.resources.overlay_registry),
+            Default::default(),
+        );
+        let tower = scene.sim().entities().get(supporter).unwrap();
+        assert_eq!(scene.sim().session.tick(), tick);
+        assert_eq!(tower.owner(), captor);
+        let captured = tower.pending_building_fire.pending().unwrap();
+        assert_eq!(captured.fire(), pending.fire());
+        assert_eq!(captured.remaining_ticks(), pending.remaining_ticks() - 1);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY captured armed Prism support");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending(),
+            Some(captured)
+        );
+        let mut emitted = 0;
+        for elapsed in 1..=captured.remaining_ticks() {
+            let output = tick_with_due_commands(&mut scene);
+            // Support44AC2C reads the current source House, not the old
+            // master/owner. The destination is the original copied coord.
+            let beams = output
+                .lifecycle_outputs
+                .iter()
+                .filter(|event| {
+                    matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3
+                    && laser.color == LaserColor::House(captor))
+                })
+                .count();
+            assert_eq!(beams, usize::from(elapsed == captured.remaining_ticks()));
+            emitted += beams;
+        }
+        assert_eq!(emitted, 1);
+        let tower = scene.sim().entities().get(supporter).unwrap();
+        assert!(tower.pending_building_fire.pending().is_none());
+        assert_eq!(tower.prism_support_count.count(), 0);
+        let bytes = save_scene(&scene, "AY captured Prism after original support beam");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..3 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3
+                    && laser.color == LaserColor::House(captor))));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_prism_scene(separate_supporter: bool) -> (HeadlessScenario, u64, u64, u64, u64) {
         // A friendly heavy target keeps the supporting tower on Guard;
         // the master receives an explicit player Attack, not an AI override.
