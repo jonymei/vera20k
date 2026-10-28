@@ -4152,6 +4152,246 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Money/Reveal/Unit rewards and separate-house save persistence"]
+    fn aymod_money_reveal_and_unit_crates_keep_real_rewards_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for slot in [0u8, 8, 1] {
+            let (mut scene, tank, _) = aymod_nearby_pair("MTNK", "E1", true);
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("Russians")
+                .unwrap();
+            let foreign = scene.add_human_house(
+                "CrateControlHouse",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            let (owner, cell) = {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                let owner = sim.entities().get(tank).unwrap().owner();
+                let at = sim.entities().get(tank).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    &resources.rules,
+                    foreign,
+                    cells_nearest((i32::from(at.rx()) - 12, i32::from(at.ry()) - 12)),
+                    &["GAPOWR"],
+                );
+                let cell = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter_map(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+                    .find(|&(x, y)| {
+                        x.abs_diff(at.rx()).max(y.abs_diff(at.ry())) == 1
+                            && sim.terrain_cell_level(x, y) == Some(at.z())
+                            && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                            && sim.occupancy().get(x, y).is_none_or(|cell| {
+                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                            })
+                            && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+                    })
+                    .expect("free adjacent reward crate cell");
+                (owner, cell)
+            };
+            let cash = |scene: &HeadlessScenario, house| {
+                crate::sim::credit_income::available_money(&scene.sim().houses, house)
+            };
+            let owned = |scene: &HeadlessScenario| {
+                scene
+                    .sim()
+                    .entities()
+                    .iter_sorted()
+                    .filter(|(_, entity)| entity.owner() == owner && entity.is_alive())
+                    .map(|(id, _)| id)
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            let starting_cash = cash(&scene, owner);
+            let foreign_cash = cash(&scene, foreign);
+            let starting_units = owned(&scene);
+            let hidden = scene
+                .sim()
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .find(|candidate| {
+                    !candidate.outside_playfield
+                        && candidate
+                            .rx
+                            .abs_diff(cell.0)
+                            .max(candidate.ry.abs_diff(cell.1))
+                            > 20
+                        && !scene
+                            .sim()
+                            .fog
+                            .is_cell_revealed(owner, candidate.rx, candidate.ry)
+                        && !scene
+                            .sim()
+                            .fog
+                            .is_cell_revealed(foreign, candidate.rx, candidate.ry)
+                })
+                .map(|cell| (cell.rx, cell.ry))
+                .expect("a real distant cell hidden from both humans");
+            assert!(!scene.sim().fog.whole_map_revealed_for_owner(owner));
+            assert!(!scene.sim().fog.whole_map_revealed_for_owner(foreign));
+            assert!(!scene.sim().houses.get(&owner).unwrap().map_is_clear());
+            assert!(!scene.sim().houses.get(&foreign).unwrap().map_is_clear());
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            assert!(crate::sim::crates::place_crate(
+                sim,
+                &resources.rules,
+                &resources.overlay_registry,
+                (cell.0 as i16, cell.1 as i16),
+                Some(slot)
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    match slot {
+                        0 => cash(&scene, owner) > starting_cash,
+                        8 => scene.sim().fog.whole_map_revealed_for_owner(owner),
+                        1 => owned(&scene).difference(&starting_units).next().is_some(),
+                        _ => unreachable!(),
+                    }
+                }),
+                "crate{slot} must reach its real reward consumer"
+            );
+            assert_eq!(cash(&scene, foreign), foreign_cash);
+            let reward_cash = cash(&scene, owner);
+            let new_units: Vec<_> = owned(&scene).difference(&starting_units).copied().collect();
+            match slot {
+                0 => {
+                    assert_eq!(
+                        f64::from_bits(scene.runtime.resources.rules.powerups.magnitudes[0].bits()),
+                        2000.0
+                    );
+                    assert!((2000..=2900).contains(&(reward_cash - starting_cash)));
+                    assert!(new_units.is_empty());
+                }
+                8 => {
+                    assert_eq!(reward_cash, starting_cash);
+                    assert!(new_units.is_empty());
+                    assert!(scene.sim().houses.get(&owner).unwrap().map_is_clear());
+                    assert!(scene.sim().fog.is_cell_revealed(owner, hidden.0, hidden.1));
+                }
+                1 => {
+                    assert_eq!(
+                        reward_cash, starting_cash,
+                        "a genuine Unit reward, not its Money fallback"
+                    );
+                    assert_eq!(new_units.len(), 1);
+                    let unit = scene.sim().entities().get(new_units[0]).unwrap();
+                    assert!(unit.is_alive() && !unit.lifecycle.in_limbo());
+                    assert_eq!(unit.category(), crate::map::entities::EntityCategory::Unit);
+                    eprintln!(
+                        "AY Unit crate materialized {}",
+                        scene.sim().interner.resolve(unit.type_ref())
+                    );
+                }
+                _ => unreachable!(),
+            }
+            assert!(!scene.sim().fog.whole_map_revealed_for_owner(foreign));
+            assert!(
+                !scene
+                    .sim()
+                    .fog
+                    .is_cell_revealed(foreign, hidden.0, hidden.1)
+            );
+            let bytes = save_scene(&scene, "AY actual reward after Money Reveal or Unit pickup");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(cash(&scene, owner), reward_cash);
+            assert_eq!(cash(&scene, foreign), foreign_cash);
+            assert_eq!(
+                owned(&scene)
+                    .difference(&starting_units)
+                    .copied()
+                    .collect::<Vec<_>>(),
+                new_units
+            );
+            assert_eq!(
+                scene.sim().fog.whole_map_revealed_for_owner(owner),
+                slot == 8
+            );
+            assert_eq!(
+                scene.sim().houses.get(&owner).unwrap().map_is_clear(),
+                slot == 8
+            );
+            assert!(!scene.sim().fog.whole_map_revealed_for_owner(foreign));
+            if slot == 8 {
+                assert!(!scene.sim().houses.get(&foreign).unwrap().map_is_clear());
+                assert!(scene.sim().fog.is_cell_revealed(owner, hidden.0, hidden.1));
+            }
+            assert!(
+                !scene
+                    .sim()
+                    .fog
+                    .is_cell_revealed(foreign, hidden.0, hidden.1)
+            );
+            for id in new_units {
+                let unit = scene.sim().entities().get(id).unwrap();
+                assert!(unit.is_alive() && !unit.lifecycle.in_limbo());
+                assert_eq!(unit.owner(), owner);
+                let at = unit.position;
+                let destination = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter_map(|(x, y)| Some((u16::try_from(x).ok()?, u16::try_from(y).ok()?)))
+                    .find(|&(x, y)| {
+                        x.abs_diff(at.rx()).max(y.abs_diff(at.ry())) == 2
+                            && scene.sim().terrain_cell_level(x, y) == Some(at.z())
+                            && scene
+                                .sim()
+                                .path_grid()
+                                .unwrap()
+                                .is_walkable_for_infantry(x, y)
+                            && scene.sim().occupancy().get(x, y).is_none_or(|cell| {
+                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                            })
+                    })
+                    .expect("a real free destination for the awarded vehicle");
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Move {
+                        entity_id: id,
+                        target_rx: destination.0,
+                        target_ry: destination.1,
+                    },
+                ));
+                assert!(
+                    (0..600).any(|_| {
+                        tick_with_due_commands(&mut scene);
+                        let unit = scene.sim().entities().get(id).unwrap();
+                        unit.is_alive()
+                            && !unit.lifecycle.in_limbo()
+                            && (unit.position.rx(), unit.position.ry()) == destination
+                    }),
+                    "the restored actual Unit reward must accept ordinary movement"
+                );
+                let bytes = save_scene(&scene, "AY crate reward vehicle after real Move");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                let unit = scene.sim().entities().get(id).unwrap();
+                assert_eq!(unit.owner(), owner);
+                assert_eq!((unit.position.rx(), unit.position.ry()), destination);
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two real Veteran pickups, saved ranks and actual elite projectile fire"]
     fn aymod_veteran_crates_promote_and_select_the_saved_elite_weapon() {
         use crate::sim::combat::combat_weapon;
