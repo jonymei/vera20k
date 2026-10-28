@@ -4152,6 +4152,177 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Speed pickup changes real Drive travel across a moving save"]
+    fn aymod_speed_crate_reduces_real_travel_time_across_moving_load() {
+        use crate::rules::terrain_rules::LandType;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let (tank, cell, destination) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let free = |x: u16, y: u16, level| {
+                sim.resolved_terrain()
+                    .unwrap()
+                    .cell(x, y)
+                    .is_some_and(|cell| {
+                        !cell.outside_playfield
+                            && cell.level == level
+                            && cell.land_type == LandType::Clear.as_index()
+                            && !cell.bridge_facts.has_structural_bridge()
+                    })
+                    && sim.occupancy().get(x, y).is_none_or(|cell| {
+                        cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                    })
+                    && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
+            };
+            // Find a physical lane, rather than clear terrain or assume the
+            // player's MCV happens to start beside a suitable straight road.
+            let (start, cell, destination) = sim
+                .resolved_terrain()
+                .unwrap()
+                .cells()
+                .iter()
+                .filter(|cell| free(cell.rx, cell.ry, cell.level))
+                .find_map(|start| {
+                    [(1i16, 0i16), (-1, 0), (0, 1), (0, -1)]
+                        .into_iter()
+                        .find_map(|(dx, dy)| {
+                            let route = (1..=9)
+                                .map(|step| {
+                                    Some((
+                                        start.rx.checked_add_signed(dx * step)?,
+                                        start.ry.checked_add_signed(dy * step)?,
+                                    ))
+                                })
+                                .collect::<Option<Vec<_>>>()?;
+                            route
+                                .iter()
+                                .all(|&(x, y)| free(x, y, start.level))
+                                .then_some(((start.rx, start.ry), route[0], *route.last().unwrap()))
+                        })
+                })
+                .expect("actual level clear terrain has an eight-cell free Drive route");
+            let owner = house_of(sim, "Americans");
+            let owner_name = sim.interner.resolve(owner).to_owned();
+            let tank = sim
+                .spawn_object("MTNK", &owner_name, start.0, start.1, 0, &resources.rules)
+                .unwrap();
+            (tank, cell, destination)
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let initial = save_scene(&scene, "AY before Speed crate control branches");
+        let mut arrivals = Vec::new();
+        let mut origins = Vec::new();
+        for pickup in [false, true] {
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &initial);
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let expected = if pickup {
+                resources.rules.powerups.magnitudes[10]
+            } else {
+                crate::util::native_x87::NativeF64Bits::ONE
+            };
+            assert_eq!(
+                f64::from_bits(resources.rules.powerups.magnitudes[10].bits()),
+                1.5
+            );
+            if pickup {
+                assert!(crate::sim::crates::place_crate(
+                    sim,
+                    &resources.rules,
+                    &resources.overlay_registry,
+                    (cell.0 as i16, cell.1 as i16),
+                    Some(10)
+                ));
+            }
+            let owner = sim.entities().get(tank).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: cell.0,
+                    target_ry: cell.1,
+                },
+            ));
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(tank).unwrap();
+                (actor.position.rx(), actor.position.ry()) == cell
+                    && actor.foot_speed.crate_multiplier() == expected
+            }));
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Stop { entity_id: tank },
+            ));
+            for _ in 0..30 {
+                tick_with_due_commands(&mut scene);
+            }
+            let bytes = save_scene(&scene, "AY Speed bonus before long Move");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let sim = &mut scene.runtime.simulation;
+            let origin = crate::sim::movement::ground_pose::position_world_coord(
+                &sim.entities().get(tank).unwrap().position,
+            );
+            origins.push((origin.x, origin.y, origin.z));
+            assert_eq!(
+                sim.entities()
+                    .get(tank)
+                    .unwrap()
+                    .foot_speed
+                    .crate_multiplier(),
+                expected
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: tank,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+            let mut arrival = None;
+            for elapsed in 1..=600 {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(tank).unwrap();
+                assert_eq!(actor.foot_speed.crate_multiplier(), expected);
+                if (actor.position.rx(), actor.position.ry()) == destination {
+                    arrival = Some(elapsed);
+                    break;
+                }
+                if elapsed == 20 {
+                    assert!(
+                        crate::sim::movement::motion_query::is_moving(actor) == Some(true),
+                        "save boundary must be a genuine moving Drive"
+                    );
+                    let bytes = save_scene(&scene, "AY Speed crate during real movement");
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                }
+            }
+            let elapsed = arrival.expect("ordinary Move must finish the real eight-cell route");
+            assert!(
+                elapsed > 20,
+                "both controls must execute the moving save boundary"
+            );
+            arrivals.push(elapsed);
+        }
+        assert_eq!(
+            origins[0], origins[1],
+            "both travel controls start at the same exact coordinates"
+        );
+        assert!(
+            arrivals[1] < arrivals[0],
+            "Speed1.5 must reduce actual travel time: {arrivals:?}"
+        );
+        eprintln!("AY Speed crate baseline/boosted arrival frames: {arrivals:?}");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real HealBase pickup heals distant owned Technos, not another house"]
     fn aymod_heal_crate_restores_owned_units_and_buildings_after_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
