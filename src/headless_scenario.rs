@@ -17264,6 +17264,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real ChaosAttack receiver, berserk rearm and saved natural expiry"]
     fn aymod_gattling_berserk_rearm_survives_load_and_returns_to_normal() {
+        aymod_gattling_berserk_lifecycle(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; powered Chaos Drone actual gas fire and saved berserk reload"]
+    fn aymod_chaos_drone_real_fire_starts_saved_gattling_berserk() {
+        aymod_gattling_berserk_lifecycle(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_gattling_berserk_lifecycle(real_drone: bool) {
         use crate::sim::combat::veterancy::VeterancyRank;
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
         use crate::sim::command::{Command, CommandEnvelope};
@@ -17274,8 +17286,8 @@ mod retail_construction_tests {
             let runtime = &mut scene.runtime;
             let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
             let rules = &resources.rules;
-            // This is the actual ChaosAttack receiver, not a supplied berserk
-            // latch or an assertion that an independently powered drone fired.
+            // Both cases use authored ChaosAttack data; only the receiver-only
+            // control bypasses the drone's real weapon/targeting ingress.
             let gas = rules
                 .weapon(rules.object("CAOS").unwrap().primary().unwrap())
                 .unwrap();
@@ -17293,28 +17305,146 @@ mod retail_construction_tests {
                 sim.houses().get(&owner).unwrap().rof_bias(),
                 crate::util::native_x87::NativeF64Bits::ONE
             );
-            let hp = sim.entities().get(actor).unwrap().health.current();
-            let warhead = sim.interner.intern(warhead_name);
-            sim.commit_direct_damage_receiver(
-                rules,
-                Some(&resources.overlay_registry),
-                EntityDamageEvent::direct_receiver(
-                    actor,
-                    gas.damage,
-                    0,
-                    RAD_NO_ATTACKER,
-                    None,
-                    warhead,
-                    ReceiverCallFlags {
-                        ignore_defenses: false,
-                        arg6: false,
-                    },
-                ),
-                Default::default(),
+            if !real_drone {
+                let hp = sim.entities().get(actor).unwrap().health.current();
+                let warhead = sim.interner.intern(warhead_name);
+                sim.commit_direct_damage_receiver(
+                    rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        actor,
+                        gas.damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: false,
+                            arg6: false,
+                        },
+                    ),
+                    Default::default(),
+                );
+                let entity = sim.entities().get(actor).unwrap();
+                assert_eq!(entity.health.current(), hp);
+                assert!(entity.berserk.is_active() && entity.berserk.timer() > 0);
+            }
+        }
+        if real_drone {
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("YuriCountry")
+                .unwrap();
+            let owner = scene.add_human_house(
+                "ChaosDroneOperator",
+                LaunchCountry::from_country_index(u32::from(country.0)),
             );
-            let entity = sim.entities().get(actor).unwrap();
-            assert_eq!(entity.health.current(), hp);
-            assert!(entity.berserk.is_active() && entity.berserk.timer() > 0);
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(actor).unwrap().position;
+                assert_eq!(
+                    rules.object("NAPSIS").unwrap().powers_unit.as_deref(),
+                    Some("CAOS")
+                );
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 18, i32::from(at.ry()))),
+                    &["GAPOWR", "NAPSIS"],
+                );
+            }
+            assert!(
+                (0..90).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().has_powered_center(owner)
+                }),
+                "real powered NAPSIS must support the drone's house"
+            );
+            let drone = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(actor).unwrap().position;
+                let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        (2..=3).contains(
+                            &(x - i32::from(at.rx()))
+                                .abs()
+                                .max((y - i32::from(at.ry())).abs()),
+                        )
+                    });
+                let drone = spawn_on_free_cells(sim, rules, owner, sites, &["CAOS"])[0];
+                assert!(!sim.entities().get(drone).unwrap().deactivated.is_offline());
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: drone,
+                        target_id: actor,
+                    },
+                ));
+                drone
+            };
+            let health = scene.sim().entities().get(actor).unwrap().health.current();
+            let mut fired = false;
+            assert!(
+                (0..240).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(scene.sim().has_powered_center(owner));
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == drone
+                            && event.target == crate::sim::combat::TargetKind::Entity(actor)
+                            && scene.sim().interner.resolve(event.weapon_id) == "ChaosAttack"
+                    });
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(actor)
+                            .unwrap()
+                            .berserk
+                            .is_active()
+                }),
+                "ordinary supported CAOS Attack must really fire and turn YTNK berserk"
+            );
+            let shooter = scene.sim().entities().get(drone).unwrap();
+            assert!(
+                shooter.health.current() > 0 && shooter.lifecycle.object_alive(),
+                "initial berserk must precede the drone's death weapon"
+            );
+            assert_eq!(
+                scene.sim().entities().get(actor).unwrap().health.current(),
+                health
+            );
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Stop { entity_id: drone },
+            ));
+            // CAOS cannot acquire or retaliate. Let the real berserk victim
+            // kill it, including its authored ChaosAttack death weapon, before
+            // checking a countdown which can no longer be refreshed by gas.
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().entities().get(drone).is_none()
+                }),
+                "berserk victim must retire the stopped real drone without injected damage"
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .berserk
+                    .is_active()
+            );
         }
         let assert_shot = |scene: &HeadlessScenario, weapon_id, berserk: bool| {
             let entity = scene.sim().entities().get(actor).unwrap();
