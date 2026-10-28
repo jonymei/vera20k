@@ -6539,6 +6539,254 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual dolphin rescue, retained Sonic wave and save/load cleanup"]
+    fn aymod_dolphin_rescues_a_grappled_destroyer_and_retires_its_saved_wave() {
+        aymod_dolphin_rescue_after_load(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; grabbed host owner transfer followed by real dolphin rescue"]
+    fn aymod_dolphin_rescues_a_transferred_grappled_destroyer_after_load() {
+        aymod_dolphin_rescue_after_load(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_dolphin_rescue_after_load(transfer_host: bool) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, squid, ship, land, anim) = aymod_grappled_ship_at_shore();
+        if transfer_host {
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("Americans")
+                .unwrap();
+            let recipient = scene.add_human_house(
+                "RescueRecipient",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            // Exercise the shared FootChangeOwner4DBED0 -> Techno7014A0
+            // receiver, not raw entity or parasite-link writes. Full capture
+            // weapon admission is outside this ownership-lifecycle fixture.
+            let runtime = &mut scene.runtime;
+            // This is a normal short-game launch. Give the new participant
+            // a real base so defeat cleanup cannot masquerade as release.
+            spawn_on_free_cells(
+                &mut runtime.simulation,
+                &runtime.resources.rules,
+                recipient,
+                cells_nearest((i32::from(land.0), i32::from(land.1))),
+                &["GAPOWR"],
+            );
+            runtime.simulation.change_owner_with_rules(
+                ship,
+                recipient,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            assert_eq!(
+                runtime.simulation.entities().get(ship).unwrap().owner(),
+                recipient
+            );
+        }
+        let expected_owner = scene.sim().entities().get(ship).unwrap().owner();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY live squid before dolphin rescue");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().owner(),
+            expected_owner
+        );
+        assert_eq!(
+            scene.sim().entities().get(ship).unwrap().parasite.eater(),
+            Some(squid)
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(squid)
+                .unwrap()
+                .parasite
+                .class()
+                .unwrap()
+                .victim(),
+            Some(ship)
+        );
+        assert!(scene.sim().anim(anim).is_some());
+        let dolphin = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let host = sim.entities().get(ship).unwrap();
+            let owner = host.owner();
+            let at = host.position;
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (2..=4).contains(
+                        &(x - i32::from(at.rx()))
+                            .abs()
+                            .max((y - i32::from(at.ry())).abs()),
+                    )
+                });
+            let dolphin = spawn_on_free_cells(sim, rules, owner, sites, &["DLPH"])[0];
+            let weapon = rules
+                .weapon(rules.object("DLPH").unwrap().primary().unwrap())
+                .unwrap();
+            assert!(
+                weapon.is_sonic
+                    && rules
+                        .warhead(weapon.warhead.as_deref().unwrap())
+                        .unwrap()
+                        .sonic
+            );
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: dolphin,
+                    target_id: ship,
+                },
+            ));
+            dolphin
+        };
+        let mut fired = false;
+        let mut wave = None;
+        assert!(
+            (0..240).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|e| e.attacker_id == dolphin);
+                wave = scene.sim().waves().iter().find_map(|(&id, w)| {
+                    (w.owner_id() == Some(dolphin) && w.wave_type() == 0).then_some(id)
+                });
+                scene
+                    .sim()
+                    .entities()
+                    .get(ship)
+                    .unwrap()
+                    .parasite
+                    .eater()
+                    .is_none()
+            }),
+            "ordinary friendly dolphin Attack must release the grabbed destroyer"
+        );
+        assert!(
+            fired,
+            "release preceded dolphin firing after transfer={transfer_host}: host={:?} squid={:?} dolphin={:?}",
+            scene.sim().entities().get(ship).map(|e| (
+                &e.mission,
+                &e.parasite,
+                e.owner(),
+                &e.health
+            )),
+            scene.sim().entities().get(squid).map(|e| (
+                &e.mission,
+                &e.parasite,
+                e.owner(),
+                &e.health
+            )),
+            scene
+                .sim()
+                .entities()
+                .get(dolphin)
+                .map(|e| (&e.mission, &e.attack_target, e.owner()))
+        );
+        let wave = wave.expect("the actual shot must leave a live Sonic WaveClass");
+        for id in [dolphin, ship, squid] {
+            let runtime = &mut scene.runtime;
+            let actor = runtime.simulation.entities().get(id).unwrap();
+            assert!(actor.is_object_alive() && !actor.lifecycle.in_limbo());
+            // Hold further combat through the mission owner: retirement must
+            // concern this exact wave, not a replacement from another shot.
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(squid)
+                .unwrap()
+                .parasite
+                .class()
+                .unwrap()
+                .victim(),
+            None
+        );
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(ship)
+                .unwrap()
+                .parasite
+                .is_paralyzed(scene.sim().session.binary_frame())
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY dolphin rescue with original Sonic wave in flight",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().waves().iter().any(|(&id, _)| id == wave));
+        let mut drew_geometry = false;
+        for _ in 0..120 {
+            for (_, w) in scene.sim().waves().iter().filter(|(id, _)| **id == wave) {
+                drew_geometry |= w.sonic_draw_geometry([0, 0]).is_some();
+            }
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|e| [dolphin, ship, squid].contains(&e.attacker_id))
+            );
+        }
+        assert!(
+            drew_geometry,
+            "saved actual Sonic must still expose its production draw polygon"
+        );
+        assert!(!scene.sim().waves().iter().any(|(&id, _)| id == wave));
+        assert!(scene.sim().anim(anim).is_none());
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(ship)
+                .unwrap()
+                .parasite
+                .eater()
+                .is_none()
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(squid)
+                .unwrap()
+                .parasite
+                .class()
+                .unwrap()
+                .grapple_anim(),
+            None
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; rookie and elite DESO deploy rescue"]
     fn aymod_radiation_deploy_releases_a_live_squid() {
         use crate::sim::command::{Command, CommandEnvelope};
