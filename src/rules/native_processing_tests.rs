@@ -794,6 +794,72 @@ fn maximum_cheer_rate_preserves_native_defaults_layers_and_rules_lifetime() {
     assert_ne!(a.simulation_config_hash(), b.simulation_config_hash());
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn prism_rank_delays_retain_native_defaults_and_layered_signed_reads() {
+    use crate::rules::ruleset::RuleSet;
+    let publish =
+        |processed: &ProcessedRulesLayers| RuleSet::from_processed_rules(processed).unwrap();
+    let first = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nPrismSupportDelay=45\n",
+    ))
+    .process()
+    .unwrap();
+    let rules = publish(&first);
+    assert_eq!(
+        (
+            rules.general.prism_support.delay,
+            rules.general.prism_support.veteran_delay,
+            rules.general.prism_support.elite_delay
+        ),
+        (45, 69, 69)
+    );
+    let mut stack = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nPrismSupportDelayVeteran=-7\nPrismSupportDelayElite=0\n",
+    ));
+    stack.push(
+        RulesLayerKind::Scenario,
+        // Failed hex scanning retains the current signed value; ordinary
+        // nonnumeric decimal text instead reads as atoi(0).
+        IniFile::from_str("[General]\nPrismSupportDelayVeteran=$q\nPrismSupportDelay=45\n"),
+    );
+    let processed = stack.process().unwrap();
+    let rules = publish(&processed);
+    assert_eq!(
+        (
+            rules.general.prism_support.delay,
+            rules.general.prism_support.veteran_delay,
+            rules.general.prism_support.elite_delay
+        ),
+        (45, -7, 0)
+    );
+    let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+    let state = trace.into_registry_state_discarding_events();
+    let state = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+    let retained = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nName=next\n",
+    ))
+    .process_with_fixed_art_and_registry_state(&IniFile::empty(), state)
+    .unwrap();
+    let retained = publish(&retained);
+    assert_eq!(retained.general.prism_support, rules.general.prism_support);
+    let (_, trace) = first.into_ini_and_native_type_construction_trace();
+    let other = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nName=next\n",
+    ))
+    .process_with_fixed_art_and_registry_state(
+        &IniFile::empty(),
+        trace.into_registry_state_discarding_events(),
+    )
+    .unwrap();
+    let other = publish(&other);
+    assert_eq!(retained.source_ini_hash(), other.source_ini_hash());
+    assert_ne!(
+        retained.simulation_config_hash(),
+        other.simulation_config_hash()
+    );
+}
+
 #[test]
 fn retail_battle_cheer_rate_uses_the_production_layered_reader() {
     let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules_for_map("XMP03T4.MAP")

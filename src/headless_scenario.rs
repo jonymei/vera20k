@@ -1982,6 +1982,145 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual rookie veteran elite Prism downtime and saved rank cache"]
+    fn aymod_prism_support_rank_downtime_survives_pending_save() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::{
+            DelayedFire,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        for (rank, cache, expected) in [(0, 2, 45), (100, 1, 69), (200, 0, 69)] {
+            let (mut scene, master, target, supporter, _) = aymod_prism_scene(true);
+            let rules = &scene.runtime.resources.rules;
+            assert_eq!(
+                (
+                    rules.general.prism_support.delay,
+                    rules.general.prism_support.veteran_delay,
+                    rules.general.prism_support.elite_delay
+                ),
+                (45, 69, 69)
+            );
+            // Explicit initial ranks, not a claim of combat promotion. Normal
+            // AI owns the cache before actual recruitment and delayed fire.
+            scene
+                .runtime
+                .simulation
+                .substrate
+                .entities
+                .get_mut(supporter)
+                .unwrap()
+                .veterancy
+                .set_rank_for_test(rank);
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scene);
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache(),
+                cache
+            );
+            let owner = scene.sim().entities().get(master).unwrap().owner();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: master,
+                    target_id: target,
+                },
+            ));
+            assert!((0..240).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_some_and(|pending| matches!(pending.fire(), DelayedFire::SupportBeam { .. }))
+            }));
+            let pending = scene
+                .sim()
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .pending_building_fire
+                .pending()
+                .unwrap();
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY ranked Prism pending support");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache(),
+                cache
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending(),
+                Some(pending)
+            );
+            for _ in 0..pending.remaining_ticks() {
+                tick_with_due_commands(&mut scene);
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .rearm_timer
+                    .duration(),
+                expected
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_none()
+            );
+            let timer = scene.sim().entities().get(supporter).unwrap().rearm_timer;
+            let bytes = save_scene(&scene, "AY ranked Prism after real support emission");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene.sim().entities().get(supporter).unwrap().rearm_timer,
+                timer
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .veterancy
+                    .rank_cache(),
+                cache
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; already armed Prism support survives subsequent EMP and hot load exactly once"]
     fn aymod_armed_prism_support_survives_emp_and_saved_countdown() {
         use crate::sim::command::{Command, CommandEnvelope};

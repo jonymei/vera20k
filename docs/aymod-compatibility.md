@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，HEAD0b707c1c4后补V10已排光棱支援束再受EMP：真实招募/原倒计时，正式TankBoltEMP落点producer仅命中支援塔，保存恢复保持pending/非零EMP。逐帧旧倒计时到期时EMP仍有效/LastOperational=false，仍恰好产生一次原端点SupportBeam的LaserCreated；到期前无提前光束，mode清空/count清零，发射后再次存读无重复。最终新实际1、既有实际3、prism7共11项通过，无待完成Cargo。无玩法修改/新critic，固定构建/配置/原档未动，整体目标开放。静读另发现NP支援发射后重装时间按rank读取Rules+644/+63C/+4A4，当前Rust固定prism_support.delay，尚需查构造/reader/实际配置，不能把本次倒计时测试称该数值分支已兼容。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于HEAD335975c33收尾V10光棱支援等级冷却修复：唯一PrismSupportRules新增NP老兵/精英逐层读取、保留、保存与配置hash，唯一延迟发射owner按缓存rank选值。实际AY新兵/老兵/精英为45/69/69帧，待发及发射后存读通过；不改变已排束遇EMP仍发射的规则。只读critic未发现玩法缺陷，指出的AI采样顺序注释已纠正。NP prism15项、实际光棱4项及已排束EMP1项、NP建筑任务16项、stock prism13项/建筑任务16项通过；ignored未显式执行者不计通过，无待完成Cargo。固定构建/配置/原档未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：沿光棱同一链核NPAE174 Support44ACC4→7E0636..7E065D按rank选择Rules+644/+63C/+4A4的重装分支，定位真实构造、INI读取及实际AY值，再决定是否修共享支持冷却owner；不猜offset字段名、不依据相似键造政策。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。
+- 下一安全动作：继续V10光棱已排支援束的死亡/换主生命周期，先核原生通知、待发状态与计时清理，再决定是否改既有owner；不重复已通过的EMP/缺电/等级冷却测试。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。非盟军巨炮修复已在本分支，固定版未包含，不能把固定版再现当成修复后回归。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -578,7 +578,16 @@
 - 已排支援束再EMP：实际NPAE BuildingUpdate440072对活HP跳4400F2/4400F4调用ProcessDelayedFire4503F0；45042C..450452将模式2的原坐标交Support44ABD0，不检查EMP/operational。44ABD0..44ACCA创建Laser并清本塔支援count，重装尾有NP补丁，见下一条；不能从招募门7E04BB推导取消已排束。
 - 新实际AY例共用唯一prism场景/实际TankBoltEMP读取夹具。普通Attack真实招募后捕捉原SupportBeam及剩余倒计时，再施加EMP，不手写pending、counter、坐标、timer或rank。主塔EMP0、支援EMP大于待发时长；正式保存恢复逐项保持pending/counter，随后普通帧每步验证仍EMP有效/LastOperational=false、原倒计时自然减一，未到期无原端点光束，到期恰好一次LaserCreated（width3及原端点）、pending清空/本塔count0。发射后再次存读及三普通帧无重复/无新招募。该观察是生产LaserBirth输出，不冒称GPU或真实TTNK投射物命中。
 - 最终新实际1、原三实际3和prism_tests7通过，共11项。只改测试/台账，无生产RNG/timer/Detach/保存字段变化，无玩法修改/新critic；未启动GUI/改MOD/原始存档/固定构建/发布。没有增加中途取消，也不扩大为死亡/换主/全部光束生命周期通过。
-- 新发现同链待核差异：实际NP Support44ACC4跳7E0636，读Building+13C rank，0用Rules+644、1用+63C、其他用+4A4，再回44ACCA写rearm。当前process_delayed_fire固定用rules.general.prism_support.delay（stock +4A4）。已读全选择分支，尚未核+644/+63C的构造/reader/实际AY值与共享owner，不能猜键名或宣称各rank冷却已等价；本次仅验证旧倒计时到期发射，不断言发射后的冷却数值。
+- 同链等级冷却差异已定位并修复，详见下节；上面的已排束EMP例本身仍只验证旧倒计时和光束输出，不替代等级数值回归。
+
+### V10光棱支援等级冷却（2026-10-29）
+
+- 实际NPAE174 Support44ACC4→7E0636..7E065D读取Building+13C缓存等级：elite0用Rules+644、veteran1用+63C、其余用+4A4。构造665EFE/665F16均设0x45即69，不继承普通冷却；ReadGeneral66F185..66F1C5在原Prism块之前按General的PrismSupportDelayVeteran/PrismSupportDelayElite调用ReadInt5276D0，保留当前有符号值、不截断/钳位。
+- 扩展唯一PrismSupportRules的逐层读取、registry保留、序列化及配置hash；process_delayed_fire沿既有缓存等级和rearm_timer选值，不另建状态、计时器或等级计算。正常Structure AI先采样等级再处理延迟发射，不能把直接缓存冲突测试解释成相反整帧顺序。stock字段布局与行为不变；NP规则保留布局改变，不强读旧档或添加迁移。
+- 缓存选择回归先在旧实现失败（elite得到45而非69），修后用实际reader的普通45/老兵23/精英-7及冲突raw/cache保护分支、有符号值和缓存语义。reader回归覆盖缺键69、跨层负数/0、失败hex保留、registry往返和同源INI不同保留状态的hash。普通无效十进制按既有atoi返回0，不为测试修改解析器。
+- 实际AY夹具为两ATESLA、友方APOC及正常供电，显式初始等级经正常AI采样，不冒称战斗晋升。正式Attack招募SupportBeam，待发时正式保存/完整资源恢复，自然倒计时到期后新兵/老兵/精英冷却分别45/69/69，随后再次存读保持timer与缓存。此例用pending清空与rearm观察发射尾，光束输出另由既有LaserCreated回归覆盖，GPU不在本次范围。
+- 最终NP prism15项、显式实际光棱4项及已排束EMP1项、NP建筑任务16项、stock prism13项及建筑任务16项通过；其余ignored未跑，不计通过。首次建筑任务过滤器为0项，已用正确building_missions::tests::重跑；一次stock运行因运行期间注释变更被runner拒绝，最终源码稳定后重跑通过。只读critic无确认玩法缺陷，采样顺序注释已修正。
+- 无新增RNG抽样、Detach、tick顺序或实体保存字段；既有rearm写入改为原生等级选择。死亡/换主/多AI自主联击及GPU仍开放。未启动GUI、未改MOD/原始存档/固定构建、未推送或发布。
 
 ### V10铁幕/力场保护目标准入（2026-10-27）
 

@@ -1467,9 +1467,20 @@ pub(super) fn process_delayed_fire(
                 .get_mut(id)
                 .expect("live support source");
             entity.prism_support_count.reset();
-            entity
-                .rearm_timer
-                .start(now, rules.general.prism_support.delay);
+            let delay = rules.general.prism_support.delay;
+            // NPAE174 Support44ACC4 ->7E0636..7E065D reads cached +13C,
+            // not a fresh read of the Veterancy+150 accumulator.
+            #[cfg(feature = "npatch")]
+            let delay = match entity.veterancy.rank_cache() {
+                crate::sim::combat::veterancy::LEVEL_ELITE => {
+                    rules.general.prism_support.elite_delay
+                }
+                crate::sim::combat::veterancy::LEVEL_VETERAN => {
+                    rules.general.prism_support.veteran_delay
+                }
+                _ => delay,
+            };
+            entity.rearm_timer.start(now, delay);
         }
     }
 }

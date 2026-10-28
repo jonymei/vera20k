@@ -2244,6 +2244,12 @@ pub struct PrismSupportRules {
     pub max: i32,
     /// `PrismSupportDelay=` (`Rules+0x4A4`), a supporter's downtime in frames.
     pub delay: i32,
+    /// NPAE174 ReadGeneral66F185/66F19F, Rules+63C. Retained signed int.
+    #[cfg(feature = "npatch")]
+    pub veteran_delay: i32,
+    /// NPAE174 ReadGeneral66F1AB/66F1C5, Rules+644. Retained signed int.
+    #[cfg(feature = "npatch")]
+    pub elite_delay: i32,
     /// `PrismSupportDuration=` (`Rules+0x4A8`), signed support-laser lifetime
     /// in frames. ReadInt retains the current value; no clamp or byte cast.
     pub duration: i32,
@@ -2257,6 +2263,11 @@ impl Default for PrismSupportRules {
             modifier: 100,
             max: 8,
             delay: 100,
+            // RulesClass665EFE/665F16 initialise both to 0x45, not Delay.
+            #[cfg(feature = "npatch")]
+            veteran_delay: 69,
+            #[cfg(feature = "npatch")]
+            elite_delay: 69,
             duration: 15,
         }
     }
@@ -2269,6 +2280,12 @@ impl PrismSupportRules {
     /// also chops ReadDouble's own percent product: a modded `35%` reads 34.
     pub(crate) fn read_pass(self, general: &crate::rules::ini_parser::IniSection) -> Self {
         use crate::util::native_x87::{MaskedX87Chop53 as X87, NativeF64Bits};
+        // NPAE174 reads these before the original Prism keys. Exact literals
+        // BA4A83/BA4A9C; ReadInt5276D0 retains each current value, no clamp.
+        #[cfg(feature = "npatch")]
+        let veteran_delay = general.read_int("PrismSupportDelayVeteran", self.veteran_delay);
+        #[cfg(feature = "npatch")]
+        let elite_delay = general.read_int("PrismSupportDelayElite", self.elite_delay);
         let percent = general.read_double("PrismSupportModifier", f64::from(self.modifier));
         let modifier = X87::ftol_i32_low_masked(X87::mul(
             X87::load_f64(NativeF64Bits::from_bits(percent.to_bits())),
@@ -2278,6 +2295,10 @@ impl PrismSupportRules {
             modifier,
             max: general.read_int("PrismSupportMax", self.max),
             delay: general.read_int("PrismSupportDelay", self.delay),
+            #[cfg(feature = "npatch")]
+            veteran_delay,
+            #[cfg(feature = "npatch")]
+            elite_delay,
             duration: general.read_int("PrismSupportDuration", self.duration),
         }
     }
