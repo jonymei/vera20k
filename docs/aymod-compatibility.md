@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于HEAD868bf4680补V10已排支援束的支援塔死亡回归：普通招募后用实际APOC主武器弹头走正式致死receiver，保存恢复后240普通帧无支援束或死塔fire_events，塔自然退休，主塔继续开火并伤害原目标，support count最终0；退休后再次存读无塔/无幽灵束。最终已排束EMP/换主/死亡三实际AY例及NP prism15项通过，无待完成Cargo。本轮测试/台账-only，不新增玩法或critic。固定构建/配置/原档未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于HEADb90fef91d补V10已排束的主塔先死边界，与已有支援塔先死共用唯一致死/存读夹具。主塔正式致死后支援pending保持，存读后自然原到期恰好一次原端点支援束，240帧无后续束、无死塔fire_events，退休后再存读无重复。最终四个已排束实际AY例及NP prism15项通过，无待完成Cargo。本轮测试/台账-only，不新增玩法或critic。固定构建/配置/原档未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：补V10已排束的主塔先死边界，按原生mode2只保存坐标、无重新验证目标的语义检查支援塔自然发射/清理；不要擅加目标存在门或取消束。支援塔先死/普通换主已通过，不重写。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。非盟军巨炮修复已在本分支，固定版未包含，不能把固定版再现当成修复后回归。
+- 下一安全动作：转F12完整16色共用目录与遭遇战启动准入，先核C2ADE9的连续MPC目录、缺项终止和颜色占用/随机分配调用者，再改已有UI/launch owners；不把HOUSE_COLOR_COUNT直接改16而改变stock。光棱常见待发失效边界本轮已验，停止扩展重复测试，稀有边界留原残余。V01/F11批准门禁、整体PLAN保留；Return Dubai弱攻势专项仍暂停，Alt飞机入口及GADEPT/GAYARD已验不重复修。非盟军巨炮修复已在本分支，固定版未包含。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -601,6 +601,12 @@
 - 实际AY例沿既有两ATESLA/友方APOC/供电夹具普通Attack招募原SupportBeam，确认主塔count>0。用实际APOC主武器的弹头、目标当前HP及正式direct receiver的ignore_defenses/arg6致死支援塔，不模拟完整炮弹命中、不直接写health/death/待发计时或UnInit。致死后正式保存/完整资源恢复，240普通帧持续断言原端点无width3支援束、无死塔fire_events；主塔仍真实开火并伤害原目标，支援塔正常退休，主塔count最终归0。
 - 退休后再次完整存读仍无支援塔，再走三个普通帧无幽灵束。此例不证明招募加成在首次主弹中的精确倍率，也不据最终count0推断所有中间timer/Detach顺序；既有单一take_support_bonus及其原生数值回归保留。主塔先死/同帧退休/Temporal与多AI仍开放。
 - 最终已排束EMP/换主/死亡三实际例和NP prism15项通过，ignored未显式跑的不计。仅测试/台账，无生产改动、新RNG/timer/Detach或保存布局，无新critic；未启动GUI/改MOD/原始存档/固定构建或发布。
+
+### V10已排光棱束的主塔先死（2026-10-29）
+
+- 沿实际45042C..450452→Support44ABD0的mode2坐标语义，不添加原主塔alive/阵营门。与支援塔死亡例共用唯一夹具和正式APOC弹头致死receiver；新增主塔先死入口，立即断言原支援pending/复制端点未变，正式保存/完整资源恢复后按原remaining_ticks恰好一次width3原端点LaserCreated，之前不提前、之后不重复。
+- 连续240普通帧无死主塔fire_events、无支援塔武器实射；主塔自然退休，支援塔count0/pending清空。退休后再次存读保持原主塔不存在，三普通帧无重复束。原支援塔先死入口仍验无光束、主塔继续实射伤害及最终count清理；不是以两者共有的结果断言掩盖相反原生行为。
+- 最终四个实际已排束例（EMP/换主/支援死/主塔死）及NP prism15项通过，未执行ignored不计。测试/台账-only，无新生产状态/RNG/timer/Detach或保存布局，无新critic；不冒称GPU、精确首次加成倍率、同帧多次通知、Temporal或多AI长局通过。常见生命周期边界已补，后续转其他清单链，不再据此无限扩大光棱验收。
 
 ### V10铁幕/力场保护目标准入（2026-10-27）
 

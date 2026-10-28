@@ -2397,6 +2397,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; lethal receiver retires armed Prism supporter without a saved ghost beam"]
     fn aymod_armed_prism_supporter_death_prevents_saved_ghost_beam() {
+        aymod_armed_prism_death(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; armed Prism beam retains copied destination after master death and saves"]
+    fn aymod_armed_prism_master_death_preserves_saved_beam_destination() {
+        aymod_armed_prism_death(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_armed_prism_death(master_dies: bool) {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::{
@@ -2449,6 +2461,7 @@ mod retail_construction_tests {
                 .count()
                 > 0
         );
+        let victim = if master_dies { master } else { supporter };
         // Kill through Building ReceiveDamage, not UnInit or a health write.
         // BuildingAI440072 returns on Health0 before4503F0 can emit.
         let runtime = &mut scene.runtime;
@@ -2461,8 +2474,8 @@ mod retail_construction_tests {
             .unwrap();
         let warhead = sim.interner.intern(weapon.warhead.as_deref().unwrap());
         let hit = EntityDamageEvent::direct_receiver(
-            supporter,
-            sim.entities().get(supporter).unwrap().health.current(),
+            victim,
+            sim.entities().get(victim).unwrap().health.current(),
             0,
             target,
             Some(owner),
@@ -2482,18 +2495,44 @@ mod retail_construction_tests {
             scene
                 .sim()
                 .entities()
-                .get(supporter)
+                .get(victim)
                 .is_none_or(|entity| entity.health.current() == 0 || entity.death.is_dying())
         );
+        if master_dies {
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending(),
+                Some(pending)
+            );
+        }
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
-        let bytes = save_scene(&scene, "AY armed Prism supporter after lethal receiver");
+        let bytes = save_scene(&scene, "AY armed Prism tower after lethal receiver");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         let before_hp = scene.sim().entities().get(target).unwrap().health.current();
         let mut master_fired = false;
-        for _ in 0..240 {
+        let mut emitted = 0;
+        for elapsed in 1..=240 {
             let output = tick_with_due_commands(&mut scene);
-            assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
-                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)));
+            // ProcessDelayedFire45042C..450452 copies the old destination
+            // directly into Support44ABD0, with no master existence check.
+            let beams = output
+                .lifecycle_outputs
+                .iter()
+                .filter(|event| {
+                    matches!(event,
+                LifecycleOutput::LaserCreated(laser) if laser.to == to && laser.width == 3)
+                })
+                .count();
+            assert_eq!(
+                beams,
+                usize::from(master_dies && elapsed == pending.remaining_ticks())
+            );
+            emitted += beams;
             assert!(
                 !output
                     .fire_events
@@ -2505,31 +2544,44 @@ mod retail_construction_tests {
                 .iter()
                 .any(|event| event.attacker_id == master);
         }
-        assert!(master_fired);
-        assert!(
-            scene
-                .sim()
-                .entities()
-                .get(target)
-                .is_none_or(|entity| entity.health.current() < before_hp)
-        );
-        assert!(!scene.sim().entities().contains(supporter));
+        assert_eq!(emitted, usize::from(master_dies));
+        assert_eq!(master_fired, !master_dies);
+        if !master_dies {
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .is_none_or(|entity| entity.health.current() < before_hp)
+            );
+        }
+        assert!(!scene.sim().entities().contains(victim));
+        let survivor = if master_dies { supporter } else { master };
         assert_eq!(
             scene
                 .sim()
                 .entities()
-                .get(master)
+                .get(survivor)
                 .unwrap()
                 .prism_support_count
                 .count(),
             0
         );
-        let bytes = save_scene(
-            &scene,
-            "AY retired Prism supporter without lingering support",
-        );
+        if master_dies {
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(supporter)
+                    .unwrap()
+                    .pending_building_fire
+                    .pending()
+                    .is_none()
+            );
+        }
+        let bytes = save_scene(&scene, "AY retired Prism tower without lingering support");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
-        assert!(!scene.sim().entities().contains(supporter));
+        assert!(!scene.sim().entities().contains(victim));
         for _ in 0..3 {
             let output = tick_with_due_commands(&mut scene);
             assert!(!output.lifecycle_outputs.iter().any(|event| matches!(event,
