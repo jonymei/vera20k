@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于fa10562b0继续V06：把既有狂暴helper分成receiver对照和真实CAOS发射两入口。新独立Yuri human House实际GAPOWR/NAPSIS正常帧取得支持，合法CAOS普通Attack实际ChaosAttack命中并使YTNK狂暴而HP不变；普通Stop后由狂暴坦克实杀无人车（保留DeathWeapon），随后共用实际狂暴半reload/短值0、热存读/续射、自然到期及完整reload恢复链通过。未注入伤害/狂暴/HP/经验/供电到真实发射入口；V01独立provider/失联移动政策不变。仅测试/台账，无生产修改或新critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于183b59e8e继续V05：既有母体连续晋升/热存读/再生场景扩为DEST/DRED/BSUB/V3/VLAD五路。V3单槽旧弹两次晋升均不继承、再生新弹仍继承；VLAD双槽旧弹正常随晋升同步；两者普通Attack发射、存读后原弹命中攻城目标（掉血或同帧真实弹头近落点/建筑销毁证据）、原配置再生、替补继承/再存读重发通过。初版移动APOC被AI调走，旧弹仍落原目标位置，不为测试加入跟踪；全量五路已跑通。仅测试/台账，无生产修改或新critic，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：推进V3/VLAD剩余母子机家族或V06全档精确节奏；真实CAOS正常供电发射→YTNK狂暴/实杀无人车→热存读自然恢复已验，不重复同一微边界。Building狂暴、非1实际House、其他武器/多目标与其他模式仍未由本例覆盖。V05其他母体/永久控制/更强子机边界保持开放。医院control1留尸、F12完整compositor/AppState与peer/重连仍开放；V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
+- 下一安全动作：转V06全档精确节奏，或按功能清单推进其他尚缺生产验收项；本次V3/VLAD出生池/两级晋升/攻城发射与保存后命中/再生继承/保存重发不再重复。七个注册母体已有各自实际样例，不等于七类全部边界闭环；母子机更多换主/强子机及多AI仍开放。医院control1留尸、F12完整compositor/AppState与peer/重连仍开放；V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW防空弹实杀与旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -87,7 +87,7 @@
 - DRED精英池另用普通Attack向真实敌方CARRIER发射，两枚旧子机实际离开limbo后至少一槽真实出池；不通过直接UnInit/致死注入制造再生。普通Stop后仍在运行中的原配置再生计时/完整manager保存恢复，正常帧新建不同ID的DMISL，SpawnOwner和母体当前raw继承正确。实读6B78EF→C2D7F3..C2D816由子机Trainable控制复制，再存读后新导弹通过普通Attack实际离开limbo重发。这里证明出池/再生/重发，不扩称所有弹道命中几何或终端伤害。
 - 初版用无有效参赛对手的加载夹具，导弹虽已发射，frame91对局终止跳过MainTick尾帧提交，导致之后等待永不到期；对象mission counter继续被测试调用不能证明游戏时钟在前进。读现有commit_frame_tail终局门后改用原有对手/正常MCV新局，保留原胜负政策且在等弹循环断言时钟前进，不改timer、清终局标志或调整AI权重来过测试。此失败不是导弹或Return Dubai弱攻势红证据。
 - 最终retail gate/NP下实际库存1项、新DEST/DRED组合1项、原CARRIER实杀/再生/重发1项通过；SpawnManager36项通过（旧Hornet整轮扫射slow未触及、保留1 ignored），NP奖励6项通过。首次两个模块路径过滤器为0，已用正确路径各补36/6，不计0项为通过。纯NP测试新增，未重跑stock既有覆盖，也未启动GUI/改MOD或原始存档/固定玩家版/发布；仅测试/台账，无新生产RNG/timer/Detach或保存字段，无需新玩法critic。
-- 剩余：DEST/CDEST单槽实际反潜与receiver死亡再生见下节，实际防空弹实杀仍未验；BSUB/CMISL见后续节，V3/VLAD其他家族的组合、子机已更强边界的更多实际场景、换主和多AI长局；旧单元强子机不降级覆盖保留，不以本轮关闭整个V05。
+- 剩余：DEST/CDEST单槽实际反潜与receiver死亡再生见下节，实际防空弹实杀仍未验；BSUB/CMISL见后续节，V3/VLAD组合后续验收见对应节，其他边界、子机已更强边界的更多实际场景、换主和多AI长局；旧单元强子机不降级覆盖保留，不以本轮关闭整个V05。
 
 ### V05实际DEST/CDEST单槽反潜机：实射、损失与存读再生（2026-10-29）
 
@@ -104,7 +104,7 @@
 - 在自然隐形后的真实双槽CMISL池上，正式击杀receiver让母体连续达到老兵/精英，采样前两次完整热存读；下一正常AI才同步弱子机raw并保留正确SpawnOwner。这仍是经验receiver验证，不冒称潜艇鱼雷实杀晋升。共享NP C2D85F..C2D8B1晋升语义及6B78EF/C2D7F3再生继承owner未修改。
 - 普通Attack让真实CMISL离开limbo，manager随后释放槽位。补命中断言时最初误把“槽空”当成“导弹落地”，此时原弹仍活着且尚在发射位置、APOC尚未掉血；不将此测试时机错误算引擎缺陷。原生6B7A16..6B7ACD把导弹交给Kamikaze tracker后可直接调用PointerExpired6B7C60释放manager槽，原生/现有owner并不要求等实际撞击才再生。
 - 保留槽空/旧弹活着这个独立端点，普通Stop后在原SpawnRegenRate=80正计时中完整保存/恢复manager与世界；不直接杀弹或UnInit。自然新生替补ID继承母体raw/SpawnOwner；继续普通帧观察旧CMISL，要求读档后实际飞至岸上APOC两格内、物理退休且APOC掉血，不能仅靠slot=None或离舰通过。替补及完整世界再次保存/恢复，raw/SpawnOwner保持，普通Attack向新岸上目标重发。此例覆盖一个真实落点，不扩称全部跨高差/移动目标几何或逐帧原生会话等价。
-- 仅测试和台账，没有生产状态、RNG调用、timer/Detach实现或保存字段改动，不需玩法critic。未启动GUI、未改MOD/原始存档/固定玩家版、未发布。V3/VLAD组合、母子机换主、实际防空击落和多AI长局仍开放，不关闭整个V05。
+- 仅测试和台账，没有生产状态、RNG调用、timer/Detach实现或保存字段改动，不需玩法critic。未启动GUI、未改MOD/原始存档/固定玩家版、未发布。V3/VLAD组合由后续节继续验收；母子机换主、实际防空击落和多AI长局仍开放，不关闭整个V05。
 - 最终retail gate/NP下扩展后的DEST/DRED/BSUB实际组合1项、SpawnManager36项、NP奖励6项通过，无待完成Cargo；旧Hornet整轮扫射slow不涉及，保留1 ignored。原DEST/CDEST及CARRIER实际场景本轮未重跑，上一轮结果保留；纯NP测试/台账无生产修改，未重跑stock。
 
 ### V05实际CARRIER心灵控制、旧翼与归还重建（2026-10-29）
@@ -117,6 +117,16 @@
 - 初版错误把玩家Attack事件发给困难AI House：生产CanCapture及GetFireError最初分别true/Ok，但前19帧YURI保持AreaGuard、目标空，后来在对战中死亡。实读Execute_DoList64C4FB..64C50D，事件House需IsHuman或PlayerControl为真；对应唯一生产门为house_state::event_dispatch_eligible，经command_schedule::WorldCommandHost调用，普通AI House不符合。改用现有独立人类House工具并带正常SMCV保持有效参赛，普通事件即可真实开火；不伪造事件来源、放宽准入、强设Attack或关闭电脑。站位另避开既有轰炸目标三格且出生点距航母最多六格（实际MindControl.Range=7），避免把轰炸中的地块当控制者安全位置；初版失败不计AI/心控缺陷。
 - 仅扩展一个真实AY组合回归，无生产reader/状态、RNG调用、timer/Detach实现或保存字段修改，无需玩法critic。其他母体与永久控制/已更强子机/复杂控制者替换、多AI实局仍开放；未启动GUI、未改MOD/原始存档/固定玩家版、未发布。
 - 最终retail gate/NP下扩展CARRIER真实组合1项、capture_manager29项、SpawnManager36项通过；旧Hornet整轮扫射slow不涉及，保留1 ignored，无待完成Cargo。纯NP测试/台账无生产修改，未重跑stock和其他母子机实际场景；上一轮结果保留。
+
+### V05实际V3/VLAD：单/双槽晋升、攻城命中与再生继承（2026-10-29）
+
+- 原母体组合回归扩为DEST/DRED/BSUB/V3/VLAD并更名aymod_spawn_pools_follow_consecutive_saved_parent_promotions；继续复用同一个测试和生产SpawnManager，不另写创建/继承/清理路径。正式Return Dubai/Battle仍为正常美国对苏联困难局、原MCV和unit_count=0；母体通过合法落点的测试spawn创建，不冒称美国正常建造菜单准入/科技验证。
+- V3放陆地、VLAD放水上，普通Attack向十格外实际NACNST攻城；陆上V3起点另要求邻近地形同高且在边界内，不改地图。母体经验仍经真实致死receiver取得，不伪造rank/raw/cache。V3单槽原V3ROCKET在老兵/精英两次采样后仍保持原raw，VLAD双槽原DMISL在两次采样同步；采样前的完整热存读与精英终点保存均保留正确母子身份。保留C2D85F..C2D865的单槽skip，不能把V3旧弹不随晋升误修成通用缺口。
+- 两者普通Attack使真实旧导弹离开limbo并从manager出池，此时旧弹仍为活体，不把槽空当实际命中。普通Stop后原配置正再生计时/完整世界热存读，原V3ROCKET/DMISL继续真实飞行；新ID按原SpawnRegenRate产生、SpawnOwner/raw继承母体（V3与VLAD不同的实际600/80均不改）。新弹继承与旧单槽skip并不矛盾，前者走既有6B78EF→C2D7F3..C2D816的Trainable门。
+- 命中观察保留整个推进期的目标HP下降，避免正常修理在再生结束前回满造成漏验。若目标在同一帧直接消失，不能仅凭None判成功：要求此前仍存在、该帧destroyed_structure，并有真实对应家族精英弹头的Impact事实落在目标三格内；原弹物理退休前最后实际位置另需在目标两格内。因此普通AI出售/目标早退不能单独冒充命中。替补及世界再完整存读后仍保持继承身份，普通Attack再次真实离开limbo；不扩称所有移动目标、高差或每枚导弹逐帧原生会话相同。
+- 初版把V3对手设为普通AI APOC：实际初点(95,14)，结束时已被调往(71,101)，原弹最后仍在(95,14)，未伤及已离开的单位不证明V3坏了。实读RocketMoveTo6632E0→B96BB0..B96BDA→66331E，66332A..66334A已有非空目的地即返回，只有6633A6..6633AF在空状态写首次目的地。最终按常见攻城路径选固定建筑，不修改导弹为追踪弹或冻结原AI/武器。后续建筑被同帧摧毁的旧HP-only断言也曾漏验，按上述现有生产输出补真实销毁证据，而非放宽为目标缺失即通过。
+- 仅测试/台账，无生产reader/状态、RNG调用、timer/Detach实现或保存字段修改，无需玩法critic。当前两图七个注册母体已有各自真实场景，并不证明各自全部晋升/换主/死亡/射击几何都已闭环；更多强子机、换主、实际防空与多AI长局仍开放，不关闭整个V05。未启动GUI、未动MOD/原始存档/固定玩家版、未发布。
+- 最终retail gate/NP下完整五路组合1项、SpawnManager36项、NP奖励6项通过；旧Hornet整轮扫射slow未涉及，保留1 ignored，无待完成Cargo。调试时曾临时仅跑V3，最终已恢复并实际跑完五路，不把单路结果算全量；旧ASW/CARRIER实际例与stock本轮未重跑。自动缓存回收因Unsupported PE debug closure安全停止、删除0字节，未手动清理；固定exe仍为10月26日原文件。
 
 ### V02等待者死亡与医院销毁：预约清理、留存尸体分开验收（2026-10-29）
 
@@ -1405,7 +1415,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V02 / P2 / 入口/Cargo/EMP任务保留已修，联盟/缺电/Off/EMP治疗存读已验 | GAROBO/NARADR Hospital保留患者owner，普通步兵共用医院动作，Ammo=-1准入；Passengers=0仍可有Cargo；建筑EMP不再误调Deactivate重置治疗 | 手动Off拒新、已有患者继续；自然缺电/EMP下原有与新患者可治疗出院，正式存读/预约清理、独立House电网及恢复已验。EMP原生生命周期/雷达顺序与付款恢复见对应节；治疗中解盟/新申请拒绝、同帧双人预约等待及依次治满/存读已验；步行中双向解盟/保存后的原生入院失联停疗边界已验，不能算正常治愈；三人预约中普通Move取消/其余两人正常治满与三次存读已验；等待者死亡/医院退休后远处等待者清预约已验，已住院者C4序列死亡可留存limbo尸体；完整TTNK医院实战、单向外交/其他取消、占领旧患者其他恢复及自主多AI仍开放；不是科技医院全军被动自愈 |
 | V03 / P1 / 普通连发链已验证，边界开放 | 原有BurstDelay读取不足以适配NP：GetROF返回完整ROF和短间隔，FireAt复用+2F8，GetFireError分两时钟，Assign_Target不再因空目标清burst；精确开关UseROFAsBurstDelays取代NoAutoFire | 双计时已接共享内核/FireAt/FireError/目标清理/保存/hash，原红测及原生六例+writer三路通过。用户批准后，NP乘员原生三例、实际TTNK完整开火/Stop/Guard/保存续战均通过，既有critic缺口已补；空武器/建筑ammo早返短值域仍保留明确fallback；两图typed库存仅无武器/不可驻军CAAIRP/CAPOWR具Ammo5，正常Occupier普通/精英均有武器，暂未找到常规FireAt消费者；游标/回调等运行时边界仍开放，不宣称所有武器等价。本轮未交付新玩家版。NASAM单数BurstDelay仍不消费，见C05 |
 | V04 / P1 / 移动/换主死亡/运输及两电脑重叠存读已验，其余开放 | 实际DOG移动带入/带出范围，电脑GAPILL用自身House探测圈获取全隐形TANY；普通Guard实射、自然重隐后的拒绝与再发现通过；同方2圈+盟友1圈时按原生隔离计数，不跨盟友直接共享探测 | IFV控制/归还/死亡、登离LCRF/存读已验，共享Unlimbo已修。两电脑House的重叠、移走一个/退休最后本方源、盟友圈仍在但不为本方准入，以及最终退休/存读已验；SNIPE自身普通Move穿圈/邻格解隐/自然重隐及边沿存读已验；其他联盟变动/圈家族、空艇/精英潜艇/幻影等及画面仍待验，不宣称多AI自主走位或长局通过 |
-| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；count1/cursor1的普通GetWeapon→Cant→drop、180帧含存读不归零/不发射及补员恢复已验；实际SNIPE两次尾删/游标1/经验/两次存读及原弹归属已验，正等级不应随机删非尾；其他名单损伤来源和原生循环分支仍待核。剩余Cargo在SpawnSurvivors后清理；另修control0错误移除隐形乘员名单，实际TANY普通入BFRT/自然隐形/存读/正常卸载通过，control1清理仍保留；实际DEST/DRED连续晋升热存读及DRED普通发射出池/再生继承/再存读重发已验；DEST/CDEST实际反潜实射/receiver死亡再生/继承/两次存读后重发已验；BSUB/CMISL自然隐形重建/连续晋升/槽位释放与旧弹热存读后实际命中/替补继承重发已验；CARRIER实际YURI控制/旧翼坠落/热存读后新翼实射及控制者死后归还重建已验；其他家族、ASW防空弹实杀及其他换主路径仍待验，不关闭全V05 |
+| V05 / P1 / 驻军双弹/射手死亡存读已验，剩余Cargo死亡顺序已修，生命周期仍开放 | 驻军按击杀时活索引减一并回绕，成本保留受害House例外；飞机保留普通奖励并额外训练母体，rank采样同步弱子机、再生按Trainable继承raw | 出驻/替换、末位死亡/补员、楼毁活体弹出、双弹与第二射手死亡后的名单XP已验。ScenarioInit内非尾删除/存读后真实交替开火、cursor0单人自然续火/热存读已验；count1/cursor1的普通GetWeapon→Cant→drop、180帧含存读不归零/不发射及补员恢复已验；实际SNIPE两次尾删/游标1/经验/两次存读及原弹归属已验，正等级不应随机删非尾；其他名单损伤来源和原生循环分支仍待核。剩余Cargo在SpawnSurvivors后清理；另修control0错误移除隐形乘员名单，实际TANY普通入BFRT/自然隐形/存读/正常卸载通过，control1清理仍保留；实际DEST/DRED连续晋升热存读及DRED普通发射出池/再生继承/再存读重发已验；DEST/CDEST实际反潜实射/receiver死亡再生/继承/两次存读后重发已验；BSUB/CMISL自然隐形重建/连续晋升/槽位释放与旧弹热存读后实际命中/替补继承重发已验；CARRIER实际YURI控制/旧翼坠落/热存读后新翼实射及控制者死后归还重建已验；V3/VLAD的单/双槽连续晋升、保存后真实攻城命中/再生继承重发已验；ASW防空弹实杀、其他换主/强子机及多AI仍待验，不关闭全V05 |
 | V06 / P1 / 地空晋升/热存读退档已验，其余开放 | 作者170601说的是“最高/中级射速”，由现有EliteWeapon1配置实现，不要求内部stage跳档 | 实际AY YTNK/YAGGUN地面及自然起飞JUMPJET对空实杀晋升、热stage存读、Stop/Guard退档和精英对应槽续射已验；对空目标是受控human House组件，不是AI自主飞行。既有stage0首发由配置实现；YTNK/YAGGUN热状态地空换主存读/新主人续射已验；机炮保存额外旧主AI后的状态，普通human House的实际地空reload及运行中双计时存读已验；实际NATBNK正常进出/非1倍率地空射击及驻留/释放存读已验；碉堡实弹毁坏/正常出售四路释放存读、Move和续射已验；V12特殊回调、碉堡Temporal/争抢、YTNK正式气体receiver狂暴后的实际减半reload/NP短值0、热存读/续射/自然到期后恢复已验；另由实际CAOS正常供电/普通Attack发射与YTNK实杀无人车后热存读/自然恢复通过；其他倍率/全档精确节奏及GPU仍待验，不加NP跳档 |
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源第三House/同宿主House换主后的解缠、两次存读与GPU已验；源自然瘫痪到期/新主人普通移动/再存读已验；多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载/卸载/重装存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读实射、解散全卸载/存读、同一批活体重建队重装、部分与全装存读并六人再次实射通过；不代表自主重建决策。优先级招走与AreaGuard保留原生行为；两图6种BFRT队/4脚本均无Unload8/Deploy9或切换17/18，不列为必需卸载缺口；07C257EC-G首段Attack0,4及实杀后自然转cursor5的Attack0,5/两段存读/实际乘员命中已验；最终0,1自然选中建筑/移动状态存读后追近、保存后新乘员实射及额外伤害已验（本例1890帧）；其他进攻脚本/竞争补员/换主/多AI长局仍待验；不把线圈充能当V01中心供电 |

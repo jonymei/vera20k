@@ -19438,14 +19438,20 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; successive naval-parent promotions with one-slot and two-slot pools"]
-    fn aymod_naval_spawn_pools_follow_consecutive_saved_parent_promotions() {
+    #[ignore = "requires VERA20K_AYMOD_DIR; successive land/naval-parent promotions and saved missile regeneration"]
+    fn aymod_spawn_pools_follow_consecutive_saved_parent_promotions() {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, LEVEL_ROOKIE, LEVEL_VETERAN};
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
-        for (kind, slots) in [("DEST", 1), ("DRED", 2), ("BSUB", 2)] {
+        for (kind, slots) in [
+            ("DEST", 1),
+            ("DRED", 2),
+            ("BSUB", 2),
+            ("V3", 1),
+            ("VLAD", 2),
+        ] {
             let mut launch = battle_session(
                 map,
                 &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
@@ -19485,10 +19491,32 @@ mod retail_construction_tests {
                 })
                 .map(|cell| (cell.rx, cell.ry))
                 .collect::<Vec<_>>();
-            let parent = water
+            let ground = land
+                .iter()
+                .copied()
+                .filter(|&(x, y)| {
+                    let level = pristine.cell(x, y).unwrap().level;
+                    [-3i16, 3].into_iter().all(|dx| {
+                        [-3i16, 3].into_iter().all(|dy| {
+                            x.checked_add_signed(dx)
+                                .zip(y.checked_add_signed(dy))
+                                .and_then(|(x, y)| pristine.cell(x, y))
+                                .is_some_and(|cell| {
+                                    !cell.outside_playfield
+                                        && cell.level == level
+                                        && cell.land_type
+                                            == crate::rules::terrain_rules::LandType::Clear
+                                                .as_index()
+                                })
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            let parent_cells = if kind == "V3" { &ground } else { &water };
+            let parent = parent_cells
                 .iter()
                 .filter(|&&(x, y)| {
-                    kind != "BSUB"
+                    !matches!(kind, "BSUB" | "V3" | "VLAD")
                         || land
                             .iter()
                             .any(|&(tx, ty)| x.abs_diff(tx).max(y.abs_diff(ty)) == 10)
@@ -19666,7 +19694,7 @@ mod retail_construction_tests {
                     );
                 }
             }
-            let bytes = save_scene(&scene, "AY elite naval parent and its inherited pool");
+            let bytes = save_scene(&scene, "AY elite parent and its inherited pool");
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             assert_eq!(
                 scene
@@ -19690,9 +19718,11 @@ mod retail_construction_tests {
                     Some(parent)
                 );
             }
-            if slots > 1 {
+            if kind != "DEST" {
                 use crate::sim::command::{Command, CommandEnvelope};
-                let (target_cells, target_kind, distance) = if kind == "BSUB" {
+                let (target_cells, target_kind, distance) = if matches!(kind, "V3" | "VLAD") {
+                    (&land, "NACNST", 10)
+                } else if kind == "BSUB" {
                     (&land, "APOC", 10)
                 } else {
                     (&water, "CARRIER", 8)
@@ -19712,10 +19742,32 @@ mod retail_construction_tests {
                     })
                     .unwrap();
                 let target_health = sim.entities().get(target).unwrap().health.current();
+                let mut target_damaged = false;
                 let target_cell = {
                     let target = sim.entities().get(target).unwrap();
                     (target.position.rx(), target.position.ry())
                 };
+                let impact_warhead = match kind {
+                    "V3" => &resources.rules.missile_spawn.v3,
+                    "BSUB" => &resources.rules.missile_spawn.cmisl,
+                    _ => &resources.rules.missile_spawn.dmisl,
+                }
+                .elite_warhead
+                .clone();
+                let mut target_was_present = true;
+                let mut observe_damage =
+                    |scene: &HeadlessScenario, output: &crate::sim::world::SimFrameOutput| {
+                        let target_now = scene.sim().entities().get(target);
+                        let damaged = target_now.is_some_and(|entity| entity.health.current() < target_health)
+                        || (target_was_present && target_now.is_none() && output.tick.destroyed_structure
+                            && output.combat_lights.iter().any(|event| matches!(event,
+                                crate::sim::combat::CombatLightRequest::Impact { warhead_ref, coord, .. }
+                                    if scene.sim().interner.resolve(*warhead_ref) == impact_warhead
+                                        && (coord.x / 256 - i32::from(target_cell.0)).abs()
+                                            .max((coord.y / 256 - i32::from(target_cell.1)).abs()) <= 3)));
+                        target_was_present = target_now.is_some();
+                        damaged
+                    };
                 let regen = sim
                     .entities()
                     .get(parent)
@@ -19733,12 +19785,13 @@ mod retail_construction_tests {
                         target_id: target,
                     },
                 ));
-                let mut launched = [false; 2];
-                let mut last_cells = [None; 2];
+                let mut launched = vec![false; slots];
+                let mut last_cells = vec![None; slots];
                 let lost_slot = (0..1200)
                     .find_map(|_| {
                         let frame = scene.sim().session.binary_frame();
-                        tick_with_due_commands(&mut scene);
+                        let output = tick_with_due_commands(&mut scene);
+                        target_damaged |= observe_damage(&scene, &output);
                         assert!(
                             scene.sim().session.binary_frame() > frame,
                             "the battle must remain active while checking missile timers"
@@ -19775,14 +19828,14 @@ mod retail_construction_tests {
                     .unwrap_or_else(|| {
                         panic!("{kind}: normal Attack must launch and consume a real missile")
                     });
-                if kind == "BSUB" {
+                if matches!(kind, "BSUB" | "V3" | "VLAD") {
                     assert!(
                         scene
                             .sim()
                             .entities()
                             .get(children[lost_slot])
                             .is_some_and(|child| child.health.current() > 0),
-                        "manager slot expiry is not the flying cruise missile's death"
+                        "manager slot expiry is not the flying missile's death"
                     );
                 }
                 let sim = &mut scene.runtime.simulation;
@@ -19810,7 +19863,7 @@ mod retail_construction_tests {
                 );
                 let bytes = save_scene(
                     &scene,
-                    "AY elite naval missile consumed with regeneration pending",
+                    "AY elite missile consumed with regeneration pending",
                 );
                 scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                 assert_eq!(
@@ -19825,7 +19878,8 @@ mod retail_construction_tests {
                 );
                 let replacement = (0..regen + 60)
                     .find_map(|_| {
-                        tick_with_due_commands(&mut scene);
+                        let output = tick_with_due_commands(&mut scene);
+                        target_damaged |= observe_damage(&scene, &output);
                         if let Some(child) = scene.sim().entities().get(children[lost_slot]) {
                             last_cells[lost_slot] =
                                 Some((child.position.rx(), child.position.ry()));
@@ -19839,38 +19893,45 @@ mod retail_construction_tests {
                             .slots()[lost_slot]
                             .spawn()
                     })
-                    .expect("configured naval regeneration must create a new missile after load");
+                    .expect("configured regeneration must create a new missile after load");
                 assert_ne!(replacement, children[lost_slot]);
                 let parent_xp = scene.sim().entities().get(parent).unwrap().veterancy.raw();
                 let child = scene.sim().entities().get(replacement).unwrap();
                 assert_eq!(child.spawn_owner_id.owner(), Some(parent));
                 assert_eq!(child.veterancy.raw(), parent_xp);
-                if kind == "BSUB" {
+                if matches!(kind, "BSUB" | "V3" | "VLAD") {
                     assert!(
                         (0..1200).any(|_| {
                             let frame = scene.sim().session.binary_frame();
-                            tick_with_due_commands(&mut scene);
+                            let output = tick_with_due_commands(&mut scene);
+                            target_damaged |= observe_damage(&scene, &output);
                             assert!(scene.sim().session.binary_frame() > frame);
                             if let Some(child) = scene.sim().entities().get(children[lost_slot]) {
                                 last_cells[lost_slot] =
                                     Some((child.position.rx(), child.position.ry()));
                                 return false;
                             }
-                            scene
-                                .sim()
-                                .entities()
-                                .get(target)
-                                .is_none_or(|target| target.health.current() < target_health)
+                            target_damaged
                         }),
-                        "cruise missile must finish its real flight and damage the land target after load"
+                        "missile must finish flight and damage target: kind={kind}, start={at:?}, target_cell={target_cell:?}, last={last_cells:?}, target={:?}, missile={:?}",
+                        scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .map(|e| (e.position, e.health.current())),
+                        scene.sim().entities().get(children[lost_slot]).map(|e| (
+                            e.position,
+                            e.mission.current(),
+                            e.navigation.nav_com()
+                        ))
                     );
                     let (x, y) = last_cells[lost_slot].unwrap();
                     assert!(
                         x.abs_diff(target_cell.0).max(y.abs_diff(target_cell.1)) <= 2,
-                        "the cruise missile must reach the target, not retire at launch: {last_cells:?}"
+                        "the missile must reach the target, not retire at launch: {kind} {last_cells:?}"
                     );
                 }
-                let bytes = save_scene(&scene, "AY regenerated elite naval missile");
+                let bytes = save_scene(&scene, "AY regenerated elite missile");
                 scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                 let child = scene.sim().entities().get(replacement).unwrap();
                 assert_eq!(child.spawn_owner_id.owner(), Some(parent));
