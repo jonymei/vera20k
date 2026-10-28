@@ -25,6 +25,12 @@ impl GameEntity {
         self.building_online.online
     }
 
+    /// NPAE BuildingChangeOwner448BD9/448BED -> C2ECB9/C2ECD6 writes
+    /// +660 around the old-owner AI call, without GoOffline/GoOnline callbacks.
+    pub(crate) fn set_building_online_for_owner_change(&mut self, online: bool) {
+        self.building_online.online = online;
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_building_online_for_test(&mut self, online: bool) {
         self.building_online.online = online;

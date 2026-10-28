@@ -10584,6 +10584,289 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; NP building ownership AI pulse, online restoration and saved recovery"]
+    fn aymod_building_owner_change_visits_ai_before_transfer_and_restores_online() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for pulse in [true, false] {
+            let (mut scene, building, _) = aymod_nearby_pair("YAGGUN", "GAPOWR", true);
+            let original = scene.sim().entities().get(building).unwrap().owner();
+            let country = scene
+                .runtime
+                .resources
+                .rules
+                .country_index("YuriCountry")
+                .unwrap();
+            let recipient = scene.add_human_house(
+                "BuildingAIRecipient",
+                LaunchCountry::from_country_index(u32::from(country.0)),
+            );
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(building).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    recipient,
+                    cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry()))),
+                    &["GAPOWR"],
+                );
+            }
+            for _ in 0..3 {
+                tick_with_due_commands(&mut scene);
+            }
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .building_last_operational
+                    .is_operational()
+            );
+            if pulse {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let primary = rules
+                    .weapon(rules.object("TTNK").unwrap().primary().unwrap())
+                    .unwrap();
+                let projectile = rules
+                    .projectile(primary.projectile.as_deref().unwrap())
+                    .unwrap();
+                let child = rules
+                    .weapon(projectile.airburst_weapon.as_deref().unwrap())
+                    .unwrap();
+                let wh = rules.warhead(child.warhead.as_deref().unwrap()).unwrap();
+                let at = crate::sim::movement::ground_pose::object_get_coords(
+                    sim.entities().get(building).unwrap(),
+                    sim.resolved_terrain(),
+                );
+                sim.apply_npatch_emp_detonation(
+                    crate::sim::projectile::ProjectileCoord {
+                        x: at.x,
+                        y: at.y,
+                        z: at.z,
+                    },
+                    Some(building),
+                    None,
+                    child.damage,
+                    wh,
+                    rules,
+                    Default::default(),
+                );
+                assert!(sim.entities().get(building).unwrap().emp_remaining() > 1);
+            } else {
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    original,
+                    sim.session.tick() + 1,
+                    Command::SetBuildingOnLine {
+                        entity_id: building,
+                        on: false,
+                    },
+                ));
+                tick_with_due_commands(&mut scene);
+                assert!(
+                    !scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .building_online()
+                );
+            }
+            let before = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .emp_remaining();
+            {
+                let runtime = &mut scene.runtime;
+                let online = runtime
+                    .simulation
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .building_online();
+                runtime.simulation.change_owner_with_rules(
+                    building,
+                    original,
+                    &runtime.resources.rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+                assert_eq!(
+                    runtime
+                        .simulation
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .emp_remaining(),
+                    before
+                );
+                assert_eq!(
+                    runtime
+                        .simulation
+                        .entities()
+                        .get(building)
+                        .unwrap()
+                        .building_online(),
+                    online
+                );
+                runtime.simulation.change_owner_with_rules(
+                    building,
+                    recipient,
+                    &runtime.resources.rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                );
+            }
+            let actor = scene.sim().entities().get(building).unwrap();
+            // C2ECB9 calls full BuildingAI43FB20 before Techno7014A0;
+            // the existing Techno AI clock must consume exactly one EMP tick.
+            assert_eq!(actor.emp_remaining(), if pulse { before - 1 } else { 0 });
+            assert_eq!(actor.owner(), recipient);
+            // C2ECD6 restores +660 unconditionally and clears +6C8.
+            assert!(actor.building_online());
+            assert!(!actor.building_last_operational.is_operational());
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY captured building after NP inline AI");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let actor = scene.sim().entities().get(building).unwrap();
+            assert_eq!(actor.owner(), recipient);
+            assert!(actor.building_online());
+            assert!(!actor.building_last_operational.is_operational());
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(building).unwrap();
+                actor.emp_remaining() == 0 && actor.building_last_operational.is_operational()
+            }));
+            let target = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(building).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    original,
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                    &["NACNST"],
+                )[0]
+            };
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                recipient,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: target,
+                },
+            ));
+            assert!(
+                (0..300).any(|_| {
+                    tick_with_due_commands(&mut scene)
+                        .fire_events
+                        .iter()
+                        .any(|event| {
+                            event.attacker_id == building
+                                && event.target == crate::sim::combat::TargetKind::Entity(target)
+                        })
+                }),
+                "new owner must regain ordinary fire after the inline off/on transaction"
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; first civilian occupant capture and last occupant abandonment through NP inline AI"]
+    fn aymod_garrison_capture_and_abandonment_do_not_reenter_inline_owner_change() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, infantry) = aymod_nearby_pair("CAHSE01", "E1", true);
+        let owner = scene.sim().entities().get(infantry).unwrap().owner();
+        let civilian = scene
+            .sim()
+            .civilian_side_house(&scene.runtime.resources.rules)
+            .unwrap();
+        {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.change_owner_with_rules(
+                building,
+                civilian,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            let sim = &mut runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::CaptureBuilding {
+                    engineer_id: infantry,
+                    target_building_id: building,
+                },
+            ));
+        }
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let actor = scene.sim().entities().get(building).unwrap();
+                actor.owner() == owner && actor.passenger_role.occupants().ids() == [infantry]
+            }),
+            "first ordinary occupier must transfer the civilian building without recursive AI capture"
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY first garrison occupant after inline ownership AI",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::UnloadPassengers {
+                transport_id: building,
+            },
+        ));
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                let actor = sim.entities().get(building).unwrap();
+                let passenger = sim.entities().get(infantry).unwrap();
+                actor.owner() == civilian
+                    && actor.passenger_role.occupants().is_empty()
+                    && passenger.is_alive()
+                    && !passenger.lifecycle.in_limbo()
+                    && passenger.passenger_role.inside_transport_id().is_none()
+            }),
+            "last ordinary unload must return ownership without recursive inline abandonment"
+        );
+        let bytes = save_scene(&scene, "AY empty garrison after inline ownership AI");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(building).unwrap().owner(),
+            civilian
+        );
+        assert_eq!(scene.sim().entities().get(infantry).unwrap().owner(), owner);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .is_empty()
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_lift_gattling_target(scene: &mut HeadlessScenario, actor: u64, target: u64) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};

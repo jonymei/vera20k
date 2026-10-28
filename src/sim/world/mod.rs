@@ -1369,7 +1369,7 @@ pub struct Simulation {
     /// The restored match rebuilds its atlases; this is not saved or hashed.
     #[serde(skip)]
     ownership_changed_since_output: bool,
-    /// Immediate damage can originate inside movement or nested callbacks
+    /// Immediate damage or inline class AI can originate in nested callbacks
     /// without a return channel for its receipt. These presentation notices
     /// drain at frame output; restoration rebuilds atlases. Not saved/hashed.
     #[serde(skip)]
@@ -6156,6 +6156,39 @@ impl Simulation {
         if category == EntityCategory::Structure {
             self.houses.leave_house_base_lists(stable_id, old_owner);
         }
+        if crate::rules::NPATCH_ENABLED && category == EntityCategory::Structure {
+            // NPAE BuildingChangeOwner448BD9 -> C2ECB9: after old-House
+            // list/sight removal, +660=0 and vt+5C (BuildingAI43FB20), still
+            // before TechnoChangeOwner7014A0. Reuse the full AI owner, not
+            // an invented counter/EMP/gattling-only substitute.
+            self.substrate
+                .entities
+                .get_mut(stable_id)
+                .unwrap()
+                .set_building_online_for_owner_change(false);
+            let mut ai = self.object_ai_visit_one_with_effects(
+                stable_id,
+                rules,
+                techno_ai::ObjectAiCtx {
+                    effects,
+                    overlay_registry: registry,
+                },
+            );
+            ai.observe_structure_retirement(self, stable_id, true);
+            self.damage_bridge_changed_since_output |= ai.bridge_state_changed;
+            self.damage_destroyed_structure_since_output |= ai.destroyed_structure;
+            self.ownership_changed_since_output |= ai.ownership_changed();
+            assert!(
+                ai.fall_error.is_none(),
+                "inline BuildingAI failed: {:?}",
+                ai.fall_error
+            );
+            // Native retirement is deferred; Rust may have already removed
+            // this ID. Its cleanup belongs to the AI/lifecycle owners above.
+            if !self.substrate.entities.contains(stable_id) {
+                return;
+            }
+        }
         // Original7014DB/7014E9 dispatch the class target and destination
         // setters, then70151A clears Archive and70156E queues Guard. All run
         // on the OLD house, before SpawnManager and the701735 owner swap.
@@ -6422,6 +6455,14 @@ impl Simulation {
             );
         }
         if category == EntityCategory::Structure {
+            if crate::rules::NPATCH_ENABLED {
+                // NPAE448BED -> C2ECD6, after the whole Techno delegate:
+                // unconditional online restoration, then LastOperational=0.
+                if let Some(entity) = self.substrate.entities.get_mut(stable_id) {
+                    entity.set_building_online_for_owner_change(true);
+                    entity.building_last_operational.reset_after_owner_change();
+                }
+            }
             crate::sim::production::initialize_factory_primary(self, rules, stable_id);
             //448CEF: Grand_Opening(1) also runs on an already placed
             //building; its6E4 gate prevents repeating first-opening slots.

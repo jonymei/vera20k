@@ -1498,6 +1498,11 @@ pub(crate) fn reconcile_civilian_garrison_owner_for_building(
         else {
             return false;
         };
+        // NPAE458307 -> C2ED1D: the inline ChangeOwner BuildingAI runs
+        // with +660 clear. Do not recursively recapture on that old House.
+        if crate::rules::NPATCH_ENABLED && !building.building_online() {
+            return false;
+        }
         sim.refresh_garrison_anims(building_id, rules);
         sim.change_owner_with_rules(building_id, new_owner, rules, registry, effects);
         return new_owner != current_owner;
@@ -1520,6 +1525,17 @@ pub(crate) fn reconcile_civilian_garrison_owner_for_building(
                     building.position.ry(),
                 ),
             });
+        }
+        // NPAE4582DD -> C2ED3B checks +660 AFTER the abandoned notices.
+        // This is also the native re-entry guard, not a Rust recursion latch.
+        if crate::rules::NPATCH_ENABLED
+            && sim
+                .substrate
+                .entities
+                .get(building_id)
+                .is_some_and(|building| !building.building_online())
+        {
+            return false;
         }
         sim.refresh_garrison_anims(building_id, rules);
         sim.change_owner_with_rules(building_id, civilian_owner, rules, registry, effects);

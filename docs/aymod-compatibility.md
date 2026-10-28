@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于8fd9a4d45补V06坦克地空精英热状态换主/新主人存读续射，Gattling ignored6项通过。同时确认V12实际NPAE建筑换主额外AI detour尚未接入，不能拿坦克保持预期套建筑；详见V12节。仅测试/台账，无生产修改/新critic，无待完成Cargo，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于7aa8e0fec接V12建筑换主的完整旧主AI与在线/operational复原，并补必要NP驻军重入门。纯NP定向93、stock35、混合23项通过；Ares40项通过但另有2项gap夹具在生存前提失败（详V12，不称全绿）。一次只读critic确认的驻军递归缺口已修并回归；无待完成Cargo，未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：V12建筑换主的C2ECB9/C2ECD6补丁，先以实际YAGGUN换主证明缺失的同帧BuildingAI作用，再复用既有object_ai_visit_one_with_effects/BuildingAI owner接通，不复制AI或只补计数。核清old House列表移除、online临时位、回调副作用/退休/返回输出、post +6C8身份及复原顺序，玩法修改需一次只读critic。Return Dubai攻势线暂停，V01/F11门禁和固定构建不变。
+- 下一安全动作：继续V12实际AY GAROBO控制中心换主后的新旧House支持/恢复链，先补完整MOD场景，沿现有PowersUnit聚合owner验证，不能借此改独立供电或失联Drive政策；再补V06机炮热状态换主。V12通用多manager/退休回调与多AI仍开放，Return Dubai攻势线暂停，V01/F11门禁和固定构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06建筑换主/V12及完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。本轮一次缓存清理仍因Unsupported PE debug closure安全停止、移除0字节，不手工清理固定构建；不影响实际定向测试执行。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -317,12 +317,16 @@
 - 最终实际复合回归1项、sim::combat::parasite::tests::25项和巨炮三阵营计划回归1项通过。测试-only，无新玩法实现/critic；未启动GUI、未改MOD/原始存档/固定构建，未发布。初次测试过滤器误写导致0项，已改用真实测试名执行，不计为通过。
 - 辐射场RadSite、部署普通/精英武器、换主、完整抗压及原生/GUI并排仍开放；不能用本条关闭全部V07或报告原鱿鱼/海豚闪退已全面排除。
 
-### V12新发现：NPAE建筑换主额外BuildingAI尚未接入（2026-10-28）
+### V12建筑换主额外旧主AI、驻军重入门与新主恢复（2026-10-28）
 
-- 实际AY BuildingChangeOwner448BD9跳C2ECB9：先调用原ReReveal虚函数+48C，写Building+660=false，再从实例vtable调用+5C；零售vtable7E3EBC的+5C（文件7E3F18字节20fb4300）确为BuildingAI43FB20。之后回448BDF/448BE8调用TechnoChangeOwner7014A0。448BED跳C2ECD6恢复+660=true、清+6C8，再回448BF3继续。这不是一般NP EMP生命周期，也不是手动Off事件，不凭相似名字复用Ares deactivate。
-- 当前change_owner_impl已在Techno委托之前移除旧House建筑列表，但此处没有该临时online写入和额外Building AI；现有enable_building_after_owner_change仅写HasEngineer/Stuff。地址/函数搜索未找到另一调用owner。完整原生BuildingAI会调Techno/Mission，再进入盖特idle等consumer；因此不能把YTNK不重置stage/value的预期直接复制成YAGGUN的即时原生结果。
-- 触发为实际NP任一异House建筑换主；影响包括同帧任务/倒计时/动画与相关manager副作用，具体每类可见结果尚待回归定位，不虚构每次必定退档。盖特Guard idle43FEE9..43FF67还受当前任务和上次开火间隔门，不能只写RateDown或C4++冒充完整AI。风险是捕获/心控/脚本换主及下游恢复的时序差异，频率为每次有效建筑换主；全AI可能经过的RNG、timer、Detach沿既有owners，新增调用尚未实现/执行验证。post +6C8字段身份亦待核，不擅起名。
-- 下一实现入口是world::change_owner_impl与既有techno_ai::object_ai_visit_one_with_effects；需先核该Rust入口是否恰好对应原生+5C、回调重入/退休及bridge/effect输出归属，不能复制AI body或静默丢输出。先做少量生产红回归再接通，stock/Ares隔离和医院/盖特等直接消费者重验，玩法改动做一次critic。当前只记录已读指令/代码缺口，无生产修改，未声称V12适配。
+- 实际AY BuildingChangeOwner448BD9→C2ECB9先调用ReReveal+48C，写Building+660=false，再调用实例vt+5C；零售Building vtable7E3EBC的+5C指向43FB20。回448BE8委托完整TechnoChangeOwner7014A0，448BED→C2ECD6再恢复+660=true、清+6C8。+6C8已确定为既有gap_generator::LastOperational，不是未知字段。此为无新键的NPAE补丁，不改GoOnline/GoOffline准入或复用Ares EMP deactivation。
+- 在既有change_owner_impl、旧House列表/视野移除后、Techno委托之前，以building_power owner的原始写入接口临时关在线，调用唯一object_ai_visit_one_with_effects完整AI；不推进全局帧或复制任务/EMP/盖特逻辑。完整Techno尾后、Building的factory/GrandOpening尾前恢复在线并经LastOperational owner清采样，让新主下一次正常AI产生正确边沿。同House拒绝仍早于这次调用。结构退休输出判断提取为同一ObjectAiOutcome方法，普通对象轮与本次同步调用复用；bridge/结构销毁/换主通知进原有瞬时输出缓存，无新增保存字段或第二套玩法状态。
+- 必要依赖：实际458307→C2ED1D在occupied-neutral归属改变前检查+660；4582DD→C2ED3B在empty-owned的遗弃声音/radar之后检查+660。现有allegiance owner两处都缺，额外AI在旧House尚未交换时会再次要求同一换主并无限递归。唯一只读critic确认此P1；在原owner的这两个原生位置补NP门，不添加递归锁/影子归属。实际CAHSE01普通E1 Capture首次进驻夺楼→存读→普通Unload最后一人离楼归中立→再存读通过；新offline双分支回归保护NP拒换主且空楼仍通知，stock/Ares-only仍按原行为改变归属。
+- 红回归：实际YAGGUN使用正式TTNK.Primary→AirburstWeapon子弹EMP配置进入生产impact；不改counter/MOD，原换主后计数仍50而期望49，修后额外Techno AI真实消费1次。另从正常手动Off换主，验证无条件恢复online、LastOperational=false、同House调用不消费EMP/不改在线位；两种状态正式保存/恢复、正常恢复operational并由新主普通Attack实射通过。不是完整EMP时长/目标政策认证或真实心控准入。
+- 直接消费者发现的预期差异已解释而非修改golden：原工程师joined fixture用生产换主安装“已发生owner race”的输入，新增旧主AI会先付费修复/更新damage mode；setup现在恢复其原witness输入HP/estimated/sample/damage state，再比较arrival。实际repair_order_enemy_owner_race这一路NP输出也确实多旧主付费修复，不能再套stock输出；在该既有测试内单列NP行为断言（HP提高、旧主付费、新主归属、停付修、工程师正常延迟清理），其余stock比较/RNG与golden文件不变。stock/Ares-only完整原九路十到达仍通过。
+- PowersUnit既有捕获回归先因“60帧后新主仍无计数”的stock预期在NP失败。stock确无+6C8换主写入；NP现在按原生清采样，新主下一正常边沿即获得支持，无需人为断电再来电。测试按backend分别断言，旧主两个ROBO立即offline与一次EVA/两次单位声、新主恢复、后续自然失电/恢复仍覆盖；NP/stock/Ares/混合的powered_unit各8项通过。未修改原生House聚合计数或用户尚未批准的独立供电/失联Drive移动政策。
+- 最终覆盖：纯NP定向93项（实际新建筑1/驻军1、医院9、地空盖特6、实际实验室2、电脑捕获出售/重夺2；allegiance6、工程师3/power消费者5、gap13/supercharge5、槽电力5、EMP15、建造12、powered_unit8）。stock35项；Ares40项通过，另两项gap_generator_tests的defeated_viewer_fogs_hostile_gap_through_power_cycle_without_shroud、defeat_does_not_reclassify_an_active_hostile_gap失败。两者在defeat_local_viewer先仅写stock计数、没有alive House的Foot实体，Ares HouseTracking::game_alive10024990要求registry实体，因而在新NP hook执行前就失败；Ares生存owner另7项通过，未改本链外夹具/规则，不冒称Ares全绿或运行了基线全套。混合仅定向归属/工程师/换主gap/槽/供电23项通过，不把未跑两夹具算通过。早期错误gap过滤器0项及未带ignored的捕获2项不计成功。
+- 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
 
 ### V06盖特坦克/机炮地面与对空生命周期（2026-10-28）
 
@@ -332,7 +336,7 @@
 - 蓄速用友军目标隔离反击：地面NACNST；对空为真实Move起飞后暂Sleep的ZEP。正常射击让stage提高，正式保存/完整资源恢复保留精英经验/cache及stage/value；对空恢复后目标仍高飞。Native Load70BF61/70C20E清+4B8 report latch，测试继续分别核保存前true/恢复后false，不为凑结果改声音owner/RNG。
 - 读档后普通Stop/Guard退至stage0/value0，经验不丢；再次普通Attack时真实发射武器匹配发射前当前stage的EliteWeapon，地面偶数槽/对空奇数槽。对空续射时目标仍高飞，允许原生瞄准时蓄速，不硬设高档或假定首发永远stage0。自然起飞辅助先让射手Sleep仅是测试隔离，不把该输入说成自主索敌/完整强度交战。
 - 最终retail gate下gattling ignored5项（新地空两复合场景、原精英首发、零售机炮蓄退档、坦克碉堡准入）、Gattling组件7、Veterancy12通过。只有测试/台账改动，无新增生产状态、RNG/timer/Detach调用或保存字段，无需新玩法critic；未启动GUI、改固定构建/MOD/原始存档或发布。
-- 坦克换主续验：同一生命周期helper新增transfer_unit，仅YTNK分别跑地面/对空实杀晋升和真实hot stage。热状态建立后创建带真实GAPOWR的另一个YuriCountry human House，经共享Unit7463A0→Foot4DBED0→Techno7014A0 receiver换主；即时经验/cache/stage/value不变、旧攻击目标清空。正式存读保留新House与热状态，随后新主人普通Stop/Guard退档、普通Attack按实际精英地面/对空槽重新开火。不是实际心控武器或占领准入；YAGGUN因上节V12未实现而明确不进入此坦克保持测试。最终gattling ignored6项一起通过，原组件7/Veterancy12上轮通过本轮不重复，无新玩法实现/critic。
+- 坦克换主续验：同一生命周期helper新增transfer_unit，仅YTNK分别跑地面/对空实杀晋升和真实hot stage。热状态建立后创建带真实GAPOWR的另一个YuriCountry human House，经共享Unit7463A0→Foot4DBED0→Techno7014A0 receiver换主；即时经验/cache/stage/value不变、旧攻击目标清空。正式存读保留新House与热状态，随后新主人普通Stop/Guard退档、普通Attack按实际精英地面/对空槽重新开火。不是实际心控武器或占领准入；YAGGUN不进入此坦克保持测试；V12已接额外建筑AI，热机炮的具体档位变化仍需独立验收。最终gattling ignored6项一起通过，原组件7/Veterancy12上轮通过本轮不重复，无新玩法实现/critic。
 - 建筑换主/V12、登离载具、所有ROF倍率与连续间隔、完整强度敌军/自主多AI和GPU画面仍开放；这两条地空生命周期不是全部V06或整体适配完成。
 
 ### V10精英名义射程库存与磁暴IFV：配置差异不是引擎加成缺失（2026-10-28）
@@ -1054,7 +1058,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源第三House/同宿主House换主后的解缠、两次存读与GPU已验；源自然瘫痪到期/新主人普通移动/再存读已验；多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载/卸载/重装存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读实射、解散全卸载/存读、同一批活体重建队重装、部分与全装存读并六人再次实射通过；不代表自主重建决策。优先级招走与AreaGuard保留原生行为，带队卸载/竞争补员/换主/多AI长局仍待验；不把线圈充能当V01中心供电 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
-| V12 / P1 / 已确认缺口，未实现 | NP建筑换主的临时online与额外完整BuildingAI | 448BD9/448BED→C2ECB9/C2ECD6，实际vt+5C=43FB20；沿共享换主/AI owner接通同帧调用、副作用与复原，不以坦克保持或手补计数替代；详见当前V12节 |
+| V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、供电捕获恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
 秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，

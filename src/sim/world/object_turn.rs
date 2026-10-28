@@ -803,18 +803,10 @@ impl Simulation {
         if let Some(error) = ai.fall_error.take() {
             return Err(error);
         }
+        ai.observe_structure_retirement(sim, stable_id, was_structure);
         outcome.bridge_state_changed |= ai.bridge_state_changed;
         outcome.destroyed_structure |= ai.destroyed_structure;
         outcome.ownership_changed |= ai.ownership_changed();
-        if was_structure
-            && sim
-                .substrate
-                .entities
-                .get(stable_id)
-                .is_none_or(|entity| entity.death.is_dying())
-        {
-            outcome.destroyed_structure = true;
-        }
         if sim.substrate.entities.get(stable_id).is_none_or(|entity| {
             entity.death.is_dying()
                 || (!tube_active_at_entry

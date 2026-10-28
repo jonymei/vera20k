@@ -91,6 +91,25 @@ impl ObjectAiOutcome {
     pub(super) fn ownership_changed(&self) -> bool {
         self.ownership_changed
     }
+
+    /// The frame needs the same retirement notice for ordinary Logic visits
+    /// and a synchronous Building AI call during ownership transfer.
+    pub(super) fn observe_structure_retirement(
+        &mut self,
+        sim: &Simulation,
+        id: u64,
+        was_structure: bool,
+    ) {
+        if was_structure
+            && sim
+                .substrate
+                .entities
+                .get(id)
+                .is_none_or(|entity| entity.death.is_dying())
+        {
+            self.destroyed_structure = true;
+        }
+    }
 }
 
 impl Simulation {

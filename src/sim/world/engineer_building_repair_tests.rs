@@ -293,11 +293,18 @@ impl Fixture {
                 crate::sim::world::FrameEffects::default(),
             );
             let entity = sim.substrate.entities.get_mut(building).unwrap();
+            // NPAE's supplied setup transfer runs an extra old-owner AI and
+            // may repair. This witness starts AFTER that supplied owner race;
+            // restore its input HP just as the other pre-arrival scalars.
+            entity.health.set_for_test(int(&before["actual_hp"]));
+            entity.estimated_health.reset(int(&before["estimated_hp"]));
+            entity.sample_building_health_for_power();
             entity.repairing.set_for_test(before["paid_repair"] == 1);
             entity.has_been_captured.set_for_test(false);
             // The preceding fixture transfer is supplied setup, not this
             // arrival. Consume its identical idle request through the owner.
             entity.apply_queued_building_body(0, sim.session.game_options());
+            sim.set_building_damage_state(building, before["damaged_mode"] == 1, &rules);
         }
         if name == "enemy_selling_refusal" {
             let entity = sim.substrate.entities.get_mut(building).unwrap();
@@ -782,6 +789,54 @@ fn original_nine_routes_ten_walk_arrivals_repair_capture_and_deferred_cleanup() 
     for route in native["routes"].as_array().unwrap() {
         let name = route["name"].as_str().unwrap();
         let mut fixture = Fixture::new(route, &native, "1.0");
+        if crate::rules::NPATCH_ENABLED && name == "repair_order_enemy_owner_race" {
+            // The supplied inputs still apply, but the stock output witness
+            // omits C2ECB9's extra BuildingAI -> UpdateRepairAndPower450630.
+            // Check its NP-visible paid repair rather than rewrite a golden.
+            let arrival = &route["arrivals"][0];
+            assert_eq!(route["arrivals"].as_array().unwrap().len(), 1);
+            let head = fixture.prepare_paid_arrival(0, &arrival["before"]);
+            let id = fixture.engineers[0];
+            let building = fixture.sim.entities().get(fixture.building).unwrap();
+            let (old_owner, before_hp) = (building.owner(), building.health.current());
+            let new_owner = fixture.sim.entities().get(id).unwrap().owner();
+            let before_credits = fixture.sim.houses[&old_owner].economy().credits();
+            assert!(building.repairing.is_on());
+            fixture
+                .sim
+                .run_completed_walk_step(
+                    id,
+                    head,
+                    &fixture.rules,
+                    Some(&fixture.registry),
+                    crate::sim::world::FrameEffects::default(),
+                )
+                .unwrap();
+            let building = fixture.sim.entities().get(fixture.building).unwrap();
+            assert_eq!(building.owner(), new_owner);
+            assert!(building.health.current() > before_hp);
+            assert!(!building.repairing.is_on());
+            assert!(fixture.sim.houses[&old_owner].economy().credits() < before_credits);
+            assert!(
+                !fixture
+                    .sim
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .lifecycle
+                    .object_alive()
+            );
+            fixture.sim.process_pending_delete_with(
+                &fixture.rules,
+                Some(&fixture.registry),
+                crate::sim::world::FrameEffects::default(),
+                1,
+                false,
+            );
+            assert!(!fixture.sim.entities().contains(id));
+            arrivals += 1;
+            continue;
+        }
         for (index, arrival) in route["arrivals"].as_array().unwrap().iter().enumerate() {
             let boundary = format!("{name}/{index}");
             fixture.assert_building(&arrival["before"]["building"], &boundary);

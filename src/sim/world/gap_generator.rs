@@ -104,6 +104,12 @@ pub struct LastOperational {
 }
 
 impl LastOperational {
+    /// NPAE BuildingChangeOwner448BED -> C2ECD6 clears +6C8 after the
+    /// Techno delegate, so the new owner's next AI samples a fresh edge.
+    pub(crate) fn reset_after_owner_change(&mut self) {
+        self.operational = false;
+    }
+
     /// The last sample was operational.
     pub(crate) const fn is_operational(self) -> bool {
         self.operational

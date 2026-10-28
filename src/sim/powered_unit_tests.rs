@@ -421,10 +421,10 @@ fn destroying_the_center_switches_its_robot_tanks_off() {
 
 /// ChangeOwner (`0x0070158A..0x007015E6`) runs Removed_From_Game on the old
 /// house: a captured center stops counting there, and its old house's ROBOs
-/// go offline in the same call. Added_To_Game never counts, and Building
-/// `+0x6C8` has no ownership-change writer, so the captor counts it only at
-/// its next operational edge: here, when the captor's power fails and
-/// returns.
+/// go offline in the same call. Added_To_Game never counts, and stock
+/// Building `+0x6C8` has no ownership-change writer, so it needs a later power
+/// cycle. NPAE448BED -> C2ECD6 clears that sample: the new owner's next
+/// ordinary visit must count the center without a manual power cycle.
 #[test]
 fn a_captured_center_counts_for_its_captor_only_at_its_next_edge() {
     let Some(rules) = retail_rules() else {
@@ -458,9 +458,14 @@ fn a_captured_center_counts_for_its_captor_only_at_its_next_edge() {
     assert!(!sim.has_powered_center(americans));
     assert_eq!(lines(&events, americans, EVA_ROBOT_TANKS_OFFLINE), 1);
     assert_eq!(sounds(&events, "RobotTankOffline"), 2);
-    // Working for the Russians, it does not count for them.
-    run_until(&mut sim, &rules, &grid, 60, &mut events, |_| false);
     assert!(!sim.has_powered_center(russians));
+    // The NP sample reset admits the next normal operational edge; stock
+    // retains the old sample until power fails and returns below.
+    run_until(&mut sim, &rules, &grid, 60, &mut events, |_| false);
+    assert_eq!(sim.has_powered_center(russians), crate::rules::NPATCH_ENABLED);
+    if crate::rules::NPATCH_ENABLED {
+        assert!(!offline(&sim, rival));
+    }
 
     let working = |sim: &Simulation| {
         sim.substrate
