@@ -7853,13 +7853,35 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Tanya senses and attacks a saved cloaked submarine"]
     fn aymod_tanya_detects_a_cloaked_submarine_before_sapper_attack_after_load() {
-        use crate::sim::combat::{
-            TargetKind, fire_error::FireError, fire_error_world::FireSubject,
-        };
+        aymod_tanya_submarine_detection_and_attack(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; elite Tanya senses and hits a saved cloaked submarine with SapperE"]
+    fn aymod_elite_tanya_detects_a_cloaked_submarine_before_sapper_attack_after_load() {
+        aymod_tanya_submarine_detection_and_attack(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_tanya_submarine_detection_and_attack(elite: bool) {
+        use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scene, actor, sub) = aymod_water_pair("TANY", "SUB", 14);
+        if elite {
+            scene
+                .runtime
+                .simulation
+                .substrate
+                .entities
+                .get_mut(actor)
+                .unwrap()
+                .veterancy
+                .set_elite();
+        }
+        let expected_weapon = if elite { "SapperE" } else { "Sapper" };
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let (owner, sub_cell, health) = {
             let runtime = &mut scene.runtime;
@@ -7964,6 +7986,17 @@ mod retail_construction_tests {
         let bytes = save_scene(&scene, "AY sensed submarine before Sapper attack");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert!(sensed(&scene));
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .veterancy
+                .rank_kind()
+                == crate::sim::combat::veterancy::VeterancyRank::Elite,
+            elite
+        );
         assert_ne!(error(&scene), FireError::Cant);
         let tick = scene.sim().session.tick() + 1;
         scene.runtime.simulation.queue_command(CommandEnvelope::new(
@@ -7983,7 +8016,10 @@ mod retail_construction_tests {
                     .iter()
                     .filter(|event| event.attacker_id == actor)
                 {
-                    assert_eq!(scene.sim().interner.resolve(event.weapon_id), "Sapper");
+                    assert_eq!(
+                        scene.sim().interner.resolve(event.weapon_id),
+                        expected_weapon
+                    );
                     assert_eq!(event.target, TargetKind::Entity(sub));
                     fired = true;
                 }
@@ -7993,9 +8029,24 @@ mod retail_construction_tests {
                     .get(sub)
                     .is_none_or(|victim| victim.health.current() < health)
             }),
-            "Tanya must close and damage the detected submarine with Sapper; fired={fired}"
+            "Tanya must close and damage the detected submarine with {expected_weapon}; fired={fired}"
         );
         assert!(fired);
+        let remaining_hp = scene
+            .sim()
+            .entities()
+            .get(sub)
+            .map(|victim| victim.health.current());
+        let bytes = save_scene(&scene, "AY submarine after actual Sapper impact");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(sub)
+                .map(|victim| victim.health.current()),
+            remaining_hp
+        );
     }
 
     #[cfg(feature = "npatch")]
