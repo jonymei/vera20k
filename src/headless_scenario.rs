@@ -6852,6 +6852,177 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; unmodified authored map lab startup, capture and saved destruction"]
+    fn aymod_authored_secret_lab_assigns_at_startup_and_retracts_after_saved_destruction() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::production::{self, CanBuild};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "Operation Lone Guardian II(2-8).yrm";
+        let mut launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Easy)],
+        );
+        launch.options.unit_count = 0;
+        let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let owner = house_of(scene.sim(), "Americans");
+        let authored: Vec<_> = scene
+            .map
+            .entities
+            .iter()
+            .filter(|actor| actor.type_id == "CASLAB")
+            .collect();
+        assert_eq!(authored.len(), 1);
+        let labs: Vec<_> = scene
+            .sim()
+            .entities()
+            .iter_sorted()
+            .filter(|(_, actor)| {
+                scene
+                    .sim()
+                    .object_type(actor.type_ref(), &scene.runtime.resources.rules)
+                    .is_some_and(|object| object.secret_lab().enabled())
+            })
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(labs.len(), 1);
+        let lab = labs[0];
+        let actor = scene.sim().entities().get(lab).unwrap();
+        assert_eq!(
+            (actor.position.rx(), actor.position.ry()),
+            (authored[0].cell_x, authored[0].cell_y)
+        );
+        assert_eq!(
+            scene.sim().interner.resolve(actor.owner()),
+            authored[0].owner
+        );
+        // No assignment call here: Post_Map_Init686AFE ->68C050 ran in load.
+        let reward = actor
+            .secret_lab_fallback()
+            .expect("authored lab gets its startup reward");
+        let reward_name = scene.sim().interner.resolve(reward.1).to_string();
+        assert!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .general
+                .secret_lab_choices()
+                .iter()
+                .flatten()
+                .any(|name| name.eq_ignore_ascii_case(&reward_name))
+        );
+        let grants = |scene: &HeadlessScenario| {
+            production::can_build(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                owner,
+                scene.runtime.resources.rules.object(&reward_name).unwrap(),
+                false,
+                true,
+            )
+        };
+        assert_eq!(grants(&scene), CanBuild::No);
+        let bytes = save_scene(&scene, "AY authored lab startup reward");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(lab)
+                .unwrap()
+                .secret_lab_fallback(),
+            Some(reward)
+        );
+        let runtime = &mut scene.runtime;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        let at = sim.entities().get(lab).unwrap().position;
+        let engineer = spawn_on_free_cells(
+            sim,
+            rules,
+            owner,
+            cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+            &["ENGINEER"],
+        )[0];
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::CaptureBuilding {
+                engineer_id: engineer,
+                target_building_id: lab,
+            },
+        ));
+        assert!((0..900).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().entities().get(lab).unwrap().owner() == owner
+        }));
+        assert_eq!(grants(&scene), CanBuild::Yes);
+        let bytes = save_scene(&scene, "AY authored lab captured with original reward");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(grants(&scene), CanBuild::Yes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(lab)
+                .unwrap()
+                .secret_lab_fallback(),
+            Some(reward)
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let damage = sim.entities().get(lab).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    lab,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .houses
+                .get(&owner)
+                .unwrap()
+                .base_projection()
+                .secret_labs()
+                .is_empty()
+        }));
+        assert_eq!(grants(&scene), CanBuild::No);
+        let bytes = save_scene(&scene, "AY authored lab destroyed grant removed");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(grants(&scene), CanBuild::No);
+        assert!(
+            scene
+                .sim()
+                .houses
+                .get(&owner)
+                .unwrap()
+                .base_projection()
+                .secret_labs()
+                .is_empty()
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_hospital_patient_inside(
         hospital_type: &str,
         patient_type: &str,
