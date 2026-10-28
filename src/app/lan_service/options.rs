@@ -578,6 +578,8 @@ fn parse_options(
         .network_setup()
         .ok_or_else(|| anyhow!("no admitted setup"))?
         .clone();
+    // ParsePacket5E4D9B..5E4F49 receives speed/credits/units and flags,
+    // not the process TechLevel822CF4. Retain the admitted local value.
     launch.options.game_speed = crt_atoi(next()?);
     launch.options.starting_credits = crt_atoi(next()?);
     launch.options.unit_count = crt_atoi(next()?);
@@ -978,6 +980,9 @@ mod tests {
     #[test]
     fn full_options_preserve_native_text_and_apply_to_existing_participants() {
         let mut host = fixture(true);
+        let mut host_options = host.network_setup().unwrap().options.clone();
+        host_options.tech_level = 3;
+        host.set_network_options(host_options).unwrap();
         host.set_network_row_kind(3, NetworkRowKind::Ai(AiDifficulty::Easy))
             .unwrap();
         let mut choices = host.network_row_choices(3).unwrap();
@@ -992,6 +997,11 @@ mod tests {
         let packet =
             LanMessage::options("Host", &wire.encode(), 0, game_name_hash("Host")).unwrap();
         let mut guest = fixture(false);
+        let mut local_setup = guest.network_setup().unwrap().clone();
+        local_setup.options.tech_level = 7;
+        guest
+            .accept_network_setup(local_setup, false, Some(7))
+            .unwrap();
         guest.set_network_player_ready(0, true).unwrap();
         let old_names: Vec<_> = guest
             .network_setup()
@@ -1012,6 +1022,7 @@ mod tests {
             "human row choices do not replace AI arrays"
         );
         assert_eq!(parsed.launch.options.game_speed, 4);
+        assert_eq!(parsed.launch.options.tech_level, 7);
         assert_eq!(parsed.map_metadata.display_name, "Høyde地");
         assert_eq!(parsed.map_metadata.byte_length, 123456);
         assert_eq!(parsed.seed, Some(0xf1234567));
@@ -1031,6 +1042,7 @@ mod tests {
                 false,
             )
             .unwrap();
+        assert_eq!(guest.network_setup().unwrap().options.tech_level, 7);
         assert_eq!(
             guest
                 .network_setup()
