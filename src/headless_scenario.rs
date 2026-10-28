@@ -16581,7 +16581,25 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; all Gattling tank stages and exact saved dual-clock cadence"]
     fn aymod_gattling_tank_all_stages_keep_saved_burst_cadence() {
-        aymod_gattling_promotion_lifecycle(false, GattlingContinuation::Cadence, &["YTNK"]);
+        aymod_gattling_promotion_lifecycle(
+            false,
+            GattlingContinuation::Cadence(crate::sim::combat::veterancy::VeterancyRank::Elite),
+            &["YTNK"],
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; rookie and naturally veteran Gattling exact three-stage cadence"]
+    fn aymod_rookie_and_veteran_gattling_keep_saved_three_stage_cadence() {
+        use crate::sim::combat::veterancy::VeterancyRank;
+        for rank in [VeterancyRank::Rookie, VeterancyRank::Veteran] {
+            aymod_gattling_promotion_lifecycle(
+                false,
+                GattlingContinuation::Cadence(rank),
+                &["YTNK"],
+            );
+        }
     }
 
     #[cfg(feature = "npatch")]
@@ -17629,7 +17647,7 @@ mod retail_construction_tests {
     #[derive(Clone, Copy)]
     enum GattlingContinuation {
         Stay,
-        Cadence,
+        Cadence(crate::sim::combat::veterancy::VeterancyRank),
         ChangeOwner,
         Bunker(BunkerRelease),
     }
@@ -18009,13 +18027,20 @@ mod retail_construction_tests {
         continuation: GattlingContinuation,
         actors: &[&str],
     ) {
-        use crate::sim::combat::veterancy::{LEVEL_ELITE, VeterancyRank};
+        use crate::sim::combat::veterancy::{VeterancyRank, veterancy_level};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let requested_rank = match continuation {
+            GattlingContinuation::Cadence(rank) => rank,
+            _ => VeterancyRank::Elite,
+        };
         for &actor_type in actors {
             let victim_type = if airborne { "JUMPJET" } else { "APOC" };
-            let (mut scene, actor, first_victim) =
-                aymod_nearby_pair(actor_type, victim_type, false);
+            let (mut scene, actor, first_victim) = aymod_nearby_pair(
+                actor_type,
+                victim_type,
+                requested_rank == VeterancyRank::Rookie,
+            );
             let target_owner = if airborne {
                 let country = scene
                     .runtime
@@ -18099,6 +18124,17 @@ mod retail_construction_tests {
             // Only victim health is prepared. Every shot, death and XP award
             // runs through ordinary Attack frames and Record_The_Kill702D40.
             for round in 0..16 {
+                if scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind()
+                    == requested_rank
+                {
+                    break;
+                }
                 let victim = if round == 0 {
                     first_victim
                 } else {
@@ -18181,7 +18217,7 @@ mod retail_construction_tests {
                     before,
                     "actual weapon kills must award experience"
                 );
-                if promoted.veterancy.rank_kind() == VeterancyRank::Elite {
+                if promoted.veterancy.rank_kind() == requested_rank {
                     break;
                 }
             }
@@ -18193,11 +18229,11 @@ mod retail_construction_tests {
                     .unwrap()
                     .veterancy
                     .rank_kind(),
-                VeterancyRank::Elite
+                requested_rank
             );
             // A friendly target (the airship held by Sleep) isolates spin-up
             // from retaliation. No stage/value/rank field is set by this test.
-            let cadence = matches!(continuation, GattlingContinuation::Cadence);
+            let cadence = matches!(continuation, GattlingContinuation::Cadence(_));
             if cadence {
                 let rules = &scene.runtime.resources.rules;
                 let unit = scene.sim().entities().get(actor).unwrap();
@@ -18267,7 +18303,7 @@ mod retail_construction_tests {
                 let mut fired_this_frame = false;
                 for fire in output.fire_events.iter().filter(|event| event.attacker_id == actor) {
                     fired_this_frame = true;
-                    aymod_assert_gattling_reload(&scene, actor, fire.weapon_id, VeterancyRank::Elite);
+                    aymod_assert_gattling_reload(&scene, actor, fire.weapon_id, requested_rank);
                     let sim = scene.sim();
                     let entity = sim.entities().get(actor).unwrap();
                     let frame = sim.session.tick();
@@ -18294,8 +18330,14 @@ mod retail_construction_tests {
                         let object = scene.runtime.resources.rules.object(actor_type).unwrap();
                         assert!(!object.use_rof_as_burst_delays());
                         assert_eq!(object.gattling_stages.weapon_stages(), 3);
-                        let stage = (0..3).find(|&stage| object.elite_weapon_at(stage * 2)
-                            == Some(sim.interner.resolve(fire.weapon_id))).unwrap();
+                        let stage = (0..3).find(|&stage| {
+                            let weapon = if requested_rank == VeterancyRank::Elite {
+                                object.elite_weapon_at(stage * 2)
+                            } else {
+                                object.weapon_at(stage * 2)
+                            };
+                            weapon == Some(sim.interner.resolve(fire.weapon_id))
+                        }).unwrap();
                         stage_shots[stage] += 1;
                     }
                     spinup_shots += 1;
@@ -18328,7 +18370,11 @@ mod retail_construction_tests {
                 aymod_gattling_bunker_round_trip(&mut scene, actor, target, release);
             }
             let unit = scene.sim().entities().get(actor).unwrap();
-            assert_eq!(unit.veterancy.rank_cache(), LEVEL_ELITE);
+            assert_eq!(unit.veterancy.rank_kind(), requested_rank);
+            assert_eq!(
+                unit.veterancy.rank_cache(),
+                veterancy_level(unit.veterancy.raw())
+            );
             let saved = (
                 unit.veterancy.clone(),
                 unit.gattling.stage(),
@@ -18393,7 +18439,7 @@ mod retail_construction_tests {
             );
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let expected_owner = scene.sim().entities().get(actor).unwrap().owner();
-            let bytes = save_scene(&scene, "AY promoted hot Gattling");
+            let bytes = save_scene(&scene, "AY hot Gattling at its requested rank");
             scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
             if airborne {
                 let sim = scene.sim();
@@ -18457,27 +18503,22 @@ mod retail_construction_tests {
             let mut resumed = false;
             for _ in 0..240 {
                 let stage = scene.sim().entities().get(actor).unwrap().gattling.stage();
-                let expected = scene
-                    .runtime
-                    .resources
-                    .rules
-                    .object(actor_type)
-                    .unwrap()
-                    .elite_weapon_at((stage * 2) as usize + usize::from(airborne))
-                    .unwrap()
-                    .to_owned();
+                let object = scene.runtime.resources.rules.object(actor_type).unwrap();
+                let slot = (stage * 2) as usize + usize::from(airborne);
+                let expected = if requested_rank == VeterancyRank::Elite {
+                    object.elite_weapon_at(slot)
+                } else {
+                    object.weapon_at(slot)
+                }
+                .unwrap()
+                .to_owned();
                 let output = tick_with_due_commands(&mut scene);
                 if let Some(fire) = output
                     .fire_events
                     .iter()
                     .find(|event| event.attacker_id == actor)
                 {
-                    aymod_assert_gattling_reload(
-                        &scene,
-                        actor,
-                        fire.weapon_id,
-                        VeterancyRank::Elite,
-                    );
+                    aymod_assert_gattling_reload(&scene, actor, fire.weapon_id, requested_rank);
                     assert_eq!(scene.sim().interner.resolve(fire.weapon_id), expected);
                     if airborne {
                         let sim = scene.sim();
@@ -18493,7 +18534,7 @@ mod retail_construction_tests {
             }
             assert!(
                 resumed,
-                "{actor_type}: promoted Gattling never resumed fire after Stop/Guard and load"
+                "{actor_type}: Gattling never resumed fire after Stop/Guard and load"
             );
         }
     }
