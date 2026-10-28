@@ -5605,11 +5605,14 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_hospital_patient_inside(hospital_type: &str) -> (HeadlessScenario, u64, u64) {
+    fn aymod_hospital_patient_inside(
+        hospital_type: &str,
+        patient_type: &str,
+    ) -> (HeadlessScenario, u64, u64) {
         use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
-        let (mut scene, hospital, patient) = aymod_nearby_pair(hospital_type, "E1", true);
+        let (mut scene, hospital, patient) = aymod_nearby_pair(hospital_type, patient_type, true);
         {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -5664,12 +5667,124 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Engineer captures a hospital with a patient before saved destruction"]
+    fn aymod_hospital_engineer_capture_disconnects_patient_before_saved_destruction() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        // A real high-strength infantry patient gives the walking Engineer a
+        // natural capture window; no repair-rate or speed override is used.
+        let (mut scene, hospital, patient) = aymod_hospital_patient_inside("GAROBO", "BRUTE");
+        let original = scene.sim().entities().get(patient).unwrap().owner();
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let recipient = scene.add_human_house(
+            "ClinicCapturer",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (engineer, start) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let at = sim.entities().get(hospital).unwrap().position;
+            // A real base keeps this supplied third human House alive under
+            // short-game rules; do not suppress defeat or use an AI sale.
+            spawn_on_free_cells(
+                sim,
+                &resources.rules,
+                recipient,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["GAPOWR"],
+            );
+            let dock = crate::sim::movement::navcom::building_dock_coordinate(
+                sim.entities(),
+                hospital,
+                Some(patient),
+                sim.resolved_terrain(),
+                &resources.rules,
+                sim.interner(),
+            )
+            .unwrap();
+            let foot = crate::sim::movement::ground_pose::object_get_coords(
+                sim.entities().get(patient).unwrap(),
+                sim.resolved_terrain(),
+            );
+            assert!(!resources.rules.object("GAROBO").unwrap().weapons_factory);
+            assert!(
+                crate::util::native_x87::distance_3d_leptons(
+                    [dock.x, dock.y, dock.z],
+                    [foot.x, foot.y, foot.z]
+                ) > 0x3F
+            );
+            // Building448644/44864C ->4485AA sends this non-docked contact away and
+            // breaks radio; it does not change every Cargo member's House.
+            let engineer = spawn_on_free_cells(
+                sim,
+                &resources.rules,
+                recipient,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["SENGINEER"],
+            )[0];
+            let start = crate::sim::movement::ground_pose::position_world_xy(
+                &sim.entities().get(engineer).unwrap().position,
+            );
+            sim.queue_command(CommandEnvelope::new(
+                recipient,
+                sim.session.tick() + 1,
+                Command::CaptureBuilding {
+                    engineer_id: engineer,
+                    target_building_id: hospital,
+                },
+            ));
+            (engineer, start)
+        };
+        let mut walked = false;
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                walked |= scene.sim().entities().get(engineer).is_some_and(|e| {
+                    crate::sim::movement::ground_pose::position_world_xy(&e.position) != start
+                });
+                scene.sim().entities().get(hospital).unwrap().owner() == recipient
+            }),
+            "the ordinary Engineer capture order must walk into and capture the actual hospital"
+        );
+        assert!(walked);
+        assert!(
+            scene.sim().entities().get(engineer).is_none(),
+            "capture must consume the Engineer"
+        );
+        let building = scene.sim().entities().get(hospital).unwrap();
+        assert_eq!(building.radio_contacts.slot(0), None);
+        assert_eq!(
+            building.passenger_role.cargo().unwrap().passengers(),
+            &[patient]
+        );
+        let actor = scene.sim().entities().get(patient).unwrap();
+        assert_eq!(actor.owner(), original);
+        assert!(actor.lifecycle.in_limbo() && actor.health.current() > 0);
+        assert!(
+            actor.health.current()
+                < scene
+                    .runtime
+                    .resources
+                    .rules
+                    .object("BRUTE")
+                    .unwrap()
+                    .strength
+        );
+        aymod_assert_hospital_cargo_destruction(&mut scene, hospital, patient);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual admitted hospital patient across manual power-off and saved treatment"]
     fn aymod_hospital_keeps_treating_its_admitted_patient_offline_after_load() {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         for kind in ["GAROBO", "NARADR"] {
-            let (mut scene, hospital, patient) = aymod_hospital_patient_inside(kind);
+            let (mut scene, hospital, patient) = aymod_hospital_patient_inside(kind, "E1");
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
             let owner = scene.sim().entities().get(hospital).unwrap().owner();
             let strength = scene.runtime.resources.rules.object("E1").unwrap().strength;
@@ -5800,46 +5915,22 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; hospital Cargo must survive until DestructionEffects then be killed"]
-    fn aymod_hospital_disconnected_cargo_waits_for_destruction_effects() {
+    fn aymod_assert_hospital_cargo_destruction(
+        scene: &mut HeadlessScenario,
+        hospital: u64,
+        patient: u64,
+    ) {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
         use crate::sim::world::SoundBoundary;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         use crate::sim::world::{FrameEffects, SimSoundEvent};
         use std::cell::Cell;
-        let (mut scene, hospital, patient) = aymod_hospital_patient_inside("GAROBO");
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
-        {
-            let runtime = &mut scene.runtime;
-            // Isolate remaining Cargo from Building442511's separate saved-
-            // contact C4 kill. Break uses the real radio owner; it does not
-            // unload Cargo. This is a supplied disconnect, not a player click.
-            crate::sim::radio::transmit(
-                &mut runtime.simulation,
-                hospital,
-                patient,
-                crate::sim::radio::RadioMessage::Break,
-                Default::default(),
-                &runtime.resources.rules,
-                FrameEffects::default(),
-            );
-            assert_eq!(
-                runtime
-                    .simulation
-                    .entities()
-                    .get(hospital)
-                    .unwrap()
-                    .radio_contacts
-                    .slot(0),
-                None
-            );
-        }
         let bytes = save_scene(
-            &scene,
+            scene,
             "AY hospital patient inside lazy Cargo before building death",
         );
-        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
         assert_eq!(
             scene
                 .sim()
@@ -5950,11 +6041,45 @@ mod retail_construction_tests {
                 .get(patient)
                 .is_none_or(|p| !p.is_object_alive())
         );
-        tick_with_due_commands(&mut scene);
+        tick_with_due_commands(scene);
         assert!(scene.sim().entities().get(patient).is_none());
-        let bytes = save_scene(&scene, "AY hospital Cargo cleaned after destruction");
-        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let bytes = save_scene(scene, "AY hospital Cargo cleaned after destruction");
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
         assert!(scene.sim().entities().get(patient).is_none());
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital Cargo must survive until DestructionEffects then be killed"]
+    fn aymod_hospital_disconnected_cargo_waits_for_destruction_effects() {
+        use crate::sim::world::FrameEffects;
+        let (mut scene, hospital, patient) = aymod_hospital_patient_inside("GAROBO", "E1");
+        {
+            let runtime = &mut scene.runtime;
+            // Isolate remaining Cargo from Building442511's separate saved-
+            // contact C4 kill. Break uses the real radio owner; it does not
+            // unload Cargo. This is a supplied disconnect, not a player click.
+            crate::sim::radio::transmit(
+                &mut runtime.simulation,
+                hospital,
+                patient,
+                crate::sim::radio::RadioMessage::Break,
+                Default::default(),
+                &runtime.resources.rules,
+                FrameEffects::default(),
+            );
+            assert_eq!(
+                runtime
+                    .simulation
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .slot(0),
+                None
+            );
+        }
+        aymod_assert_hospital_cargo_destruction(&mut scene, hospital, patient);
     }
 
     #[cfg(feature = "npatch")]
