@@ -9698,6 +9698,113 @@ mod retail_construction_tests {
                 .map(|unit| unit.health.current()),
             hp
         );
+        let (building, building_hp) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let level = sim.terrain_cell_level(at.rx(), at.ry());
+            let sites = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 10
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == level)
+                })
+                .collect::<Vec<_>>();
+            let enemy = house_of(sim, "Russians");
+            let building = spawn_on_free_cells(sim, rules, enemy, sites, &["GAPOWR"])[0];
+            (
+                building,
+                sim.entities().get(building).unwrap().health.current(),
+            )
+        };
+        let (mut vehicle_retired, mut final_saved, mut final_fired, mut final_hit) =
+            (false, false, false, false);
+        assert!(
+            (0..3000).any(|_| {
+                let was_saved = final_saved;
+                let output = tick_with_due_commands(&mut scene);
+                assert!(output.tick.frame_committed, "final attack frame did not commit: tick={} outcome_waiting={} network_waiting={}", output.tick.tick, output.outcome_waiting, output.network_waiting);
+                let sim = scene.sim();
+                vehicle_retired |= sim.entities().get(vehicle).is_none();
+                let team = sim.team_script_vm.team(team_id).unwrap();
+                let fortress = sim.entities().get(carrier).unwrap();
+                // Quarry1 maps to zero, then Unit's shared override adds class bits:
+                // this final action is general targeting, not building-only.
+                if !final_saved
+                    && vehicle_retired
+                    && team.cursor() == 6
+                    && team.current_action(&sim.team_script_vm) == 0
+                    && fortress.attack_target.target() == Some(TargetKind::Entity(building))
+                {
+                    assert!(sim.entities().get(building).unwrap().health.current() > 0);
+                    let bytes = save_scene(
+                        &scene,
+                        "AY BFRT final general attack selects a building after vehicle death",
+                    );
+                    scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                    let sim = scene.sim();
+                    assert!(sim.entities().get(vehicle).is_none());
+                    assert_eq!(sim.team_script_vm.team(team_id).unwrap().cursor(), 6);
+                    assert_eq!(
+                        sim.entities().get(carrier).unwrap().attack_target.target(),
+                        Some(TargetKind::Entity(building))
+                    );
+                    assert!(riders.iter().all(|id| {
+                        sim.entities()
+                            .get(*id)
+                            .unwrap()
+                            .passenger_role
+                            .open_transport_id()
+                            == Some(carrier)
+                    }));
+                    final_saved = true;
+                }
+                final_fired |= output.fire_events.iter().any(|event| {
+                    riders.contains(&event.attacker_id) && event.target == TargetKind::Entity(building)
+                });
+                final_hit |= was_saved
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(building)
+                        .is_none_or(|unit| unit.health.current() < building_hp);
+                final_saved && final_fired && final_hit
+            }),
+            "BFRT final attack incomplete: retired={vehicle_retired} saved={final_saved} fired={final_fired} hit={final_hit}; building={building}; team={:?} carrier={:?}",
+            scene.sim().team_script_vm.team(team_id).map(|team| (
+                team.cursor(),
+                team.current_action(&scene.sim().team_script_vm)
+            )),
+            scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .map(|unit| (unit.attack_target.target(), unit.mission.current()))
+        );
+        let hp = scene
+            .sim()
+            .entities()
+            .get(building)
+            .map(|unit| unit.health.current());
+        let bytes = save_scene(
+            &scene,
+            "AY BFRT final general attack actual building impact",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .map(|unit| unit.health.current()),
+            hp
+        );
     }
 
     #[cfg(feature = "npatch")]
