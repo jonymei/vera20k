@@ -2097,7 +2097,7 @@ impl Simulation {
             crate::sim::combat::FatalLifecycleStage::MaintainDamageSmoke { state } => {
                 self.maintain_damage_smoke_after_receive(stable_id, state, rules);
             }
-            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction { attacker } => {
+            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction => {
                 // Building ReceiveDamage442625..44264C, after Techno's
                 // death weapon and the saved-contact callbacks return:
                 // SellBuilding ejects garrison occupants, then light disable
@@ -2123,19 +2123,6 @@ impl Simulation {
                         },
                     )
                 });
-                // An absorbing building's passengers leave through
-                // SpawnSurvivors' Phase A; its KillPassengers (`0x00441F27`,
-                // crediting the attacker) runs after that and finds the list
-                // empty.
-                let absorbs = self
-                    .substrate
-                    .entities
-                    .get(stable_id)
-                    .is_some_and(|entity| {
-                        self.interner
-                            .object_type(entity.type_ref(), rules)
-                            .is_some_and(|object| object.absorbs_passengers())
-                    });
                 if let Some(event) = garrison {
                     passenger::garrison_eject::eject_destruction_garrison_with_context(
                         self,
@@ -2143,8 +2130,6 @@ impl Simulation {
                         &event,
                         uninit_context,
                     );
-                } else if !absorbs {
-                    self.kill_passengers(stable_id, attacker, uninit_context);
                 }
                 //44264C precedes the recursive destruction effects.
                 self.lighting_sources

@@ -156,11 +156,9 @@ pub enum FatalLifecycleStage {
     MaintainDamageSmoke {
         state: damage::DamageState,
     },
-    /// Building442625..44264C, after the Techno death arm and contacts but
-    /// before DestructionEffects. `attacker` credits true Cargo deaths.
-    BeforeBuildingDestruction {
-        attacker: Option<u64>,
-    },
+    /// Building442625..44264C: garrison release and light shutdown after
+    /// the Techno death arm, before DestructionEffects. Cargo dies later.
+    BeforeBuildingDestruction,
     AfterDeathEffects,
 }
 

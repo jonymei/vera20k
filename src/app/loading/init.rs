@@ -1214,7 +1214,7 @@ mod map_wall_owner_candidate_tests {
     fn fatal_lamp_stage(sim: &mut Simulation, rules: &RuleSet, id: u64) {
         sim.apply_fatal_lifecycle_stage(
             rules,
-            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction { attacker: None },
+            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction,
             id,
             EntityCategory::Structure,
             crate::sim::world::UninitContext::with_rules(rules),

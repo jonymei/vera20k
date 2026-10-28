@@ -5313,7 +5313,7 @@ mod retail_construction_tests {
                         && object.infantry_absorb
                         && object.absorbs_passengers()
                 }),
-                "the pending nonabsorber true-Cargo residual is not an authored AY building profile"
+                "configured capacity alone does not enumerate Hospital lazy-Cargo producers"
             );
             let tick = scene.sim().session.tick() + 1;
             scene.runtime.simulation.queue_command(CommandEnvelope::new(
@@ -5602,6 +5602,217 @@ mod retail_construction_tests {
                 0
             );
         }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; hospital Cargo must survive until DestructionEffects then be killed"]
+    fn aymod_hospital_disconnected_cargo_waits_for_destruction_effects() {
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::SoundBoundary;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        use crate::sim::world::{FrameEffects, SimSoundEvent};
+        use std::cell::Cell;
+        let (mut scene, hospital, patient) = aymod_nearby_pair("GAROBO", "E1", true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let object = rules.object("GAROBO").unwrap();
+            assert!(object.hospital && !object.absorbs_passengers() && !object.explodes);
+            assert_eq!(
+                object.passengers, 0,
+                "Hospital lazily allocates real Cargo without configured capacity"
+            );
+            assert!(object.die_sounds.is_empty());
+            let owner = sim.entities().get(hospital).unwrap().owner();
+            let at = sim.entities().get(hospital).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["GAPOWR"],
+            );
+            sim.substrate
+                .entities
+                .get_mut(patient)
+                .unwrap()
+                .health
+                .set(1);
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::clicked_mission(patient, MissionType::Enter, TargetKind::Entity(hospital)),
+            ));
+        }
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .lifecycle
+                .in_limbo()
+                && scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .is_some_and(|cargo| cargo.passengers() == [patient])
+        }));
+        {
+            let runtime = &mut scene.runtime;
+            // Isolate remaining Cargo from Building442511's separate saved-
+            // contact C4 kill. Break uses the real radio owner; it does not
+            // unload Cargo. This is a supplied disconnect, not a player click.
+            crate::sim::radio::transmit(
+                &mut runtime.simulation,
+                hospital,
+                patient,
+                crate::sim::radio::RadioMessage::Break,
+                Default::default(),
+                &runtime.resources.rules,
+                FrameEffects::default(),
+            );
+            assert_eq!(
+                runtime
+                    .simulation
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .radio_contacts
+                    .slot(0),
+                None
+            );
+        }
+        let bytes = save_scene(
+            &scene,
+            "AY hospital patient inside lazy Cargo before building death",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(hospital)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap()
+                .passengers(),
+            &[patient]
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .lifecycle
+                .in_limbo()
+        );
+        struct Heard {
+            hospital: u64,
+            patient: u64,
+            delivered: Cell<usize>,
+            observed: Cell<bool>,
+        }
+        impl SoundBoundary for Heard {
+            fn delivered(&self) -> usize {
+                self.delivered.get()
+            }
+            fn consume(
+                &self,
+                sim: &Simulation,
+                rules: &crate::rules::ruleset::RuleSet,
+                events: &[SimSoundEvent],
+            ) {
+                for event in &events[self.delivered.get()..] {
+                    if let SimSoundEvent::VocAtCoord { sound_id, .. } = event
+                        && Some(sound_id.as_str()) == rules.general.building_die_sound.as_deref()
+                    {
+                        // DestructionEffects441779 precedes SpawnSurvivors441F1B
+                        // and KillPassengers441F27. A patient is Cargo, not an
+                        // occupant that SellBuilding has already ejected.
+                        let patient = sim.entities().get(self.patient).unwrap();
+                        assert!(
+                            patient.is_object_alive()
+                                && patient.health.current() > 0
+                                && patient.lifecycle.in_limbo(),
+                            "hospital Cargo was killed before its building's DestructionEffects"
+                        );
+                        // Techno7078B2's earlier dead-transport expiry may
+                        // already clear the passenger's reverse relation.
+                        assert_eq!(
+                            sim.entities()
+                                .get(self.hospital)
+                                .unwrap()
+                                .passenger_role
+                                .cargo()
+                                .unwrap()
+                                .passengers(),
+                            &[self.patient]
+                        );
+                        self.observed.set(true);
+                    }
+                }
+                self.delivered.set(events.len());
+            }
+        }
+        let heard = Heard {
+            hospital,
+            patient,
+            delivered: Cell::new(scene.sim().sound_events().len()),
+            observed: Cell::new(false),
+        };
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            assert!(resources.rules.general.building_die_sound.is_some());
+            let damage = sim.entities().get(hospital).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    hospital,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                FrameEffects::for_sound(&heard),
+            );
+        }
+        assert!(
+            heard.observed.get(),
+            "actual destruction sound must reach the observer"
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(patient)
+                .is_none_or(|p| !p.is_object_alive())
+        );
+        tick_with_due_commands(&mut scene);
+        assert!(scene.sim().entities().get(patient).is_none());
+        let bytes = save_scene(&scene, "AY hospital Cargo cleaned after destruction");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().entities().get(patient).is_none());
     }
 
     #[cfg(feature = "npatch")]

@@ -2441,15 +2441,15 @@ fn finish_concrete_death(
                 postlude.commit(world, rules, effects, uninit);
             }
             ConcreteDeathSmudgePlan::Building => {
+                let attacker = killing_attacker(world, damage_events, dead_id);
                 // Building ReceiveDamage442625..44264C: Techno's death
                 // weapon and the saved-contact callbacks have returned.
                 // Reveal garrison survivors and disable the light now, before
                 // DestructionEffects442665, not before the nested blast.
                 if callbacks_enabled(world) {
-                    let attacker = killing_attacker(world, damage_events, dead_id);
                     world.apply_fatal_lifecycle_stage(
                         rules,
-                        FatalLifecycleStage::BeforeBuildingDestruction { attacker },
+                        FatalLifecycleStage::BeforeBuildingDestruction,
                         dead_id,
                         category,
                         crate::sim::world::UninitContext::new(rules, overlay_registry)
@@ -2487,6 +2487,16 @@ fn finish_concrete_death(
                             );
                         },
                         frame_effects,
+                    );
+                    // Building::DestructionEffects441F1B ->441F27: every
+                    // remaining Cargo head dies only after SpawnSurvivors.
+                    // Infantry51A38A can fill Cargo with Passengers=0; neither
+                    // that nor an absorber/garrison flag permits early cleanup.
+                    world.kill_passengers(
+                        dead_id,
+                        attacker,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(frame_effects),
                     );
                 }
             }
