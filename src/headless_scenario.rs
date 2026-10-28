@@ -10867,6 +10867,255 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Engineer captures three typed centers and transfers support across snapshots"]
+    fn aymod_captured_powered_centers_restore_only_the_new_house_without_a_power_cycle() {
+        for (center_type, unit_type) in [("GAROBO", "ROBO"), ("NARADR", "DRON"), ("NAPSIS", "CAOS")]
+        {
+            aymod_captured_center_transfers_support(center_type, unit_type);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_captured_center_transfers_support(center_type: &str, unit_type: &str) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::movement::locomotor::MovementLayer;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, center, _) = aymod_nearby_pair(center_type, "GAPOWR", true);
+        let original = scene.sim().entities().get(center).unwrap().owner();
+        let country = scene
+            .runtime
+            .resources
+            .rules
+            .country_index("Russians")
+            .unwrap();
+        let recipient = scene.add_human_house(
+            "PoweredCenterCapturer",
+            LaunchCountry::from_country_index(u32::from(country.0)),
+        );
+        let (old_unit, new_unit, engineer) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert_eq!(
+                rules.object(center_type).unwrap().powers_unit.as_deref(),
+                Some(unit_type)
+            );
+            assert!(rules.object(unit_type).unwrap().powered_unit);
+            let at = sim.entities().get(center).unwrap().position;
+            let at = (i32::from(at.rx()), i32::from(at.ry()));
+            spawn_on_free_cells(
+                sim,
+                rules,
+                recipient,
+                cells_nearest((at.0 + 12, at.1)),
+                &["GAPOWR"],
+            );
+            let old_unit = spawn_on_free_cells(
+                sim,
+                rules,
+                original,
+                cells_nearest((at.0, at.1 + 12)),
+                &[unit_type],
+            )[0];
+            let new_unit = spawn_on_free_cells(
+                sim,
+                rules,
+                recipient,
+                cells_nearest((at.0 + 12, at.1 - 8)),
+                &[unit_type],
+            )[0];
+            let engineer =
+                spawn_on_free_cells(sim, rules, recipient, cells_nearest(at), &["SENGINEER"])[0];
+            for id in [old_unit, new_unit] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            (old_unit, new_unit, engineer)
+        };
+        let destination = |scene: &HeadlessScenario, id| {
+            let sim = scene.sim();
+            let at = sim.entities().get(id).unwrap().position;
+            cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .filter_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let distance = x.abs_diff(at.rx()).max(y.abs_diff(at.ry()));
+                    let cell = sim.resolved_terrain()?.cell(x, y)?;
+                    ((2..=3).contains(&distance)
+                        && !cell.outside_playfield
+                        && cell.level == at.z()
+                        && sim.path_grid()?.is_walkable_for_infantry(x, y)
+                        && sim
+                            .occupancy()
+                            .get(x, y)
+                            .is_none_or(|entry| entry.is_empty_on(MovementLayer::Ground)))
+                    .then_some((x, y))
+                })
+                .next()
+                .unwrap()
+        };
+        let queue = |scene: &mut HeadlessScenario, owner, command| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+        };
+        assert!((0..90).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().has_powered_center(original)
+        }));
+        assert!(!scene.sim().has_powered_center(recipient));
+        // Native Unit739F21 only deactivates an initially unsupported unit
+        // at a real cell arrival. Do not manufacture its offline latch.
+        let at = destination(&scene, new_unit);
+        queue(
+            &mut scene,
+            recipient,
+            Command::Move {
+                entity_id: new_unit,
+                target_rx: at.0,
+                target_ry: at.1,
+            },
+        );
+        assert!((0..300).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(new_unit)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        }));
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(old_unit)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY old House supports robot, future captor has no center",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().has_powered_center(original));
+        assert!(!scene.sim().has_powered_center(recipient));
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(new_unit)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        );
+        queue(
+            &mut scene,
+            recipient,
+            Command::CaptureBuilding {
+                engineer_id: engineer,
+                target_building_id: center,
+            },
+        );
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().entities().get(center).unwrap().owner() == recipient
+            }),
+            "normal SENGINEER capture must transfer the actual {center_type}"
+        );
+        assert!(!scene.sim().has_powered_center(original));
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(old_unit)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        );
+        assert!(scene.sim().entities().get(engineer).is_none());
+        // Snapshot at the real capture boundary, before any requested
+        // power cycle. Restore must retain the authoritative counted state.
+        let counted = scene.sim().has_powered_center(recipient);
+        let bytes = save_scene(&scene, "AY robot center after normal Engineer capture");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(scene.sim().has_powered_center(recipient), counted);
+        assert!(
+            (0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                assert!(!sim.has_powered_center(original));
+                assert!(
+                    sim.entities()
+                        .get(old_unit)
+                        .unwrap()
+                        .deactivated
+                        .is_offline()
+                );
+                sim.has_powered_center(recipient)
+                    && !sim
+                        .entities()
+                        .get(new_unit)
+                        .unwrap()
+                        .deactivated
+                        .is_offline()
+            }),
+            "NP capture sample reset must restore the new House without Off/On"
+        );
+        let at = destination(&scene, new_unit);
+        queue(
+            &mut scene,
+            recipient,
+            Command::Move {
+                entity_id: new_unit,
+                target_rx: at.0,
+                target_ry: at.1,
+            },
+        );
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let actor = scene.sim().entities().get(new_unit).unwrap();
+            actor.is_alive()
+                && !actor.lifecycle.in_limbo()
+                && (actor.position.rx(), actor.position.ry()) == at
+        }));
+        let bytes = save_scene(
+            &scene,
+            "AY new House robot moved after captured support recovery",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(center).unwrap().owner(),
+            recipient
+        );
+        assert!(!scene.sim().has_powered_center(original));
+        assert!(scene.sim().has_powered_center(recipient));
+        for (id, owner, offline) in [(old_unit, original, true), (new_unit, recipient, false)] {
+            let actor = scene.sim().entities().get(id).unwrap();
+            assert!(actor.is_alive() && !actor.lifecycle.in_limbo());
+            assert_eq!(actor.owner(), owner);
+            assert_eq!(actor.deactivated.is_offline(), offline);
+        }
+        assert_eq!(
+            (
+                scene.sim().entities().get(new_unit).unwrap().position.rx(),
+                scene.sim().entities().get(new_unit).unwrap().position.ry()
+            ),
+            at
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_lift_gattling_target(scene: &mut HeadlessScenario, actor: u64, target: u64) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};

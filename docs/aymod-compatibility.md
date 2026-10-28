@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-28）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于7aa8e0fec接V12建筑换主的完整旧主AI与在线/operational复原，并补必要NP驻军重入门。纯NP定向93、stock35、混合23项通过；Ares40项通过但另有2项gap夹具在生存前提失败（详V12，不称全绿）。一次只读critic确认的驻军递归缺口已修并回归；无待完成Cargo，未推送/PR/发布，整体goal仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume；本轮基于71e67bf1b补V12实际AY三组中心GAROBO/ROBO、NARADR/DRON、NAPSIS/CAOS的工程师夺取、旧主offline/新主支持恢复、三次存读与新主真实移动。新复合1（含三组）及旧建筑1/驻军1/powered_unit8，共11项通过；仅测试/台账，无新生产修改/critic，无待完成Cargo。上轮Ares两项gap生存夹具失败仍保留，未推送/PR/发布，整体goal仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续V12实际AY GAROBO控制中心换主后的新旧House支持/恢复链，先补完整MOD场景，沿现有PowersUnit聚合owner验证，不能借此改独立供电或失联Drive政策；再补V06机炮热状态换主。V12通用多manager/退休回调与多AI仍开放，Return Dubai攻势线暂停，V01/F11门禁和固定构建不变。
+- 下一安全动作：继续V06实际YAGGUN热状态换主与新主人地空续射；以额外旧主BuildingAI的实际输出作为保存前状态，不照搬YTNK瞬时stage/value必须不变的断言，复用同一stage/武器/经验owner。V12多manager/特殊退休/Temporal与多AI仍开放，Return Dubai攻势线暂停，V01独立供电/失联移动政策与F11门禁、固定构建不变。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；不扩大到cursor>=count的原生完整循环、普通战斗非尾producer或多AI。母子机其他家族/连续晋升/旧控制者指针选择仍开放。V08解散后的重新招募/六人重新装载存读实射通过；带队卸载/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04多House/联盟重叠、V07多AI/原鱿鱼-海豚崩溃完整回放、V06建筑换主/V12及完整ROF倍率、铁幕旧目标/ForceShield完整存读、V03空武器reload fallback及真人验收仍开放。本轮一次缓存清理仍因Unsupported PE debug closure安全停止、移除0字节，不手工清理固定构建；不影响实际定向测试执行。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -326,6 +326,8 @@
 - 直接消费者发现的预期差异已解释而非修改golden：原工程师joined fixture用生产换主安装“已发生owner race”的输入，新增旧主AI会先付费修复/更新damage mode；setup现在恢复其原witness输入HP/estimated/sample/damage state，再比较arrival。实际repair_order_enemy_owner_race这一路NP输出也确实多旧主付费修复，不能再套stock输出；在该既有测试内单列NP行为断言（HP提高、旧主付费、新主归属、停付修、工程师正常延迟清理），其余stock比较/RNG与golden文件不变。stock/Ares-only完整原九路十到达仍通过。
 - PowersUnit既有捕获回归先因“60帧后新主仍无计数”的stock预期在NP失败。stock确无+6C8换主写入；NP现在按原生清采样，新主下一正常边沿即获得支持，无需人为断电再来电。测试按backend分别断言，旧主两个ROBO立即offline与一次EVA/两次单位声、新主恢复、后续自然失电/恢复仍覆盖；NP/stock/Ares/混合的powered_unit各8项通过。未修改原生House聚合计数或用户尚未批准的独立供电/失联Drive移动政策。
 - 最终覆盖：纯NP定向93项（实际新建筑1/驻军1、医院9、地空盖特6、实际实验室2、电脑捕获出售/重夺2；allegiance6、工程师3/power消费者5、gap13/supercharge5、槽电力5、EMP15、建造12、powered_unit8）。stock35项；Ares40项通过，另两项gap_generator_tests的defeated_viewer_fogs_hostile_gap_through_power_cycle_without_shroud、defeat_does_not_reclassify_an_active_hostile_gap失败。两者在defeat_local_viewer先仅写stock计数、没有alive House的Foot实体，Ares HouseTracking::game_alive10024990要求registry实体，因而在新NP hook执行前就失败；Ares生存owner另7项通过，未改本链外夹具/规则，不冒称Ares全绿或运行了基线全套。混合仅定向归属/工程师/换主gap/槽/供电23项通过，不把未跑两夹具算通过。早期错误gap过滤器0项及未带ignored的捕获2项不计成功。
+- 71e67bf1b后续实际AY验收：同一aymod_captured_center_transfers_support夹具按typed PowersUnit逐对运行GAROBO→ROBO、NARADR→DRON、NAPSIS→CAOS，正常Battle加载后供给原主真实电厂/中心和另一个同俄罗斯Country但独立human House的电厂/对应单位。新主原先无中心，通过普通Move真实到格触发739F21离线，不手写provider/counter/latch；原主仍获支持。首次完整保存恢复后，由新主SENGINEER普通Capture实际步行夺取，旧主House计数归零/旧单位offline，工程师正常消耗；捕获边界第二次保存保留已有counted值，普通更新让新主获得支持并Reactivate。没有对中心发Off/On或补另一座中心/伪造House标志，新主普通Move使对应单位实际到达新格，第三次保存保留中心/双方单位归属、旧offline/新online、House支持与位置。
+- 本次复合1项内部三组配置均通过，另重跑实际建筑AI1/驻军归属1/powered_unit8，共11项通过；与上轮93项有重叠，不相加为新总数。测试不对失去支持的旧Drive单位继续下Move，因此不能把offline旗标冒称“新命令必被拒绝/绝对不能动”；保留V01原生聚合及失联移动政策门禁。新旧House均为受控组件，不是多AI自主夺取/长局；无新玩法实现/RNG/timer/Detach调用/保存字段，无需新critic，无GUI/MOD/原始存档/固定构建改动。
 - 无新直接RNG draw/保存字段；额外原生AI通过既有Mission/EMP/repair/动画/manager计时、Scenario/Main RNG及Detach/生命周期owners产生其正常副作用，不保持旧错误路径的抽样次数。稀有同步退休/多manager回调、特殊Temporal/高度、多AI长局与整个App画面尚未验证；不关闭全V06/V01或整MOD。无GUI、MOD/原始存档/固定玩家构建/发布变更，无全workspace/Clippy；一次critic后的修正由owner定向复验，未追加critic轮次。
 
 ### V06盖特坦克/机炮地面与对空生命周期（2026-10-28）
@@ -1058,7 +1060,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V07 / P1 / 辐射与实际海豚解缠、宿主换主存读/原波GPU已验，生命周期仍开放 | AY Sonic沿既有Foot伤害前缀解除寄生，无须另造NP剥离状态 | 自主缠船/缠绕中存读→辐射束救船/再次自主捕获/再次解除/释放后存读移动；普通/精英DESO部署及独立场救船通过。实际DLPH救DEST/宿主换主两例及同一原波的两格式GPU、保存像素一致/退役零输出已验。寄生源第三House/同宿主House换主后的解缠、两次存读与GPU已验；源自然瘫痪到期/新主人普通移动/再存读已验；多AI、完整抗压/长期场衰减及整个App/玩家原局仍待验 |
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载/卸载/重装存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读实射、解散全卸载/存读、同一批活体重建队重装、部分与全装存读并六人再次实射通过；不代表自主重建决策。优先级招走与AreaGuard保留原生行为，带队卸载/竞争补员/换主/多AI长局仍待验；不把线圈充能当V01中心供电 |
 | V09 / P2 | 其他 stock 箱子与无键补丁 | 全量对照当前有权重/可达的效果；零权重且地图不指定的 Gas/Napalm 等不误列高频缺口 |
-| V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、供电捕获恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
+| V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、AY三组中心工程师夺取/三次存读/新主支持及运动恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
 秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，
