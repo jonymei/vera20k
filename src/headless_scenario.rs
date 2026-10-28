@@ -10044,7 +10044,8 @@ mod retail_construction_tests {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, building, target, old, replacement) = aymod_garrison_missile_in_flight("APOC");
+        let (mut scene, building, target, old, replacement) =
+            aymod_garrison_missile_in_flight("APOC");
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         assert_eq!(
             scene
@@ -10166,19 +10167,11 @@ mod retail_construction_tests {
         let next = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-            assert!(crate::sim::passenger::add_garrison_occupant(
-                sim,
-                rules,
-                replacement,
-                building,
-                Some(&runtime.resources.overlay_registry),
-                Default::default()
-            ));
             let actor = sim.entities().get(building).unwrap();
             assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
             assert_eq!(
                 combat_weapon::firing_occupant_id(actor, rules.object("CAHSE01").unwrap()),
-                Some(replacement)
+                None
             );
             let coord =
                 crate::sim::movement::ground_pose::object_get_coords(actor, sim.resolved_terrain());
@@ -10209,6 +10202,77 @@ mod retail_construction_tests {
             ));
             next
         };
+        // GetWeapon452742..4527B7 falls back to CAHSE01's empty own slot.
+        // GetFireError6FC325..333 ->6FCD29 returns Cant; BuildingAttack's
+        // table44B728[6] drops the target at44B0DE without fixing +69C.
+        for elapsed in 0..180 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == building)
+            );
+            let actor = scene.sim().entities().get(building).unwrap();
+            assert_eq!(actor.passenger_role.occupants().ids(), &old[..1]);
+            assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
+            assert_eq!(
+                scene.sim().entities().get(next).unwrap().health.current(),
+                1
+            );
+            assert_eq!(
+                scene.sim().selected_weapon_fire_error(
+                    &scene.runtime.resources.rules,
+                    building,
+                    TargetKind::Entity(next),
+                    true,
+                    Some(&scene.runtime.resources.overlay_registry)
+                ),
+                crate::sim::combat::fire_error::FireError::Cant
+            );
+            if elapsed == 60 {
+                let bytes =
+                    save_scene(&scene, "AY live target while garrison cursor exceeds count");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            }
+        }
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .attack_target
+                .target()
+                .is_none()
+        );
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(crate::sim::passenger::add_garrison_occupant(
+                sim,
+                rules,
+                replacement,
+                building,
+                Some(&runtime.resources.overlay_registry),
+                Default::default()
+            ));
+            let actor = sim.entities().get(building).unwrap();
+            assert_eq!(actor.passenger_role.occupants().fire_index(), 1);
+            assert_eq!(
+                combat_weapon::firing_occupant_id(actor, rules.object("CAHSE01").unwrap()),
+                Some(replacement)
+            );
+            let owner = actor.owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: next,
+                },
+            ));
+        }
         let mut fired = false;
         assert!(
             (0..180).any(|_| {
