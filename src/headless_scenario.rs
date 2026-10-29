@@ -1433,6 +1433,240 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; allied AI Houses replace a defeated enemy and attack the remaining hostile House"]
+    fn aymod_allied_ai_replace_a_defeated_enemy_and_attack_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                session.options.unit_count = 0;
+                for slot in &mut session.opponents[..2] {
+                    slot.team = crate::skirmish_launch::LaunchTeam::Team(1);
+                }
+            },
+            &[
+                (LaunchCountry::from_country_index(1), AiDifficulty::Hard),
+                (LaunchCountry::from_country_index(1), AiDifficulty::Hard),
+                (LaunchCountry::from_country_index(2), AiDifficulty::Hard),
+            ],
+        );
+        let human = scene.sim().session.current_house().unwrap();
+        let allies = &computers[..2];
+        let defeated = computers[2];
+        assert!(crate::map::houses::are_houses_mutually_allied(
+            scene.sim().house_alliances(),
+            scene.sim().interner.resolve(allies[0]),
+            scene.sim().interner.resolve(allies[1]),
+        ));
+        let (yards, aggressor) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            for &owner in &computers {
+                sim.houses
+                    .get_mut(&owner)
+                    .unwrap()
+                    .set_ai_triggers_active(false);
+            }
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest(aymod_anchor(sim, human)),
+                &["GACNST", "GACNST", "GAPOWR"],
+            );
+            let yards = allies
+                .iter()
+                .map(|&owner| {
+                    spawn_on_free_cells(
+                        sim,
+                        rules,
+                        owner,
+                        cells_nearest(aymod_anchor(sim, owner)),
+                        &["NACNST", "NANRCT"],
+                    )[0]
+                })
+                .collect::<Vec<_>>();
+            let aggressor = spawn_on_free_cells(
+                sim,
+                rules,
+                defeated,
+                cells_nearest(aymod_anchor(sim, defeated)),
+                &["MTNK"],
+            )[0];
+            (yards, aggressor)
+        };
+        assert!((0..900).any(|_| {
+            tick_with_due_commands(&mut scene);
+            yards.iter().all(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            }) && allies
+                .iter()
+                .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
+        }));
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            for &yard in &yards {
+                // Actual receiver aggression is a fixture, not a whole tank
+                // shot. Enemy selection still belongs to the damage/House owners.
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        yard,
+                        100,
+                        0,
+                        aggressor,
+                        Some(defeated),
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+        }
+        assert!(
+            allies
+                .iter()
+                .all(|owner| scene.sim().houses[owner].enemy_house() == Some(defeated))
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        assert!(scene.runtime.simulation.flag_house_to_die(defeated));
+        let bytes = save_scene(
+            &scene,
+            "AY allied AI with a pending defeat of their current enemy",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().houses[&defeated].is_to_die());
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().houses[&defeated].is_defeated()
+                    && allies
+                        .iter()
+                        .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
+            }),
+            "each AI must forget the defeated enemy and reselect the live hostile House, not its ally"
+        );
+        let bytes = save_scene(&scene, "AY allied AI after normal enemy replacement");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            allies
+                .iter()
+                .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
+        );
+        let teams = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = sim.interner.get("0CA1614C-G").unwrap();
+            let types = sim
+                .team_script_vm
+                .task_force_of(kind)
+                .unwrap()
+                .entries
+                .iter()
+                .flat_map(|entry| {
+                    std::iter::repeat_n(
+                        sim.interner.resolve(entry.member_type.id).to_owned(),
+                        entry.count as usize,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(types, ["APOC", "APOC"]);
+            let names = types.iter().map(String::as_str).collect::<Vec<_>>();
+            let at = aymod_anchor(sim, human);
+            allies
+                .iter()
+                .map(|&owner| {
+                    // Member supply near the enemy is explicit; this tests the
+                    // retarget/script consumer, not autonomous production or travel.
+                    let members = spawn_on_free_cells(
+                        sim,
+                        rules,
+                        owner,
+                        cells_nearest((at.0 + 12, at.1)),
+                        &names,
+                    );
+                    let team = sim.create_team(kind, Some(owner), rules).unwrap();
+                    (team, members)
+                })
+                .collect::<Vec<_>>()
+        };
+        let before = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| entity.owner() == human)
+            .map(|entity| (entity.stable_id(), entity.health.current()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut fired = [false; 2];
+        let mut targets = std::collections::BTreeSet::new();
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for (index, (_, members)) in teams.iter().enumerate() {
+                    for event in output
+                        .fire_events
+                        .iter()
+                        .filter(|event| members.contains(&event.attacker_id))
+                    {
+                        if let crate::sim::combat::TargetKind::Entity(id) = event.target {
+                            if let Some(target) = scene.sim().entities().get(id) {
+                                assert!(
+                                    !allies.contains(&target.owner()),
+                                    "the authored team must not attack an ally"
+                                );
+                            }
+                            if before.contains_key(&id) {
+                                fired[index] = true;
+                                targets.insert(id);
+                            }
+                        }
+                    }
+                }
+                fired.into_iter().all(|value| value)
+                    && targets.iter().any(|&id| {
+                        scene
+                            .sim()
+                            .entities()
+                            .get(id)
+                            .is_none_or(|entity| entity.health.current() < before[&id])
+                    })
+            }),
+            "both allied AI teams must actually fire at the remaining hostile House and cause damage"
+        );
+        assert!(teams.iter().all(|(id, _)| {
+            scene
+                .sim()
+                .team_script_vm
+                .team(*id)
+                .is_some_and(|team| team.cursor() >= 2)
+        }));
+        assert!(
+            allies
+                .iter()
+                .all(|owner| !scene.sim().houses[owner].is_defeated())
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two allied AI Houses launch their own mutators at hostile infantry"]
     fn aymod_two_allied_ai_mutators_keep_targets_and_recharge_house_local_after_load() {
         use crate::sim::mission::{MissionId, MissionType};

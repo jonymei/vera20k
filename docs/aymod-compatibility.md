@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线687bed2a7，继续F18复制中心House自愈生命周期：普通Off后远处本方E1仍治满/异House不治，正式换主/完整存读后旧方失去自愈、新方伤兵治满；移除源后双方计数0且重新受伤不回血。四次完整存读；实际场景1、selfheal13、capture-sale2通过，共16项，另3项ignored未跑。首轮真实电脑接受建筑后正常Selling/退休导致停疗，已按原生4492D7..449368确认，不改玩法；持续换主验收使用明确human夹具隔离自动出售。仅测试/台账，无生产修复；F22多控来源仍未决，固定版未动。
+- 本轮基线e0870b6fc，续验A03实际四方局：两家同盟困难苏联由真实receiver受第三家攻击而选其为敌；第三家经Flag_To_Die/正常败亡清理后，两家都重新选人类。败亡待处理与重选后两次完整存读，随后两家正式APOC队按原脚本实射人类并造成实际伤害，不打盟友。实际场景1、House strategy10/defeat16/diplomacy9通过，共36项。设施/伤害输入/旗标败亡/近敌队员供给及建队是fixture，非自然生产/战斗灭国/旧在途队伍重定向验收。仅测试/台账，F22政策尚未确认，不擅改多控；V01/F11门禁和Return Dubai暂停、固定版不动均保留。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -23,6 +23,15 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/其他脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### A03同盟双AI：第三方败亡后的目标切换及实际续攻（2026-10-29）
+
+- 新aymod_allied_ai_replace_a_defeated_enemy_and_attack_after_load加载正式AY Battle/XMP03T4，人类美国、两家同盟困难苏联及一家独立困难尤里；同盟来自正常LaunchTeam配置，并核are_houses_mutually_allied。夹具关闭三家AI进攻触发以隔离自动建队竞争，基地/House策略、外交、正常败亡和编队VM仍运行，不重开Return Dubai弱攻势调查。
+- 人类基地、两方AI额外NACNST/NANRCT及第三家MTNK为spawn输入，先等正常施工结束和两AI自然选人类为敌。第三家MTNK作为实际attacker，经正式Super direct receiver分别伤两AI基地100，使生产receiver/UpdateAngerNodes自行把两方敌人改为第三家；不是炮弹命中验收，不手写enemy_house/grudge_scores。
+- 唯一flag_house_to_die给第三家正常败亡请求，待处理状态完整存读后is_to_die保持；普通帧正常Blowup/House败亡和策略/外交使其is_defeated为真、两AI均重选仍存活的人类。未改Paranoid/IQ/权重或绕过正常败亡联动，也不把最终结果专门归因于forget_defeated_enemy一条叶。重选后第二次完整存读保持两家enemy_house。不是玩家实战击毁全部基地，也不直接置defeated、跳战略时钟或删House。
+- 后续各自读取正式TeamType 0CA1614C-G的两APOC TaskForce，在人类基地附近供给成员并正常create_team；原53/55/0脚本自行推进，无铁幕来源时55沿既有缺来源分支结束。成员供给位置/建队明确为fixture，不冒称自然生产、出基地或整个行军链。普通帧必须观测两家队伍各自对原有人类实体的真实fire_events，且所射目标实际掉血/退休；所有仍可解析的目标不得属于两家盟友，脚本各自cursor至少2，两AI未败亡。此处为两队都开火且敌方实伤，不声明每一颗弹的单独归因。
+- 最终实际复合场景1、sim::house_strategy::tests 10、sim::world::house_defeat::tests 16及sim::house_diplomacy::tests 9通过，共36项。初次defeat过滤器错写得到0项，已按真实模块重跑16项，不把0项算通过。没有生产修复，无新权威状态/RNG抽样/timer写入/Detach/保存布局；正常伤害、败亡清理、外交和脚本仍执行既有owners的抽样/计时/拆链，不需玩法critic。
+- 未启动GUI、修改MOD/原始存档/固定构建或发布。A03仍开放：多个人类或其他House顺序、自由混战/外交撤销/最后目标耗尽、正在攻击旧敌的既有队伍重定向、自然战斗灭国及自主多AI长局。不能把两次存读与后建队攻击等同旧在途队伍的命令清理已验；本例也不改变原生首次候选可为盟友、敌人由anger rescan决定的政策。
 
 ### A05实际超时空编队：双阶段投送、warp中保存及落地续攻（2026-10-29）
 
@@ -1712,7 +1721,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | --- | --- | --- |
 | A01 / P1 / 待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 三阵营各自完成队伍、出基地、接敌、损耗后重建；不只数“团队已创建”，不能被永久空队占满 Max |
 | A02 / P1 / 待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 同阵营至少两家 AI 同场独立付款、造厂、补矿车和补兵；一家的失厂/缺钱不污染另一家选择；三阵营都可发展到实际高级科技 |
-| A03 / P1 / 待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 人类对多家结盟 AI、自由混战分别验；不把盟友错误选为敌对目标，范围友伤按武器政策验；目标灭亡后重选，视野/外交符合 #174，不借 retail 注释断言补丁行为 |
+| A03 / P1 / 同盟双AI第三方败亡后重选及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，第三方正常旗标败亡/待处理存读后均重选人类，再存读及各自正式APOC队实射/人类实伤已验；成员/建队等为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、旧在途队伍重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
 | A04 / P1 / 待核+待验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
 | A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；自然经济/全程充能、其他超武/多AI竞争及长局仍待验；光照另见F11 |
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
