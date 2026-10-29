@@ -21914,6 +21914,153 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Boris summons multi-release MiGs and the original sortie survives saves and retires"]
+    fn aymod_boris_migs_repeat_releases_and_retire_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, boris, target) = aymod_nearby_pair("BORIS", "CAEAST01", false);
+        let owner = scene.sim().entities().get(boris).unwrap().owner();
+        let enemy = scene.sim().entities().get(target).unwrap().owner();
+        scene
+            .runtime
+            .simulation
+            .houses
+            .get_mut(&enemy)
+            .unwrap()
+            .set_is_human_for_test(true);
+        let strength = scene.sim().entities().get(target).unwrap().health.current();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Attack {
+                attacker_id: boris,
+                target_id: target,
+            },
+        ));
+        let mut release_frames =
+            std::collections::BTreeMap::<u64, std::collections::BTreeSet<u64>>::new();
+        let observe = |scene: &HeadlessScenario,
+                       output: &crate::sim::world::SimFrameOutput,
+                       frames: &mut std::collections::BTreeMap<
+            u64,
+            std::collections::BTreeSet<u64>,
+        >| {
+            for event in &output.fire_events {
+                if scene.sim().interner.resolve(event.weapon_id) == "Maverick3" {
+                    frames
+                        .entry(event.attacker_id)
+                        .or_default()
+                        .insert(scene.sim().session.tick());
+                }
+            }
+        };
+        let planes = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| {
+                    scene.sim().interner.resolve(entity.type_ref()) == "BPLN"
+                        && entity.airstrike_link() == Some(boris)
+                })
+                .map(|entity| entity.stable_id())
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            (0..2400).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                observe(&scene, &output, &mut release_frames);
+                let wing = planes(&scene);
+                wing.len() == 3
+                    && !release_frames.is_empty()
+                    && wing.iter().any(|id| {
+                        scene
+                            .sim()
+                            .entities()
+                            .get(*id)
+                            .unwrap()
+                            .ammo()
+                            .is_some_and(|ammo| (1..3).contains(&ammo.current()))
+                    })
+            }),
+            "the real Boris designator must summon the authored three-plane sortie and fire"
+        );
+        let wing = planes(&scene);
+        let ammo = |scene: &HeadlessScenario| {
+            wing.iter()
+                .map(|id| {
+                    scene
+                        .sim()
+                        .entities()
+                        .get(*id)
+                        .unwrap()
+                        .ammo()
+                        .unwrap()
+                        .current()
+                })
+                .collect::<Vec<_>>()
+        };
+        let partial = ammo(&scene);
+        assert!(
+            partial.iter().any(|&value| (1..3).contains(&value)),
+            "{partial:?}"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY Boris sortie after its first release with ammo remaining",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(planes(&scene), wing);
+        assert_eq!(ammo(&scene), partial);
+        assert!(
+            (0..3600).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                observe(&scene, &output, &mut release_frames);
+                wing.iter().all(|id| {
+                    release_frames
+                        .get(id)
+                        .is_some_and(|frames| frames.len() >= 2)
+                }) && ammo(&scene).iter().all(|&value| value == 0)
+            }),
+            "all original MiGs must fire on separate release frames after the saved first pass"
+        );
+        assert!(scene.sim().entities().get(target).unwrap().health.current() < strength);
+        let bytes = save_scene(&scene, "AY original MiG sortie spent its ammo");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(ammo(&scene).iter().all(|&value| value == 0));
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Stop { entity_id: boris },
+        ));
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| wing.contains(&event.attacker_id))
+                );
+                wing.iter()
+                    .all(|id| scene.sim().entities().get(*id).is_none())
+            }),
+            "the original spent sortie must leave the map and retire without further shots"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY spent MiGs retired after their multi-release sortie",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            wing.iter()
+                .all(|id| scene.sim().entities().get(*id).is_none())
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY sniper and MiG garrison penetration"]
     fn aymod_sniper_respects_bunker_protection_and_boris_sortie_clears_it() {
         use crate::sim::command::{Command, CommandEnvelope};

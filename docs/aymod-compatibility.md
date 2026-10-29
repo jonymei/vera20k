@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线413117f01。本轮修正前轮未通过的A04夹具而不改玩法：只在测试每帧关该House新AITrigger，并通过正常create_team在指定原TeamType无活队时补回需求；保留DissolveUnfilledTeamDelay=100及自然空队销毁，不手塞成员/改timer/写choice。此前一次性建空队会超时、已有产品被其他队接收，不能当引擎招募故障；当前场景明确是持续需求fixture，不是自然AITrigger或原生建队频率对照。
-- 实际AY困难盟军双工厂/原始产品余额下降与两次存读继续通过；同一测试普通帧进一步得到formed的原幻影队4MGTK和原海军猎手4DEST/1AEGIS/4DLPH，13名成员全部核对为之前正常工厂持有过的对象、同House活体非limbo，第三次完整存读保留同两队ID/formed和名单顺序。新实际1、NP FactoryAI13/UnitChoice4（另1 ignored未跑）/TeamAI1共19项通过；无生产修复/新状态/RNG/timer/Detach/保存布局或新critic。当前无遗留执行，固定EXE仍42237952字节/2026-10-26 20:57:58；未启动GUI、修改MOD/原档/固定版或发布。A04海军集结/实际出击/自然触发、多AI仍开放，下一步查成队后脚本消费者或其他功能缺口，不重做首件出厂微边界；Return Dubai弱攻势暂停和V01/F11/F22门禁保持，完整目标仍开放。
+- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线c57b8d5d6。本轮转回作战功能，新增F30作者“召唤机多轮投弹”实际消费者：BORIS普通Attack实际CAEAST01，原AirstrikeTeam3/BPLN Ammo3/Maverick3 Burst2不改；三个原机均至少两个不同逻辑帧实际发射，不能把同一帧Burst2当两轮。首轮后部分弹药完整存读保留原翼ID/链接/弹药，后续实射并伤害原建筑，原翼全0弹保存、正常Stop仅隔离下一架次，旧翼无后续fire并自然离图退休，第三次完整存读无复活。敌House human与高强度原型建筑为fixture，不是自然AI/付费英雄或每机精确三轮认证。
+- 新实际1、原F04狙击/鲍里斯清驻军实际1、NP airstrike普通2及aircraft attack5通过，共9项；airstrike另12 ignored未跑。初稿把首轮fire当立即扣弹，实际pending需由原消费owner后续扣，已改等真正部分弹药，不改生产逻辑；一次错误模块过滤0项已改正确模块重跑5项，不计空运行。仅测试/台账，无生产修复/新RNG/timer/Detach/保存字段或新critic。无遗留执行/GUI/MOD/原档/固定构建/发布改动；下一步转其他未闭合功能，不按每机/每等级无限追加相同架次；Return Dubai弱攻势暂停、V01/F11/F22门禁保持，完整目标仍开放。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1841,6 +1841,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F29 / P1 / 按安装配置实际占位/满员拒绝/卸载存读已验；旧说明有差异 | YURIPR占2格，BFRT/HTK均SizeLimit2，现配置允许进入 | 原Unit737430的总Size及单体SizeLimit共享owner；C11记录旧文字冲突 | 两载具正常Enter/占2格、填满/额外E1拒绝、三次完整存读/卸空及换接近位置后原E1重入已验。不是自然科技/AI出兵；原地直接重试已确认本同格取消与原生一致，正常Move后重入成功，见V13；不再列为已知引擎故障 |
 
+| F30 / P1 / 普通鲍里斯三机重复投弹/离图退休及三次存读已验，其余家族开放 | 作者所有飞机含舰载/召唤机多轮投弹；不是新扩展key | 现有Airstrike manager→BPLN Ammo3/Maverick3 Burst2→Aircraft Attack/Release/弹药/离图 owners | 实际普通Attack召唤原三机，各在至少两个不同逻辑帧发射；部分弹药/全0/退休三次存读及真实目标损伤通过。集体0弹不等于每机独立三轮；自然精英六机、目标死亡/拦截、多AI/GUI和其他飞机家族仍开放，不以此关闭全部空战 |
+
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
 
@@ -1952,6 +1954,13 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 经验、赏金、EMP、混合扩展、负数generic前置处理和切电root生命周期的有意差异，
 继续以 [npatch.md](npatch.md) / [npatch-emp.md](npatch-emp.md) 为机制说明 owner。
 不要为了清单显示“完成”而悄悄抹掉政策残留。
+
+### F30召唤机多轮投弹：鲍里斯原机群与三次存读（2026-10-30）
+
+- 作者170507明确“所有飞机（包括舰载机与召唤机）由一次投弹改为多次投弹”。ORCA及舰载机已有各自覆盖，旧BORIS/Maverick3实际例只到首击清驻军，不足以证明完整架次；此项补入分类清单，不虚构新NPatch开关。
+- 新aymod_boris_migs_repeat_releases_and_retire_after_load正式AY Battle/XMP03T4，普通BORIS正常Attack原CAEAST01，原Airstrike manager真实召唤3个BPLN，原Ammo3/Primary Maverick3/Burst2保持。目标原型强度3000、敌House human与单位spawn为隔离fixture，没有手改HP/弹药、召唤飞机/投射物、经理状态或退休。普通帧按attacker ID记录Maverick3真实fire事件的逻辑帧集合，三个原机各至少两个不同帧发射，不把同帧两发算多轮。
+- 等首轮真正扣成部分弹药后第一次完整存读，原三机ID/airstrike链接与当前弹药保持；普通帧继续重复实射，原建筑实际掉血。原翼弹药全0后第二次完整存读，之后正常Stop BORIS仅隔离后续架次；原飞机无新fire，正常离图/UnInit退休，第三次完整存读保持原ID不存在。此例未逐机断言恰好三轮或六弹：既有Airstrike Clear41DB40在队伍任一机空弹时可清同翼弹药，不从集体ammo0倒推出每机独立打完三个release。
+- 初稿误将首次fire等同本帧raw Ammo已减，断言先失败；既有Ammo::begin_release/consume_release及AircraftRelease418403..4184BD表明pending与后续消费分离，已等实际部分弹药端点，而非改ammo实现。最终新实际1、旧清驻军实际1、airstrike普通2、attack_mission5通过，共9；airstrike另12 ignored未跑，初次错误攻击模块0项不计。测试/台账-only，无新增玩法状态/RNG/timer/Detach/保存布局或critic；原生完整架次/自然晋升精英六机、实战对空拦截/目标中途死亡、所有飞机家族和GPU画面仍开放。
 
 ### A04完整补员：持续指定需求夹具（2026-10-30）
 
