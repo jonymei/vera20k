@@ -14234,6 +14234,7 @@ mod retail_construction_tests {
         LowPowerArrival,
         OfflineArrival,
         DestroyedDuringReload,
+        CapturedDuringReload,
     }
 
     #[cfg(feature = "npatch")]
@@ -14241,6 +14242,174 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; partially reloaded aircraft die with their airfield and replacement service survives load"]
     fn aymod_airfield_destruction_during_reload_and_replacement_survive_load() {
         aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::DestroyedDuringReload);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; captured airfield takes its partially reloaded aircraft along across saves"]
+    fn aymod_captured_airfield_keeps_reloading_transferred_aircraft_after_load() {
+        aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::CapturedDuringReload);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_captured_airfield_reload(
+        scene: &mut HeadlessScenario,
+        field: u64,
+        planes: [u64; 2],
+        new_owner: InternedId,
+        capacity: i32,
+    ) {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let old_owner = scene.sim().entities().get(field).unwrap().owner();
+        let ammo = |scene: &HeadlessScenario| {
+            planes.map(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .ammo()
+                    .unwrap()
+                    .current()
+            })
+        };
+        let linked = |scene: &HeadlessScenario| {
+            planes.iter().all(|&id| {
+                let e = scene.sim().entities().get(id).unwrap();
+                e.radio_contacts.contains(field)
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(field)
+                        .unwrap()
+                        .radio_contacts
+                        .contains(id)
+                    && crate::sim::movement::air_movement::current_fly_height(
+                        e,
+                        scene.sim().resolved_terrain(),
+                    ) == 0
+            })
+        };
+        let before = ammo(scene);
+        assert!(before.iter().all(|&n| n > 0 && n < capacity));
+        assert!(linked(scene));
+        let tethers = planes.map(|id| scene.sim().entities().get(id).unwrap().tether.partner());
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            scene,
+            "AY two partial airport reloads before owner transfer",
+        );
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        assert_eq!(ammo(scene), before);
+        assert!(linked(scene));
+        {
+            let runtime = &mut scene.runtime;
+            // Building4485C9..448663 takes stationary Foot contacts within
+            // 64 leptons of their dock;449289..4492D7 restores Hello/tether.
+            runtime.simulation.change_owner_with_rules(
+                field,
+                new_owner,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        let owners = |scene: &HeadlessScenario| {
+            for id in [field, planes[0], planes[1]] {
+                let e = scene.sim().entities().get(id).unwrap();
+                assert!(e.is_ai_alive());
+                assert_eq!(e.owner(), new_owner);
+            }
+        };
+        owners(scene);
+        assert!(linked(scene));
+        assert_eq!(ammo(scene), before);
+        for (id, tether) in planes.into_iter().zip(tethers) {
+            assert_eq!(
+                scene.sim().entities().get(id).unwrap().tether.partner(),
+                tether
+            );
+        }
+        let bytes = save_scene(
+            scene,
+            "AY captured airfield and original partial-reload aircraft",
+        );
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        owners(scene);
+        assert!(linked(scene));
+        assert_eq!(ammo(scene), before);
+        assert!(
+            (0..3000).any(|_| {
+                tick_with_due_commands(scene);
+                owners(scene);
+                linked(scene) && ammo(scene) == [capacity; 2]
+            }),
+            "both original aircraft must finish rearming for the airport's new owner"
+        );
+        let at = scene.sim().entities().get(field).unwrap().position;
+        let targets = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                old_owner,
+                cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry()) + 8)),
+                &["NACNST", "NACNST"],
+            )
+        };
+        let bytes = save_scene(
+            scene,
+            "AY transferred aircraft finish reload before their new owner's sortie",
+        );
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        owners(scene);
+        assert!(linked(scene));
+        assert_eq!(ammo(scene), [capacity; 2]);
+        let health = targets
+            .iter()
+            .map(|&id| scene.sim().entities().get(id).unwrap().health.current())
+            .collect::<Vec<_>>();
+        for (&plane, &target) in planes.iter().zip(&targets) {
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                new_owner,
+                scene.sim().session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+        }
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+            (0..3000).any(|_| {
+                let output = tick_with_due_commands(scene);
+                owners(scene);
+                for event in output.fire_events {
+                    if planes.contains(&event.attacker_id) {
+                        fired.insert(event.attacker_id);
+                    }
+                }
+                fired.len() == 2
+                    && targets.iter().zip(&health).all(|(&id, &hp)| {
+                        scene
+                            .sim()
+                            .entities()
+                            .get(id)
+                            .is_none_or(|e| e.health.current() < hp)
+                    })
+            }),
+            "the new owner must command both original aircraft to fire and damage former-owner targets"
+        );
+        let after = ammo(scene);
+        let bytes = save_scene(
+            scene,
+            "AY captured airport aircraft damage their former owner's targets",
+        );
+        scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        owners(scene);
+        assert_eq!(ammo(scene), after);
     }
 
     #[cfg(feature = "npatch")]
@@ -14365,6 +14534,11 @@ mod retail_construction_tests {
             }),
             "both aircraft must spend real ammo and enter partial reload on separate contacts"
         );
+        if matches!(case, AirfieldReloadCase::CapturedDuringReload) {
+            let new_owner = scene.sim().entities().get(targets[0]).unwrap().owner();
+            aymod_captured_airfield_reload(&mut scene, field, planes, new_owner, capacity);
+            return;
+        }
         if matches!(case, AirfieldReloadCase::DestroyedDuringReload) {
             use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
             let pristine = scene.sim().resolved_terrain().unwrap().clone();
