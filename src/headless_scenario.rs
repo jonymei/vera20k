@@ -20169,9 +20169,19 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; single-slot ASW sortie, saved loss and regeneration"]
     fn aymod_destroyer_asw_fires_and_regenerates_with_parent_experience() {
-        use crate::sim::combat::{
-            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
-        };
+        aymod_destroyer_asw_lifecycle(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real naval AA kills ASW before saved regeneration and relaunch"]
+    fn aymod_destroyer_asw_regenerates_after_actual_naval_aa_kill() {
+        aymod_destroyer_asw_lifecycle(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_destroyer_asw_lifecycle(real_aa: bool) {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -20199,8 +20209,7 @@ mod retail_construction_tests {
                     terrain.cell(x, y).is_some_and(|cell| {
                         !cell.outside_playfield
                             && !cell.bridge_facts.has_structural_bridge()
-                            && cell.land_type
-                                == crate::rules::terrain_rules::LandType::Water.as_index()
+                            && cell.land_type == crate::rules::terrain_rules::LandType::Water.as_index()
                             && sim.occupancy().get(x, y).is_none()
                     })
                 };
@@ -20284,6 +20293,60 @@ mod retail_construction_tests {
                 }),
                 "{kind}: ordinary Attack must launch ASW and damage the submarine"
             );
+            if real_aa {
+                let aa = {
+                    let runtime = &mut scene.runtime;
+                    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                    let at = sim.entities().get(child).unwrap().position;
+                    let enemy = sim.entities().get(target).unwrap().owner();
+                    let sites: Vec<_> = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                        .into_iter()
+                        .filter(|&(x, y)| {
+                            sim.resolved_terrain()
+                                .unwrap()
+                                .cell(x as u16, y as u16)
+                                .is_some_and(|cell| {
+                                    !cell.outside_playfield
+                                        && !cell.bridge_facts.has_structural_bridge()
+                                        && cell.land_type
+                                            == crate::rules::terrain_rules::LandType::Water.as_index()
+                                })
+                        })
+                        .collect();
+                    spawn_on_free_cells(sim, rules, enemy, sites, &["AEGIS"])[0]
+                };
+                let hp = scene.sim().entities().get(child).unwrap().health.current();
+                let mut fired = false;
+                let mut damaged = false;
+                assert!(
+                    (0..1200).any(|_| {
+                        let output = tick_with_due_commands(&mut scene);
+                        fired |= output.fire_events.iter().any(|event| {
+                            event.attacker_id == aa && event.target == TargetKind::Entity(child)
+                        });
+                        let victim = scene.sim().entities().get(child);
+                        damaged |= fired && victim.is_some_and(|entity| entity.health.current() < hp);
+                        fired && damaged && victim.is_none_or(|entity| !entity.is_alive())
+                    }),
+                    "{kind}: ordinary AEGIS Guard must actually shoot down the ASW"
+                );
+                let defender = scene.sim().entities().get(aa).unwrap();
+                assert!(defender.is_alive() && defender.veterancy.raw().bits() > 0);
+                assert!(scene.sim().entities().get(parent).unwrap().is_alive());
+                // Isolate regeneration from another interception, without
+                // destroying the attacker or editing its weapon/reload state.
+                let sim = &mut scene.runtime.simulation;
+                sim.mission_queue_exact(
+                    aa,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &scene.runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+            }
             let regen = {
                 let runtime = &mut scene.runtime;
                 let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
@@ -20293,25 +20356,27 @@ mod retail_construction_tests {
                     sim.session.tick() + 1,
                     Command::Stop { entity_id: parent },
                 ));
-                let hp = sim.entities().get(child).unwrap().health.current();
-                let warhead = sim.interner.intern("Super");
-                sim.commit_direct_damage_receiver(
-                    &resources.rules,
-                    Some(&resources.overlay_registry),
-                    EntityDamageEvent::direct_receiver(
-                        child,
-                        hp,
-                        0,
-                        RAD_NO_ATTACKER,
-                        None,
-                        warhead,
-                        ReceiverCallFlags {
-                            ignore_defenses: true,
-                            arg6: true,
-                        },
-                    ),
-                    Default::default(),
-                );
+                if !real_aa {
+                    let hp = sim.entities().get(child).unwrap().health.current();
+                    let warhead = sim.interner.intern("Super");
+                    sim.commit_direct_damage_receiver(
+                        &resources.rules,
+                        Some(&resources.overlay_registry),
+                        EntityDamageEvent::direct_receiver(
+                            child,
+                            hp,
+                            0,
+                            RAD_NO_ATTACKER,
+                            None,
+                            warhead,
+                            ReceiverCallFlags {
+                                ignore_defenses: true,
+                                arg6: true,
+                            },
+                        ),
+                        Default::default(),
+                    );
+                }
                 sim.entities()
                     .get(parent)
                     .unwrap()
@@ -20391,18 +20456,28 @@ mod retail_construction_tests {
             let restored = scene.sim().entities().get(replacement).unwrap();
             assert_eq!(restored.spawn_owner_id.owner(), Some(parent));
             assert_eq!(restored.veterancy.raw(), parent_xp);
+            let remaining_hp = scene.sim().entities().get(target).unwrap().health.current();
+            assert!(remaining_hp > 0);
             attack(&mut scene);
+            let mut replacement_fired = false;
             assert!(
                 (0..1200).any(|_| {
-                    tick_with_due_commands(&mut scene)
-                        .fire_events
-                        .iter()
-                        .any(|event| {
-                            event.attacker_id == replacement
-                                && event.target == TargetKind::Entity(target)
-                        })
+                    replacement_fired |=
+                        tick_with_due_commands(&mut scene)
+                            .fire_events
+                            .iter()
+                            .any(|event| {
+                                event.attacker_id == replacement
+                                    && event.target == TargetKind::Entity(target)
+                            });
+                    replacement_fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .is_none_or(|entity| entity.health.current() < remaining_hp)
                 }),
-                "{kind}: replacement ASW must relaunch and fire after load"
+                "{kind}: replacement ASW must relaunch and damage the submarine after load"
             );
         }
     }
