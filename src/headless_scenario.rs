@@ -16604,6 +16604,24 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; building mission dispatch and saved three-stage Gattling cadence"]
+    fn aymod_gattling_cannon_keeps_saved_three_stage_dispatch_cadence() {
+        use crate::sim::combat::veterancy::VeterancyRank;
+        for rank in [
+            VeterancyRank::Rookie,
+            VeterancyRank::Veteran,
+            VeterancyRank::Elite,
+        ] {
+            aymod_gattling_promotion_lifecycle(
+                false,
+                GattlingContinuation::Cadence(rank),
+                &["YAGGUN"],
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
         aymod_gattling_promotion_lifecycle(true, GattlingContinuation::Stay, &["YTNK", "YAGGUN"]);
@@ -18312,7 +18330,7 @@ mod retail_construction_tests {
                             "continuous Gattling fire must wait for its retained burst/reload interval");
                         if cadence {
                             assert_eq!(frame - previous_frame, delay as u64,
-                                "stationary YTNK must fire when the native full/short-clock gate opens");
+                                "stationary Gattling must fire on the first eligible native mission visit");
                         }
                     }
                     let interval = if cadence && entity.weapon_burst.index() != 0 {
@@ -18324,6 +18342,17 @@ mod retail_construction_tests {
                         entity.rearm_timer.duration()
                     } else {
                         entity.saved_rearm_delay()
+                    };
+                    // Building Mission_Attack44B6D6 returns 1 after firing;
+                    // REARM44B1DE returns 2. MissionAI5B32F2 therefore visits
+                    // at odd offsets from a shot, unlike the unit's per-frame gate.
+                    let interval = if cadence
+                        && scene.runtime.resources.rules.object(actor_type).unwrap().category
+                            == crate::rules::object_type::ObjectCategory::Building
+                    {
+                        interval + i32::from(interval % 2 == 0)
+                    } else {
+                        interval
                     };
                     previous_shot = Some((frame, interval));
                     if cadence {
@@ -18348,12 +18377,25 @@ mod retail_construction_tests {
                     && entity.saved_rearm_delay() != entity.rearm_timer.duration() && !cadence_loaded {
                     assert!(entity.rearm_timer.remaining(scene.sim().session.binary_frame() as i32) > 0);
                     assert!(entity.burst_rearm_remaining(scene.sim().session.binary_frame() as i32) > 0);
-                    let saved = (entity.rearm_timer, entity.saved_rearm_delay(), entity.weapon_burst.index());
+                    let saved = (
+                        entity.rearm_timer,
+                        entity.saved_rearm_delay(),
+                        entity.weapon_burst.index(),
+                        entity.mission.dispatch_timer(),
+                    );
                     let pristine = scene.sim().resolved_terrain().unwrap().clone();
                     let bytes = save_scene(&scene, "AY middle-stage Gattling exact cadence with both clocks live");
                     scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                     let entity = scene.sim().entities().get(actor).unwrap();
-                    assert_eq!((entity.rearm_timer, entity.saved_rearm_delay(), entity.weapon_burst.index()), saved);
+                    assert_eq!(
+                        (
+                            entity.rearm_timer,
+                            entity.saved_rearm_delay(),
+                            entity.weapon_burst.index(),
+                            entity.mission.dispatch_timer(),
+                        ),
+                        saved
+                    );
                     cadence_loaded = true;
                 }
                 if cadence {
