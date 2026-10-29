@@ -25096,6 +25096,287 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Yuri Prime's two slots admit authored transports, enforce total capacity and survive unload and saves"]
+    fn aymod_yuri_prime_transport_size_tracks_saved_capacity_and_unload() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for (kind, capacity) in [("BFRT", 6), ("HTK", 5)] {
+            let (mut scene, carrier, yuri) = aymod_nearby_pair(kind, "YURIPR", true);
+            let owner = scene.sim().entities().get(carrier).unwrap().owner();
+            {
+                let rules = &scene.runtime.resources.rules;
+                assert_eq!(rules.object("YURIPR").unwrap().size, 2.0);
+                assert_eq!(rules.object(kind).unwrap().size_limit, 2.0);
+                assert_eq!(rules.object(kind).unwrap().passengers, capacity);
+            }
+            let enter = |scene: &mut HeadlessScenario, passenger| {
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::clicked_mission(
+                        passenger,
+                        MissionType::Enter,
+                        crate::sim::combat::TargetKind::Entity(carrier),
+                    ),
+                ));
+            };
+            let inside = |scene: &HeadlessScenario, passenger| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(passenger)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id()
+                    == Some(carrier)
+            };
+            enter(&mut scene, yuri);
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    inside(&scene, yuri)
+                }),
+                "the installed {kind} SizeLimit=2 must admit Size=2 Yuri Prime"
+            );
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let restore = |scene: &mut HeadlessScenario| {
+                let bytes = save_scene(scene, "AY Yuri Prime transport size and capacity");
+                scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            };
+            restore(&mut scene);
+            assert!(inside(&scene, yuri));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .total_size(),
+                2
+            );
+            let soldiers = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let at = sim.entities().get(carrier).unwrap().position;
+                // Enough one-slot senders to fill the remaining capacity and
+                // retain one real overflow sender outside the transport.
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 3, i32::from(at.ry()))),
+                    &vec!["E1"; (capacity - 1) as usize],
+                )
+            };
+            for &soldier in &soldiers[..soldiers.len() - 1] {
+                enter(&mut scene, soldier);
+                assert!((0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    inside(&scene, soldier)
+                }));
+            }
+            let members = {
+                let cargo = scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap();
+                assert_eq!(cargo.total_size(), capacity);
+                assert_eq!(cargo.count(), (capacity - 1) as u32);
+                cargo.passengers().to_vec()
+            };
+            let overflow = *soldiers.last().unwrap();
+            enter(&mut scene, overflow);
+            for _ in 0..180 {
+                tick_with_due_commands(&mut scene);
+                assert!(!inside(&scene, overflow));
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .passengers(),
+                    members
+                );
+            }
+            restore(&mut scene);
+            assert!(!inside(&scene, overflow));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .total_size(),
+                capacity
+            );
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::UnloadPassengers {
+                    transport_id: carrier,
+                },
+            ));
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    members.iter().all(|&id| {
+                        let entity = scene.sim().entities().get(id).unwrap();
+                        entity.is_ai_alive() && !entity.lifecycle.in_limbo() && !inside(&scene, id)
+                    }) && scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .mission
+                        .effective()
+                        .known()
+                        == Some(MissionType::Guard)
+                }),
+                "ordinary unload must release Yuri Prime and every original soldier"
+            );
+            restore(&mut scene);
+            let cargo = scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .passenger_role
+                .cargo()
+                .unwrap();
+            assert_eq!(cargo.total_size(), 0);
+            assert_eq!(cargo.count(), 0);
+            // Clear the loading approach with ordinary walking orders; the
+            // disembarked soldiers otherwise occupy the carrier's entry cells.
+            let at = scene.sim().entities().get(carrier).unwrap().position;
+            let destination = cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let cell = scene.sim().resolved_terrain().unwrap().cell(x, y)?;
+                    (!cell.outside_playfield
+                        && cell.level == at.z()
+                        && cell
+                            .speed_costs
+                            .cost_for_speed_type(crate::rules::locomotor_type::SpeedType::Foot)
+                            .is_some_and(|cost| cost > 0)
+                        && scene.sim().occupancy().get(x, y).is_none())
+                    .then_some((x, y))
+                })
+                .unwrap();
+            for &soldier in members.iter().filter(|&&id| id != yuri) {
+                let sim = &mut scene.runtime.simulation;
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Move {
+                        entity_id: soldier,
+                        target_rx: destination.0,
+                        target_ry: destination.1,
+                    },
+                ));
+            }
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    members.iter().filter(|&&id| id != yuri).all(|&id| {
+                        let position = scene.sim().entities().get(id).unwrap().position;
+                        (i32::from(position.rx()) - i32::from(at.rx()))
+                            .abs()
+                            .max((i32::from(position.ry()) - i32::from(at.ry())).abs())
+                            >= 8
+                    })
+                }),
+                "unloaded soldiers must really walk clear before a fresh loading attempt"
+            );
+            enter(&mut scene, yuri);
+            assert!((0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                inside(&scene, yuri)
+            }));
+            assert_eq!(
+                crate::sim::radio::receive::unit_can_enter_radio(
+                    scene.sim(),
+                    carrier,
+                    Some(overflow),
+                    &scene.runtime.resources.rules
+                ),
+                crate::sim::radio::RadioResponse::Roger
+            );
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: overflow,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let position = scene.sim().entities().get(overflow).unwrap().position;
+                    (i32::from(position.rx()) - i32::from(at.rx()))
+                        .abs()
+                        .max((i32::from(position.ry()) - i32::from(at.ry())).abs())
+                        >= 8
+                }),
+                "the previously refused sender must walk to a fresh approach"
+            );
+            enter(&mut scene, overflow);
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    inside(&scene, overflow)
+                }),
+                "{kind}: the formerly refused sender must board after normal capacity release; carrier={:?}, sender={:?}",
+                scene.sim().entities().get(carrier).map(|entity| (
+                    entity.position,
+                    &entity.mission,
+                    entity.passenger_role.cargo(),
+                    &entity.radio_contacts
+                )),
+                scene.sim().entities().get(overflow).map(|entity| (
+                    &entity.mission,
+                    &entity.navigation,
+                    &entity.radio_contacts,
+                    entity.position
+                ))
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .total_size(),
+                3
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; naturally harvested ore receives only the refinery owner's Ore Processor bonus across source loss and transfer"]
     fn aymod_ore_processor_bonus_follows_refinery_owner_on_real_saved_delivery() {
         use crate::sim::mission::MissionType;

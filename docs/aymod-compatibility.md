@@ -1,12 +1,12 @@
 # AYMOD 兼容性清单
 
-更新：2026-10-29。面向“人类玩家与多个电脑对战”的分批适配工作清单。
+更新：2026-10-30。面向“人类玩家与多个电脑对战”的分批适配工作清单。
 完整执行顺序见 [全面适配 PLAN](aymod-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
 不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
-## 当前检查点（2026-10-29）
+## 当前检查点（2026-10-30）
 
-- 本轮基线9eeca78a2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：F28续补实际采矿/交矿倍率。正式AY NAREFN施工自动产原HARV，正常帧真实采矿并载货进入Enter/Unload，完整保存后同一原货物/矿车/矿场分别运行保留GAOREP/UnInit移除/转交另一human House三分支；第一次实际卸货的前后cargo完全一致，移除与换主收入相等，原House保留时额外50%奖励按原生两次入账分别截断。用原现金owner实际重臂变化扣分离恰好同帧的+4定时收入，不混作交矿奖励。原生隔离unit_case(25bales/Value25/Income1/Bonus.5/count0和1)实际为625与937，纠正初稿精确1.5整数比断言，非生产缺陷；未存新执行语料/工具。最终实际2（含原定时收入）、refinery_dock_oracle10、income_tests1，共13通过。无生产修复/新critic，矿场/精炼器/电源为fixture、矿车是原FreeUnit，非设施付费/多AI；固定版未动，无GUI/MOD/原档/发布，Return Dubai及各设计门禁不变。下一安全动作继续其他高频功能/作者遗漏或实际多AI补员，不把本次单矿车一槽交矿外推为全部经济闭环。
+- 本轮基线2c3d36cd9，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F29/C11作者旧说明与安装配置差异，实际AY YURIPR.Size2，BFRT/HTK.SizeLimit均2，能普通Enter上车。逐种核YURI占2格、其余Size1 E1填满、额外E1拒绝、三次完整存读、普通全卸至Guard/空Cargo及重新登车容量3；最终实际复合1、passenger49、radio::receive18共68通过（先跑passenger::tests4不重复计）。新增V13已复现边界：BFRT满员拒绝过的原E1，卸空后原位置直接Enter仍回Guard；搬走其他乘员不能消除，CanEnter已Roger，普通Move原E1到8格外再Enter可登车，故不能把容量恢复通过写成原位置重试也通过。V13未做原生同链/未修，不归因容量或关闭；下一安全动作查这个sender的步行/终点准入与原生对照。仅测试/台账，无生产修复/新critic；固定版未动，无GUI/MOD/原档/发布，Return Dubai暂停及设计门禁保持。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -194,6 +194,19 @@
 
 
 
+
+
+### F29/C11尤里X运输占位、原说明与安装配置差异（2026-10-30）
+
+- 作者170507说YURIPR占2格，因此不能进入BFRT/HTK；正式AY Battle当前typed实际YURIPR.Size=2、BFRT.SizeLimit=2/Passengers=6、HTK.SizeLimit=2/Passengers=5。沿原Unit Receive_Radio737430的总Size容量及Size<=SizeLimit owner，等于2不是拒绝条件。新增aymod_yuri_prime_transport_size_tracks_saved_capacity_and_unload分别在真实BFRT/HTK上普通Enter，实际YURIPR入车后完整保存恢复，total_size=2；不修改MOD为SizeLimit1或加兵种禁止特判。
+- 正常生成同方E1并逐人普通Enter，BFRT为1YURIPR+4E1（5人/6格），HTK为1YURIPR+3E1（4人/5格）；额外E1普通Enter、180帧保持在外，原名单不变。满员再次完整存读保持总容量，普通Unload释放所有原ID且活体/非limbo，载具回Guard；第三次完整存读空Cargo/count/total_size均为0。卸下的E1通过普通Move真正走到8格外清接近区域，原YURIPR再Enter，原overflow E1以普通Move走到新接近位置再Enter，两者实际入车后total_size=3。
+- 最终实际复合1、passenger49、radio::receive18共68项通过；先前passenger::tests4包含于49内，不重复计数。仅测试与台账，无生产规则/状态/RNG/timer/Detach/保存字段或新玩法critic。载具/步兵生成、跨阵营同House为fixture，非自然付费出兵/AI运输队；未启动GUI、改MOD/原档/固定版或发布。作者旧描述与现配置不符单列C11，不据旧文字调当前MOD。其他运输族/强子机/控制者带俘虏/实际载员开火与多AI仍开放；原位置重试问题见V13，不能据换位置后通过宣称它已修。
+
+### V13新运行边界：满员拒绝后原位置重新Enter（2026-10-30）
+
+- 触发：上述BFRT实际满6格时拒绝原overflow E1，完整保存/全卸空/再次保存，YURIPR重新占2格后，对同一原E1从其原位置再次下Enter。等待900帧仍在外、Mission Guard，载具只有YURIPR且cargo2/6，双方无radio联系，sender导航目标已清。仅等卸载回Guard或让其余卸载E1先真正Move到8格外，均仍复现；不能简单归因“容量未清”或“其他卸载者挡门”。
+- 共享只读unit_can_enter_radio此时给该sender Roger。让原E1再普通Move到8格外，再普通Enter，实际能走回登车。当前通过测试保留新接近位置的真实移动/登车链，未保留错误期望“原地重试必须成功”去伪装已修；原地直重试的失败来自本轮先前诊断运行，完整日志只在本机临时目录，不入库。
+- 状态：VERA端可复现的功能边界，原生同一指令/路径链未对照，尚未证明是引擎差异或具体寻路原因，未实现修复。频率仅此固定BFRT卸载/原E1重试序列已复现；玩家可能需要额外Move重新接近，风险为运输装载停滞。下一步沿该sender的Enter任务、导航终点/进格准入与原生所有者追踪，不改Size、加容量或强制塞入Cargo。无新生产RNG/timer/Detach写入；原路径重试/任务调度的既有计时仍执行。
 
 ### F28作者漏项：矿石精炼器的独立定时收入（2026-10-29）
 
@@ -1793,6 +1806,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F28 / P1 / 定时收入及真实交矿加成/换主移除存读已验，扩展待验 | 矿石精炼器既给交矿加成，也单独产生收入 | GAOREP OrePurifier/ProduceCashAmount4/Delay15/Startup0；原credit_income43FD2C及miner purifier owners | 正式AY正常逐笔收入、活timer保存、缺电停付/复电续付、换主仅新House收款、退休停付和四次完整存读已验。原FreeUnit HARV自然采矿/载货保存、同货物保留/移除/换主三分支实际交矿的50%分次截断奖励亦已验，独立定时收入分离。其他矿物/AI虚拟奖励、科技树付款、叠加/EMP/战斗死亡及多AI仍待验，不把单次交矿外推全部经济 |
 
+| F29 / P1 / 按安装配置实际占位/满员拒绝/卸载存读已验；旧说明有差异 | YURIPR占2格，BFRT/HTK均SizeLimit2，现配置允许进入 | 原Unit737430的总Size及单体SizeLimit共享owner；C11记录旧文字冲突 | 两载具正常Enter/占2格、填满/额外E1拒绝、三次完整存读/卸空及换接近位置后原E1重入已验。不是自然科技/AI出兵；原地直接重试边界见V13，尚未修复 |
+
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
 
@@ -1810,6 +1825,8 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V08 / P1 / 玩家BFRT/TTNK及电脑六人装载/卸载/重装存读开火已验 | BFRT的CanRetaliate=no与原生被动目标标志保留“不自动冲敌坦克”；TTNK没有充能副武器，普通/精英均不充能 | 实际被动开火/受击不移动、手动Attack可压灰熊；TTNK不入charger列表而SHK正常充能通过。电脑原脚本装满6人、存读实射、解散全卸载/存读、同一批活体重建队重装、部分与全装存读并六人再次实射通过；不代表自主重建决策。优先级招走与AreaGuard保留原生行为；两图6种BFRT队/4脚本均无Unload8/Deploy9或切换17/18，不列为必需卸载缺口；07C257EC-G首段Attack0,4及实杀后自然转cursor5的Attack0,5/两段存读/实际乘员命中已验；最终0,1自然选中建筑/移动状态存读后追近、保存后新乘员实射及额外伤害已验（本例1890帧）；其他进攻脚本/竞争补员/换主/多AI长局仍待验；不把线圈充能当V01中心供电 |
 | V09 / P2 / 活跃10类基本实际消费者已验，扩展范围开放 | 其他 stock 箱子与无键补丁 | 正式XMP03T4/Return Dubai均10种非零效果，未移植Napalm/ICBM/Gas/Tiberium无随机/初始固定/动作108消费者。F02/F03加上实际Armor/Firepower、HealBase、Speed、Veteran、Money/Reveal/Unit的基本效果与存读通过；Unit实得AMCV并正常移动，资金/迷雾保留独立House对照。不扩大为全部随机单位、放置失败/重入、其他地图/模式、动态触发及画面通过 |
 | V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、AY三组中心工程师夺取/三次存读/新主支持及运动恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
+
+| V13 / P1 / 固定BFRT原位置重试已复现，原生差异待核 | 满员拒绝过的原E1在卸空后原位置再次Enter仍回Guard，普通Move离开后重入可用 | 只读CanEnter给Roger、Cargo2/6，不能归因容量未清；Enter步行/终点准入待追 | 需原生同链及sender任务/路径证据，再决定修复；不强装Cargo/改Size或扩大容量，见F29对应诊断 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
 秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，
@@ -1878,6 +1895,8 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C08 / P2 / 作者旧说明与配置差异 | 工业工厂文字为车辆降25%/建筑15%，正式AY Battle typed实际Units/Aircraft=.8、Buildings/Defenses=.900001、Infantry=1 | 保留安装配置；实际建筑折扣付款/存读、双方造价经验对照已验，见工业工厂节；其他模式/地图或未来改版另核，不据文字擅调费用 |
 | C09 / P2 / 作者旧说明与配置差异 | 旧说明仅精英飞碟不吸防御；正式Battle十种防御Drainable=false，DISK精英副槽回退普通DiskDrain，原生选择无精英门 | 两等级均按安装配置直接攻击防御，不擅造精英特例；GAPILL实际实伤/存读及空中电厂对照已验，其他塔实弹与起飞边界仍开放 |
 | C10 / P1 / 作者/配置/保留状态差异，未决 | YURI精英多控见F22；旧说明5、正式Battle MindControlE.Damage10、当前管理器出生容量1 | 不能把精英武器读到10等同实际10控，也不能借原生构造叶将作者功能标为通过；扩容writer/运行时对照或明确设计选择仍需补齐 |
+
+| C11 / P2 / 作者旧说明与安装配置差异 | 旧称YURIPR.Size2不能入BFRT/HTK，实际两载具SizeLimit2允许等号且已普通Enter成功 | 保留实际配置，按总Size占2格；三次存读/满员拒绝/卸载及新接近重入见F29。若恢复旧禁入设计须另作明确配置维护，不当成引擎不兼容；V13原位置重试另管 |
 
 ## 6. 已交付机制和有意政策：不重复“修复”
 
