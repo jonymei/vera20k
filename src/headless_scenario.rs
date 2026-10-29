@@ -10030,18 +10030,25 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Kirov flight, saved falling bomb and PostMortem expiry"]
     fn aymod_kirov_bomb_flight_and_delayed_barrel_death_survive_load() {
-        aymod_kirov_bomb_lifecycle(false);
+        aymod_kirov_bomb_lifecycle(false, false);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Kirov earns elite through weapon kills and its KTSTLEXP bomb and fuse survive saves"]
     fn aymod_kirov_earned_elite_bomb_and_delayed_death_survive_load() {
-        aymod_kirov_bomb_lifecycle(true);
+        aymod_kirov_bomb_lifecycle(true, false);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_kirov_bomb_lifecycle(elite: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; earned-elite Kirov continues its range-edge approach and attacks a second target across saves"]
+    fn aymod_kirov_elite_continuous_bombing_and_target_switch_survive_load() {
+        aymod_kirov_bomb_lifecycle(true, true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_kirov_bomb_lifecycle(elite: bool, continuous: bool) {
         use crate::sim::combat::TargetKind;
         use crate::sim::combat::veterancy::VeterancyRank;
         use crate::sim::command::{Command, CommandEnvelope};
@@ -10165,7 +10172,7 @@ mod retail_construction_tests {
                 .collect::<Vec<_>>();
             spawn_on_free_cells(sim, rules, enemy, sites, &["CAMISC02"])[0]
         };
-        if elite {
+        if elite && !continuous {
             // Range admission includes the building's foundation, whereas a
             // vertical bomb keeps its own launch XY. Approach with a normal
             // Move before testing impact/fuse persistence, not a position write.
@@ -10259,11 +10266,13 @@ mod retail_construction_tests {
         let tick = scene.sim().session.tick() + 1;
         // Stop future releases without deleting or completing the existing
         // projectile. Its normal fall and impact remain authoritative.
-        scene.runtime.simulation.queue_command(CommandEnvelope::new(
-            owner,
-            tick,
-            Command::Stop { entity_id: actor },
-        ));
+        if !continuous {
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Stop { entity_id: actor },
+            ));
+        }
         let bytes = save_scene(&scene, "AY Kirov bomb before impact");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         if elite {
@@ -10293,16 +10302,24 @@ mod retail_construction_tests {
             })
             .collect::<Vec<_>>();
         let mut impact_states = Vec::new();
+        let mut releases_after_load = 0;
+        let impact_limit = if continuous { 1200 } else { 360 };
         assert!(
-            (0..360).any(|_| {
+            (0..impact_limit).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
-                assert!(
-                    !output
-                        .fire_events
-                        .iter()
-                        .any(|event| event.attacker_id == actor),
-                    "the saved falling bomb, not a replacement release, must cause the hit"
-                );
+                let releases = output
+                    .fire_events
+                    .iter()
+                    .filter(|event| event.attacker_id == actor)
+                    .count();
+                if continuous {
+                    releases_after_load += releases;
+                } else {
+                    assert_eq!(
+                        releases, 0,
+                        "the saved falling bomb, not a replacement release, must cause the hit"
+                    );
+                }
                 let state = scene.sim().entities().get(barrel).map(|victim| {
                     (
                         victim.health.current(),
@@ -10319,6 +10336,12 @@ mod retail_construction_tests {
             }),
             "the actual saved bomb must hit and arm the barrel's PostMortem fuse: elite={elite}, states={impact_states:?}, geometry={bomb_geometry:?}"
         );
+        if continuous {
+            assert!(
+                releases_after_load > 0,
+                "the range-edge scenario must include actual subsequent releases, not replace it with an overhead first shot"
+            );
+        }
         let victim = scene.sim().entities().get(barrel).unwrap();
         assert!(victim.is_object_alive());
         assert_eq!(
@@ -10357,6 +10380,80 @@ mod retail_construction_tests {
             }),
             "normal building AI must expire the restored fuse and destroy the barrel"
         );
+        if continuous {
+            let target = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let enemy = house_of(sim, "Russians");
+                let at = sim.entities().get(actor).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    enemy,
+                    cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry()))),
+                    &["GATECH"],
+                )[0]
+            };
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            }));
+            let hp = scene.sim().entities().get(target).unwrap().health.current();
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                scene.sim().session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            ));
+            assert!(
+                (0..1200).any(|_| {
+                    tick_with_due_commands(&mut scene)
+                        .fire_events
+                        .iter()
+                        .any(|event| {
+                            event.attacker_id == actor && event.target == TargetKind::Entity(target)
+                        })
+                }),
+                "ordinary Attack must retarget the same elite airship after the barrel dies"
+            );
+            let bytes = save_scene(
+                &scene,
+                "AY elite Kirov has switched to its second target and released a new bomb",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let mut fired = false;
+            assert!(
+                (0..1200).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    for event in output
+                        .fire_events
+                        .iter()
+                        .filter(|event| event.attacker_id == actor)
+                    {
+                        assert_eq!(event.target, TargetKind::Entity(target));
+                        assert_eq!(scene.sim().interner.resolve(event.weapon_id), expected);
+                        fired = true;
+                    }
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .is_none_or(|entity| entity.health.current() < hp)
+                }),
+                "the restored airship must emit fresh elite bombs at the second target and cause real damage"
+            );
+        }
     }
 
     #[cfg(feature = "npatch")]
