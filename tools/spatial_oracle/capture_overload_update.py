@@ -371,7 +371,7 @@ def metadata():
                       "static_target": STATIC_TARGET_INIT})
 
 
-def joined_inputs(root):
+def joined_inputs(root, *, npatch=False):
     """Selected physical MIND/overload readers on the existing shared VM."""
     from collections import deque
     from types import SimpleNamespace
@@ -384,7 +384,7 @@ def joined_inputs(root):
     from tools.procedural_drawing_oracle.electric_bolt import read_spark_types, prepare_spark_capacity
     import hashlib
 
-    m = host.joined_inputs(root)
+    m = host.joined_inputs(root, npatch=npatch)
     u, read = m.u, m.read32
     proxy = SimpleNamespace(m=m, trace=deque(maxlen=40), events=[], pending={}, frame=0, phase='setup')
 

@@ -541,13 +541,13 @@ def read_repair_reference(inputs, sections):
     return struct.unpack('<i', u.mem_read(inputs.rules + 0x1C4, 4))[0]
 
 
-def prepare_joined_inputs(root, *, layers=None):
+def prepare_joined_inputs(root, *, layers=None, npatch=False):
     # Construction dynamically imports Sound, so this selects an extension of
     # that one reader/allocator owner. No existing primitive is changed.
     original = bridge_child_sound.Sound
     bridge_child_sound.Sound = EngineerInputs
     try:
-        inputs = construction.joined_inputs(root, layers=layers)
+        inputs = construction.joined_inputs(root, layers=layers, npatch=npatch)
     finally:
         bridge_child_sound.Sound = original
     u, read = inputs.u, inputs.read32

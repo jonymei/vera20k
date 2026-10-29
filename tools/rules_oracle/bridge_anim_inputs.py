@@ -64,6 +64,21 @@ class Reader(Lists):
   self.u.mem_write(SP,dwords(RET_MAGIC,*args));self.u.reg_write(UC_X86_REG_ESP,SP);self.u.reg_write(UC_X86_REG_ECX,obj)
   run_checked(self.u,addr,RET_MAGIC,count=instruction_limit,timeout_us=timeout_us,context=context)
   return self.u.reg_read(UC_X86_REG_EAX)
+ def initialize_npatch_rules(self):
+  """Run Startup52BA82/52BB02/52BB07's extension allocation/defaults."""
+  saved=self.u.context_save()
+  try:
+   self.npatch=True
+   self.u.reg_write(UC_X86_REG_EBX,0);self.invoke(0xB97000,0)
+   self.u.reg_write(UC_X86_REG_EBX,0);self.invoke(0xB99000,0)
+  finally:self.u.context_restore(saved)
+ def read_npatch_rules(self,ini):
+  """B96000/C2A2CE supplies the current physical INI in EDI."""
+  saved=self.u.context_save()
+  try:
+   self.u.reg_write(UC_X86_REG_EBX,0);self.u.reg_write(UC_X86_REG_EDI,ini)
+   self.invoke(0xB98000,0)
+  finally:self.u.context_restore(saved)
  def install_waypoint_character_format_transport(self):
   """Supply only ToLetters763610's two Windows wsprintfA calls.
 
@@ -125,6 +140,12 @@ class Reader(Lists):
   for i,(key,pointer) in enumerate(sorted(rows,key=lambda x:struct.unpack('<i',dwords(x[0]))[0])):u.mem_write(items+i*8,dwords(key,pointer))
   u.mem_write(ini_address+0x28,dwords(items,len(rows),len(rows),1,0))
  def hook(self,u,p,n,d):
+  if getattr(self,'npatch',False):
+   if p==0x7C9430:
+    # CRT malloc uses this same bump allocator; strdup's body still executes.
+    super().hook(u,0x7C8E17,n,d);return
+   if p==0x7C978A:
+    self.ret(0);return  # Platform CRT exit registration, not gameplay.
   if p==0x5B40B0:
    name=self.string(u.reg_read(UC_X86_REG_ECX));raw=self.assets.get(name.upper());pointer=0
    if raw:

@@ -577,12 +577,7 @@ class TemporalGunnerReader(BulletReader):
         u.mem_write(0x8871E0, dwords(self.rules))
         self.invoke(0x665650, self.rules)
         if npatch:
-            # Startup52BA82/52BB02/52BB07: real extension allocation and
-            # constructor, not supplied BA700C storage or scalar defaults.
-            u.reg_write(UC_X86_REG_EBX, 0)
-            self.invoke(0xB97000, 0)
-            u.reg_write(UC_X86_REG_EBX, 0)
-            self.invoke(0xB99000, 0)
+            self.initialize_npatch_rules()
         self.types = {'FV': self.alloc(0x1900), 'CLEG': self.alloc(0x1900)}
         self.invoke(0x7470D0, self.types['FV'], (self.cstring('FV'),))
         self.invoke(0x5236A0, self.types['CLEG'], (self.cstring('CLEG'),))
@@ -626,10 +621,7 @@ class TemporalGunnerReader(BulletReader):
             self.invoke(0x674500, self.rules, (RULES,))
             combat = self.invoke(0x66BBB0, self.rules, (RULES,))
             if npatch:
-                # B96000/C2A2CE pass the physical layer's INI in EDI.
-                u.reg_write(UC_X86_REG_EBX, 0)
-                u.reg_write(UC_X86_REG_EDI, RULES)
-                self.invoke(0xB98000, 0)
+                self.read_npatch_rules(RULES)
             type_results = {
                 'FV': self.invoke(0x747620, self.types['FV'], (RULES,)) & 255,
                 'CLEG': self.invoke(0x5240A0, self.types['CLEG'], (RULES,)) & 255,
@@ -689,11 +681,6 @@ class TemporalGunnerReader(BulletReader):
         self.u.hook_add(UC_HOOK_MEM_WRITE, self.observe_write)
 
     def hook(self, u, pc, size, user):
-        if self.npatch and pc == 0x7C9430:
-            # Use the shared allocator transport for CRT malloc; native
-            # strdup still owns its strlen/size/strcpy arithmetic.
-            super().hook(u, 0x7C8E17, size, user)
-            return
         sp = u.reg_read(UC_X86_REG_ESP)
         if Reader.guid_transport(self, u, pc, sp, self.platform):
             return
