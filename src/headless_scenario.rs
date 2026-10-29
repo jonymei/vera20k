@@ -19907,6 +19907,124 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual suicide explosions preserve only same-house same-type peers"]
+    fn aymod_suicide_explosions_spare_only_friendly_same_type_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+
+        for (kind, friendly) in [
+            ("TERROR", true),
+            ("TERROR", false),
+            ("DTRUCK", true),
+            ("DTRUCK", false),
+        ] {
+            let (mut scene, bomber, target) = aymod_nearby_pair(kind, "MTNK", false);
+            let owner = scene.sim().entities().get(bomber).unwrap().owner();
+            let enemy = scene.sim().entities().get(target).unwrap().owner();
+            let (peer, other) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                assert!(rules.object(kind).unwrap().type_immune);
+                sim.houses
+                    .get_mut(&enemy)
+                    .unwrap()
+                    .set_is_human_for_test(true);
+                let at = sim.entities().get(target).unwrap().position;
+                let nearby = |sim: &Simulation| {
+                    cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                        .into_iter()
+                        .filter(|&(x, y)| {
+                            (x - i32::from(at.rx()))
+                                .abs()
+                                .max((y - i32::from(at.ry())).abs())
+                                <= 1
+                                && u16::try_from(x)
+                                    .ok()
+                                    .zip(u16::try_from(y).ok())
+                                    .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let peer = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    if friendly { owner } else { enemy },
+                    nearby(sim),
+                    &[kind],
+                )[0];
+                let other = spawn_on_free_cells(sim, rules, owner, nearby(sim), &["E1"])[0];
+                for id in [bomber, target, peer, other] {
+                    sim.mission_queue_exact(
+                        id,
+                        MissionId::from_known(MissionType::Sleep),
+                        1,
+                        sim.session.binary_frame(),
+                        &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                    )
+                    .unwrap();
+                }
+                (peer, other)
+            };
+            let hp = |scene: &HeadlessScenario, id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .map_or(0, |entity| entity.health.current().max(0))
+            };
+            let before = [peer, other, target].map(|id| hp(&scene, id));
+            assert!(before.iter().all(|&health| health > 0));
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let bytes = save_scene(&scene, "AY suicide explosion before attack");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: bomber,
+                    target_id: target,
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    hp(&scene, bomber) == 0
+                }),
+                "{kind} must actually reach its target and self-destruct"
+            );
+            // Suicide FireAt6FDDC0..6FDE0E returns before ordinary fire events.
+            // No other active shooter exists: death plus blast damage proves the attack.
+            if friendly {
+                assert_eq!(
+                    hp(&scene, peer),
+                    before[0],
+                    "{kind}: friendly same-type peer"
+                );
+            } else {
+                assert!(
+                    hp(&scene, peer) < before[0],
+                    "{kind}: hostile same-type peer must not be immune"
+                );
+            }
+            assert!(
+                hp(&scene, other) < before[1],
+                "{kind}: friendly different-type infantry must not be immune"
+            );
+            assert!(
+                hp(&scene, target) < before[2],
+                "{kind}: the real attack must damage its target"
+            );
+            let after = [peer, other, target].map(|id| hp(&scene, id));
+            let bytes = save_scene(&scene, "AY suicide explosion after detonation");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!([peer, other, target].map(|id| hp(&scene, id)), after);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; typed building ammo and admitted garrison weapon early-return inventory"]
     fn aymod_rearm_early_return_inventory_tracks_buildings_and_occupiers() {
         use crate::rules::object_type::ObjectCategory;

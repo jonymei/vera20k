@@ -6,6 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
+- 本轮补F21作者漏项：恐怖分子/自爆卡车的同方同类型爆炸免伤。实际AY四组普通Attack自爆（两类型各同方/敌方同类型对照）、异型友军受伤、攻击前后完整存读通过；既有TypeImmune与死亡武器owner无需生产修改。V05原始killer控制者修复的独立critic已完成，无可操作发现；固定构建未动，Return Dubai弱攻势继续暂停。
 - 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于574ad0af0修V05原始击杀者的控制者选择：唯一award_kill_experience按702FF0→C2C208/C2C241读原killer的controller，不从经验已重定向的carrier/launcher/occupant取。双向组件回归先失败后通过；实际YURI普通Attack控制BFRT、E1正常上车、终结receiver的两级经验与两次完整存读通过，原未捕获要塞场景通过。NP/stock奖励各7、NP CaptureManager及Veterancy12通过；只读critic独立核对原始指令/生产调用/回归后无可操作发现。经验比例/等级回退/兵种数值不改，固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
@@ -15,6 +16,14 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F21新增作者漏项：自爆单位的同方同类型免伤（2026-10-29）
+
+- 作者170507明确要求恐怖分子与自爆卡车不因同类爆炸一死一片。正式AY Battle生产reader保留TERROR/DTRUCK的TypeImmune；现有唯一receiver_call与damage早门已实现，不添加专属兵种过滤、不改MOD伤害/范围/敌我政策。
+- 独立读实际GameMD.exe的Techno ReceiveDamage7019E3..701A38：需实际攻击者存在、受害TypeImmune、双方GetType相同且House相同才返回。Suicide FireAt6FDDC0..6FDE0E通过正式自伤receiver完成嵌套死亡武器并早返，不产生普通fire_event；测试不把无普通事件误判成未攻击。
+- 新aymod_suicide_explosions_spare_only_friendly_same_type_after_load覆盖两类型各两组边界：正式普通Attack使唯一活跃射手接近MTNK并自爆，附近同方同类型HP保持，另一场敌方同类型真正受伤；同方E1及原敌方目标均真正受伤。不同时混放两方同型炸弹，以免敌方第二次爆炸合法伤害本方对照而混淆免伤归属。其他对象Sleep且对方House设human，仅隔离战斗组件，不称AI自主造兵/突击。
+- 每组攻击前与爆后各完整保存/资源恢复，保留所有对照生命；未手写HP、死亡/弹头来源或伤害事件。源自身死亡和周围实际受伤构成自爆消费者证据，不注入terminal receiver。测试首稿错误要求普通fire_event而失败，按已实读的Suicide早返修夹具后通过；未改生产逻辑来迎合断言。
+- 新实际复合场景1项（四组）通过，既有combat_cloak_damage_tests模块及死亡武器gate/selection/native-damage回归通过。仅测试/台账，无新增状态、RNG抽样、timer写入、Detach或保存字段，不需新玩法critic；未启动GUI、修改MOD/原始存档/固定构建或发布。战斗中被击毁触发、持续辐射/后续残留、同型异House盟友、运输内死亡、多AI与GUI仍开放；不把即时爆炸通过外推到全部自爆生命周期。
 
 ### V05原始击杀者与重定向接收者：控制者选择修复（2026-10-29）
 
@@ -1570,6 +1579,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F19 / P1 / 现有选择与DiskLaser owner，普通/精英实际对照已验 | 旧说明精英飞碟直接打防御，实际两等级均如此 | 十种防御Drainable=false；SelectWeapon6F3558，无精英门 | 实际GAPILL实伤/不吸、保存保持；正常起飞后吸NAPOWR/保存/移走解绑通过。地面fixture起飞切目标、其他塔实弹/多AI/正常出厂仍开放，见F19及C09 |
 
 | F20 / P1 / 已补共享AoE空中门，实际AY死亡施气/存读已验 | 混乱雄蜂死亡施气感染飞行者，兼补F08平面爆炸门 | Apply_area_damage4893BA→7E03A8；WH+130既有别名owner→AoECollector→receiver | NP普通地面爆炸收空中/平面爆炸不收，stock高度门保留；真实CAOS死亡爆炸感染自然起飞JUMPJET及热存读/倒计时通过。只读critic无可操作发现，其他家族/实际对战仍开放 |
+
+| F21 / P1 / 已有免伤owner，实际自爆与存读已验 | 恐怖分子、自爆卡车同方同类型爆炸免伤 | TypeImmune→ReceiveDamage7019E3..701A38；Suicide FireAt6FDDC0→死亡武器→共享receiver | 实际TERROR/DTRUCK普通Attack自爆，各同方/敌方同类型对照及异型友军受伤、攻击前后存读通过；被击毁/持续辐射/运输死亡、多AI及GUI仍待验，不加兵种特例 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
