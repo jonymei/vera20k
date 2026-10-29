@@ -13646,6 +13646,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two already docked ORCAs continue native reload during low power and take off after restored power"]
     fn aymod_two_orcas_keep_reloading_during_saved_airfield_power_loss() {
+        aymod_orca_power_reload("GAAIRC", false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; American AMRADR services existing and newly returning aircraft during low power across saves"]
+    fn aymod_american_airfield_admits_a_new_return_during_saved_low_power() {
+        aymod_orca_power_reload("AMRADR", true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_orca_power_reload(dock: &str, incoming: bool) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::movement::air_movement;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -13661,7 +13673,7 @@ mod retail_construction_tests {
                 .set_is_human_for_test(true);
             let at = sim.entities().get(first).unwrap().position;
             let kind = rules.object("ORCA").unwrap();
-            let dock = kind.dock.first().unwrap();
+            assert!(kind.dock.iter().any(|name| name == dock));
             assert!(rules.object(dock).unwrap().unit_reload && rules.object(dock).unwrap().powered);
             let field = spawn_on_free_cells(
                 sim,
@@ -13792,6 +13804,75 @@ mod retail_construction_tests {
             }),
             "Building MissionRepair UnitReload services existing pad contacts even during low power"
         );
+        let arriving = if incoming {
+            let (plane, target) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let enemy = sim.entities().get(targets[0]).unwrap().owner();
+                let at = sim.entities().get(field).unwrap().position;
+                let plane = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry()))),
+                    &["ORCA"],
+                )[0];
+                let target = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    enemy,
+                    cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry()) + 8)),
+                    &["NACNST"],
+                )[0];
+                assert!(
+                    !sim.entities()
+                        .get(plane)
+                        .unwrap()
+                        .radio_contacts
+                        .contains(field)
+                );
+                assert!(sim.entities().get(field).unwrap().building_online());
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: plane,
+                        target_id: target,
+                    },
+                ));
+                (plane, target)
+            };
+            let mut empty = false;
+            let mut partial = false;
+            assert!(
+                (0..6000).any(|_| {
+                    step(&mut scene);
+                    assert!(scene.sim().power_states[&owner].is_low_power());
+                    assert_eq!(
+                        scene
+                            .sim()
+                            .building_operational_state(field, &scene.runtime.resources.rules),
+                        Some(false)
+                    );
+                    empty |= scene
+                        .sim()
+                        .entities()
+                        .get(plane)
+                        .unwrap()
+                        .ammo()
+                        .unwrap()
+                        .current()
+                        == 0;
+                    partial |= empty
+                        && linked_ammo(&scene, plane).is_some_and(|ammo| ammo > 0 && ammo < capacity);
+                    partial && linked_ammo(&scene, plane) == Some(capacity)
+                }),
+                "a new spent aircraft must actually enter and reload at the online but low-power American airfield"
+            );
+            Some((plane, target))
+        } else {
+            None
+        };
         let bytes = save_scene(
             &scene,
             "AY two ORCAs finished native reload while their airfield remains low power",
@@ -13812,7 +13893,9 @@ mod retail_construction_tests {
                 .building_operational_state(field, &scene.runtime.resources.rules)
                 == Some(true)
         }));
-        for (&plane, &target) in planes.iter().zip(&targets) {
+        let mut sorties = planes.into_iter().zip(targets).collect::<Vec<_>>();
+        sorties.extend(arriving);
+        for &(plane, target) in &sorties {
             scene.runtime.simulation.queue_command(CommandEnvelope::new(
                 owner,
                 scene.sim().session.tick() + 1,
@@ -13827,11 +13910,11 @@ mod retail_construction_tests {
             (0..3000).any(|_| {
                 let output = step(&mut scene);
                 for event in output.fire_events {
-                    if planes.contains(&event.attacker_id) {
+                    if sorties.iter().any(|&(plane, _)| plane == event.attacker_id) {
                         fired.insert(event.attacker_id);
                     }
                 }
-                fired.len() == planes.len()
+                fired.len() == sorties.len()
             }),
             "both same aircraft must depart and fire after the low-power/recovery saves"
         );
