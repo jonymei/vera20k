@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于574ad0af0修V05原始击杀者的控制者选择：唯一award_kill_experience按702FF0→C2C208/C2C241读原killer的controller，不从经验已重定向的carrier/launcher/occupant取。双向组件回归先失败后通过；实际YURI普通Attack控制BFRT、E1正常上车、终结receiver的两级经验与两次完整存读通过，原未捕获要塞场景通过。NP/stock奖励各7、NP CaptureManager及Veterancy12通过；只读critic待跑。经验比例/等级回退/兵种数值不改，固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于574ad0af0修V05原始击杀者的控制者选择：唯一award_kill_experience按702FF0→C2C208/C2C241读原killer的controller，不从经验已重定向的carrier/launcher/occupant取。双向组件回归先失败后通过；实际YURI普通Attack控制BFRT、E1正常上车、终结receiver的两级经验与两次完整存读通过，原未捕获要塞场景通过。NP/stock奖励各7、NP CaptureManager及Veterancy12通过；只读critic独立核对原始指令/生产调用/回归后无可操作发现。经验比例/等级回退/兵种数值不改，固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -23,7 +23,7 @@
 - 新npatch_transport_award_uses_the_shooters_controller_not_the_recipient经正式capture_unit建立关系，再以组件fixture构造精英open rider，覆盖两端：无控制者的乘员在受控载具内，经验仍给载具、不被载具控制者截走；乘员自己受控而载具不受控，则按原乘员控制者分流。修前首边界controller实际获得XP而失败，修后两端通过；stock保持载具奖励。该组件不冒称真实登车准入。
 - 新aymod_captured_fortress_does_not_redirect_its_elite_riders_experience与原要塞例共用一个boarding/经验helper。正式AY普通YURI Attack实际捕获BFRT（仅预置目标Sleep隔离反击），新生本方E1通过普通clicked Enter步行进车，验证载具controller及乘员无controller。实际typed controller_points(100)=100且YURI非精英，排除比例0或精英回退造成的假阳性；两次完整存读保持关系/经验。
 - 击杀阶段复用既有aymod_kill_for_experience，按乘员真实主武器弹头给APOC正式终结receiver：普通乘员自己获得XP、载具仍0，明确精英fixture后下一击给载具正XP，YURI raw始终不增；不是乘员M60弹道/实弹命中或自然升精英的完整战斗验证。控制与登车是真实命令链，不手写controller/Cargo或MOD比例；额外保存后载具XP与控制关系保持。
-- NP/stock奖励模块各7项、新受控与原未受控要塞实际场景各1项、NP capture_manager模块及Veterancy12项通过。无新状态/保存字段、RNG抽样、timer/Detach调用；新得XP可由原等级采样owner正常改变后续能力/manager同步，不承诺保持旧错误归属的后续表现。只读critic待跑；未启动GUI、改MOD/原档/固定版或发布。
+- NP/stock奖励模块各7项、新受控与原未受控要塞实际场景各1项、NP capture_manager模块及Veterancy12项通过。无新状态/保存字段、RNG抽样、timer/Detach调用；新得XP可由原等级采样owner正常改变后续能力/manager同步，不承诺保持旧错误归属的后续表现。只读critic独立核对原始指令/生产调用/回归后无可操作发现；未启动GUI、改MOD/原档/固定版或发布。
 - 尚未覆盖：受控乘员的完整登车准入、海军不同子机的受控终结实弹、在途击杀时控制者退休/换主及自主多AI混战。共有原生分流函数已校正，不以一例关闭V05、既有经验政策或所有母子机生命周期。
 
 ### F20新增作者漏项及F08补链：地面混乱爆炸感染空中单位（2026-10-29）
