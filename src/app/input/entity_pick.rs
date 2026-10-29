@@ -737,21 +737,54 @@ fn type_select_candidates(
             let type_id = interner.map_or("", |i| i.resolve(entity.type_ref()));
             if !entity.lifecycle.object_alive()
                 || local_owner.is_some_and(|local| !owner.eq_ignore_ascii_case(local))
-                || !seeds.contains(&entity.type_ref())
                 || (screen_only
                     && entity.category() != EntityCategory::Structure
                     && !is_drawn_for_local_owner(fog, local_owner, owner, entity, local_owner_id))
             {
                 return None;
             }
-            let dynamic = selection_dynamic_prefix(entity, entities, rules, interner)
+            let exact = seeds.contains(&entity.type_ref());
+            let dynamic = exact
+                && selection_dynamic_prefix(entity, entities, rules, interner)
                 && type_is_selectable(type_id, rules)
                 && (!require_playfield_membership || entity.in_playfield());
-            let undeploying_building_fallback = entity.category() == EntityCategory::Structure
+            #[cfg(not(feature = "npatch"))]
+            let building_fallback = entity.category() == EntityCategory::Structure
+                && exact
                 && rules
                     .and_then(|r| r.object(type_id))
                     .is_some_and(|object| object.undeploys_into.is_some());
-            (dynamic || undeploying_building_fallback).then_some(*id)
+            #[cfg(feature = "npatch")]
+            let building_fallback = entity.category() == EntityCategory::Structure
+                && (exact
+                    || rules
+                        .and_then(|r| r.object(type_id))
+                        .is_some_and(|candidate| {
+                            // TypeSelect732C7A -> NPAE C2CABA/C2CBC3 replaces the
+                            // UndeploysInto check: equal types, or equal Naval plus
+                            // nonzero raw Factory RTTI (Cloning with no Factory is16),
+                            // or two UnitRepair buildings. Do not normalize RTTI aliases.
+                            let factory =
+                                |object: &crate::rules::object_type::ObjectType| match object
+                                    .factory_rtti()
+                                {
+                                    0 if object.cloning => 16,
+                                    raw => raw,
+                                };
+                            seeds.iter().any(|seed| {
+                                interner
+                                    .and_then(|i| rules.and_then(|r| r.object(i.resolve(*seed))))
+                                    .is_some_and(|source| {
+                                        source.category
+                                            == crate::rules::object_type::ObjectCategory::Building
+                                            && candidate.naval == source.naval
+                                            && ((factory(candidate) != 0
+                                                && factory(candidate) == factory(source))
+                                                || candidate.unit_repair && source.unit_repair)
+                                    })
+                            })
+                        }));
+            (dynamic || building_fallback).then_some(*id)
         })
         .collect()
 }
@@ -1001,7 +1034,7 @@ pub(crate) fn selection_dynamic_prefix(
     interner: Option<&crate::sim::intern::StringInterner>,
 ) -> bool {
     // BuildingClass answers false on the ordinary dynamic selection virtual.
-    // TypeSelect owns the verified UndeploysInto fallback separately.
+    // TypeSelect owns its stock UndeploysInto / NP building-group fallback separately.
     if entity.category() == EntityCategory::Structure {
         return false;
     }
@@ -1238,6 +1271,182 @@ mod tests {
         entity.lifecycle.set_in_limbo_for_test(false);
         entity.selection.set_selected_for_test(selected);
         entity
+    }
+
+    fn building_type_tap(
+        rules: &RuleSet,
+        names: &[(&str, bool)],
+        seed: u64,
+        screen_count: usize,
+        across_map: bool,
+    ) -> TypeSelectTapResult {
+        let mut sim = crate::sim::world::Simulation::new();
+        let local = sim.intern("Americans");
+        let other = sim.intern("Other");
+        sim.session_mut_for_test()
+            .set_current_house_for_test(Some(local));
+        sim.session_mut_for_test()
+            .set_game_mode(crate::sim::scenario_session::ScenarioGameMode::from_legacy_nonzero(true));
+        sim.houses_mut_for_test()
+            .register(crate::sim::house_state::HouseState::new(
+                local, 0, None, true, 0, 10,
+            ));
+        for (index, &(name, foreign)) in names.iter().enumerate() {
+            assert_eq!(
+                rules.object(name).unwrap().category,
+                crate::rules::object_type::ObjectCategory::Building
+            );
+            let type_ref = sim.intern(name);
+            let entity = item83_entity(
+                index as u64 + 1,
+                10,
+                10,
+                if foreign { other } else { local },
+                type_ref,
+                EntityCategory::Structure,
+                index as u64 + 1 == seed,
+            );
+            sim.entities_mut_for_test().insert(entity);
+        }
+        let map: Vec<_> = (1..=names.len() as u64).collect();
+        let result = compute_type_select_tap_with_playfield(
+            sim.entities(),
+            &map[..screen_count],
+            &map,
+            &[seed],
+            None,
+            Some("Americans"),
+            Some(rules),
+            Some(sim.interner()),
+            across_map,
+            false,
+        );
+        let mut requested = vec![seed];
+        requested.extend(
+            result
+                .mutation
+                .select
+                .iter()
+                .copied()
+                .filter(|&id| id != seed),
+        );
+        assert!(sim.apply_command(
+            "Americans",
+            &crate::sim::command::Command::Select {
+                entity_ids: requested,
+                additive: true,
+            },
+            Some(rules),
+        ));
+        for id in map {
+            assert_eq!(
+                sim.entities().get(id).unwrap().selection.is_selected(),
+                id == seed || result.mutation.select.contains(&id)
+            );
+        }
+        result
+    }
+
+    #[test]
+    fn np_building_type_tap_groups_factories_but_keeps_naval_owner_and_scope_gates() {
+        let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules_for_map("XMP03T4.MAP")
+        else {
+            return;
+        };
+        let names = [
+            ("GAWEAP", false),
+            ("NAWEAP", false),
+            ("YAWEAP", false),
+            ("GAYARD", false),
+            ("NAYARD", false),
+            ("NAWEAP", true),
+            ("NAWEAP", false),
+        ];
+        let screen = building_type_tap(&retail.rules, &names, 1, 6, false);
+        let map = building_type_tap(&retail.rules, &names, 1, 6, true);
+        let naval = building_type_tap(&retail.rules, &names, 4, 6, false);
+        if cfg!(feature = "npatch") {
+            assert_eq!(screen.mutation.select, [1, 2, 3]);
+            assert!(!screen.across_map);
+            assert_eq!(map.mutation.select, [1, 2, 3, 7]);
+            assert!(map.across_map);
+            assert_eq!(naval.mutation.select, [4, 5]);
+        } else {
+            assert!(screen.mutation.select.is_empty());
+            assert!(map.mutation.select.is_empty());
+            assert!(naval.mutation.select.is_empty());
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn np_building_type_tap_does_not_normalize_raw_factory_rtti_aliases() {
+        let rules = RuleSet::from_ini(&crate::rules::ini_parser::IniFile::from_str(
+            "[BuildingTypes]\n0=OBJECTFACTORY\n1=TYPEFACTORY\n\
+             [OBJECTFACTORY]\nFactory=Unit\n\
+             [TYPEFACTORY]\nFactory=UnitType\n",
+        ))
+        .unwrap();
+        assert_eq!(rules.object("OBJECTFACTORY").unwrap().factory_rtti(), 1);
+        assert_eq!(rules.object("TYPEFACTORY").unwrap().factory_rtti(), 40);
+        assert_eq!(
+            building_type_tap(
+                &rules,
+                &[("OBJECTFACTORY", false), ("TYPEFACTORY", false)],
+                1,
+                2,
+                false
+            )
+            .mutation
+            .select,
+            [1]
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual root cloning/barracks, repair and exact defensive building type selection"]
+    fn aymod_root_building_type_tap_groups_cloning_and_repair_without_grouping_defenses() {
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let ini = crate::rules::ini_parser::IniFile::from_bytes(
+            &std::fs::read(root.join("rulesmd.ini")).unwrap(),
+        )
+        .unwrap();
+        let rules = RuleSet::from_ini(&ini).unwrap();
+        let clone = rules.object("NACLON").unwrap();
+        assert!(clone.cloning);
+        assert_eq!(clone.factory_rtti(), 0);
+        let names = [
+            ("NAHAND", false),
+            ("GAPILE", false),
+            ("YABRCK", false),
+            ("NACLON", false),
+            ("GADEPT", false),
+            ("NADEPT", false),
+            ("TESLA", false),
+            ("GAPILL", false),
+            ("NAHAND", true),
+        ];
+        for seed in [1, 4] {
+            assert_eq!(
+                building_type_tap(&rules, &names, seed, 9, false)
+                    .mutation
+                    .select,
+                [1, 2, 3, 4]
+            );
+        }
+        assert_eq!(
+            building_type_tap(&rules, &names, 5, 9, false)
+                .mutation
+                .select,
+            [5, 6]
+        );
+        assert_eq!(
+            building_type_tap(&rules, &names, 7, 9, false)
+                .mutation
+                .select,
+            [7]
+        );
     }
 
     #[test]

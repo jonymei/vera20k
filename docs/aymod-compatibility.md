@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于32ea13e2e继续铁幕/护盾混合功能：正常双向Ally，独立施放House实际先IC后FS/先FS后IC两路；第一段完整存读后再发第二种，严格按最后发射的kind和原配置duration覆盖，不取最大值。第二段存读保留timer/kind、两个超武fade、护盾施放方blackout及射手rearm；受保护方blackout逐帧0，已有攻击持续免伤且最终到期恢复实际伤害。新复合1/原单保护复合1/invulnerability6/force_shield8通过。无生产修改/新critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于04db842a9发现并修F14漏项：作者建筑TypeSelect扩展未接，原重工短按T回归先红([]而非三阵营自有重工)。实际732C7A→C2CABA/C2CBC3按同类型、Naval+非零原始Factory、Cloning视16或双UnitRepair分组，接入原type_select_candidates，不扩展held鼠标/框选。NP实体选择9/导航18/AY根实际1、stock实体选择8/导航18通过，Select快照位也验；原生指令静读，无新增原生执行/RNG/timer/Detach/保存字段。输入UI改动不另起玩法critic，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,15 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F14新增漏项：建筑“选择同类”短按T的NP分组（2026-10-29）
+
+- 作者《内容介绍170507版》明确要求：防御建筑可选同类型；生产建筑跨阵营同类选中，复制中心视同兵营。旧type_select_candidates先要求精确seed，再用Building普通dynamic=false及仅UndeploysInto fallback，普通重工/兵营/防御建筑连同型都被拒。新增真实retail三阵营重工回归在修复前实际失败：select=[]，应为本方GAWEAP/NAWEAP/YAWEAP；不是配置或权重问题。该功能此前未进入F表，本轮补F14，不将旧库存计数当完整性证明。
+- 实读实际AY原生TypeSelect732950两处732A91/732B34→732C30，Building RTTI6分支732C7A调用C2CABA；该helper取候选类型：同类型直接true，异类型须Naval(+CCE)相同，比较非零原始Factory(+EB8)；Factory=0且BuildingType RTTI7的Cloning(+16AC)按16看待；工厂不匹配再接受双方UnitRepair(+16A9)。C2CBC3严格比较原始值，不把Unit1与UnitType40或其他别名归一。非建筑seed的越类内存别名不在本轮证明范围，不仿造无类型raw内存读取。
+- 沿唯一type_select_candidates修正NP fallback，保持普通单位的精确seed/dynamic路径、原owner/alive/屏幕与全图范围/最终static准入。普通建筑精确同型无需UndeploysInto；跨阵营不硬编码兵种名。stock保留原UndeploysInto门，不全局放开建筑拖框，也不改held TypeSelect+点击/框选的exact_type_group。静态direct-caller候选仅上述短按路径，不能据此宣称所有间接调用穷尽；现有keyboard dispatch1636仍调用同一生产入口。
+- 三个聚焦回归：retail正式Battle/XMP03T4的三阵营重工、Naval隔离、异主排除与全图范围；生产reader的raw Factory=Unit1/UnitType40严格不混组；真实AY rulesmd根正式reader的兵营/复制中心双向分组、维修厂分组和TESLA不混GAPILL。测试生成候选后还送既有Command::Select快照receiver，核每个对象最终selection位；没有跨模块扩大dispatch私有状态。未驱动完整AppState的T键事件、真实屏幕遍历或GUI，不冒称已经真人验收。AY例只核根配置，未冒称全部地图覆盖层。
+- 最终retail gate下NP entity_pick9通过/2ignored、selection_navigation18通过；AY实际ignored显式单跑1通过；stock entity_pick8通过/1ignored、selection_navigation18通过，共54项通过，不重复计ignored。初次导航过滤器路径错得0项，已改selection_navigation::并实际运行NP/stock各18。测试增强初稿曾试图从另一模块访问私有dispatch resolver导致编译失败，未扩大权限，改用已有公开Select receiver并通过最终编译/测试。
+- 无新增模拟状态、RNG抽样、timer写入、Detach或保存字段；多选带来的既有声音/后续玩家指令仍走原owners，不宣称与原错误路径抽样完全相同。按review.md的UI/input范围不另开玩法critic；未启动GUI、改MOD/原始存档/固定构建或发布。实际屏幕/键盘节奏、重复短按、热键重绑及各地图配置覆盖仍待验；完整MOD目标不关闭。下一项应继续作者说明漏项复核，尤其防御建筑选中范围，不能只对原F01–F13重复加场景。
 
 ### 铁幕与护盾先后覆盖：正常联盟、两次保存及独立停电（2026-10-29）
 
@@ -1454,6 +1463,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F11 / P2 / reader已接、运行时仍开放 | 心灵终结器独立光照：超武 section 的 NP 读取已保留，覆盖效果尚未接通，不等于 stock 全局光照缺失 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`src/rules/superweapon_type.rs`；`src/sim/superweapon/psychic_dominator.rs:8` 当前使用 map 的 Dominator profile | #174 启动、叠加/互斥、渐变和复原；实际输出验证，覆盖取消/结束/存读档，不污染下一次超武 |
 | F12 / P2 / 遭遇战16色及科技设置链已接，网络边界开放 | 扩展遭遇战UI：原8色错配、科技设置及完整MPC连续目录已接，普通滚动点击、启动准入/随机/偏好重开/House传递和无窗口GPU通过 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；目录由启动root唯一helper派生，UI/runtime缓存共用；stock仍8，原生network human随机仍8，local/AI随机按扩展范围 | 完整遭遇战链见F12对应节；BC/BD与WOL My Information已共用扩展目录、偏好恢复和palette；完整AppState/compositor、旧MenuColors及真实网络接收/重连/同色策略、全部popup GPU与玩家GUI仍开放，不把单屏通过称所有UI已兼容 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
+| F14 / P1 / 建筑短按同类选择已修，GUI/完整输入待验 | 作者新增建筑TypeSelect：同型防御、跨阵营生产类、复制中心视兵营；旧实现普通建筑被dynamic拒绝 | TypeSelect732C7A→C2CABA/C2CBC3；`src/app/input/entity_pick.rs::type_select_candidates`复用原seed/范围/owner/最终准入与Select receiver，比较原始Factory，不混Naval；stock不变 | 红测后NP/stock定向及真实AY根分组通过；完整AppState键盘/屏幕、重复短按、重绑/地图覆盖与GUI仍开放，不改held鼠标或建筑拖框 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
