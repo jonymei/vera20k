@@ -13504,6 +13504,7 @@ mod retail_construction_tests {
     fn aymod_sixth_fortress_passenger_reuses_first_firing_port() {
         use crate::sim::combat::fire_coord::{FireSource, fire_coordinate};
         use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scenario, carrier, first) = aymod_nearby_pair("BFRT", "E1", true);
         let mut riders = vec![first];
         {
@@ -13554,9 +13555,11 @@ mod retail_construction_tests {
             .passenger_role
             .cargo()
             .unwrap()
-            .passengers();
+            .passengers()
+            .to_vec();
         assert_eq!(cargo.len(), 6, "all six actual Enter missions must board");
-        let coord = |id| {
+        let coord = |scenario: &HeadlessScenario, id| {
+            let sim = scenario.sim();
             let entity = sim.entities().get(id).unwrap();
             fire_coordinate(
                 sim,
@@ -13571,15 +13574,173 @@ mod retail_construction_tests {
             .coord
         };
         assert_eq!(
-            coord(cargo[5]),
-            coord(cargo[0]),
+            coord(&scenario, cargo[5]),
+            coord(&scenario, cargo[0]),
             "NPAE174 cycles five ports; ART5/6 are not enabled"
         );
         assert_ne!(
-            coord(cargo[4]),
-            coord(cargo[0]),
+            coord(&scenario, cargo[4]),
+            coord(&scenario, cargo[0]),
             "the fifth port must not be collapsed too"
         );
+        let original_port = coord(&scenario, cargo[0]);
+        let fortress = scenario.sim().entities().get(carrier).unwrap();
+        let owner = fortress.owner();
+        let origin = fortress.position;
+        let facing = fortress.body_facing_current(scenario.sim().session.binary_frame() as u32);
+        let destination = cells_nearest((i32::from(origin.rx()), i32::from(origin.ry())))
+            .into_iter()
+            .filter(|&(x, y)| x - i32::from(origin.rx()) >= 4 && y - i32::from(origin.ry()) >= 2)
+            .find_map(|(x, y)| {
+                let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                let sim = scenario.sim();
+                (sim.terrain_cell_level(x, y) == Some(origin.z())
+                    && sim.mover_can_enter(
+                        carrier,
+                        (x as i16, y as i16),
+                        crate::sim::movement::infantry_entry::InfantryEntryArgs::REPAIR,
+                        crate::sim::movement::infantry_entry::EntryQueryMode::CheckLocomotor,
+                        &scenario.runtime.resources.rules,
+                        Some(&scenario.runtime.resources.overlay_registry),
+                    ) == Ok(0))
+                .then_some((x, y))
+            })
+            .expect("a same-level destination requiring a real turn");
+        let tick = scenario.sim().session.tick() + 1;
+        scenario
+            .runtime
+            .simulation
+            .queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Move {
+                    entity_id: carrier,
+                    target_rx: destination.0,
+                    target_ry: destination.1,
+                },
+            ));
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scenario);
+            let fortress = scenario.sim().entities().get(carrier).unwrap();
+            crate::sim::movement::ground_pose::position_world_coord(&fortress.position)
+                != crate::sim::movement::ground_pose::position_world_coord(&origin)
+                && crate::sim::movement::motion_query::is_moving(fortress) == Some(true)
+        }));
+        let pristine = scenario.sim().resolved_terrain().unwrap().clone();
+        let moving_port = coord(&scenario, cargo[5]);
+        let bytes = save_scene(
+            &scenario,
+            "AY sixth firing port during ordinary fortress movement",
+        );
+        scenario.runtime.simulation = restored_retail(&scenario, &pristine, &bytes);
+        assert_eq!(coord(&scenario, cargo[5]), moving_port);
+        assert!((0..1800).any(|_| {
+            tick_with_due_commands(&mut scenario);
+            let fortress = scenario.sim().entities().get(carrier).unwrap();
+            (fortress.position.rx(), fortress.position.ry()) == destination
+                && fortress.navigation.nav_com().is_none()
+                && crate::sim::movement::motion_query::is_moving(fortress) == Some(false)
+        }));
+        assert_ne!(
+            scenario
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .body_facing_current(scenario.sim().session.binary_frame() as u32),
+            facing,
+            "ordinary movement must exercise a turned, not just translated, firing basis"
+        );
+        {
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            // Isolate the passengers' births from the carrier's own attack/turn.
+            sim.mission_queue_exact(
+                carrier,
+                crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+        }
+        for _ in 0..60 {
+            tick_with_due_commands(&mut scenario);
+        }
+        let ports = cargo
+            .iter()
+            .map(|&id| coord(&scenario, id))
+            .collect::<Vec<_>>();
+        assert_ne!(ports[0], original_port);
+        assert_eq!(ports[5], ports[0]);
+        assert_ne!(ports[4], ports[0]);
+        let target = {
+            let runtime = &mut scenario.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let enemy = house_of(sim, "Russians");
+            let sites = cells_nearest((i32::from(destination.0), i32::from(destination.1)))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(destination.0))
+                        .abs()
+                        .max((y - i32::from(destination.1)).abs())
+                        == 3
+                });
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["BFRT"])[0];
+            sim.mission_queue_exact(
+                target,
+                crate::sim::mission::MissionId::from_known(crate::sim::mission::MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            target
+        };
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+                (0..360).any(|_| {
+                    let output = tick_with_due_commands(&mut scenario);
+                    for event in &output.fire_events {
+                        if let Some(port) = cargo.iter().position(|&id| id == event.attacker_id)
+                            && event.target == crate::sim::combat::TargetKind::Entity(target)
+                        {
+                            assert_eq!(event.fire_coord, ports[port], "actual shot must use its moved/turned port, including the sixth rider's wrap");
+                            fired.insert(event.attacker_id);
+                        }
+                    }
+                    fired.len() == 6
+                }),
+                "all six riders must emit real shots after movement/load: {fired:?}, riders={:?}, target={:?}",
+                cargo
+                    .iter()
+                    .map(|&id| {
+                        let rider = scenario.sim().entities().get(id).unwrap();
+                        (
+                            rider.mission.effective(),
+                            rider.attack_target.target(),
+                            rider.passenger_role.open_transport_id(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                scenario.sim().entities().get(target).map(|target| (
+                    target.health.current(),
+                    target.lifecycle.in_limbo(),
+                    target.mission.effective()
+                ))
+            );
+        let ports = cargo
+            .iter()
+            .map(|&id| coord(&scenario, id))
+            .collect::<Vec<_>>();
+        let bytes = save_scene(
+            &scenario,
+            "AY six actual transformed passenger firing ports",
+        );
+        scenario.runtime.simulation = restored_retail(&scenario, &pristine, &bytes);
+        for (port, &id) in cargo.iter().enumerate() {
+            assert_eq!(coord(&scenario, id), ports[port]);
+        }
     }
 
     #[cfg(feature = "npatch")]
