@@ -25096,6 +25096,192 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; naturally harvested ore receives only the refinery owner's Ore Processor bonus across source loss and transfer"]
+    fn aymod_ore_processor_bonus_follows_refinery_owner_on_real_saved_delivery() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, refinery, _) = aymod_nearby_pair("NAREFN", "GAPOWR", false);
+        let owner = scene.sim().entities().get(refinery).unwrap().owner();
+        let other = house_of(scene.sim(), "Russians");
+        let processor = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&other)
+                .unwrap()
+                .set_is_human_for_test(true);
+            assert_eq!(
+                rules.object("NAREFN").unwrap().free_unit.as_deref(),
+                Some("HARV")
+            );
+            assert_eq!(rules.general.purifier_bonus.bits(), 0x3F00_0000);
+            let at = aymod_anchor(sim, owner);
+            let ids = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((at.0 + 12, at.1)),
+                &["GAOREP", "NANRCT"],
+            );
+            spawn_on_free_cells(
+                sim,
+                rules,
+                other,
+                cells_nearest(aymod_anchor(sim, other)),
+                &["NANRCT"],
+            );
+            ids[0]
+        };
+        let mut miner = None;
+        assert!(
+            (0..18000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                let finished = sim
+                    .entities()
+                    .get(processor)
+                    .is_some_and(|entity| !entity.building_up());
+                miner = sim
+                    .entities()
+                    .values()
+                    .find(|entity| {
+                        entity.owner() == owner
+                            && sim.interner.resolve(entity.type_ref()) == "HARV"
+                            && entity
+                                .miner
+                                .as_ref()
+                                .is_some_and(|miner| !miner.cargo().is_empty())
+                            && matches!(
+                                entity.mission.effective().known(),
+                                Some(MissionType::Enter | MissionType::Unload)
+                            )
+                    })
+                    .map(|entity| entity.stable_id());
+                finished && miner.is_some()
+            }),
+            "the refinery's original free miner must really harvest and start a loaded delivery"
+        );
+        let miner = miner.unwrap();
+        let cargo = scene
+            .sim()
+            .entities()
+            .get(miner)
+            .unwrap()
+            .miner
+            .as_ref()
+            .unwrap()
+            .cargo()
+            .to_vec();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY naturally harvested cargo returning with an Ore Processor",
+        );
+        let mut deliveries = Vec::new();
+        for case in ["keep", "remove", "transfer"] {
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(miner)
+                    .unwrap()
+                    .miner
+                    .as_ref()
+                    .unwrap()
+                    .cargo(),
+                cargo
+            );
+            {
+                let runtime = &mut scene.runtime;
+                if case == "remove" {
+                    runtime
+                        .simulation
+                        .uninit_with_rules(processor, &runtime.resources.rules);
+                } else if case == "transfer" {
+                    runtime.simulation.change_owner_with_rules(
+                        processor,
+                        other,
+                        &runtime.resources.rules,
+                        Some(&runtime.resources.overlay_registry),
+                        Default::default(),
+                    );
+                }
+            }
+            let mut delivery = None;
+            assert!(
+                (0..3600).any(|_| {
+                    let sim = scene.sim();
+                    let before_cargo = sim
+                        .entities()
+                        .get(miner)
+                        .unwrap()
+                        .miner
+                        .as_ref()
+                        .unwrap()
+                        .cargo()
+                        .to_vec();
+                    let before_money = sim.houses[&owner].economy().available_money();
+                    let before_timer = sim
+                        .entities()
+                        .get(processor)
+                        .map(|entity| entity.produce_cash.timer());
+                    tick_with_due_commands(&mut scene);
+                    let sim = scene.sim();
+                    let entity = sim.entities().get(miner).unwrap();
+                    assert!(entity.is_ai_alive());
+                    let after_cargo = entity.miner.as_ref().unwrap().cargo();
+                    if after_cargo.len() >= before_cargo.len() {
+                        return false;
+                    }
+                    assert_eq!(entity.radio_contacts.slot(0), Some(refinery));
+                    assert_eq!(sim.entities().get(refinery).unwrap().owner(), owner);
+                    // Read the existing cash owner's actual rearm to separate a
+                    // coincident passive pulse, not another copy of its fire gate.
+                    let passive = sim
+                        .entities()
+                        .get(processor)
+                        .filter(|processor| processor.owner() == owner)
+                        .map_or(0, |processor| {
+                            if before_timer.is_some_and(|timer| {
+                                timer.start_frame() != processor.produce_cash.timer().start_frame()
+                            }) {
+                                scene
+                                    .runtime
+                                    .resources
+                                    .rules
+                                    .object("GAOREP")
+                                    .unwrap()
+                                    .produce_cash_amount
+                            } else {
+                                0
+                            }
+                        });
+                    let income =
+                        sim.houses[&owner].economy().available_money() - before_money - passive;
+                    assert!(income > 0);
+                    delivery = Some((before_cargo, after_cargo.to_vec(), income));
+                    true
+                }),
+                "{case}: the same loaded miner must unload naturally into the same refinery"
+            );
+            deliveries.push(delivery.unwrap());
+        }
+        assert_eq!(deliveries[0].0, deliveries[1].0);
+        assert_eq!(deliveries[0].0, deliveries[2].0);
+        assert_eq!(deliveries[0].1, deliveries[1].1);
+        assert_eq!(deliveries[0].1, deliveries[2].1);
+        assert_eq!(
+            deliveries[1].2, deliveries[2].2,
+            "a purifier held by the other House must not boost this refinery"
+        );
+        // Unit73E4A9/73E4C9 pays base and bonus separately. Original numeric
+        // execution for this 25-bale/Value25 case pays 625 + 312, not 937.5.
+        assert_eq!(deliveries[0].2, deliveries[1].2 + deliveries[1].2 / 2);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Ore Processor passive income preserves cadence, power gates and ownership through saves"]
     fn aymod_ore_processor_passive_income_follows_power_and_owner_after_load() {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};

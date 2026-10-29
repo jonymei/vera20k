@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线a9e361cf9，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F28矿石精炼器独立定时收入遗漏项。正式AY GAOREP typed OrePurifier/Powered、ProduceCashAmount4/Delay15/Startup0；真实供电后正常帧连续三笔+4，相邻支付14帧（原43FD2C remaining1后重臂），活计时/缺电/换主及退休共四次完整存读。缺电停付/复电续付，仅新House收款，退休双方停付；原钱包/计时均保留，不刷钱/计时或手动调用cash step。实际1、credit_income12共13通过，无生产修复/新critic。设施/电源/直接换主/UnInit为fixture，交矿倍率实际采矿及付费科技树/自主AI尚未验，F28不全关闭。固定版未动，无GUI/MOD/原档/发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作补F28真实采矿交矿加成及其Owner生命周期，不把独立定时收入当交矿加成证据。
+- 本轮基线9eeca78a2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：F28续补实际采矿/交矿倍率。正式AY NAREFN施工自动产原HARV，正常帧真实采矿并载货进入Enter/Unload，完整保存后同一原货物/矿车/矿场分别运行保留GAOREP/UnInit移除/转交另一human House三分支；第一次实际卸货的前后cargo完全一致，移除与换主收入相等，原House保留时额外50%奖励按原生两次入账分别截断。用原现金owner实际重臂变化扣分离恰好同帧的+4定时收入，不混作交矿奖励。原生隔离unit_case(25bales/Value25/Income1/Bonus.5/count0和1)实际为625与937，纠正初稿精确1.5整数比断言，非生产缺陷；未存新执行语料/工具。最终实际2（含原定时收入）、refinery_dock_oracle10、income_tests1，共13通过。无生产修复/新critic，矿场/精炼器/电源为fixture、矿车是原FreeUnit，非设施付费/多AI；固定版未动，无GUI/MOD/原档/发布，Return Dubai及各设计门禁不变。下一安全动作继续其他高频功能/作者遗漏或实际多AI补员，不把本次单矿车一槽交矿外推为全部经济闭环。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -201,6 +201,14 @@
 - 新aymod_ore_processor_passive_income_follows_power_and_owner_after_load，正式Battle/XMP03T4、两独立human控制House，GAOREP及双方NANRCT正常施工/供电为输入，不生矿车/工厂/别的现金源。每帧核双方实际可用钱包差值，正常运行连续三笔各+4，另一House钱包不动；相邻支付14逻辑帧与Building Update43FD2C..43FDD6的remaining==1、重臂15相符，不把配置15改成14。活计时阶段第一次完整存读精确保留原CdTimer与钱包，随后真实续付。
 - 通过已有go_building_offline关闭NANRCT而非GAOREP（原配置TogglePower=no）；正常帧要求低电/精炼器不可运行，第二次完整存读后45帧不付。恢复电源/等待operational后再收三笔。第三次正式存读覆盖共享ChangeOwner receiver交另一House后的状态，原House钱包不变、只新House各+4续付；此建筑Capturable=false，换主是边界输入，不称工程师准入。随后UnInit退休，双方各45帧不付，第四次完整存读后再45帧仍不付。
 - 最终新实际1、credit_income::tests12共13项通过。无生产修复/新权威状态/保存字段/RNG/timer/Detach实现或新玩法critic，计时重臂与换主/退休副作用仍归原owner。不写钱包/现金计时、不直接调用ProduceCash step、不改MOD/原档/固定版或发布，未启动GUI。实际付费建造、交矿倍率/多座叠加、EMP/战斗死亡与自主多AI仍开放。
+
+
+### F28续验：真实矿物的精炼奖励与同一保存三分支（2026-10-29）
+
+- 新aymod_ore_processor_bonus_follows_refinery_owner_on_real_saved_delivery，正式AY Battle/XMP03T4生成NAREFN/GAOREP及双方电源，另一House设human隔离；玩家House无其他收入设施/工厂。矿场按原FreeUnit=HARV正常施工出车，不手放矿车、装cargo、补矿或发采矿/返厂指令。等待原HARV自然采矿后带货进入Enter/Unload且GAOREP施工结束，再完整保存；生产typed PurifierBonus确为0.5，原货物恢复后逐项不变。
+- 同一保存分别正常运行keep、UnInit移除精炼器、共享ChangeOwner将精炼器转交另一human House。每个分支都要求同一原矿车活着、与同一原矿场有radio联系、cargo实际减少并向矿场原House增加钱包；逐分支核卸货前后cargo向量完全相等。以原ProduceCash权威计时的实际重臂变化识别同帧被动收入，扣除仅本House那笔+4，不另写发放门或把收入混作矿物收益。移除和转交另一House的交矿所得相等，只有同House精炼器有额外奖励；保留与无源的比较按原生分次入账截断。
+- 初稿精确整数1.5比得到1874/1875不等。已沿原Unit73E4A9/73E4C9分别调用House Add_Tiberium_Credits4F9610的owner，用现有tools.spatial_oracle.refinery_income的common/unit_case在隔离模拟器实际执行当前AY算术，amount25、Value25、Income1、PurifierBonus0.5、有效计数0/1：原生分别增加625及937（基础625，奖励312），与实际Rust交矿一致；不是新的经济故障。仅两个算术内核执行，不运行原生整局/采矿/House计数，不新增语料/脚本/日志入库。测试比较基础所得加截断的50%，不改生产取整或MOD配置。
+- 最终aymod_ore_processor_两实际场景2、world::refinery_dock_oracle_tests10、miner::refinery_dock::income_tests1，共13通过；未重跑上一节credit_income12，不重复计数。初稿NativeF32Bits不存在的to_f32编译错误改为核对原保留bits，不扩生产API。仅测试/台账，无生产状态/RNG/timer/Detach/保存布局变化或新玩法critic。设施生成与直接移除/换主是fixture，尚非人类付费科技树或自主多AI；矿车真实采矿/原货物/正常入场卸货成立。其他矿物槽/多个卸货者、多座奖励/AI虚拟数、精炼器停电的加成政策及战斗死亡/长期经济仍开放。未启动GUI、改MOD/原档/固定版或发布。
 
 ### F27作者漏项：精英病毒狙击手的基因变异子弹（2026-10-29）
 
@@ -1783,7 +1791,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F27 / P1 / 实际击杀晋升/精英发射/死亡动画产物与三次存读已验 | 精英病毒狙击手改用基因变异子弹 | VIRUS.ElitePrimary=VirusgunE→VirusM.InfDeath9→GENDEATH→原MakeInfantry owner | 普通Attack实际击杀晋升、精英弹实射、动画中保存及唯一归攻击方BRUTE落地、产物保存后不重复生成已验。驻军弹/空中免伤/建筑桥梁准入/产物战斗/多AI及画面仍待验，单位/受控House为fixture |
 
-| F28 / P1 / 独立定时收入及电力/换主/退休存读已验，交矿加成待验 | 矿石精炼器既给交矿加成，也单独产生收入 | GAOREP OrePurifier/ProduceCashAmount4/Delay15/Startup0；原credit_income43FD2C及miner purifier owners | 正式AY正常逐笔收入、活timer保存、缺电停付/复电续付、换主仅新House收款、退休停付和四次完整存读已验。实际采矿倍率、科技树付款、叠加/EMP/战斗死亡及多AI仍待验，不把定时收入混作交矿加成 |
+| F28 / P1 / 定时收入及真实交矿加成/换主移除存读已验，扩展待验 | 矿石精炼器既给交矿加成，也单独产生收入 | GAOREP OrePurifier/ProduceCashAmount4/Delay15/Startup0；原credit_income43FD2C及miner purifier owners | 正式AY正常逐笔收入、活timer保存、缺电停付/复电续付、换主仅新House收款、退休停付和四次完整存读已验。原FreeUnit HARV自然采矿/载货保存、同货物保留/移除/换主三分支实际交矿的50%分次截断奖励亦已验，独立定时收入分离。其他矿物/AI虚拟奖励、科技树付款、叠加/EMP/战斗死亡及多AI仍待验，不把单次交矿外推全部经济 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
