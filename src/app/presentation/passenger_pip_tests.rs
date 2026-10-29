@@ -6,6 +6,177 @@ use crate::sim::world::Simulation;
 
 const OWNER: &str = "Americans";
 
+#[cfg(feature = "npatch")]
+pub(super) fn aymod_pip_fixture() -> (RuleSet, Simulation, u64, u64, u64) {
+    use crate::headless_scenario::{battle_session, load_session};
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let scene = load_session(
+        &root,
+        "XMP03T4.MAP",
+        0xC0FFEE,
+        battle_session("XMP03T4.MAP", &[]),
+    )
+    .unwrap();
+    let rules = scene.runtime.resources.rules;
+    let mut sim = Simulation::new();
+    let owner = sim.intern(OWNER);
+    sim.houses_mut_for_test()
+        .register(crate::sim::house_state::HouseState::new(
+            owner, 0, None, true, 0, 10,
+        ));
+    crate::sim::arena_fixture::flat_arena(&mut sim, &rules);
+    sim.intern_rule_type_ids(&rules);
+    sim.resolve_type_handles(&rules);
+    sim.fog_mut_for_test().reveal_all_for_owner(owner);
+    let building = sim.spawn_object("CAHSE01", OWNER, 6, 6, 0, &rules).unwrap();
+    let transport = sim.spawn_object("LCRF", OWNER, 22, 22, 0, &rules).unwrap();
+    let elite = sim.spawn_object("MTNK", OWNER, 16, 16, 0, &rules).unwrap();
+    // Rank is a drawing prior; gameplay promotion has separate coverage.
+    sim.entities_mut_for_test()
+        .get_mut(elite)
+        .unwrap()
+        .veterancy
+        .set_raw_for_test(crate::util::native_x87::NativeF32Bits::from_bits(
+            2.0f32.to_bits(),
+        ));
+    let mut garrison = Vec::new();
+    let mut passengers = Vec::new();
+    for (index, (kind, pip, occupy)) in [
+        ("E1", 1, Some(7)),
+        ("GGI", 5, Some(11)),
+        ("SNIPE", 4, Some(10)),
+        // TANY has a yellow transport Pip but is not an Occupier in this
+        // install. Its absent OccupyPip is not a reachable garrison color.
+        ("TANY", 2, None),
+        ("BORIS", 2, Some(8)),
+        ("ENGINEER", 3, None),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let object = rules.object(kind).unwrap();
+        assert_eq!(object.pip(), pip, "{kind}: final Battle transport color");
+        let rider = sim
+            .spawn_object(kind, OWNER, 21, 20 + index as u16, 0, &rules)
+            .unwrap();
+        assert!(sim.apply_command(
+            OWNER,
+            &Command::clicked_mission(
+                rider,
+                crate::sim::mission::MissionType::Enter,
+                crate::sim::combat::TargetKind::Entity(transport)
+            ),
+            Some(&rules)
+        ));
+        passengers.push(rider);
+        if let Some(occupy) = occupy {
+            assert_eq!(
+                object.occupy_pip(),
+                occupy,
+                "{kind}: final Battle garrison color"
+            );
+            let rider = sim
+                .spawn_object(kind, OWNER, 5, 5 + index as u16, 0, &rules)
+                .unwrap();
+            assert!(sim.apply_command(
+                OWNER,
+                &Command::CaptureBuilding {
+                    engineer_id: rider,
+                    target_building_id: building
+                },
+                Some(&rules)
+            ));
+            garrison.push(rider);
+        }
+    }
+    assert!(!rules.object("TANY").unwrap().occupier);
+    let grid = sim.path_grid_snapshot().unwrap();
+    assert!(
+        (0..600).any(|_| {
+            sim.advance_tick(&[], Some(&rules), Some(&grid), None, 33);
+            passengers.iter().all(|&id| {
+                sim.entities()
+                    .get(id)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id()
+                    == Some(transport)
+            }) && garrison.iter().all(|&id| {
+                sim.entities()
+                    .get(id)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id()
+                    == Some(building)
+            })
+        }),
+        "ordinary Enter/CaptureBuilding must populate both actual pip consumers: {:?}",
+        passengers
+            .iter()
+            .chain(&garrison)
+            .map(|&id| {
+                let entity = sim.entities().get(id).unwrap();
+                (
+                    id,
+                    sim.interner().resolve(entity.type_ref()),
+                    entity.position.rx(),
+                    entity.position.ry(),
+                    entity.mission.effective(),
+                    entity.passenger_role.inside_transport_id(),
+                    entity.lifecycle.in_limbo(),
+                )
+            })
+            .collect::<Vec<_>>()
+    );
+    assert!(sim.apply_command(
+        OWNER,
+        &Command::Select {
+            entity_ids: vec![building, transport, elite],
+            additive: false
+        },
+        Some(&rules)
+    ));
+    for id in [building, transport, elite] {
+        sim.entities_mut_for_test()
+            .get_mut(id)
+            .unwrap()
+            .discovery
+            .set_owned_by_current_house_for_test(true);
+    }
+    (rules, sim, building, transport, elite)
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR; actual layered pip colors after ordinary garrison/transport entry"]
+fn aymod_class_colors_reach_garrison_and_transport_pip_rows() {
+    let (rules, sim, building, transport, _) = aymod_pip_fixture();
+    let mut occupied = frames(&sim, &rules, building, None);
+    occupied.retain(|&frame| frame != 6);
+    occupied.sort_unstable();
+    assert_eq!(
+        occupied,
+        [7, 8, 10, 11],
+        "garrison uses person frames, not transport Pip"
+    );
+    let mut loaded = frames(&sim, &rules, transport, None);
+    loaded.retain(|&frame| frame != 0 && frame != 3);
+    loaded.sort_unstable();
+    assert_eq!(
+        loaded,
+        [1, 2, 2, 4, 5],
+        "transport preserves each combat class color"
+    );
+    assert_eq!(
+        frames(&sim, &rules, transport, None)
+            .iter()
+            .filter(|&&frame| frame == 3)
+            .count(),
+        1,
+        "only the real Engineer slot is white in this size-one cargo"
+    );
+}
+
 fn frames(sim: &Simulation, rules: &RuleSet, transport: u64, hover: Option<u64>) -> Vec<usize> {
     let hash = sim.state_hash();
     let result = super::ui_overlays::scale_pip_draws(
