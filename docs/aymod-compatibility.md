@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于ef2584165补玩家GAGAP2超级裂缝真实验收。正式AY Battle普通Unload展开/收回，敌方FogState实际10→15→10格、House额外耗电150与双方隔离、两次完整存读及各120帧保持通过；既有gap_supercharge_tests5项通过。无生产修改/新critic；固定玩家版未动，整体目标仍开放。此前F16停机坪维修修复及定向验收已本地提交，扩大techno_ai模块四失败仍见F16，不冒称已解决。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于72b6cc01f补A06/V08实际APOC载具EMP与乘员独立开火。正常E1登车、敌方TTNK普通Attack实际送EMP、热存读后正counter期间Move不动/载具无射击而乘员实射，自然到期后同一载具普通Move及Attack恢复通过。新增实际场景1、npatch_emp_tests15、原实际TTNK/APOC恢复1通过；仅测试/台账，无生产修改/新critic。固定玩家版未动，整体目标仍开放；此前F16及超级裂缝已本地提交，扩大techno_ai模块四失败仍见F16。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,14 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### A06/V08：天启EMP下乘员实射与自然恢复存读（2026-10-29）
+
+- 作者170507明确要求装甲载具瘫痪时内部驻兵仍能攻击。本轮选一条APOC/E1实际功能链，不把BFRT六乘员开火通过外推为全部EMP组合。正式AY Battle中E1普通Enter登上真实APOC，确认open_transport_id；附近实际敌方TTNK普通Attack沿TankBolt→子武器实际送达EMP，未直接写counter/乘员目标或伪造射击事件。第二House设为human是隔离武器组件的fixture，不证明电脑自主选敌。
+- 源保持活体供乘员攻击；用现有AssignTarget owner清源目标并QueueMission Sleep，阻止新EMP火力，既有在途弹仍允许正常落地。只排Sleep而保留攻击目标并不能保证不再射击，初版因此在观察窗口末仍有EMP15；最终逐帧要求源无新fire_event，按正常倒计时等待到期，不改武器ROF/伤害或EMP时长。
+- 完整保存恢复保留正EMP counter和Cargo；恢复后普通Move向原步兵的已腾空格，counter正值期间载具XY完全不动且无自身fire_event，E1自己的EMP仍0/仍在原车内，必须真正发射武器攻击同一活体TTNK。到期后同一APOC普通Move确实移动到该格，普通Attack重新产自身fire_event，不只检查bool恢复。
+- 实读AY B9914C..B991DF：counter写+504，清capture/spawn后，GetHeight<=0在B9917E跳B991D9清目标，绕过高空PowerOff；不写独立provider+1C8。初版误要求载具deactivated=true，已纠正测试而非错误修改生产。FireError6FC2E0读射手自身EMP；既有fire_error_world为乘员采自身counter，不借载具counter拒乘员，沿用原owner。
+- 最终新增实际场景1、npatch_emp_tests15、原实际TTNK命中APOC/移除射手后自然恢复场景1通过，共17项；仅测试/台账，无新权威状态/RNG调用/timer写入/Detach/保存字段，无新critic。未启动GUI、改MOD/原始存档/固定玩家版或发布。BFRT全部六人、APOC双乘员/其他兵种、EMP反复重击及自主多AI组合仍开放；既有EMP时长/适用性政策与V01批准门禁不变，不宣称#174完整等价。
 
 ### F16新增漏项：工程师IFV维修空指部停机坪上的飞机（2026-10-29）
 
@@ -1581,7 +1589,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | 三阵营随机范围 | `NewPlayableCountries=-7`；startup root reader，现有 RNG 顺序 | Windows 人类/AI多个随机槽；不是 mode/map 覆盖项 |
 | 科技树与 AI 规划 | 七处 Prerequisite2、三处 NegativePrerequisite、八厂 AIBasePlanningCount 通过共享 owner；已有实际MOD科技/船厂生命周期覆盖 | 普通AI原生提前成功分支保留，不强制套人类前置规则；实际发展见 A02 |
 | 手动切电 | UseTogglePower、V/可重绑、鼠标与事件/BuildingOnline 链；已有 GUI 兵营Off/On与地图切换/手势回归 | Windows普通输入与存档；不另建客户端电力状态 |
-| EMP | 实际TTNK→TankBolt/TankBoltE→ElectricbounceT/TE→TankBoltEMP→EMPulsWH；Drive及普通建筑分别走共用owner的原生类分支，医院任务不再被清掉，双雷达扫描/付款恢复与存读已验 | 时长/适用对象/算术仍为[明确政策](npatch-emp.md)，不是完整#174等价；特殊运动/联动manager/完整建筑家族与多AI见A06，不宣称全EMP完成 |
+| EMP | 实际TTNK→TankBolt/TankBoltE→ElectricbounceT/TE→TankBoltEMP→EMPulsWH；Drive及普通建筑分别走共用owner的原生类分支，医院任务不再被清掉，双雷达扫描/付款恢复与存读已验；实际APOC正EMP下乘员实射/热存读、Move拒绝及自然到期后自身移动开火已验 | 时长/适用对象/算术仍为[明确政策](npatch-emp.md)，不是完整#174等价；特殊运动/联动manager/完整建筑家族与多AI见A06，不宣称全EMP完成 |
 | 已付款生产头暂停/恢复 | EMP不退款/重建，手动Off和用户Hold不被到期覆盖；已有实际MOD生产场景和保存状态回归 | Windows运行与多工厂/多House |
 | 乘员/母子机经验 | BFRT乘员先升、精英回退载具；飞机子机保留自身奖励并额外训练母体，母体等级采样时仅提高弱子机、再生按Trainable继承；已有实际BFRT Enter与航母再生存读场景 | 见 V05/F13；不是所有驻军链都已验 |
 | 控制者经验 | 有效非精英控制者分配既有XP，精英/无效回退普通受益者；实际尤里场景 | 比例限制与整数守恒为[政策](npatch.md)，不是所有 #174 算术已证 |

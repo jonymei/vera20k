@@ -1989,6 +1989,195 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real EMP leaves Apocalypse passengers firing after load"]
+    fn aymod_emp_apocalypse_keeps_its_boarded_infantry_firing_after_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, carrier, rider) = aymod_nearby_pair("APOC", "E1", true);
+        let owner = scene.sim().entities().get(carrier).unwrap().owner();
+        let at = scene.sim().entities().get(rider).unwrap().position;
+        let exit_cell = (at.rx(), at.ry());
+        let queue = |scene: &mut HeadlessScenario, house, command| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(house, sim.session.tick() + 1, command));
+        };
+        queue(
+            &mut scene,
+            owner,
+            Command::clicked_mission(rider, MissionType::Enter, TargetKind::Entity(carrier)),
+        );
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(rider)
+                .unwrap()
+                .passenger_role
+                .open_transport_id()
+                == Some(carrier)
+        }));
+        let shooter = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let enemy = house_of(sim, "Russians");
+            // Two human-controlled components isolate weapons from AI teams;
+            // this is not an autonomous AI attack-selection test.
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let at = sim.entities().get(carrier).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()) + 3, i32::from(at.ry()))),
+                &["TTNK"],
+            )[0]
+        };
+        aymod_attack_until_emp(&mut scene, shooter, carrier);
+        // Keep the same live hostile target, but stop refreshing the EMP.
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.assign_target_represented(
+                shooter,
+                None,
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            )
+            .unwrap();
+            sim.mission_queue_exact(
+                shooter,
+                crate::sim::mission::MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+        }
+        let position = crate::sim::movement::ground_pose::position_world_xy(
+            &scene.sim().entities().get(carrier).unwrap().position,
+        );
+        let remaining = scene.sim().entities().get(carrier).unwrap().emp_remaining();
+        assert!(remaining > 1);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY EMP carrier with independently firing infantry");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(carrier).unwrap().emp_remaining(),
+            remaining
+        );
+        queue(
+            &mut scene,
+            owner,
+            Command::Move {
+                entity_id: carrier,
+                target_rx: exit_cell.0,
+                target_ry: exit_cell.1,
+            },
+        );
+        let mut rider_fired = false;
+        // A child EMP projectile already in flight may still refresh the
+        // counter after the source's target is cleared; let it expire normally.
+        for _ in 0..(remaining * 3 + 60) {
+            let before = scene.sim().entities().get(carrier).unwrap().emp_remaining();
+            let output = tick_with_due_commands(&mut scene);
+            let sim = scene.sim();
+            let tank = sim.entities().get(carrier).unwrap();
+            let infantry = sim.entities().get(rider).unwrap();
+            assert_eq!(infantry.passenger_role.open_transport_id(), Some(carrier));
+            assert_eq!(infantry.emp_remaining(), 0);
+            if tank.emp_remaining() == 0 {
+                break;
+            }
+            assert!(before > 0);
+            // NPAE B9917E skips PowerOff for a ground Unit. EMP +504,
+            // not the independent provider latch +1C8, blocks its own fire.
+            assert!(!tank.deactivated.is_offline());
+            assert_eq!(
+                crate::sim::movement::ground_pose::position_world_xy(&tank.position),
+                position
+            );
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == carrier)
+            );
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == shooter)
+            );
+            rider_fired |= output
+                .fire_events
+                .iter()
+                .any(|event| event.attacker_id == rider && event.target == TargetKind::Entity(shooter));
+        }
+        assert!(
+            rider_fired,
+            "an unaffected boarded GI must really fire while its carrier remains EMP-disabled"
+        );
+        assert_eq!(
+            scene.sim().entities().get(carrier).unwrap().emp_remaining(),
+            0
+        );
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .deactivated
+                .is_offline()
+        );
+        queue(
+            &mut scene,
+            owner,
+            Command::Move {
+                entity_id: carrier,
+                target_rx: exit_cell.0,
+                target_ry: exit_cell.1,
+            },
+        );
+        assert!(
+            (0..300).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let tank = scene.sim().entities().get(carrier).unwrap();
+                (tank.position.rx(), tank.position.ry()) == exit_cell
+                    && crate::sim::movement::ground_pose::position_world_xy(&tank.position) != position
+            }),
+            "the same tank must regain ordinary movement after EMP expires"
+        );
+        queue(
+            &mut scene,
+            owner,
+            Command::Attack {
+                attacker_id: carrier,
+                target_id: shooter,
+            },
+        );
+        assert!(
+            (0..120).any(|_| {
+                tick_with_due_commands(&mut scene)
+                    .fire_events
+                    .iter()
+                    .any(|event| {
+                        event.attacker_id == carrier && event.target == TargetKind::Entity(shooter)
+                    })
+            }),
+            "the recovered carrier must regain its own weapon, not only the passenger's"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR with the original AYMod rules/assets"]
     fn aymod_tesla_attack_delivers_emp_and_actual_frames_recover() {
         let (mut scenario, shooter, target) = aymod_emp_duel(1, "APOC");
