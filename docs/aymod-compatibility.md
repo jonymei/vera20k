@@ -6,6 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
+- 本轮新增F22/C10未闭合功能：作者称精英YURI控制5个，正式Battle typed的MindControlE却为10，实际普通Attack捕获/受控击杀receiver升精英/第二次MindControlE捕获仍替换原目标，管理器count1，两段完整存读不变。原生构造/容量准入/替换叶支持保留出生容量，未证明运行时另有扩容writer；不擅改成5或10，不算已兼容。新增实际场景1、CaptureManager29通过；下一步查运行时扩容来源或明确作者设计与原生冲突策略，同时继续其他功能项，不因此暂停整个目标。
 - 本轮补F21作者漏项：恐怖分子/自爆卡车的同方同类型爆炸免伤。实际AY四组普通Attack自爆（两类型各同方/敌方同类型对照）、异型友军受伤、攻击前后完整存读通过；既有TypeImmune与死亡武器owner无需生产修改。V05原始killer控制者修复的独立critic已完成，无可操作发现；固定构建未动，Return Dubai弱攻势继续暂停。
 - 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于574ad0af0修V05原始击杀者的控制者选择：唯一award_kill_experience按702FF0→C2C208/C2C241读原killer的controller，不从经验已重定向的carrier/launcher/occupant取。双向组件回归先失败后通过；实际YURI普通Attack控制BFRT、E1正常上车、终结receiver的两级经验与两次完整存读通过，原未捕获要塞场景通过。NP/stock奖励各7、NP CaptureManager及Veterancy12通过；只读critic独立核对原始指令/生产调用/回归后无可操作发现。经验比例/等级回退/兵种数值不改，固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
@@ -16,6 +17,15 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F22新增作者漏项/C10差异：精英尤里的多目标容量仍未闭合（2026-10-29）
+
+- 作者170507写YURI精英可控制5个；正式AY Battle/XMP03T4全生产加载后的YURI Primary=MindControl、Damage1，ElitePrimary=MindControlE、Damage10。根配置后面有同名精英武器重复定义，不能仅取前一段Damage5或按文字覆写为5；本例已用正式typed结果断言，不只grep判断最终生效值。
+- 原生Techno Init_Managers6F4090..6F40F2在构造时GetWeapon(0)，CaptureManager构造4717D0/471822保留该Damage到+3C；GetWeapon70E140..70E192精英查询仅选择武器槽。CanCapture471D08..471D1C读取保留容量，CaptureUnit471D81..471D98在容量1时先释放旧节点。普通MindControl弹头的实际Detonate4692BD→C27C90→C27CBA仍调用471D40；6FA726..6FA730更新到471A50，有限管理器于471A59..471A5E直接退出。已读的这些原生叶与当前owner保留出生容量一致，不支持仅因ElitePrimary.Damage不同就现场重建管理器。
+- +2BC指令候选与+3C写候选扫描只作定位；未发现的别名/外部运行时注入不能由扫描空集排除，不声称已穷尽全部扩容可能。此前6FA13E→C2D825晋升补丁仅同步SpawnManager，不能把它解释为CaptureManager扩容。尚无零售同场运行对照，不因此将作者描述直接判为配置错误或宣布引擎等价。
+- 新aymod_promoted_yuri_retains_single_capture_manager_across_load：普通YURI真实Attack捕获MTNK，控制关系建立后复用正式终结receiver给该MTNK击杀经验，YURI通过现有100%经验分享升精英，不直接写精英或控制节点。此处击杀不是坦克实弹；捕获两次均为真实普通Attack，并要求实际MindControl/MindControlE发射事件。对方House及非射手Sleep仅隔离组件。
+- 晋升持一目标时完整存读，随后第二次捕获必须真的使用MindControlE；第一辆活车归还原House并清controller，第二辆归本方、controller=YURI，管理器count仍1。再次完整存读保持等级及上述关系。此测试锁定当前诊断事实，不是将“只能控1个”宣布为作者功能已实现；后续查得真实扩容路径或获明确设计选择时应同步调整本例，不保留竞争容量owner。
+- 最终新增实际场景1、CaptureManager模块29项通过；最后只调整一处格式，无生产行为、权威状态、RNG抽样、timer写入、Detach或保存字段变化，不需玩法critic。未启动GUI、修改MOD/原始存档/固定构建或发布。F22仍开放：需证明实际NP扩容writer及调用条件，或明确选择偏离当前已读原生的设计；不得擅选5/10、清掉旧受控队伍或借此改AI权重。
 
 ### F21新增作者漏项：自爆单位的同方同类型免伤（2026-10-29）
 
@@ -1582,6 +1592,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F21 / P1 / 已有免伤owner，实际自爆与存读已验 | 恐怖分子、自爆卡车同方同类型爆炸免伤 | TypeImmune→ReceiveDamage7019E3..701A38；Suicide FireAt6FDDC0→死亡武器→共享receiver | 实际TERROR/DTRUCK普通Attack自爆，各同方/敌方同类型对照及异型友军受伤、攻击前后存读通过；被击毁/持续辐射/运输死亡、多AI及GUI仍待验，不加兵种特例 |
 
+| F22 / P1 / 实际未达作者多目标要求，扩容来源待核 | 精英YURI同时控制多单位；作者5/正式精英武器10/出生管理器1三者不一致 | Init_Managers6F4090→4717D0保留出生容量；CanCapture/CaptureUnit读取保留值；已有owner不在晋升时扩容 | 真实捕获/经验receiver晋升/精英第二次捕获释放旧目标及两次存读已复现，未实现多目标；下一步证明原生运行时扩容路径或明确冲突策略，不按旧文字擅改数值 |
+
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
 
@@ -1666,6 +1678,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C07 / P2 / 配置差异，部分适用性待核 | Battle/Return Dubai各120对普通/精英槽中，FV槽6、UTNK槽0、XCOMET2槽0/1四项精英名义Range更短；不是未知槽被跳过 | 实际键与typed一致，具体武器/格数及原生读取见V10对应节。SHK实际登FV后6→5.25格、晋升/存读/近距实射通过，不修改MOD或额外补射程；UTNK/XCOMET2常规消费者、其他模式/地图和完整最远几何仍待核，不泛称它们不可达或全部兼容 |
 | C08 / P2 / 作者旧说明与配置差异 | 工业工厂文字为车辆降25%/建筑15%，正式AY Battle typed实际Units/Aircraft=.8、Buildings/Defenses=.900001、Infantry=1 | 保留安装配置；实际建筑折扣付款/存读、双方造价经验对照已验，见工业工厂节；其他模式/地图或未来改版另核，不据文字擅调费用 |
 | C09 / P2 / 作者旧说明与配置差异 | 旧说明仅精英飞碟不吸防御；正式Battle十种防御Drainable=false，DISK精英副槽回退普通DiskDrain，原生选择无精英门 | 两等级均按安装配置直接攻击防御，不擅造精英特例；GAPILL实际实伤/存读及空中电厂对照已验，其他塔实弹与起飞边界仍开放 |
+| C10 / P1 / 作者/配置/保留状态差异，未决 | YURI精英多控见F22；旧说明5、正式Battle MindControlE.Damage10、当前管理器出生容量1 | 不能把精英武器读到10等同实际10控，也不能借原生构造叶将作者功能标为通过；扩容writer/运行时对照或明确设计选择仍需补齐 |
 
 ## 6. 已交付机制和有意政策：不重复“修复”
 

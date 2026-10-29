@@ -21415,6 +21415,141 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; elite weapon does not reconstruct a Yuri capture manager"]
+    fn aymod_promoted_yuri_retains_single_capture_manager_across_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, yuri, first) = aymod_nearby_pair("YURI", "MTNK", false);
+        let owner = scene.sim().entities().get(yuri).unwrap().owner();
+        let enemy = scene.sim().entities().get(first).unwrap().owner();
+        let capture = |scene: &mut HeadlessScenario, target, weapon: &str| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: yuri,
+                    target_id: target,
+                },
+            ));
+            let mut fired = false;
+            assert!((0..600).any(|_| {
+                let output = tick_with_due_commands(scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == yuri && scene.sim().interner.resolve(event.weapon_id) == weapon
+                });
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .unwrap()
+                    .mind_control
+                    .controller()
+                    == Some(yuri)
+            }));
+            assert!(fired, "capture must use {weapon}");
+        };
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            sim.mission_queue_exact(
+                first,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let kind = rules.object("YURI").unwrap();
+            assert_eq!(rules.weapon(kind.primary().unwrap()).unwrap().damage, 1);
+            // The later duplicate MindControlE definition is effective input,
+            // not the author's older description of five links.
+            assert_eq!(
+                rules.weapon(kind.elite_primary().unwrap()).unwrap().damage,
+                10
+            );
+        }
+        capture(&mut scene, first, "MindControl");
+        for _ in 0..4 {
+            if scene.sim().entities().get(yuri).unwrap().veterancy.rank() == 200 {
+                break;
+            }
+            aymod_kill_for_experience(&mut scene, first);
+            tick_with_due_commands(&mut scene);
+        }
+        assert_eq!(
+            scene.sim().entities().get(yuri).unwrap().veterancy.rank(),
+            200
+        );
+        let second = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(first).unwrap().position;
+            let second = spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["MTNK"],
+            )[0];
+            for id in [first, second] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            second
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY Yuri promoted with one captive");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        capture(&mut scene, second, "MindControlE");
+        let assert_replaced = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            assert_eq!(sim.entities().get(yuri).unwrap().veterancy.rank(), 200);
+            assert!(sim.entities().get(first).unwrap().is_alive());
+            assert_eq!(
+                sim.entities()
+                    .get(yuri)
+                    .unwrap()
+                    .capture_manager
+                    .as_ref()
+                    .unwrap()
+                    .count(),
+                1
+            );
+            assert_eq!(sim.entities().get(first).unwrap().owner(), enemy);
+            assert_eq!(
+                sim.entities().get(first).unwrap().mind_control.controller(),
+                None
+            );
+            assert_eq!(sim.entities().get(second).unwrap().owner(), owner);
+            assert_eq!(
+                sim.entities()
+                    .get(second)
+                    .unwrap()
+                    .mind_control
+                    .controller(),
+                Some(yuri)
+            );
+        };
+        assert_replaced(&scene);
+        let bytes = save_scene(&scene, "AY elite Yuri replaces rather than adds captive");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_replaced(&scene);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; cloaking open-topped rider retains Cargo across load and unload"]
     fn aymod_fortress_cloaking_rider_keeps_cargo_across_load_and_unload() {
         use crate::sim::combat::TargetKind;
