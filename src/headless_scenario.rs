@@ -14235,6 +14235,7 @@ mod retail_construction_tests {
         OfflineArrival,
         DestroyedDuringReload,
         CapturedDuringReload,
+        EmpArrival,
     }
 
     #[cfg(feature = "npatch")]
@@ -14249,6 +14250,13 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; captured airfield takes its partially reloaded aircraft along across saves"]
     fn aymod_captured_airfield_keeps_reloading_transferred_aircraft_after_load() {
         aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::CapturedDuringReload);
+    }
+
+    #[cfg(all(feature = "npatch", not(feature = "ares")))]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual EMP hit, existing and incoming aircraft reload, saved expiry and sorties"]
+    fn aymod_emp_airfield_services_existing_and_new_aircraft_across_load() {
+        aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::EmpArrival);
     }
 
     #[cfg(feature = "npatch")]
@@ -14416,6 +14424,8 @@ mod retail_construction_tests {
     fn aymod_orca_airfield_lifecycle(dock: &str, case: AirfieldReloadCase) {
         let incoming = !matches!(case, AirfieldReloadCase::LowPower);
         let offline = matches!(case, AirfieldReloadCase::OfflineArrival);
+        let emp = matches!(case, AirfieldReloadCase::EmpArrival);
+        let hold_emp = std::cell::Cell::new(false);
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::movement::air_movement;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -14479,6 +14489,11 @@ mod retail_construction_tests {
         let step = |scene: &mut HeadlessScenario| {
             let output = tick_with_due_commands(scene);
             assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+            if hold_emp.get() {
+                // Keep the service/admission interval under the authored EMP
+                // via its existing detonation owner, not a timer/Off write.
+                aymod_apply_tank_bolt_emp(scene, field);
+            }
             output
         };
         let linked_ammo = |scene: &HeadlessScenario, id| {
@@ -14498,7 +14513,9 @@ mod retail_construction_tests {
         let unavailable = |scene: &HeadlessScenario| {
             let online = scene.sim().entities().get(field).unwrap().building_online();
             let low = scene.sim().power_states[&owner].is_low_power();
-            let expected_transition = if offline {
+            let expected_transition = if emp {
+                online && !low && scene.sim().entities().get(field).unwrap().emp_remaining() > 0
+            } else if offline {
                 !online && !low
             } else {
                 online && low
@@ -14709,7 +14726,28 @@ mod retail_construction_tests {
             );
             return;
         }
-        {
+        if emp {
+            let shooter = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let enemy = sim.entities().get(targets[0]).unwrap().owner();
+                let at = sim.entities().get(field).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    enemy,
+                    cells_nearest((i32::from(at.rx()) + 4, i32::from(at.ry()))),
+                    &["TTNK"],
+                )[0]
+            };
+            aymod_attack_until_emp(&mut scene, shooter, field);
+            aymod_remove_shooter(&mut scene, shooter);
+            assert!(scene.sim().entities().get(field).unwrap().emp_remaining() > 0);
+            // The initial effect must come from an ordinary real TTNK shot.
+            // Only subsequent refreshes are explicit component inputs; this
+            // avoids turning a finite-duration hit into an unexplained latch.
+            hold_emp.set(true);
+        } else {
             let runtime = &mut scene.runtime;
             assert!(runtime.simulation.go_building_offline(
                 if offline { field } else { power },
@@ -14832,13 +14870,7 @@ mod retail_construction_tests {
                 assert!(
                     (0..6000).any(|_| {
                         step(&mut scene);
-                        assert!(scene.sim().power_states[&owner].is_low_power());
-                        assert_eq!(
-                            scene
-                                .sim()
-                                .building_operational_state(field, &scene.runtime.resources.rules),
-                            Some(false)
-                        );
+                        assert!(unavailable(&scene));
                         empty |= scene
                             .sim()
                             .entities()
@@ -14853,7 +14885,7 @@ mod retail_construction_tests {
                                 .is_some_and(|ammo| ammo > 0 && ammo < capacity);
                         partial && linked_ammo(&scene, plane) == Some(capacity)
                     }),
-                    "a new spent aircraft must actually enter and reload at the online but low-power American airfield"
+                    "a new spent aircraft must enter and reload at the online airfield during its power or EMP outage"
                 );
                 Some((plane, target))
             }
@@ -14865,7 +14897,8 @@ mod retail_construction_tests {
             "AY existing ORCAs finished native reload while their airfield remains unavailable",
         );
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
-        {
+        hold_emp.set(false);
+        if !emp {
             let runtime = &mut scene.runtime;
             assert!(runtime.simulation.go_building_online(
                 if offline { field } else { power },
@@ -14873,13 +14906,19 @@ mod retail_construction_tests {
                 Default::default()
             ));
         }
-        assert!((0..180).any(|_| {
+        assert!((0..if emp { 1200 } else { 180 }).any(|_| {
             step(&mut scene);
             scene
                 .sim()
                 .building_operational_state(field, &scene.runtime.resources.rules)
                 == Some(true)
         }));
+        if emp {
+            assert_eq!(
+                scene.sim().entities().get(field).unwrap().emp_remaining(),
+                0
+            );
+        }
         let mut sorties = planes.into_iter().zip(targets).collect::<Vec<_>>();
         sorties.extend(arriving);
         for &(plane, target) in &sorties {
