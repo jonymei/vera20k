@@ -13005,6 +13005,8 @@ mod retail_construction_tests {
         let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
         let ai = house_of(scene.sim(), "Americans");
         assert!(!scene.sim().houses[&ai].is_human());
+        let kinds =
+            ["0ACCD81C-G", "0CA1E67C-G"].map(|name| scene.sim().interner.get(name).unwrap());
         let factories = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -13020,27 +13022,11 @@ mod retail_construction_tests {
                 cells_nearest(at),
                 &["GAWEAP", "GAREFN", "GATECH", "GAROBO", "NANRCT"],
             );
-            let yard = aymod_spawn_service_building(sim, rules, ai, "GAYARD", at);
-            [buildings[0], yard]
+            [
+                buildings[0],
+                aymod_spawn_service_building(sim, rules, ai, "GAYARD", at),
+            ]
         };
-        assert!((0..600).any(|_| {
-            tick_with_due_commands(&mut scene);
-            factories.iter().all(|id| {
-                scene.sim().entities().get(*id).is_some_and(|entity| {
-                    entity.mission.effective().known() != Some(MissionType::Construction)
-                })
-            })
-        }));
-        {
-            let runtime = &mut scene.runtime;
-            for name in ["0ACCD81C-G", "0CA1E67C-G"] {
-                let kind = runtime.simulation.interner.get(name).unwrap();
-                runtime
-                    .simulation
-                    .create_team(kind, Some(ai), &runtime.resources.rules)
-                    .expect("the original Mirage and Naval Hunters TeamTypes");
-            }
-        }
         let heads = |scene: &HeadlessScenario| {
             factories.map(|id| {
                 let factory = scene.sim().production().factories().building_factory(id)?;
@@ -13048,24 +13034,69 @@ mod retail_construction_tests {
                 Some((object.entity_id?, object.type_id, factory.balance()))
             })
         };
-        let demanded = |scene: &HeadlessScenario| {
-            let [Some(land), Some(ship)] = heads(scene) else {
-                return false;
-            };
-            scene.sim().interner.resolve(land.1) == "MGTK"
-                && matches!(
-                    scene.sim().interner.resolve(ship.1),
-                    "DEST" | "AEGIS" | "DLPH"
-                )
-                && land.2 > 0
-                && ship.2 > 0
+        let teams = |scene: &HeadlessScenario| {
+            kinds.map(|kind| {
+                scene
+                    .sim()
+                    .team_script_vm
+                    .teams_in_order()
+                    .find(|team| team.owner() == ai && team.team_type_id() == Some(kind))
+                    .map(|team| team.id())
+            })
         };
+        let demands_enabled = std::cell::Cell::new(false);
+        let factory_objects = std::cell::RefCell::new(std::collections::BTreeSet::new());
+        let step = |scene: &mut HeadlessScenario| {
+            let existing = teams(scene);
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .houses
+                .get_mut(&ai)
+                .unwrap()
+                .set_ai_triggers_active(false);
+            // Fixture demand producer only: do not change AY's 100-frame
+            // empty-team lifetime or inject members to keep a demand alive.
+            if demands_enabled.get() {
+                for (kind, present) in kinds.into_iter().zip(existing) {
+                    if present.is_none() {
+                        runtime
+                            .simulation
+                            .create_team(kind, Some(ai), &runtime.resources.rules)
+                            .unwrap();
+                    }
+                }
+            }
+            let output = tick_with_due_commands(scene);
+            for head in heads(scene).into_iter().flatten() {
+                factory_objects.borrow_mut().insert(head.0);
+            }
+            output
+        };
+        assert!((0..600).any(|_| {
+            step(&mut scene);
+            factories.iter().all(|id| {
+                scene.sim().entities().get(*id).is_some_and(|entity| {
+                    entity.mission.effective().known() != Some(MissionType::Construction)
+                })
+            })
+        }));
+        demands_enabled.set(true);
         assert!(
             (0..9000).any(|_| {
-                tick_with_due_commands(&mut scene);
-                demanded(&scene)
+                step(&mut scene);
+                let [Some(land), Some(ship)] = heads(&scene) else {
+                    return false;
+                };
+                scene.sim().interner.resolve(land.1) == "MGTK"
+                    && matches!(
+                        scene.sim().interner.resolve(ship.1),
+                        "DEST" | "AEGIS" | "DLPH"
+                    )
+                    && land.2 > 0
+                    && ship.2 > 0
             }),
-            "both authored demands must reach separate live factories"
+            "both persistent authored demands must reach separate live factories"
         );
         let products = heads(&scene).map(Option::unwrap);
         assert_ne!(products[0].0, products[1].0);
@@ -13079,7 +13110,7 @@ mod retail_construction_tests {
         let mut paid = [false; 2];
         assert!(
             (0..9000).any(|_| {
-                tick_with_due_commands(&mut scene);
+                step(&mut scene);
                 for (index, head) in heads(&scene).into_iter().enumerate() {
                     if let Some(head) = head.filter(|head| head.0 == products[index].0) {
                         paid[index] |= head.2 < products[index].2;
@@ -13103,6 +13134,78 @@ mod retail_construction_tests {
             let entity = scene.sim().entities().get(id).unwrap();
             assert_eq!((entity.owner(), entity.type_ref()), (ai, kind));
             assert!(!entity.lifecycle.in_limbo());
+        }
+        let full = |scene: &HeadlessScenario| {
+            teams(scene).into_iter().zip([4, 9]).all(|(id, count)| {
+                id.and_then(|id| scene.sim().team_script_vm.team(id))
+                    .is_some_and(|team| team.formed() && team.members().count() == count)
+            })
+        };
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                full(&scene)
+            }),
+            "authored teams must fill from factory members: {:?}",
+            teams(&scene).map(|id| id
+                .and_then(|id| scene.sim().team_script_vm.team(id))
+                .map(|team| (team.members().count(), team.formed(), team.cursor())))
+        );
+        let complete = teams(&scene).map(Option::unwrap);
+        let members = complete.map(|id| {
+            scene
+                .sim()
+                .team_script_vm
+                .team(id)
+                .unwrap()
+                .members()
+                .collect::<Vec<_>>()
+        });
+        for (index, ids) in members.iter().enumerate() {
+            let mut types = std::collections::BTreeMap::<String, usize>::new();
+            for &id in ids {
+                assert!(
+                    factory_objects.borrow().contains(&id),
+                    "each member must be an observed factory object"
+                );
+                let entity = scene.sim().entities().get(id).unwrap();
+                assert!(
+                    entity.owner() == ai && entity.is_ai_alive() && !entity.lifecycle.in_limbo()
+                );
+                *types
+                    .entry(scene.sim().interner.resolve(entity.type_ref()).to_owned())
+                    .or_default() += 1;
+            }
+            let expected = if index == 0 {
+                [("MGTK".to_owned(), 4)].into_iter().collect()
+            } else {
+                [
+                    ("DEST".to_owned(), 4),
+                    ("AEGIS".to_owned(), 1),
+                    ("DLPH".to_owned(), 4),
+                ]
+                .into_iter()
+                .collect()
+            };
+            assert_eq!(types, expected);
+        }
+        let bytes = save_scene(
+            &scene,
+            "AY authored land and naval teams filled with paid factory members",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(full(&scene));
+        for (id, expected) in complete.into_iter().zip(members) {
+            assert_eq!(
+                scene
+                    .sim()
+                    .team_script_vm
+                    .team(id)
+                    .unwrap()
+                    .members()
+                    .collect::<Vec<_>>(),
+                expected
+            );
         }
     }
 
