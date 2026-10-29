@@ -14211,34 +14211,42 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two already docked ORCAs continue native reload during low power and take off after restored power"]
     fn aymod_two_orcas_keep_reloading_during_saved_airfield_power_loss() {
-        aymod_orca_power_reload("GAAIRC", AirfieldPowerCase::LowPower);
+        aymod_orca_airfield_lifecycle("GAAIRC", AirfieldReloadCase::LowPower);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; American AMRADR services existing and newly returning aircraft during low power across saves"]
     fn aymod_american_airfield_admits_a_new_return_during_saved_low_power() {
-        aymod_orca_power_reload("AMRADR", AirfieldPowerCase::LowPowerArrival);
+        aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::LowPowerArrival);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; offline American airfield services existing contacts but refuses a new spent aircraft"]
     fn aymod_offline_american_airfield_rejects_new_return_but_keeps_pad_service() {
-        aymod_orca_power_reload("AMRADR", AirfieldPowerCase::OfflineArrival);
+        aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::OfflineArrival);
     }
 
     #[cfg(feature = "npatch")]
-    enum AirfieldPowerCase {
+    enum AirfieldReloadCase {
         LowPower,
         LowPowerArrival,
         OfflineArrival,
+        DestroyedDuringReload,
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_orca_power_reload(dock: &str, case: AirfieldPowerCase) {
-        let incoming = !matches!(case, AirfieldPowerCase::LowPower);
-        let offline = matches!(case, AirfieldPowerCase::OfflineArrival);
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; partially reloaded aircraft die with their airfield and replacement service survives load"]
+    fn aymod_airfield_destruction_during_reload_and_replacement_survive_load() {
+        aymod_orca_airfield_lifecycle("AMRADR", AirfieldReloadCase::DestroyedDuringReload);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_orca_airfield_lifecycle(dock: &str, case: AirfieldReloadCase) {
+        let incoming = !matches!(case, AirfieldReloadCase::LowPower);
+        let offline = matches!(case, AirfieldReloadCase::OfflineArrival);
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::movement::air_movement;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -14357,6 +14365,176 @@ mod retail_construction_tests {
             }),
             "both aircraft must spend real ammo and enter partial reload on separate contacts"
         );
+        if matches!(case, AirfieldReloadCase::DestroyedDuringReload) {
+            use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let before = planes.map(|id| linked_ammo(&scene, id).unwrap());
+            let bytes = save_scene(
+                &scene,
+                "AY airfield with two partial reloads before destruction",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(planes.map(|id| linked_ammo(&scene, id).unwrap()), before);
+            let at = scene.sim().entities().get(field).unwrap().position;
+            let enemy = scene.sim().entities().get(targets[0]).unwrap().owner();
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                assert!(resources.rules.object(dock).unwrap().helipad);
+                let damage = sim.entities().get(field).unwrap().health.current() * 10;
+                let warhead = sim.interner.intern("Super");
+                // Building4422F9 snapshots contacts before Stun; the Helipad
+                // death arm4425B6 sends each saved aircraft its own receiver.
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        field,
+                        damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+            let assert_destroyed = |scene: &HeadlessScenario| {
+                for id in [field, planes[0], planes[1]] {
+                    assert!(scene.sim().entities().get(id).is_none_or(|e| !e.is_alive()));
+                    assert!(
+                        scene
+                            .sim()
+                            .entities()
+                            .get(id)
+                            .is_none_or(|e| e.radio_contacts.is_empty())
+                    );
+                }
+            };
+            assert_destroyed(&scene);
+            let bytes = save_scene(
+                &scene,
+                "AY airfield death clears both partially reloaded contacts",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_destroyed(&scene);
+            let (replacement, plane, target) = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let replacement = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry()))),
+                    &[dock],
+                )[0];
+                let plane = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest((i32::from(at.rx()) + 5, i32::from(at.ry()))),
+                    &["ORCA"],
+                )[0];
+                let at = sim.entities().get(targets[0]).unwrap().position;
+                let target = spawn_on_free_cells(
+                    sim,
+                    rules,
+                    enemy,
+                    cells_nearest((i32::from(at.rx()) + 6, i32::from(at.ry()))),
+                    &["NACNST"],
+                )[0];
+                assert_ne!(replacement, field);
+                assert!(!planes.contains(&plane));
+                (replacement, plane, target)
+            };
+            let ammo = |scene: &HeadlessScenario| {
+                let e = scene.sim().entities().get(plane).unwrap();
+                assert!(e.is_alive() && !e.radio_contacts.contains(field));
+                e.ammo().unwrap().current()
+            };
+            let linked = |scene: &HeadlessScenario| {
+                let e = scene.sim().entities().get(plane).unwrap();
+                e.radio_contacts.contains(replacement)
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(replacement)
+                        .unwrap()
+                        .radio_contacts
+                        .contains(plane)
+                    && air_movement::current_fly_height(e, scene.sim().resolved_terrain()) == 0
+            };
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                scene.sim().session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+            let mut empty = false;
+            assert!(
+                (0..6000).any(|_| {
+                    step(&mut scene);
+                    assert_destroyed(&scene);
+                    empty |= ammo(&scene) == 0;
+                    empty && linked(&scene) && ammo(&scene) > 0 && ammo(&scene) < capacity
+                }),
+                "replacement airfield must accept and partially reload a genuinely spent aircraft"
+            );
+            let partial = ammo(&scene);
+            let bytes = save_scene(
+                &scene,
+                "AY replacement airfield partially reloads its new aircraft",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(linked(&scene));
+            assert_eq!(ammo(&scene), partial);
+            assert!((0..3000).any(|_| {
+                step(&mut scene);
+                assert_destroyed(&scene);
+                linked(&scene) && ammo(&scene) == capacity
+            }));
+            let bytes = save_scene(
+                &scene,
+                "AY replacement airfield finished reload after original field loss",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(linked(&scene));
+            assert_eq!(ammo(&scene), capacity);
+            let health = scene.sim().entities().get(target).unwrap().health.current();
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                scene.sim().session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+            let mut fired = false;
+            assert!(
+                (0..3000).any(|_| {
+                    let output = step(&mut scene);
+                    fired |= output
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == plane);
+                    assert_destroyed(&scene);
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .is_none_or(|e| e.health.current() < health)
+                }),
+                "the replacement's reloaded aircraft must depart, fire and damage its target after load"
+            );
+            return;
+        }
         {
             let runtime = &mut scene.runtime;
             assert!(runtime.simulation.go_building_offline(
