@@ -21412,8 +21412,71 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY boarding and TrainPassengers kill credit"]
     fn aymod_fortress_passenger_trains_before_carrier_then_elite_falls_back() {
+        aymod_fortress_passenger_experience(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual captured fortress, normal boarding and saved kill attribution"]
+    fn aymod_captured_fortress_does_not_redirect_its_elite_riders_experience() {
+        aymod_fortress_passenger_experience(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_fortress_passenger_experience(captured: bool) {
         use crate::sim::command::{Command, CommandEnvelope};
-        let (mut scenario, carrier, passenger) = aymod_nearby_pair("BFRT", "E1", true);
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scenario, carrier, passenger, controller) = if captured {
+            let (mut scene, controller, carrier) = aymod_nearby_pair("YURI", "BFRT", false);
+            let sim = &mut scene.runtime.simulation;
+            let rules = &scene.runtime.resources.rules;
+            sim.mission_queue_exact(
+                carrier,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let owner = sim.entities().get(controller).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: controller,
+                    target_id: carrier,
+                },
+            ));
+            assert!(
+                (0..400).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .mind_control
+                        .controller()
+                        == Some(controller)
+                }),
+                "ordinary Yuri fire must capture the actual fortress"
+            );
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(carrier).unwrap().position;
+            let passenger = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["E1"],
+            )[0];
+            (scene, carrier, passenger, Some(controller))
+        } else {
+            let (scene, carrier, passenger) = aymod_nearby_pair("BFRT", "E1", true);
+            (scene, carrier, passenger, None)
+        };
         let sim = &mut scenario.runtime.simulation;
         let owner = sim.entities().get(passenger).unwrap().owner();
         sim.queue_command(CommandEnvelope::new(
@@ -21446,6 +21509,52 @@ mod retail_construction_tests {
                 .open_transport_id(),
             Some(carrier)
         );
+        let pristine = scenario.sim().resolved_terrain().unwrap().clone();
+        let controller_xp =
+            controller.map(|id| scenario.sim().entities().get(id).unwrap().veterancy.raw());
+        if let Some(controller) = controller {
+            assert_eq!(
+                scenario
+                    .runtime
+                    .resources
+                    .rules
+                    .npatch_rewards
+                    .controller_points(100),
+                100
+            );
+            assert!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(controller)
+                    .unwrap()
+                    .veterancy
+                    .rank()
+                    < 200
+            );
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .mind_control
+                    .controller(),
+                Some(controller)
+            );
+            assert!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(passenger)
+                    .unwrap()
+                    .mind_control
+                    .controller()
+                    .is_none()
+            );
+            let bytes = save_scene(&scenario, "AY captured fortress with an uncontrolled rider");
+            scenario.runtime.simulation = restored_retail(&scenario, &pristine, &bytes);
+        }
         aymod_kill_for_experience(&mut scenario, passenger);
         assert!(
             scenario
@@ -21490,6 +21599,58 @@ mod retail_construction_tests {
                 .bits()
                 > 0
         );
+        if let Some(controller) = controller {
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(controller)
+                    .unwrap()
+                    .veterancy
+                    .raw(),
+                controller_xp.unwrap(),
+                "the carrier's controller must not take an uncontrolled rider's kill experience"
+            );
+            let carrier_xp = scenario
+                .sim()
+                .entities()
+                .get(carrier)
+                .unwrap()
+                .veterancy
+                .raw();
+            let bytes = save_scene(&scenario, "AY elite rider kill pays its captured carrier");
+            scenario.runtime.simulation = restored_retail(&scenario, &pristine, &bytes);
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .veterancy
+                    .raw(),
+                carrier_xp
+            );
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(controller)
+                    .unwrap()
+                    .veterancy
+                    .raw(),
+                controller_xp.unwrap()
+            );
+            assert_eq!(
+                scenario
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .mind_control
+                    .controller(),
+                Some(controller)
+            );
+        }
     }
 
     #[cfg(feature = "npatch")]

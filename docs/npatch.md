@@ -207,8 +207,10 @@ children mirror that award, and regenerated children inherit the parent's
 veterancy through the existing spawn owner.
 
 `[General] MindControllerGainExperienceRatio` shares the existing XP award with
-a valid, non-elite, positive-cost controller. `100%` transfers it all; unavailable
-or elite controllers leave the award with the ordinary recipient. The ratio is
+a valid, non-elite, positive-cost controller of the original killer
+(`RecordKill702FF0 -> C2C208`, `EDI+2C0`), not of a redirected carrier,
+launcher or garrison recipient. `100%` transfers it all; unavailable or elite
+controllers leave the award with the ordinary recipient. The ratio is
 bounded to 0..1, with integer points conserved rather than duplicated.
 
 The killer's `GetsBounty`, `VeteranGetsBounty` and `EliteGetsBounty` select bounty

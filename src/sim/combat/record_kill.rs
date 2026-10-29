@@ -146,10 +146,12 @@ fn award_kill_experience(
     let Some((recipient_id, recipient_cost)) = recipient else {
         return;
     };
+    // NPAE RecordKill702FF0 -> C2C208/C2C241 reads EDI+2C0: the
+    // original killer, not ECX's redirected carrier/launcher/occupant award.
     let controller = entities
-        .get(recipient_id)
-        .and_then(|recipient| recipient.mind_control.controller())
-        .filter(|&id| id != recipient_id)
+        .get(killer_id)
+        .and_then(|killer| killer.mind_control.controller())
+        .filter(|&id| id != killer_id)
         .filter(|&id| {
             entities.get(id).is_some_and(|entity| {
                 entity.is_object_alive()

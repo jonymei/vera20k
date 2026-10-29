@@ -164,6 +164,69 @@ fn npatch_controller_receives_authored_share_and_elite_controller_does_not_waste
 }
 
 #[test]
+fn npatch_transport_award_uses_the_shooters_controller_not_the_recipient() {
+    for control_passenger in [false, true] {
+        let (mut sim, rules) = fixture("");
+        let controller = spawn(&mut sim, &rules, "YURI", "Americans", 10);
+        let carrier = spawn(
+            &mut sim,
+            &rules,
+            "BFRT",
+            if control_passenger {
+                "Americans"
+            } else {
+                "Russians"
+            },
+            12,
+        );
+        let passenger = spawn(
+            &mut sim,
+            &rules,
+            "GI",
+            if control_passenger {
+                "Russians"
+            } else {
+                "Americans"
+            },
+            14,
+        );
+        assert!(sim.capture_unit(
+            controller,
+            if control_passenger {
+                passenger
+            } else {
+                carrier
+            },
+            &rules,
+            None,
+            FrameEffects::default()
+        ));
+        let rider = sim.substrate.entities.get_mut(passenger).unwrap();
+        rider.veterancy.set_elite();
+        rider.passenger_role.set_inside_transport(carrier, true);
+        let target = spawn(&mut sim, &rules, "TARGET", "Russians", 20);
+        kill(&mut sim, &rules, passenger, target, KillCallback::Terminal);
+        let diverted = crate::rules::NPATCH_ENABLED && control_passenger;
+        assert_eq!(
+            sim.entities()
+                .get(controller)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits()
+                > 0,
+            diverted,
+            "RecordKill C2C208 reads the original shooter's +2C0"
+        );
+        assert_eq!(
+            sim.entities().get(carrier).unwrap().veterancy.raw().bits() > 0,
+            !diverted,
+            "the ordinary carrier recipient must not supply the controller"
+        );
+    }
+}
+
+#[test]
 fn npatch_zero_cost_controller_does_not_swallow_experience() {
     let (mut sim, rules) = fixture("[YURI]\nCost=0\n");
     let controller = spawn(&mut sim, &rules, "YURI", "Americans", 10);
