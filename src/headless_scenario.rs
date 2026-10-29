@@ -1856,6 +1856,218 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual authored Chronosphere team warps and resumes attack after save"]
+    fn aymod_chronosphere_team_warps_and_resumes_attack_after_save() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::{
+            SimSoundEvent,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                session.options.unit_count = 0;
+            },
+            &[(LaunchCountry::from_country_index(0), AiDifficulty::Hard)],
+        );
+        let ai = computers[0];
+        let human = scene.sim().session.current_house().unwrap();
+        let providers = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&ai)
+                .unwrap()
+                .set_ai_triggers_active(false);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest(aymod_anchor(sim, human)),
+                &["GACNST", "GAPOWR", "GAWEAP"],
+            );
+            spawn_on_free_cells(
+                sim,
+                rules,
+                ai,
+                cells_nearest(aymod_anchor(sim, ai)),
+                &["NANRCT", "GACSPH"],
+            )
+        };
+        let sphere = scene.sim().interner.get("ChronoSphereSpecial").unwrap();
+        let warp = scene.sim().interner.get("ChronoWarpSpecial").unwrap();
+        assert!((0..900).any(|_| {
+            tick_with_due_commands(&mut scene);
+            providers.iter().all(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            }) && scene.sim().super_weapons.get(&ai).unwrap()[&sphere].is_active()
+                && scene.sim().houses[&ai].enemy_house() == Some(human)
+        }));
+        let (team, members) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let team_type = sim.interner.get("0A87472C-G").unwrap();
+            assert_eq!(
+                sim.interner.resolve(
+                    sim.team_script_vm
+                        .team_type_definition(team_type)
+                        .unwrap()
+                        .script_id
+                ),
+                "0CAC55CC-G"
+            );
+            let types = sim
+                .team_script_vm
+                .task_force_of(team_type)
+                .unwrap()
+                .entries
+                .iter()
+                .flat_map(|entry| {
+                    std::iter::repeat_n(
+                        sim.interner.resolve(entry.member_type.id).to_owned(),
+                        entry.count as usize,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                types,
+                [
+                    "MTNK", "MTNK", "MGTK", "MGTK", "MGTK", "SREF", "SREF", "SREF", "SREF"
+                ]
+            );
+            let names = types.iter().map(String::as_str).collect::<Vec<_>>();
+            let members =
+                spawn_on_free_cells(sim, rules, ai, cells_nearest(aymod_anchor(sim, ai)), &names);
+            let frame = sim.session.binary_frame();
+            let kind = rules.super_weapon("ChronoSphereSpecial").unwrap();
+            let instance = sim
+                .super_weapons
+                .map_mut_for_test()
+                .get_mut(&ai)
+                .unwrap()
+                .get_mut(&sphere)
+                .unwrap();
+            assert!(instance.set_charge_percentage(100, kind, frame));
+            instance.set_is_ready_for_test(true);
+            instance.set_ready_tick_for_test(frame as i32);
+            (
+                sim.create_team(team_type, Some(ai), rules).unwrap(),
+                members,
+            )
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY authored Chronosphere team before normal script dispatch",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let mut launched = std::collections::BTreeSet::new();
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in &output.sound_events {
+                    if let SimSoundEvent::SuperWeaponLaunched { owner, sw_type, .. } = event {
+                        if *owner == ai && [sphere, warp].contains(sw_type) {
+                            launched.insert(*sw_type);
+                        }
+                    }
+                }
+                launched.len() == 2
+            }),
+            "the unmodified script must gather and fire both halves of its Chronosphere"
+        );
+        let source = scene.sim().super_weapons.get(&ai).unwrap()[&sphere].chrono_cell();
+        let in_transit = members
+            .iter()
+            .copied()
+            .filter(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .is_some_and(|entity| entity.chrono_warp().is_some())
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            !in_transit.is_empty(),
+            "paired launch must actually start a member's warp"
+        );
+        let bytes = save_scene(&scene, "AY authored Chronosphere team during real warp");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(in_transit.iter().all(|id| {
+            scene
+                .sim()
+                .entities()
+                .get(*id)
+                .unwrap()
+                .chrono_warp()
+                .is_some()
+        }));
+        let before = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| entity.owner() == human)
+            .map(|entity| (entity.stable_id(), entity.health.current()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut landed = std::collections::BTreeSet::new();
+        let mut attacked = std::collections::BTreeSet::new();
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for &id in &in_transit {
+                    if scene.sim().entities().get(id).is_some_and(|entity| {
+                        entity.is_alive()
+                            && entity.chrono_warp().is_none()
+                            && (entity.position.rx().abs_diff(source.0) > 3
+                                || entity.position.ry().abs_diff(source.1) > 3)
+                    }) {
+                        landed.insert(id);
+                    }
+                }
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| landed.contains(&event.attacker_id))
+                {
+                    if let crate::sim::combat::TargetKind::Entity(id) = event.target {
+                        if before.contains_key(&id) {
+                            attacked.insert(id);
+                        }
+                    }
+                }
+                attacked.iter().any(|&id| {
+                    scene
+                        .sim()
+                        .entities()
+                        .get(id)
+                        .is_none_or(|entity| entity.health.current() < before[&id])
+                })
+            }),
+            "an actually warped member must land and damage its authored enemy after load"
+        );
+        assert!(
+            scene
+                .sim()
+                .team_script_vm
+                .team(team)
+                .is_some_and(|team| team.cursor() >= 2)
+        );
+        assert!(!scene.sim().super_weapons.get(&ai).unwrap()[&sphere].is_ready());
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual paid AI gap generator and authored fifteen-cell fog after load"]
     fn aymod_three_ai_bases_build_the_authored_super_radius_gap() {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
