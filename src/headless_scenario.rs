@@ -13644,6 +13644,201 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two already docked ORCAs continue native reload during low power and take off after restored power"]
+    fn aymod_two_orcas_keep_reloading_during_saved_airfield_power_loss() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::air_movement;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, first, target) = aymod_nearby_pair("ORCA", "NACNST", false);
+        let (owner, field, power, planes, targets, capacity) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = sim.entities().get(first).unwrap().owner();
+            let enemy = sim.entities().get(target).unwrap().owner();
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let at = sim.entities().get(first).unwrap().position;
+            let kind = rules.object("ORCA").unwrap();
+            let dock = kind.dock.first().unwrap();
+            assert!(rules.object(dock).unwrap().unit_reload && rules.object(dock).unwrap().powered);
+            let field = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &[dock],
+            )[0];
+            let power = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 15, i32::from(at.ry()))),
+                &["NANRCT"],
+            )[0];
+            let second = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 2, i32::from(at.ry()))),
+                &["ORCA"],
+            )[0];
+            let at = sim.entities().get(target).unwrap().position;
+            let second_target = spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()) + 5, i32::from(at.ry()))),
+                &["NACNST"],
+            )[0];
+            let planes = [first, second];
+            let targets = [target, second_target];
+            for (&plane, &target) in planes.iter().zip(&targets) {
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: plane,
+                        target_id: target,
+                    },
+                ));
+            }
+            (owner, field, power, planes, targets, kind.ammo)
+        };
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+            output
+        };
+        let linked_ammo = |scene: &HeadlessScenario, id| {
+            let entity = scene.sim().entities().get(id)?;
+            (entity.is_ai_alive()
+                && air_movement::current_fly_height(entity, scene.sim().resolved_terrain()) == 0
+                && entity.radio_contacts.contains(field)
+                && scene
+                    .sim()
+                    .entities()
+                    .get(field)
+                    .unwrap()
+                    .radio_contacts
+                    .contains(id))
+            .then(|| entity.ammo().unwrap().current())
+        };
+        let mut empty = std::collections::BTreeSet::new();
+        assert!(
+            (0..6000).any(|_| {
+                step(&mut scene);
+                for &id in &planes {
+                    if scene
+                        .sim()
+                        .entities()
+                        .get(id)
+                        .unwrap()
+                        .ammo()
+                        .unwrap()
+                        .current()
+                        == 0
+                    {
+                        empty.insert(id);
+                    }
+                }
+                empty.len() == 2
+                    && planes.iter().all(|&id| {
+                        linked_ammo(&scene, id).is_some_and(|ammo| ammo > 0 && ammo < capacity)
+                    })
+            }),
+            "both aircraft must spend real ammo and enter partial reload on separate contacts"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_offline(
+                power,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        assert!((0..180).any(|_| {
+            step(&mut scene);
+            scene.sim().power_states[&owner].is_low_power()
+                && scene
+                    .sim()
+                    .building_operational_state(field, &scene.runtime.resources.rules)
+                    == Some(false)
+        }));
+        let before = planes.map(|id| linked_ammo(&scene, id).unwrap());
+        assert!(before.iter().all(|&ammo| ammo > 0 && ammo < capacity));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY two partially reloaded ORCAs on a genuinely low-power airfield",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(planes.map(|id| linked_ammo(&scene, id).unwrap()), before);
+        assert!(scene.sim().power_states[&owner].is_low_power());
+        assert!(
+            (0..3000).any(|_| {
+                step(&mut scene);
+                assert!(scene.sim().power_states[&owner].is_low_power());
+                assert_eq!(
+                    scene
+                        .sim()
+                        .building_operational_state(field, &scene.runtime.resources.rules),
+                    Some(false)
+                );
+                planes
+                    .iter()
+                    .all(|&id| linked_ammo(&scene, id) == Some(capacity))
+            }),
+            "Building MissionRepair UnitReload services existing pad contacts even during low power"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY two ORCAs finished native reload while their airfield remains low power",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_online(
+                power,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        assert!((0..180).any(|_| {
+            step(&mut scene);
+            scene
+                .sim()
+                .building_operational_state(field, &scene.runtime.resources.rules)
+                == Some(true)
+        }));
+        for (&plane, &target) in planes.iter().zip(&targets) {
+            scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                owner,
+                scene.sim().session.tick() + 1,
+                Command::Attack {
+                    attacker_id: plane,
+                    target_id: target,
+                },
+            ));
+        }
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+            (0..3000).any(|_| {
+                let output = step(&mut scene);
+                for event in output.fire_events {
+                    if planes.contains(&event.attacker_id) {
+                        fired.insert(event.attacker_id);
+                    }
+                }
+                fired.len() == planes.len()
+            }),
+            "both same aircraft must depart and fire after the low-power/recovery saves"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real ORCA empties on ground target, saves return/partial reload and attacks air after rearming"]
     fn aymod_orca_returns_reloads_and_resumes_air_combat_after_load() {
         aymod_orca_reload_lifecycle(false);
