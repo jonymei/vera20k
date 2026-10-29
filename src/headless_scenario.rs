@@ -25096,6 +25096,197 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Ore Processor passive income preserves cadence, power gates and ownership through saves"]
+    fn aymod_ore_processor_passive_income_follows_power_and_owner_after_load() {
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, processor, _) = aymod_nearby_pair("GAOREP", "GAPOWR", false);
+        let owner = scene.sim().entities().get(processor).unwrap().owner();
+        let other = house_of(scene.sim(), "Russians");
+        let power = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&other)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let power = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["NANRCT"],
+            )[0];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                other,
+                cells_nearest(aymod_anchor(sim, other)),
+                &["NANRCT"],
+            );
+            power
+        };
+        let (amount, delay) = {
+            let object = scene.runtime.resources.rules.object("GAOREP").unwrap();
+            assert!(object.ore_purifier && object.powered);
+            assert_eq!(
+                (
+                    object.produce_cash_amount,
+                    object.produce_cash_delay,
+                    object.produce_cash_startup
+                ),
+                (4, 15, 0)
+            );
+            (object.produce_cash_amount, object.produce_cash_delay)
+        };
+        let operational = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .building_operational_state(processor, &scene.runtime.resources.rules)
+                == Some(true)
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            operational(&scene)
+        }));
+        let wallets = |scene: &HeadlessScenario| {
+            [owner, other].map(|id| scene.sim().houses[&id].economy().available_money())
+        };
+        let observe = |scene: &mut HeadlessScenario, recipient: usize| {
+            let mut pulses = 0;
+            let mut previous_pulse = None;
+            for _ in 0..delay * 5 {
+                let before = wallets(scene);
+                tick_with_due_commands(scene);
+                assert!(operational(scene));
+                let after = wallets(scene);
+                assert_eq!(after[1 - recipient], before[1 - recipient]);
+                let delta = after[recipient] - before[recipient];
+                assert!(delta == 0 || delta == amount);
+                if delta == amount {
+                    let frame = scene.sim().session.tick();
+                    if let Some(previous) = previous_pulse {
+                        // Building Update43FD2C pays at remaining1 then rearms.
+                        assert_eq!(frame - previous, (delay - 1) as u64);
+                    }
+                    previous_pulse = Some(frame);
+                    pulses += 1;
+                    if pulses == 3 {
+                        return;
+                    }
+                }
+            }
+            panic!("the operational processor must actually pay three income pulses");
+        };
+        observe(&mut scene, 0);
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let timer = scene
+                .sim()
+                .entities()
+                .get(processor)
+                .unwrap()
+                .produce_cash
+                .timer();
+            let before = wallets(scene);
+            let bytes = save_scene(scene, "AY Ore Processor passive income lifecycle");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(processor)
+                    .unwrap()
+                    .produce_cash
+                    .timer(),
+                timer
+            );
+            assert_eq!(wallets(scene), before);
+        };
+        restore(&mut scene);
+        observe(&mut scene, 0);
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_offline(
+                power,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().power_states[&owner].is_low_power() && !operational(&scene)
+        }));
+        restore(&mut scene);
+        let before = wallets(&scene);
+        for _ in 0..delay * 3 {
+            tick_with_due_commands(&mut scene);
+            assert!(!operational(&scene));
+            assert_eq!(wallets(&scene), before);
+        }
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_online(
+                power,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            operational(&scene)
+        }));
+        observe(&mut scene, 0);
+        for _ in 0..3 {
+            tick_with_due_commands(&mut scene);
+        }
+        {
+            let runtime = &mut scene.runtime;
+            // Ownership input, not a claim of Engineer capture eligibility.
+            runtime.simulation.change_owner_with_rules(
+                processor,
+                other,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            operational(&scene)
+        }));
+        assert_eq!(
+            scene.sim().entities().get(processor).unwrap().owner(),
+            other
+        );
+        restore(&mut scene);
+        observe(&mut scene, 1);
+        {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .uninit_with_rules(processor, &runtime.resources.rules);
+        }
+        let before = wallets(&scene);
+        for _ in 0..delay * 3 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(wallets(&scene), before);
+        }
+        let bytes = save_scene(
+            &scene,
+            "AY retired Ore Processor cannot keep paying either House",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..delay * 3 {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(wallets(&scene), before);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; kill-earned elite Virus fires mutation bullets and the saved death animation creates one Brute"]
     fn aymod_virus_earned_elite_mutation_round_survives_death_animation_save() {
         use crate::sim::combat::TargetKind;

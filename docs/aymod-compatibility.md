@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线3e61813a2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F27作者漏项，精英VIRUS基因变异子弹。实际AY Battle VIRUS正常Attack敌SPY、真实耗血/击杀升精英（无rank/XP/HP写入），晋升完整存读后发VirusgunE/VirusM，进入归攻击方的GENDEATH；死亡动画中完整存读后正常生成唯一活体落地BRUTE，后续180帧/产物再次存读再180帧不重复生成。最终实际1、GeneticConverter9、Veterancy12共22通过，无生产修复/新critic。初稿AnimId借用跨restore编译错误、误用friendly fixture导致零XP已纠正，非玩法缺陷；无MOD/原档/固定版/GUI/发布变更。Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续作者遗漏或其他高频功能；普通/精英驻军弹、空中免变异/建筑拒绝边界、变异后战斗/多AI及画面仍开放，不把单场功能通过写成全部病毒体系完成。
+- 本轮基线a9e361cf9，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F28矿石精炼器独立定时收入遗漏项。正式AY GAOREP typed OrePurifier/Powered、ProduceCashAmount4/Delay15/Startup0；真实供电后正常帧连续三笔+4，相邻支付14帧（原43FD2C remaining1后重臂），活计时/缺电/换主及退休共四次完整存读。缺电停付/复电续付，仅新House收款，退休双方停付；原钱包/计时均保留，不刷钱/计时或手动调用cash step。实际1、credit_income12共13通过，无生产修复/新critic。设施/电源/直接换主/UnInit为fixture，交矿倍率实际采矿及付费科技树/自主AI尚未验，F28不全关闭。固定版未动，无GUI/MOD/原档/发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作补F28真实采矿交矿加成及其Owner生命周期，不把独立定时收入当交矿加成证据。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -193,6 +193,14 @@
 - 最终实际复合场景1、techno_ai::selfheal（普通10+原生数值3）及captured_building_sale普通2通过，共16项。另selfheal的原retail Arena场景1项、capture-sale的零售组件2项ignored未重跑。仅测试/台账，无新增生产权威状态、RNG调用、timer写入、Detach或保存字段，不需玩法critic。正常自愈/换主/退休仍走既有owners；未启动GUI、修改MOD/原始存档/固定构建或发布。中心付费建造、多源叠加/Organic车辆分流、自然缺电/EMP组合、源战斗死亡及自主多AI长局仍开放，不能把本项或医院项当成完整医疗系统已验。
 
 
+
+
+### F28作者漏项：矿石精炼器的独立定时收入（2026-10-29）
+
+- 作者170507称矿石精炼器提高精炼率并自身产生收入。现单列F28，不能以矿车交矿产生了收入代替独立ProduceCash验证。正式AY Battle typed GAOREP保留OrePurifier/Powered，ProduceCashAmount=4、ProduceCashDelay=15、ProduceCashStartup=0；不按旧文字“等效1油井”擅改数值。实际采矿交矿倍率仍待验，原purifier owner及已有组件不等于新AY全链已通过。
+- 新aymod_ore_processor_passive_income_follows_power_and_owner_after_load，正式Battle/XMP03T4、两独立human控制House，GAOREP及双方NANRCT正常施工/供电为输入，不生矿车/工厂/别的现金源。每帧核双方实际可用钱包差值，正常运行连续三笔各+4，另一House钱包不动；相邻支付14逻辑帧与Building Update43FD2C..43FDD6的remaining==1、重臂15相符，不把配置15改成14。活计时阶段第一次完整存读精确保留原CdTimer与钱包，随后真实续付。
+- 通过已有go_building_offline关闭NANRCT而非GAOREP（原配置TogglePower=no）；正常帧要求低电/精炼器不可运行，第二次完整存读后45帧不付。恢复电源/等待operational后再收三笔。第三次正式存读覆盖共享ChangeOwner receiver交另一House后的状态，原House钱包不变、只新House各+4续付；此建筑Capturable=false，换主是边界输入，不称工程师准入。随后UnInit退休，双方各45帧不付，第四次完整存读后再45帧仍不付。
+- 最终新实际1、credit_income::tests12共13项通过。无生产修复/新权威状态/保存字段/RNG/timer/Detach实现或新玩法critic，计时重臂与换主/退休副作用仍归原owner。不写钱包/现金计时、不直接调用ProduceCash step、不改MOD/原档/固定版或发布，未启动GUI。实际付费建造、交矿倍率/多座叠加、EMP/战斗死亡与自主多AI仍开放。
 
 ### F27作者漏项：精英病毒狙击手的基因变异子弹（2026-10-29）
 
@@ -1774,6 +1782,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。其他家族/多源叠加/Off/EMP/战斗死亡及自主多AI仍待验 |
 
 | F27 / P1 / 实际击杀晋升/精英发射/死亡动画产物与三次存读已验 | 精英病毒狙击手改用基因变异子弹 | VIRUS.ElitePrimary=VirusgunE→VirusM.InfDeath9→GENDEATH→原MakeInfantry owner | 普通Attack实际击杀晋升、精英弹实射、动画中保存及唯一归攻击方BRUTE落地、产物保存后不重复生成已验。驻军弹/空中免伤/建筑桥梁准入/产物战斗/多AI及画面仍待验，单位/受控House为fixture |
+
+| F28 / P1 / 独立定时收入及电力/换主/退休存读已验，交矿加成待验 | 矿石精炼器既给交矿加成，也单独产生收入 | GAOREP OrePurifier/ProduceCashAmount4/Delay15/Startup0；原credit_income43FD2C及miner purifier owners | 正式AY正常逐笔收入、活timer保存、缺电停付/复电续付、换主仅新House收款、退休停付和四次完整存读已验。实际采矿倍率、科技树付款、叠加/EMP/战斗死亡及多AI仍待验，不把定时收入混作交矿加成 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
