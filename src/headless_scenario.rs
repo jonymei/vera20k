@@ -1433,6 +1433,14 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     fn aymod_two_ai_economies(country: u32) -> (HeadlessScenario, Vec<InternedId>) {
+        aymod_two_ai_economies_with(country, |_| {})
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_two_ai_economies_with(
+        country: u32,
+        configure: impl FnOnce(&mut crate::skirmish_launch::SkirmishLaunchSession),
+    ) -> (HeadlessScenario, Vec<InternedId>) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, computers) = retail_battle_in(
             &root,
@@ -1442,6 +1450,7 @@ mod retail_construction_tests {
                 for slot in &mut session.opponents {
                     slot.team = crate::skirmish_launch::LaunchTeam::Team(1);
                 }
+                configure(session);
             },
             &[(
                 LaunchCountry::from_country_index(country),
@@ -2312,6 +2321,279 @@ mod retail_construction_tests {
                 "observed sales must finish, not just retain pending orders"
             );
         }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; a Soviet AI unable to fund recovery sends original miners hunting and attacks after a save"]
+    fn aymod_broke_soviet_ai_hunts_with_original_miners_after_load() {
+        use crate::map::entities::EntityCategory;
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies_with(1, |session| {
+            session.options.short_game = false;
+        });
+        let owner = computers[0];
+        let peer = computers[1];
+        let human = scene.sim().session.current_house().unwrap();
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+            output
+        };
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                computers.iter().all(|&owner| {
+                    scene.sim().houses[&owner].economy().score() > 0
+                        && scene.sim().entities().values().any(|entity| {
+                            entity.owner() == owner
+                                && entity.is_ai_alive()
+                                && scene.sim().interner.resolve(entity.type_ref()) == "HARV"
+                                && entity
+                                    .miner
+                                    .as_ref()
+                                    .is_some_and(|miner| !miner.cargo().is_empty())
+                        })
+                })
+            }),
+            "both normal AI starts must mine and earn before the pressure fixture"
+        );
+        let miners = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                entity.owner() == owner
+                    && entity.is_ai_alive()
+                    && scene.sim().interner.resolve(entity.type_ref()) == "HARV"
+                    && !entity.lifecycle.in_limbo()
+            })
+            .map(|entity| entity.stable_id())
+            .collect::<Vec<_>>();
+        // Finish real building construction before triggering Hunt. A newly
+        // spawned foundation is not yet the ordinary completed enemy target.
+        let targets = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(miners[0]).unwrap().position;
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest((i32::from(at.rx()) + 6, i32::from(at.ry()))),
+                &["GATECH"; 3],
+            )
+        };
+        assert!((0..600).any(|_| {
+            step(&mut scene);
+            targets.iter().all(|&id| {
+                scene.sim().entities().get(id).is_some_and(|entity| {
+                    entity.is_ai_alive()
+                        && entity.mission.effective().known() != Some(MissionType::Construction)
+                })
+            })
+        }));
+        let lost = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                entity.owner() == owner
+                    && entity.is_ai_alive()
+                    && entity.category() == EntityCategory::Structure
+                    && scene.sim().interner.resolve(entity.type_ref()) != "NAHAND"
+                    && !entity.lifecycle.in_limbo()
+            })
+            .map(|entity| entity.stable_id())
+            .collect::<Vec<_>>();
+        let peer_wallet = scene.sim().houses[&peer].economy().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            for id in lost {
+                let Some(entity) = sim.entities().get(id).filter(|entity| entity.is_ai_alive()) else {
+                    continue;
+                };
+                let hp = entity.health.current();
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        id,
+                        hp,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+            sim.houses
+                .get_mut(&owner)
+                .unwrap()
+                .economy_mut()
+                .set_credits_for_test(0);
+        }
+        assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
+        assert!(
+            scene.sim().entities().values().any(|entity| {
+                entity.owner() == owner
+                    && entity.is_ai_alive()
+                    && !entity.lifecycle.in_limbo()
+                    && scene.sim().interner.resolve(entity.type_ref()) == "NAHAND"
+            }),
+            "retain a real factory so this is economic recovery, not the no-factory emergency"
+        );
+        assert_eq!(
+            scene.sim().houses[&owner]
+                .tracking()
+                .resource_destinations(),
+            0
+        );
+        let refund = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                entity.owner() == owner
+                    && entity.is_ai_alive()
+                    && !entity.lifecycle.in_limbo()
+                    && entity.category() == EntityCategory::Structure
+            })
+            .map(|entity| {
+                crate::sim::production::techno_refund(
+                    scene.sim(),
+                    &scene.runtime.resources.rules,
+                    entity.stable_id(),
+                )
+                .unwrap_or(0)
+            })
+            .sum::<i32>();
+        assert!(
+            refund
+                < scene.sim().cost_of(
+                    owner,
+                    scene.runtime.resources.rules.object("NAREFN").unwrap(),
+                    &scene.runtime.resources.rules
+                ),
+            "the remaining buildings cannot refund enough for a refinery"
+        );
+        assert!(crate::sim::ai_build_need::check_build_need(
+            scene.sim(),
+            &scene.runtime.resources.rules,
+            owner
+        ));
+        let mut hunting = Vec::new();
+        assert!(
+            (0..3000).any(|_| {
+                step(&mut scene);
+                if !scene.sim().houses[&owner]
+                    .strategy_emergency()
+                    .all_to_hunt_bias()
+                {
+                    return false;
+                }
+                hunting = miners
+                    .iter()
+                    .copied()
+                    .filter(|&id| {
+                        scene.sim().entities().get(id).is_some_and(|entity| {
+                            entity.is_ai_alive()
+                                && entity.mission.effective().known() == Some(MissionType::Hunt)
+                        })
+                    })
+                    .collect();
+                !hunting.is_empty()
+            }),
+            "unfundable economic recovery must reach actual Hunt orders on surviving original miners"
+        );
+        assert!(!scene.sim().houses[&owner].is_defeated());
+        assert!(
+            !scene.sim().houses[&peer]
+                .strategy_emergency()
+                .all_to_hunt_bias()
+        );
+        let targets = targets
+            .into_iter()
+            .map(|id| (id, scene.sim().entities().get(id).unwrap().health.current()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY unfundable Soviet recovery has sent original miners hunting",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            scene.sim().houses[&owner]
+                .strategy_emergency()
+                .all_to_hunt_bias()
+        );
+        assert!(
+            !scene.sim().houses[&peer]
+                .strategy_emergency()
+                .all_to_hunt_bias()
+        );
+        for &id in &hunting {
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known(),
+                Some(MissionType::Hunt)
+            );
+        }
+        let income = scene.sim().houses[&peer].economy().score();
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+            (0..3600).any(|_| {
+                let output = step(&mut scene);
+                for event in &output.fire_events {
+                    if miners.contains(&event.attacker_id) {
+                        if let TargetKind::Entity(target) = event.target {
+                            if targets.contains_key(&target) {
+                                fired.insert(target);
+                            }
+                        }
+                    }
+                }
+                fired.iter().any(|id| {
+                    scene
+                        .sim()
+                        .entities()
+                        .get(*id)
+                        .is_none_or(|entity| entity.health.current() < targets[id])
+                }) && scene.sim().houses[&peer].economy().score() > income
+            }),
+            "restored original miners must acquire and damage an enemy while the peer still earns: fired={fired:?}, defeated={}, peer_income={}/{income}, miners={:?}",
+            scene.sim().houses[&owner].is_defeated(),
+            scene.sim().houses[&peer].economy().score(),
+            miners
+                .iter()
+                .map(|&id| (
+                    id,
+                    scene.sim().entities().get(id).map(|entity| (
+                        entity.is_ai_alive(),
+                        entity.lifecycle.in_limbo(),
+                        entity.mission.current(),
+                        entity.mission.effective(),
+                        entity.attack_target.target(),
+                        entity.position,
+                    ))
+                ))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[cfg(feature = "npatch")]
