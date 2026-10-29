@@ -21853,6 +21853,24 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; cannon AA three-stage cadence and live dual clocks survive saves at each rank"]
+    fn aymod_gattling_cannon_aa_keeps_saved_three_stage_dispatch_cadence() {
+        use crate::sim::combat::veterancy::VeterancyRank;
+        for rank in [
+            VeterancyRank::Rookie,
+            VeterancyRank::Veteran,
+            VeterancyRank::Elite,
+        ] {
+            aymod_gattling_promotion_lifecycle(
+                true,
+                GattlingContinuation::Cadence(rank),
+                &["YAGGUN"],
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual air-target Gattling promotion, hot save and elite AA fire"]
     fn aymod_gattling_air_kills_promote_and_resume_elite_aa_fire_after_load() {
         aymod_gattling_promotion_lifecycle(true, GattlingContinuation::Stay, &["YTNK", "YAGGUN"]);
@@ -23603,7 +23621,9 @@ mod retail_construction_tests {
                     "all-stage cadence must start after ordinary Stop/Guard winds down"
                 );
             }
-            let target_kind = if cadence {
+            let target_kind = if airborne {
+                "ZEP".to_owned()
+            } else if cadence {
                 // Real authored durability, not added HP or altered weapons:
                 // keep one stationary target alive through the full spin-up.
                 scene
@@ -23622,8 +23642,6 @@ mod retail_construction_tests {
                     .unwrap()
                     .id
                     .clone()
-            } else if airborne {
-                "ZEP".to_owned()
             } else {
                 "NACNST".to_owned()
             };
@@ -23684,9 +23702,9 @@ mod retail_construction_tests {
                         assert_eq!(object.gattling_stages.weapon_stages(), 3);
                         let stage = (0..3).find(|&stage| {
                             let weapon = if requested_rank == VeterancyRank::Elite {
-                                object.elite_weapon_at(stage * 2)
+                                object.elite_weapon_at(stage * 2 + usize::from(airborne))
                             } else {
-                                object.weapon_at(stage * 2)
+                                object.weapon_at(stage * 2 + usize::from(airborne))
                             };
                             weapon == Some(sim.interner.resolve(fire.weapon_id))
                         }).unwrap();
