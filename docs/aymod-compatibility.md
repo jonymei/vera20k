@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于9052d3bd8补精英YURIPR对空永久控制的真实Aircraft消费者。实际ORCA普通Move起飞、空中发射/空中夺取、三次完整存读、移除控制者后归属保持并按新主命令正常降落其GAAIRC通过；新飞机/原建筑实际场景共2、永久控制直接回归1通过。仅测试/台账，无生产修改/新critic；固定玩家版未动，整体目标仍开放，Return Dubai弱攻势继续暂停。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于79b2e54bc补作者漏项F17：尤里X部署范围治疗。正式AY Battle实际普通ToggleInfantryDeploy发SuperPsiWave，受伤E1与MTNK同时回血，10格外受伤E1不变；治疗前后两次完整存读、已发射rearm保留及后续120帧不重复开火通过。新实际场景1、部署事件/部署武器直接消费者各1通过。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,14 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F17新增作者漏项：尤里X部署范围治疗（2026-10-29）
+
+- 作者170507明确说尤里X部署治疗周围单位；此前清单主要记录心控与永久控制，没有单独覆盖该副武器消费者。本轮核现有owner即可运行，不把首版F/V表当功能全集，也不将新增验收写成新增生产修复。
+- 正式AY Battle typed YURIPR为Deployer/DeployFire，副槽SuperPsiWave是AreaFire/FireOnce、正Damage250；SuperPsiPulse的配置Verses为负，支持步兵/装甲治疗而非建筑治疗。经现有Infantry Mission_Unload51F6E0、部署武器选择、正常弹体/AoE/ReceiveDamage共享owners，不新增“尤里治疗”特例或直接加血。
+- 新aymod_yuri_prime_deploy_heals_a_wounded_ally_after_load实际放置同House的YURIPR、附近E1/MTNK与10格以外E1；正式Super receiver分别造成半血损伤，不写health。治疗前完整保存恢复，普通ToggleInfantryDeploy必须产实际SuperPsiWave fire_event，并使附近步兵与重甲车均回血，远处同类步兵全程保持原伤，排除全图医疗/普通自愈冒充范围效果。
+- 治疗后第二次完整保存恢复保留步兵/车HP及源rearm，后续120普通帧不产源新fire_event，远处E1仍未恢复，近处已治愈生命不回退。不是精确治疗量、边缘衰减或完整ROF/重复部署时序对照；敌方也可能被当前AffectsAllies/敌我政策治疗，未擅自把配置改为只治友军。
+- 最终新增实际场景1、synchronized_deploy_queues_unload_before_handler_action_and_sound与deployed_gi_uses_deployed_fire_visual_with_deploy_fire_weapon各1通过，共3项。仅测试/台账，无新权威状态/RNG调用/timer写入/Detach/保存字段，无新critic；未启动GUI、改MOD/原档/固定构建或发布。不同House盟友/敌军、其他装甲/空中目标、建筑零Verses、精英/重复部署/被EMP时及多AI自主部署、实际环形动画仍开放，不关闭整个MOD适配。
 
 ### 精英尤里X：空中Aircraft永久控制、移除控制者与存读（2026-10-29）
 
@@ -1504,6 +1512,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F15 / P2 / 已有生产实现，根库存与示例GPU已验 | 作者要求防御建筑选中显示范围；HasRadialIndicator/当前武器范围经原radial owner绘制 | Tactical6DBE39/Building456750/GetSensorRange4566B0；正式AY根10种可选有武器防御均产范围，TESLA普通/精英及RGBA/BGRA GPU与Z不变通过 | 全地图/模式层、其他阶段/类型GPU、完整游戏遮挡/保存恢复及真人GUI仍待验，不强开所有建筑flag |
 
 | F16 / P1 / 已修停机坪维修输入与目标保留，实际AY存读已验 | 作者工程师IFV维修空指部上的飞机 | Unit73FDE1→7E09E6及73FE04..07 NOP；Techno6FAAE0→6FAAEF | 沿现有unit_repair_action/healer_target_drop_step解除NP停机坪拒绝，保留空中拒绝及Organic输入政策；实际登车/降落/实射回血/存读续修满通过。其他家族、AI自主维修和GUI仍待验 |
+
+| F17 / P1 / 已有部署治疗owner，实际AY范围与存读已验 | 尤里X部署治疗周围单位，非心控武器 | YURIPR副槽SuperPsiWave→SuperPsiPulse负Verses；现有Infantry部署/弹体/AoE/伤害receiver | 普通部署实际发射，附近E1/MTNK回血、远处E1不变、治疗前后存读及rearm/120帧不重放通过；精确量/边沿、其他敌我/空中/建筑、多AI与画面仍待验 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。

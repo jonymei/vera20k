@@ -20023,6 +20023,189 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Yuri Prime deploy heals a nearby wounded unit"]
+    fn aymod_yuri_prime_deploy_heals_a_wounded_ally_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, yuri, patient) = aymod_nearby_pair("YURIPR", "E1", true);
+        let owner = scene.sim().entities().get(yuri).unwrap().owner();
+        let strength = scene.runtime.resources.rules.object("E1").unwrap().strength;
+        let (tank, distant) = {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let kind = resources.rules.object("YURIPR").unwrap();
+            assert!(kind.deployer && kind.deploy_fire);
+            let weapon = resources.rules.weapon(kind.secondary().unwrap()).unwrap();
+            assert_eq!(weapon.id, "SuperPsiWave");
+            assert!(weapon.area_fire && weapon.fire_once && weapon.damage > 0);
+            let warhead = resources
+                .rules
+                .warhead(weapon.warhead.as_deref().unwrap())
+                .unwrap();
+            assert!(warhead.affects_allies && warhead.cell_spread_f64 > 0.0);
+            let at = sim.entities().get(yuri).unwrap().position;
+            let tank = spawn_on_free_cells(
+                sim,
+                &resources.rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["MTNK"],
+            )[0];
+            let far = cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        >= 10
+                });
+            let distant = spawn_on_free_cells(sim, &resources.rules, owner, far, &["E1"])[0];
+            let super_wh = sim.interner.intern("Super");
+            for target in [patient, tank, distant] {
+                let kind = sim
+                    .object_type(
+                        sim.entities().get(target).unwrap().type_ref(),
+                        &resources.rules,
+                    )
+                    .unwrap();
+                let damage = kind.strength / 2;
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        target,
+                        damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        super_wh,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+            (tank, distant)
+        };
+        let before = scene
+            .sim()
+            .entities()
+            .get(patient)
+            .unwrap()
+            .health
+            .current();
+        assert!(before > 0 && before < strength);
+        let tank_before = scene.sim().entities().get(tank).unwrap().health.current();
+        let far_before = scene
+            .sim()
+            .entities()
+            .get(distant)
+            .unwrap()
+            .health
+            .current();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY Yuri Prime before deployment healing");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::ToggleInfantryDeploy { entity_id: yuri },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..300).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == yuri
+                        && scene.sim().interner.resolve(event.weapon_id) == "SuperPsiWave"
+                });
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(distant)
+                        .unwrap()
+                        .health
+                        .current(),
+                    far_before
+                );
+                fired
+                    && scene.sim().entities().get(tank).unwrap().health.current() > tank_before
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(patient)
+                        .unwrap()
+                        .health
+                        .current()
+                        > before
+            }),
+            "ordinary deploy must really fire SuperPsiWave and heal the wounded allied GI"
+        );
+        let healed = scene
+            .sim()
+            .entities()
+            .get(patient)
+            .unwrap()
+            .health
+            .current();
+        assert!(healed <= strength);
+        let tank_healed = scene.sim().entities().get(tank).unwrap().health.current();
+        let rearm = scene.sim().entities().get(yuri).unwrap().rearm_timer;
+        let bytes = save_scene(&scene, "AY Yuri Prime after deployment healing");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(tank).unwrap().health.current(),
+            tank_healed
+        );
+        assert_eq!(scene.sim().entities().get(yuri).unwrap().rearm_timer, rearm);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .health
+                .current(),
+            healed
+        );
+        for _ in 0..120 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(
+                !output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == yuri)
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(distant)
+                    .unwrap()
+                    .health
+                    .current(),
+                far_before
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .health
+                    .current()
+                    >= healed
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; elite Yuri airborne aircraft capture and saved permanent ownership"]
     fn aymod_elite_yuri_captures_a_flying_orca_and_keeps_it_after_load() {
         use crate::sim::combat::TargetKind;
