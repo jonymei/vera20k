@@ -28608,6 +28608,199 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real V3 impact awards its launcher before missile retirement across saves"]
+    fn aymod_v3_terminal_impact_awards_parent_before_saved_missile_retirement() {
+        use crate::sim::combat::CombatLightRequest;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let (owner, parent, target, missile, regen, warhead) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let anchor = aymod_anchor(sim, owner);
+            let parent = spawn_on_free_cells(sim, rules, owner, cells_nearest(anchor), &["V3"])[0];
+            let at = sim.entities().get(parent).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()) + 10, i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        == 10
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect::<Vec<_>>();
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["APOC"])[0];
+            // Wounded receiver is fixture state; launch, flight and kill are not.
+            sim.substrate
+                .entities
+                .get_mut(target)
+                .unwrap()
+                .health
+                .set(1);
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let kind = rules.object("V3ROCKET").unwrap();
+            assert!(kind.trainable && kind.missile_spawn && kind.immune_to_psionics);
+            let e = sim.entities().get(parent).unwrap();
+            assert_eq!(e.veterancy.raw().bits(), 0);
+            let manager = e.spawn_manager.as_ref().unwrap();
+            assert_eq!(manager.slots().len(), 1);
+            let missile = manager.slots()[0].spawn().unwrap();
+            let regen = manager.regen_rate();
+            let warhead = rules.missile_spawn.v3.warhead.clone();
+            (owner, parent, target, missile, regen, warhead)
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Attack {
+                attacker_id: parent,
+                target_id: target,
+            },
+        ));
+        assert!(
+            (0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let e = scene.sim().entities().get(missile).unwrap();
+                !e.lifecycle.in_limbo()
+                    && e.is_object_alive()
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(parent)
+                        .unwrap()
+                        .spawn_manager
+                        .as_ref()
+                        .unwrap()
+                        .slots()[0]
+                        .spawn()
+                        .is_none()
+            }),
+            "normal V3 Attack must detach a live in-flight missile from its pool"
+        );
+        scene.runtime.simulation.queue_command(CommandEnvelope::new(
+            owner,
+            scene.sim().session.tick() + 1,
+            Command::Stop { entity_id: parent },
+        ));
+        tick_with_due_commands(&mut scene);
+        assert!(scene.sim().entities().get(target).unwrap().is_alive());
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(missile)
+                .unwrap()
+                .spawn_owner_id
+                .owner(),
+            Some(parent)
+        );
+        let manager = scene
+            .sim()
+            .entities()
+            .get(parent)
+            .unwrap()
+            .spawn_manager
+            .clone()
+            .unwrap();
+        assert!(manager.slots()[0].spawn().is_none());
+        let bytes = save_scene(
+            &scene,
+            "AY real V3 missile flying after pool release and launcher Stop",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(parent)
+                .unwrap()
+                .spawn_manager
+                .as_ref(),
+            Some(&manager)
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(missile)
+                .unwrap()
+                .spawn_owner_id
+                .owner(),
+            Some(parent)
+        );
+        let mut impact = false;
+        // Rocket Detonate663030 calls area damage before the owner's UnInit.
+        // RecordKill702FF0/C2C49F must still see the live missile's SpawnOwner.
+        assert!((0..1200).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            impact |= output.combat_lights.iter().any(|event| matches!(event,
+                CombatLightRequest::Impact { warhead_ref, .. } if scene.sim().interner.resolve(*warhead_ref) == warhead));
+            impact && scene.sim().entities().get(target).is_none_or(|e| !e.is_alive())
+                && scene.sim().entities().get(missile).is_none()
+                && scene.sim().entities().get(parent).unwrap().veterancy.raw().bits() > 0
+        }), "real missile impact must kill, retire its source and award the surviving launcher");
+        let experience = scene.sim().entities().get(parent).unwrap().veterancy.raw();
+        let bytes = save_scene(
+            &scene,
+            "AY V3 launcher retains its terminal missile impact award",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(parent).unwrap().veterancy.raw(),
+            experience
+        );
+        assert!(scene.sim().entities().get(missile).is_none());
+        let replacement = (0..regen + 60)
+            .find_map(|_| {
+                tick_with_due_commands(&mut scene);
+                let e = scene.sim().entities().get(parent).unwrap();
+                assert_eq!(
+                    e.veterancy.raw(),
+                    experience,
+                    "no duplicate impact award during regeneration"
+                );
+                e.spawn_manager.as_ref().unwrap().slots()[0].spawn()
+            })
+            .expect("the launcher must regenerate a new missile after its saved real impact");
+        assert_ne!(replacement, missile);
+        let e = scene.sim().entities().get(replacement).unwrap();
+        assert_eq!(e.spawn_owner_id.owner(), Some(parent));
+        assert_eq!(e.veterancy.raw(), experience);
+        let bytes = save_scene(
+            &scene,
+            "AY replacement V3 missile inherits the launcher's real impact experience",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let e = scene.sim().entities().get(replacement).unwrap();
+        assert_eq!(e.spawn_owner_id.owner(), Some(parent));
+        assert_eq!(e.veterancy.raw(), experience);
+        assert_eq!(
+            scene.sim().entities().get(parent).unwrap().veterancy.raw(),
+            experience
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; successive land/naval-parent promotions and saved missile regeneration"]
     fn aymod_spawn_pools_follow_consecutive_saved_parent_promotions() {
         use crate::sim::combat::veterancy::{LEVEL_ELITE, LEVEL_ROOKIE, LEVEL_VETERAN};

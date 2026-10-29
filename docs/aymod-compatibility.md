@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 本轮基线42634bd19，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。V05扩展既有aymod_carrier_child_keeps_experience_and_regenerates_after_real_load，不另建母子机/经验owner：原本已通过实际YURI武器在途控制CARRIER、旧机群退休、新House重建HORNET/SpawnOwner及存读；现在把新机群对旧主目标的终点从“发射事件”推进到普通母舰Attack→真实HORNET终结击杀。APOC预置1HP是明确fixture，不冒称全血实战；射击/终结/奖励都走生产链。捕获母舰的YURI非精英且正式controller_points(100)>0，排除精英回退/比例0掩盖；原生RecordKill702FF0→C2C208/C2C49F读取原killer的controller，Aircraft有trainable SpawnOwner时执行自己和母体两份奖励。本例新翼子机无controller，真实击杀令子机和受控母舰raw均增，YURI raw不增；新增完整存读逐个保留母舰/子机/控制者经验。原后续controller死亡、航母归还及旧主新机群重建/继承检查仍通过。
-- 正式生产库存aymod_spawn_family_training_inventory新增免疫断言：Battle/XMP03T4和Return Dubai两个完整加载中的7组父子配置，其ASW/HORNET/CMISL/DMISL/V3ROCKET子机均ImmuneToPsionics；不关闭免疫强造“直接受控子机”例。此结论限这两个场景，不泛化未来地图/外部修改。最终扩展实际1、库存1、NP奖励模块7通过，共9项，retail环境及REQUIRE_RETAIL_INI=1；仅测试/台账，无生产权威状态、RNG抽样、timer写入、Detach或保存布局新增，既有原owners执行原副作用，无新玩法critic。未启动GUI、修改MOD/原档/固定版或发布，当前无遗留执行。下一安全动作查V05导弹子机命中并自身销毁时的击杀者生命周期/经验接收者，先定位现有实际DRED/BSUB/V3链与RecordKill调用，不用强行控制免疫子机或调经验/AI权重。机场常用补给/毁场/换主/EMP实际边界已留在F06，持续多机场/多AI/GUI仍开放，不无限重复微边界。
+- 本轮基线d0672c565，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。V05新增aymod_v3_terminal_impact_awards_parent_before_saved_missile_retirement：正式AY Battle/XMP03T4合法spawn普通V3/10格同层敌APOC，目标预置1HP/Sleep且敌House human为隔离fixture；没有直接伤害/经验/飞行位置写入。普通Attack令原V3ROCKET真实离开limbo并出母体槽，正常Stop只停母体；目标仍活/子机SpawnOwner仍指母体时第一次完整存读保留同manager/源链接。原663030 Detonate的6632C7调用ApplyAreaDamage后、6632D3虚调用UnInit前，RecordKill702FF0/C2C49F仍能通过原killer取SpawnOwner；正常帧必须同时观察原V3弹头impact请求、目标真正死亡、旧导弹退休和母体raw从0增加。第二次完整存读保留母体经验/旧源不存在；正常再生得到不同ID的替补、期间母体经验不重复增加，新子机继承母体raw/SpawnOwner，第三次完整存读保持。不是全血目标、所有导弹几何/控制者换主/多AI战斗或全部经验算术认证。
+- 最终新实际1、原DEST/DRED/BSUB/V3/VLAD连续晋升/热保存再生组合实际1、NP奖励7通过，共9项，retail环境及REQUIRE_RETAIL_INI=1。仅测试/台账，无生产权威状态、RNG抽样、timer写入、Detach或保存布局新增；各原owner正常执行已有副作用，无新玩法critic。未启动GUI、修改MOD/原档/固定版或发布，当前无遗留执行。下一安全动作回到总清单核对明确缺生产实现与仅缺验收的项目，优先非门禁生产缺口，不按每个导弹型号无限扩展同一例；F12完整AppState到启动/颜色消费者链是后续可查入口，不能据此解除F11光照批准门禁。V01/F11设计/批准门禁、F22容量设计冲突及Return Dubai弱攻势暂停保持。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -425,7 +425,8 @@
 - DRED精英池另用普通Attack向真实敌方CARRIER发射，两枚旧子机实际离开limbo后至少一槽真实出池；不通过直接UnInit/致死注入制造再生。普通Stop后仍在运行中的原配置再生计时/完整manager保存恢复，正常帧新建不同ID的DMISL，SpawnOwner和母体当前raw继承正确。实读6B78EF→C2D7F3..C2D816由子机Trainable控制复制，再存读后新导弹通过普通Attack实际离开limbo重发。这里证明出池/再生/重发，不扩称所有弹道命中几何或终端伤害。
 - 初版用无有效参赛对手的加载夹具，导弹虽已发射，frame91对局终止跳过MainTick尾帧提交，导致之后等待永不到期；对象mission counter继续被测试调用不能证明游戏时钟在前进。读现有commit_frame_tail终局门后改用原有对手/正常MCV新局，保留原胜负政策且在等弹循环断言时钟前进，不改timer、清终局标志或调整AI权重来过测试。此失败不是导弹或Return Dubai弱攻势红证据。
 - 最终retail gate/NP下实际库存1项、新DEST/DRED组合1项、原CARRIER实杀/再生/重发1项通过；SpawnManager36项通过（旧Hornet整轮扫射slow未触及、保留1 ignored），NP奖励6项通过。首次两个模块路径过滤器为0，已用正确路径各补36/6，不计0项为通过。纯NP测试新增，未重跑stock既有覆盖，也未启动GUI/改MOD或原始存档/固定玩家版/发布；仅测试/台账，无新生产RNG/timer/Detach或保存字段，无需新玩法critic。
-- 剩余：DEST/CDEST单槽实际反潜与receiver死亡再生见下节，实际防空弹实杀仍未验；BSUB/CMISL见后续节，V3/VLAD组合后续验收见对应节，其他边界、子机已更强边界的更多实际场景、换主和多AI长局；旧单元强子机不降级覆盖保留，不以本轮关闭整个V05。
+- 2026-10-30补普通V3的实际终结奖励：正常Attack/Stop后在原弹仍飞行且SpawnOwner保持时保存，恢复后原弹实际impact杀死预伤目标、自身退休且母体获得经验，再保存/正常再生/替补继承保存；没有直接调用终结或奖励入口。原6632C7面积伤害先于6632D3 UnInit，与唯一rocket/RecordKill owners一致；不把导弹出池当作自身死亡。
+- 当前边界：DEST/CDEST实际反潜、防空击落与再生，BSUB/CMISL实际命中，CARRIER新翼实杀/控制母舰奖励，V3终端退休奖励均见各现行节，不能再统一列为未验。其他边界、子机已更强场景、在途控制者退休/换主及多AI长局仍开放；旧单元强子机不降级覆盖保留，不以这些样例关闭整个V05。
 
 ### V05实际DEST/CDEST单槽反潜机：实射、损失与存读再生（2026-10-29）
 
