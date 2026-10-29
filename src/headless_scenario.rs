@@ -20023,6 +20023,161 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; elite Yuri airborne aircraft capture and saved permanent ownership"]
+    fn aymod_elite_yuri_captures_a_flying_orca_and_keeps_it_after_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::movement::air_movement;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, yuri, plane) = aymod_nearby_pair("YURIPR", "ORCA", false);
+        let owner = scene.sim().entities().get(yuri).unwrap().owner();
+        let enemy = scene.sim().entities().get(plane).unwrap().owner();
+        let pad = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            // Rank is a scenario input; this test is about the elite weapon,
+            // not how the controller earns its experience.
+            sim.substrate
+                .entities
+                .get_mut(yuri)
+                .unwrap()
+                .veterancy
+                .set_elite();
+            sim.mission_queue_exact(
+                yuri,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let at = sim.entities().get(yuri).unwrap().position;
+            let pad = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry()))),
+                &["GAAIRC"],
+            )[0];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()) - 12, i32::from(at.ry()))),
+                &["GAAIRC"],
+            );
+            let weapon = rules
+                .weapon(rules.object("YURIPR").unwrap().elite_primary().unwrap())
+                .unwrap();
+            assert!(
+                rules
+                    .projectile(weapon.projectile.as_deref().unwrap())
+                    .unwrap()
+                    .aa
+            );
+            assert!(
+                rules
+                    .warhead(weapon.warhead.as_deref().unwrap())
+                    .unwrap()
+                    .is_perma_controlled
+            );
+            sim.queue_command(CommandEnvelope::new(
+                enemy,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: plane,
+                    target_rx: at.rx() + 3,
+                    target_ry: at.ry() + 3,
+                },
+            ));
+            pad
+        };
+        let airborne = |scene: &HeadlessScenario| {
+            air_movement::is_high_flying(
+                scene.sim().entities().get(plane).unwrap(),
+                scene.sim().resolved_terrain(),
+                Some((&scene.runtime.resources.rules, scene.sim().interner())),
+            )
+        };
+        assert!((0..300).any(|_| {
+            tick_with_due_commands(&mut scene);
+            airborne(&scene)
+        }));
+        assert_eq!(scene.sim().entities().get(plane).unwrap().owner(), enemy);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Attack {
+                attacker_id: yuri,
+                target_id: plane,
+            },
+        ));
+        let mut shot_in_air = false;
+        assert!(
+            (0..300).any(|_| {
+                let high = airborne(&scene);
+                let output = tick_with_due_commands(&mut scene);
+                shot_in_air |= high
+                    && output.fire_events.iter().any(|event| {
+                        event.attacker_id == yuri && event.target == TargetKind::Entity(plane)
+                    });
+                scene.sim().entities().get(plane).unwrap().owner() == owner
+            }),
+            "the elite psychic weapon must actually capture an airborne Aircraft"
+        );
+        assert!(shot_in_air);
+        assert!(airborne(&scene), "capture must finish before the ORCA lands");
+        let assert_owned = |scene: &HeadlessScenario| {
+            let captured = scene.sim().entities().get(plane).unwrap();
+            assert!(captured.health.current() > 0 && !captured.lifecycle.in_limbo());
+            assert_eq!(captured.owner(), owner);
+            assert!(captured.mind_control.permanent());
+            assert_eq!(captured.mind_control.controller(), None);
+        };
+        assert_owned(&scene);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let bytes = save_scene(scene, "AY elite Yuri captures a flying ORCA");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_owned(scene);
+        };
+        restore(&mut scene);
+        aymod_remove_shooter(&mut scene, yuri);
+        restore(&mut scene);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::clicked_mission(plane, MissionType::Enter, TargetKind::Entity(pad)),
+        ));
+        assert!(
+            (0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert_owned(&scene);
+                let sim = scene.sim();
+                let captured = sim.entities().get(plane).unwrap();
+                captured.radio_contacts.contains(pad)
+                    && sim
+                        .entities()
+                        .get(pad)
+                        .unwrap()
+                        .radio_contacts
+                        .contains(plane)
+                    && air_movement::current_fly_height(captured, sim.resolved_terrain()) == 0
+            }),
+            "the permanently captured aircraft must obey its new owner and dock after the controller is gone"
+        );
+        restore(&mut scene);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY elite Yuri permanent building control"]
     fn aymod_elite_yuri_keeps_captured_building_after_controller_removal() {
         use crate::sim::command::{Command, CommandEnvelope};
