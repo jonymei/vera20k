@@ -3254,7 +3254,7 @@ mod tests {
     }
 
     #[test]
-    fn gsi_04_07_damage_receiver_pipeline_source_admission_and_house_snapshot() {
+    fn gsi_04_07_damage_receiver_retains_source_house_but_filters_live_attacker_house() {
         fn run(
             damage_self: bool,
             warhead_name: &str,
@@ -3320,8 +3320,10 @@ mod tests {
             let ids = hit_ids(&aoe.hits);
             let captured_houses = aoe.hits.iter().map(|event| event.source_house).collect();
 
-            // Prove alliance resolution reads the detonation ABI snapshot, not
-            // a later live-source owner value.
+            // ReceiveDamage701CA1..701CB9 reads the actual attacker argument
+            // and asks its current House+21C IsAlliedWith4F9A50. The separate
+            // detonation SourceHouse remains on the receipts for attribution;
+            // it does not freeze the AffectsAllies operand across receivers.
             entities.change_owner(1, enemy_house);
             let mut commit = ReceiverCommit::new();
             commit
@@ -3354,15 +3356,17 @@ mod tests {
         let (ordinary_ids, ordinary_houses, ordinary_hp) = run(false, "OrdinaryWH");
         assert_eq!(ordinary_ids, vec![2, 3]);
         assert_eq!(ordinary_houses, vec![Some(source_house); 2]);
-        assert_eq!(ordinary_hp, [100, 100, 60]);
+        assert_eq!(ordinary_hp, [100, 60, 100]);
 
         let (damage_self_ids, _, damage_self_hp) = run(true, "OrdinaryWH");
         assert_eq!(damage_self_ids, vec![1, 2, 3]);
-        assert_eq!(damage_self_hp, [60, 100, 60]);
+        // DamageSelf and CrushWarhead admit the source into the AoE list, but
+        // neither bypasses the receiver's later allied-damage protection.
+        assert_eq!(damage_self_hp, [100, 60, 100]);
 
         let (crush_ids, _, crush_hp) = run(false, "CrushWH");
         assert_eq!(crush_ids, vec![1, 2, 3]);
-        assert_eq!(crush_hp, [60, 100, 60]);
+        assert_eq!(crush_hp, [100, 60, 100]);
     }
 
     #[test]
