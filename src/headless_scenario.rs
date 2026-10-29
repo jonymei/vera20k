@@ -1428,6 +1428,83 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; three hard AI bases and actual paid Grand Cannon placement"]
     fn aymod_three_ai_bases_only_allies_produce_and_place_the_grand_cannon() {
+        aymod_three_ai_base_defense("GTGCAN", "GTGCAN2");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual paid AI gap generator and authored fifteen-cell fog after load"]
+    fn aymod_three_ai_bases_build_the_authored_super_radius_gap() {
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, gap) = aymod_three_ai_base_defense("GAGAP", "GAGAP2");
+        let kind = scene.runtime.resources.rules.object("GAGAP").unwrap();
+        assert!(kind.gap_generator && kind.ai_build_this && kind.powered);
+        assert_eq!(
+            (kind.gap_radius_in_cells, kind.super_gap_radius_in_cells),
+            (15, 15)
+        );
+        assert_eq!(kind.extra_power.drain(), 150);
+        let human = scene.runtime.resources.rules.object("GAGAP2").unwrap();
+        assert_eq!(
+            (human.gap_radius_in_cells, human.super_gap_radius_in_cells),
+            (10, 15)
+        );
+        let assert_gap = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let entity = sim.entities().get(gap).unwrap();
+            assert_eq!(
+                sim.building_operational_state(gap, &scene.runtime.resources.rules),
+                Some(true)
+            );
+            let viewer = sim.session.current_house().unwrap();
+            let deposit = entity.gap_generator.viewers().get(&viewer).unwrap();
+            assert!(deposit.active());
+            assert_eq!(deposit.radius(), 15);
+            let center = (entity.position.rx(), entity.position.ry());
+            assert!(sim.fog.is_cell_gap_covered(viewer, center.0, center.1));
+            // The AI's authored ordinary radius already covers cells outside
+            // the human variant's ten-cell radius; no invented AI toggle.
+            assert!(
+                (-15i16..=15)
+                    .flat_map(|dx| (-15i16..=15).map(move |dy| (dx, dy)))
+                    .filter(|&(dx, dy)| dx * dx + dy * dy > 100 && dx * dx + dy * dy <= 196)
+                    .any(|(dx, dy)| {
+                        center
+                            .0
+                            .checked_add_signed(dx)
+                            .zip(center.1.checked_add_signed(dy))
+                            .is_some_and(|(x, y)| sim.fog.is_cell_gap_covered(viewer, x, y))
+                    })
+            );
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(gap)
+                .unwrap()
+                .gap_generator
+                .viewers()
+                .get(&scene.sim().session.current_house().unwrap())
+                .is_some_and(|deposit| deposit.active())
+        }));
+        assert_gap(&scene);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY paid AI gap generator with authored super-sized ordinary radius",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_gap(&scene);
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            assert_gap(&scene);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_three_ai_base_defense(kind: &str, human_kind: &str) -> (HeadlessScenario, u64) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, computers) = retail_battle_in(
             &root,
@@ -1461,20 +1538,20 @@ mod retail_construction_tests {
             .runtime
             .resources
             .rules
-            .object("GTGCAN")
+            .object(kind)
             .unwrap()
             .base_plan_type_index;
         let human_cannon = scene
             .runtime
             .resources
             .rules
-            .object("GTGCAN2")
+            .object(human_kind)
             .unwrap()
             .base_plan_type_index;
         let mut held = std::collections::BTreeMap::new();
         let mut paid = std::collections::BTreeSet::new();
         let mut on_map = std::collections::BTreeSet::new();
-        let mut placed = false;
+        let mut placed = None;
         for _ in 0..24000 {
             tick_with_due_commands(&mut scene);
             let sim = scene.sim();
@@ -1497,13 +1574,13 @@ mod retail_construction_tests {
                     continue;
                 };
                 let name = sim.interner.resolve(product.type_id);
-                assert_ne!(name, "GTGCAN2");
-                if name == "GTGCAN" {
+                assert_ne!(name, human_kind);
+                if name == kind {
                     assert_eq!(factory.owner(), allied);
                     let id = product.entity_id.unwrap();
                     let initial_balance = *held.entry(id).or_insert_with(|| {
                         eprintln!(
-                            "AY Allied cannon factory object{id} at tick{}",
+                            "AY Allied {kind} factory object{id} at tick{}",
                             sim.session.tick()
                         );
                         factory.balance()
@@ -1514,14 +1591,14 @@ mod retail_construction_tests {
                 }
             }
             for actor in sim.entities().values().filter(|actor| {
-                sim.interner.resolve(actor.type_ref()) == "GTGCAN" && actor.is_object_alive()
+                sim.interner.resolve(actor.type_ref()) == kind && actor.is_object_alive()
             }) {
                 assert_eq!(actor.owner(), allied);
                 if !actor.lifecycle.in_limbo() && actor.lifecycle.cell_marked() {
                     assert!(held.contains_key(&actor.stable_id()));
                     if on_map.insert(actor.stable_id()) {
                         eprintln!(
-                            "AY cannon{} placed at tick{}, mission={:?}",
+                            "AY {kind}{} placed at tick{}, mission={:?}",
                             actor.stable_id(),
                             sim.session.tick(),
                             actor.mission
@@ -1536,10 +1613,10 @@ mod retail_construction_tests {
                         )
                 {
                     assert!(paid.contains(&actor.stable_id()));
-                    placed = true;
+                    placed = Some(actor.stable_id());
                 }
             }
-            if placed {
+            if placed.is_some() {
                 break;
             }
         }
@@ -1569,8 +1646,8 @@ mod retail_construction_tests {
             );
         }
         assert!(
-            placed && !paid.is_empty(),
-            "no paid Allied cannon placement: held={held:?}, paid={paid:?}, on_map={on_map:?}, bases={:?}",
+            placed.is_some() && !paid.is_empty(),
+            "no paid Allied {kind} placement: held={held:?}, paid={paid:?}, on_map={on_map:?}, bases={:?}",
             computers
                 .iter()
                 .map(|owner| {
@@ -1600,6 +1677,7 @@ mod retail_construction_tests {
                 })
                 .collect::<Vec<_>>()
         );
+        (scene, placed.unwrap())
     }
 
     #[cfg(feature = "npatch")]

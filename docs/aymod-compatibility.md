@@ -6,15 +6,23 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于3867a1655继续V05实际防空击杀：DEST/CDEST的ASW真实出击伤潜艇后，敌方电脑AEGIS普通Guard自主选中/发射/伤害/击杀并获得经验，母舰存活。丢机待再生完整存读、替补继承/再存读/再出击实伤通过。原receiver死亡对照保留，替补端点也加实际伤害；无生产修改/新critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于c2b987e41核A10电脑裂缝：正式AY typed的GAGAP普通/超级半径均15，GAGAP2才10/15；实际三困难AI基地发展中盟军付款/落地/建成GAGAP，敌方实际fog覆盖10格外，完整存读及120帧保持。原三AI巨炮回归1项、gap_supercharge5项通过；无生产修改/新critic，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
-- Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；GUI及占领异阵营科技后的边界未验。
+- Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### A10电脑裂缝：普通配置已是15格，不凭“未切超级”加AI政策（2026-10-29）
+
+- 新增aymod_three_ai_bases_build_the_authored_super_radius_gap，复用原三AI巨炮的真实基地验证助手aymod_three_ai_base_defense，不另写基地/付款/落地算法。实际AY Battle三阵营困难电脑，停用进攻触发以隔离经济/基地组件；三方仍自主发展。每帧非盟军计划/选择不得含GAGAP，所有工厂不得含玩家专用GAGAP2；仅盟军正常选择GAGAP、在同一factory object实际支付、落地并结束施工，不手放裂缝或授予科技/金钱。
+- 正式生产reader确认GAGAP为GapGenerator/Powered/AIBuildThis，普通与超级半径均15，ExtraPower drain150；玩家GAGAP2普通10/超级15。实际GameMD.exe Building GetSensorRange4566D9..4566FC按Techno+268选择Type+CD3或+CD2；二者都15时，不能把未观察到超级开关当成缺少15格范围。44E29D..44E306的Unload超级开关还会设置额外耗电标志，不能为制造“电脑使用超级”的表象擅加调用或白送电力。本例不证明从未自动toggle，也不把该开关的额外耗电政策宣布已验。
+- 施工后等待真实operational publication，当前人类敌方viewer的deposit必须active/radius15，实际FogState中心有gap，且10格以外/14格以内的合法格确有gap覆盖，不只读配置字段。完整保存/资源恢复后重复上述断言，并正常跑120帧逐帧保持。未声称GPU/GUI、原生同场录像、所有外交/EMP/占领边界或多AI战斗长局通过。
+- 实际新增三AI裂缝1项通过（807秒），原同助手三AI巨炮1项通过，gap_supercharge_tests5项通过；最后仅格式化新测试函数后重编并再跑5项通过。无生产改动、RNG/timer/Detach/保存字段新增，无新critic；未启动GUI、修改MOD/原始存档/固定构建或发布。测试时间长来自普通基地发展，不通过加资源/减成本缩短。
+- A10裂缝新局建造/已配置大半径的基本运行及存读不再列纯待验。异阵营科技占领、实际断电/EMP恢复的AY组合、外交/多AI长期边界仍开放；AI的超级开关原生自动调用条件尚未追全，不能据有限字面字段扫描宣称不存在或擅补。Return Dubai弱攻势仍暂停，本例不是该线的发展/出击诊断。
 
 ### V05反潜机实际防空击杀、保存再生与再出击伤害（2026-10-29）
 
@@ -1505,7 +1513,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
 | A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。三项相关NP开关已核各物理层未设置，对应默认不能解释此停滞；原生相关门同样保留。仍不能擅改悬停参数或直接归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
-| A10 / P1 / 巨炮实际建造已验，其余待验 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。隔离进攻组件不等于完整战斗验收；占领科技/GUI、裂缝建造与超级裂缝相关单位/能力仍待验，不把旧作者bug当当前引擎必然存在 |
+| A10 / P1 / 巨炮/裂缝实际建造及裂缝大范围存读已验，边界开放 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。裂缝同样实际付款/落地/建成，其电脑GAGAP普通/超级均15格，实际敌方fog超过10格/完整存读/后续120帧保持；不据此擅造超级切换。隔离进攻组件不等于完整战斗验收；占领科技/GUI、AY停电/EMP组合及自动超级切换的完整原生条件仍开放，不把旧作者bug当当前引擎必然存在 |
 
 A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](npatch.md)；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
 
