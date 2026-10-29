@@ -25096,6 +25096,237 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Industrial Plant and Cloning Vats independently heal mechanical and organic units across source loss and saves"]
+    fn aymod_industrial_and_cloning_self_heal_keep_unit_classes_separate_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, ship, dolphin) =
+            aymod_water_pair_with_target_control("DEST", "DLPH", 8, true);
+        let owner = scene.sim().entities().get(ship).unwrap().owner();
+        let infantry = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            assert!(!rules.object("DEST").unwrap().organic);
+            assert!(rules.object("DLPH").unwrap().organic);
+            sim.change_owner_with_rules(
+                dolphin,
+                owner,
+                rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["E1"],
+            )[0]
+        };
+        let patients = [ship, dolphin, infantry];
+        let strengths = patients.map(|id| {
+            let entity = scene.sim().entities().get(id).unwrap();
+            scene
+                .runtime
+                .resources
+                .rules
+                .object(scene.sim().interner.resolve(entity.type_ref()))
+                .unwrap()
+                .strength
+        });
+        let period = scene
+            .runtime
+            .resources
+            .rules
+            .general
+            .self_heal_unit_frames
+            .max(
+                scene
+                    .runtime
+                    .resources
+                    .rules
+                    .general
+                    .self_heal_infantry_frames,
+            );
+        assert!(period > 0);
+        let wound = |scene: &mut HeadlessScenario, ids: &[u64]| {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let warhead = sim.interner.intern("Super");
+            for &id in ids {
+                let entity = sim.entities().get(id).unwrap();
+                let strength = rules
+                    .object(sim.interner.resolve(entity.type_ref()))
+                    .unwrap()
+                    .strength;
+                let damage = (entity.health.current() - strength / 2).max(0);
+                sim.commit_direct_damage_receiver(
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        id,
+                        damage,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+        };
+        let health = |scene: &HeadlessScenario| {
+            patients.map(|id| scene.sim().entities().get(id).unwrap().health.current())
+        };
+        wound(&mut scene, &patients);
+        assert_eq!(
+            (
+                scene.sim().houses[&owner].self_heal_units(),
+                scene.sim().houses[&owner].self_heal_infantry()
+            ),
+            (0, 0)
+        );
+        // SelfHealing is independently active on AY's naval units. Its
+        // existing intrinsic owner heals one HP; House grants add larger steps.
+        for _ in 0..period * 2 {
+            let previous = health(&scene);
+            tick_with_due_commands(&mut scene);
+            assert!(
+                health(&scene)
+                    .into_iter()
+                    .zip(previous)
+                    .all(|(hp, before)| (0..=1).contains(&(hp - before)))
+            );
+        }
+        let add_provider = |scene: &mut HeadlessScenario, name: &str| {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object(name).unwrap();
+            assert_eq!(
+                (kind.units_gain_self_heal, kind.infantry_gain_self_heal),
+                if name == "NAINDP" { (1, 0) } else { (0, 1) }
+            );
+            let at = aymod_anchor(sim, owner);
+            spawn_on_free_cells(sim, rules, owner, cells_nearest((at.0 + 12, at.1)), &[name])[0]
+        };
+        let plant = add_provider(&mut scene, "NAINDP");
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().houses[&owner].self_heal_units() == 1
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let bytes = save_scene(scene, "AY mechanical and organic self-heal grants");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        };
+        restore(&mut scene);
+        assert_eq!(
+            (
+                scene.sim().houses[&owner].self_heal_units(),
+                scene.sim().houses[&owner].self_heal_infantry()
+            ),
+            (1, 0)
+        );
+        let budget = period * strengths.into_iter().max().unwrap();
+        let mut mechanical_grant = false;
+        assert!(
+            (0..budget).any(|_| {
+                let previous = health(&scene);
+                tick_with_due_commands(&mut scene);
+                let hp = health(&scene);
+                for index in [1, 2] {
+                    assert!((0..=1).contains(&(hp[index] - previous[index])));
+                }
+                mechanical_grant |= hp[0] - previous[0] > 1;
+                mechanical_grant && hp[0] == strengths[0]
+            }),
+            "Industrial Plant must heal a mechanical ship, not an organic vehicle or infantry"
+        );
+        let vat = add_provider(&mut scene, "NACLON");
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().houses[&owner].self_heal_infantry() == 1
+        }));
+        wound(&mut scene, &patients);
+        restore(&mut scene);
+        assert_eq!(
+            (
+                scene.sim().houses[&owner].self_heal_units(),
+                scene.sim().houses[&owner].self_heal_infantry()
+            ),
+            (1, 1)
+        );
+        let mut grants = [false; 3];
+        assert!(
+            (0..budget).any(|_| {
+                let previous = health(&scene);
+                tick_with_due_commands(&mut scene);
+                let hp = health(&scene);
+                for index in 0..3 {
+                    grants[index] |= hp[index] - previous[index] > 1;
+                }
+                grants.into_iter().all(|seen| seen) && hp == strengths
+            }),
+            "both grant channels must independently heal their admitted unit classes"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .uninit_with_rules(plant, &runtime.resources.rules);
+        }
+        wound(&mut scene, &patients);
+        restore(&mut scene);
+        assert_eq!(
+            (
+                scene.sim().houses[&owner].self_heal_units(),
+                scene.sim().houses[&owner].self_heal_infantry()
+            ),
+            (0, 1)
+        );
+        assert!(
+            (0..budget).any(|_| {
+                let previous = health(&scene);
+                tick_with_due_commands(&mut scene);
+                let hp = health(&scene);
+                assert!((0..=1).contains(&(hp[0] - previous[0])));
+                [hp[1], hp[2]] == [strengths[1], strengths[2]]
+            }),
+            "loss of the Industrial Plant must not revoke organic or infantry healing"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .uninit_with_rules(vat, &runtime.resources.rules);
+        }
+        wound(&mut scene, &[dolphin, infantry]);
+        restore(&mut scene);
+        assert_eq!(
+            (
+                scene.sim().houses[&owner].self_heal_units(),
+                scene.sim().houses[&owner].self_heal_infantry()
+            ),
+            (0, 0)
+        );
+        for _ in 0..period * 3 {
+            let previous = health(&scene);
+            tick_with_due_commands(&mut scene);
+            assert!(
+                health(&scene)
+                    .into_iter()
+                    .zip(previous)
+                    .all(|(hp, before)| (0..=1).contains(&(hp - before)))
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Cloning Vats grants remote owner-only self-heal and revokes it across saves"]
     fn aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};

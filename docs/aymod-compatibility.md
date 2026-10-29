@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线215134ee2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：A01由原双盟军自然进攻测试提取唯一aymod_two_ai_natural_attack_lifecycle，新增双同盟困难苏联/尤里，从MCV/正常资金出发，各自实际付款成员/正式非防御队成型/离初始基地8格外射击原玩家目标/人类原目标实伤、完整存读后同一两队新射击已验。最终实际三阵营3、ai_team_creation4、team_script_vm18通过/1既有ignored未跑，共25项；苏联单跑1不重复计数。尤里初稿6座无保护目标全毁且原MCV被控，仅剩两座IC观察基地；改为24座实际GATECH输入后双家均出击，随后发现把YURI一次心控的小队解散误当续射失败，判据收紧为正damage且非心控武器，原队续射要求不放松。仅测试/台账，无生产修复/新critic；无AI成员/科技/钱/命令注入，观察保护/靶建筑仍为fixture，非整局无干预或所有战术长局认证。固定版未动，无GUI/MOD/原档/发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续多AI损耗补员/持续战斗或其他高频功能，勿重做已验自然首次出击/盖特微边界。
+- 本轮基线eeaeae462，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F26工业工厂车辆自愈遗漏项，并补F18 Organic Unit通道。正式AY Return Dubai的DEST/DLPH/E1，同House普通受伤：无源只有独立单点自愈；NAINDP仅给机械DEST额外大步治疗，NACLON再给Organic海豚及步兵独立治疗。两源并存/逐个UnInit退休、四次完整存读核(Units,Infantry)计数(1,0)/(1,1)/(0,1)/(0,0)，逐帧大步治疗随正确来源消失，固有SelfHealing保留。最终新实际1、原复制中心1、selfheal普通10/原生数值3通过，共15通过/1既有ignored未跑。初稿DNOA及DLPH有固有SelfHealing，不能假设零治疗，已改按原有独立单点自愈与House额外大步治疗区分，不改配置或关闭固有能力。仅测试/台账，无生产修复/新critic；设施/伤势/换主为隔离fixture，不称自然生产/AI治疗。固定版未动，无GUI/MOD/原档/发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续高频功能/作者遗漏或多AI损耗补员，不重复已验初次出击及自愈微边界。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -191,6 +191,14 @@
 - 首次续验仍用电脑接收中心，测试预期持续疗伤失败：实际新方先从伤兵HP70治到90，随后计数1→0；追到原中心满血1300、Selling后退休，非患者分流错误。原生Building ChangeOwner4492D7..449368对遭遇战中电脑取得另一非passive House所造建筑发Sell_Back(1)，既有sell_after_owner_change实际执行，不能为本项取消这条规则。最终持续疗伤夹具将接收House显式设human，以隔离自动出售；本例不是多AI自主医疗验收。既有捕获出售原生比较回归本轮另运行2项。
 - 通过既有UnInit owner退休源后双方计数均0，正式receiver再伤新方E1；第四次完整存读保持双方计数0，随后三个周期两方患者HP均不再增加。本例为源退休，不冒称实弹死亡或完整出售动画验收。
 - 最终实际复合场景1、techno_ai::selfheal（普通10+原生数值3）及captured_building_sale普通2通过，共16项。另selfheal的原retail Arena场景1项、capture-sale的零售组件2项ignored未重跑。仅测试/台账，无新增生产权威状态、RNG调用、timer写入、Detach或保存字段，不需玩法critic。正常自愈/换主/退休仍走既有owners；未启动GUI、修改MOD/原始存档/固定构建或发布。中心付费建造、多源叠加/Organic车辆分流、自然缺电/EMP组合、源战斗死亡及自主多AI长局仍开放，不能把本项或医院项当成完整医疗系统已验。
+
+
+### F26工业工厂车辆自愈、F18有机海军分流（2026-10-29）
+
+- 配置复核补遗漏：正式AY NAINDP除FactoryPlant折扣外还有UnitsGainSelfHeal=1，不只是F18的NACLON步兵通道。新增aymod_industrial_and_cloning_self_heal_keep_unit_classes_separate_after_load，使用正式Battle/Return Dubai、正常水面落点的DEST/DLPH及陆地E1，同一human House隔离；DLPH经已有ChangeOwner receiver归机械船同方。生产typed规则核DEST非Organic、DLPH为Organic，NAINDP两增益为(1,0)、NACLON为(0,1)，不改MOD或关闭固有SelfHealing。
+- 已有Techno AI的House自愈owner按6FA7D2..6FA857服务非Organic Unit、6FA8A9..6FA941服务Infantry及Organic Unit，登记/换主/撤销仍由原建筑owner持有。新实际场景先以Super直伤receiver将三类伤至半血，无源时逐帧最多固有单点治疗；建成/登记NAINDP并完整存读后，DEST必须实际额外多点回血至满，海豚与步兵不能获得该大步治疗。再添加NACLON、重新普通receiver受伤及完整存读，三类均必须实际出现额外多点治疗并治满。
+- 先UnInit退休NAINDP、再受伤并完整存读，计数(0,1)，DEST只余独立单点自愈、海豚与E1治满；再退休NACLON/受伤/完整存读，计数(0,0)，三类连续135逻辑帧均无额外大步治疗。四次保存分别覆盖(1,0)/(1,1)/(0,1)/(0,0)，不写House计数/治疗时钟/HP字段或添加第二套自愈模型。固有self_heal_step的每次+1与House治疗是两条正常叠加的生产链，不把撤销House能力解释为所有自愈必须停止。
+- 最终新实际1、原复制中心实际1、selfheal普通10与原生数值3通过，共15项；另1既有零售场景ignored未跑。初稿DNOA、换用DLPH的零治疗期待均被实际固有SelfHealing+1推翻；保留原配置并改为对额外House治疗的准入/撤销断言，不称为玩法修复。仅测试/台账，无新生产权威状态、RNG/timer/Detach或保存字段，无新玩法critic。设施生成、半血与直接UnInit为输入，不是付费科技树/实弹源死亡；未启动GUI、改MOD/原档/固定版或发布。其他车辆家族、多源叠加、Off/EMP/源实际战斗死亡及自主多AI仍开放。
 
 ### 工业工厂：实际建筑折扣、付款与两端造价经验（2026-10-29）
 
@@ -1739,7 +1747,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F17 / P1 / 已有部署治疗owner，实际AY范围与存读已验 | 尤里X部署治疗周围单位，非心控武器 | YURIPR副槽SuperPsiWave→SuperPsiPulse负Verses；现有Infantry部署/弹体/AoE/伤害receiver | 普通部署实际发射，附近E1/MTNK回血、远处E1不变、治疗前后存读及rearm/120帧不重放通过；精确量/边沿、其他敌我/空中/建筑、多AI与画面仍待验 |
 
-| F18 / P1 / House远程自愈、Off/换主/退休存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满、普通Off仍治满、正式换主后旧方停止/新方治满、退休源后双方停止及四次存读通过；电脑接收敌对所造中心会按原生自动出售，持续换主验收以human隔离。中心付费建造、多源叠加/其他类别、自然缺电/EMP及自主多AI仍待验 |
+| F18 / P1 / House远程自愈、Off/换主/退休存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满、普通Off仍治满、正式换主后旧方停止/新方治满、退休源后双方停止及四次存读通过；电脑接收敌对所造中心会按原生自动出售，持续换主验收以human隔离。Organic DLPH与机械DEST/E1的NAINDP/NACLON独立治疗、逐源退休及四次存读见F26。中心付费建造、多源叠加/其他类别、自然缺电/EMP及自主多AI仍待验 |
 
 | F19 / P1 / 现有选择与DiskLaser owner，普通/精英实际对照已验 | 旧说明精英飞碟直接打防御，实际两等级均如此 | 十种防御Drainable=false；SelectWeapon6F3558，无精英门 | 实际GAPILL实伤/不吸、保存保持；正常起飞后吸NAPOWR/保存/移走解绑通过。地面fixture起飞切目标、其他塔实弹/多AI/正常出厂仍开放，见F19及C09 |
 
@@ -1754,6 +1762,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F24 / P1 / 三阵营陆海工厂切换实际付款/出厂/存读已验，其余待验 | 作者170507要求运输艇默认从船厂造，无船厂时可从战车工厂造；不是同一类型动态改Naval | LCRF的GAWEAP前置/NegativePrerequisite=GAYARD，LCRF2的GAYARD前置/Naval；既有CanBuild4F7870及NP负前置、Factory/PLACE owners | 正式Battle/Return Dubai，GAWEAP付款出LCRF→GAYARD建成后禁LCRF/Ship队列付款出LCRF2→退休船厂/存读后重新付款出不同ID的LCRF，五次完整存读及三次费用已验。设施/电源生成、正常施工、直接UnInit退休是fixture，非科技树/设施付费/实弹摧毁。苏联NAWEAP/NAYARD的SAPC/SAPC2、尤里YAWEAP/YAYARD的YHVR/YHVR2亦已走同一实际付费/三件产品/五次存读链。船厂Off/EMP/换主/在途队列和自主AI仍待验；普通AI的原生CanBuild提前成功分支不因作者文字擅加人类负前置门 |
 
 | F25 / P2 / 正式Battle基础颜色/精英星标两格式GPU已验，完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。其他类型/全部模式地图、存读/换主/出驻后的完整界面与GUI仍待验，无新增绘制逻辑 |
+
+| F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。其他家族/多源叠加/Off/EMP/战斗死亡及自主多AI仍待验 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
