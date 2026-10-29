@@ -512,7 +512,16 @@ class EngineerInputs(bridge_child_sound.Sound):
             # Retain the full original binary lookup, unlike the historical
             # Explosion-only Sound fixture's local two-name sample mapping.
             return
-        if not 0x400000 <= pc < 0x7E1000 and pc != RET_MAGIC:
+        if not hasattr(self, 'native_code_ranges'):
+            from tools.native_oracle import IMAGE_BASE, image_bytes, _sections
+            # The selected immutable PE owns these ranges for this VM's life.
+            # NP text is outside retail .text; data/BSS are never code inputs.
+            self.native_code_ranges = tuple(
+                (IMAGE_BASE + rva, IMAGE_BASE + rva + raw)
+                for rva, _, raw, _, flags in _sections(image_bytes())
+                if raw and flags & 0x20000000)
+        if pc != RET_MAGIC and not any(low <= pc and pc + size <= high
+                                      for low, high in self.native_code_ranges):
             raise AssertionError(('non_native_input_code', f'0x{pc:08X}'))
         super().hook(u, pc, size, data)
 
