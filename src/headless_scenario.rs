@@ -2989,10 +2989,29 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied AI naturally produce attack teams and resume real attacks after a full save"]
     fn aymod_two_allied_ai_naturally_produce_attack_teams_and_resume_after_load() {
+        aymod_two_ai_natural_attack_lifecycle(0);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet AI pay for attack teams, leave base and resume actual fire across saves"]
+    fn aymod_two_soviet_ai_naturally_produce_attack_teams_and_resume_after_load() {
+        aymod_two_ai_natural_attack_lifecycle(1);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Yuri AI pay for attack teams, leave base and resume actual fire across saves"]
+    fn aymod_two_yuri_ai_naturally_produce_attack_teams_and_resume_after_load() {
+        aymod_two_ai_natural_attack_lifecycle(2);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_two_ai_natural_attack_lifecycle(country: u32) {
         use crate::sim::combat::TargetKind;
         use crate::sim::production::ProductionCategory;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let (mut scene, computers) = aymod_two_ai_economies(0);
+        let (mut scene, computers) = aymod_two_ai_economies(country);
         let human = scene.sim().session.current_house().unwrap();
         let origins = computers
             .iter()
@@ -3012,7 +3031,17 @@ mod retail_construction_tests {
             let at = aymod_anchor(sim, human);
             // Real unarmed human targets, not supplied AI members or orders.
             // The two protected observer yards keep normal defeat rules intact.
-            spawn_on_free_cells(sim, rules, human, cells_nearest(at), &["GATECH"; 6]);
+            // Yuri's first House can exhaust six targets and capture the MCV
+            // before its peer arrives. Supply more ordinary human structures,
+            // never extra AI members, money or targets immune to damage.
+            let target_count = if country == 2 { 24 } else { 6 };
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest(at),
+                &vec!["GATECH"; target_count],
+            );
         }
         let targets = scene
             .sim()
@@ -3021,6 +3050,18 @@ mod retail_construction_tests {
             .filter(|entity| entity.owner() == human)
             .map(|entity| (entity.stable_id(), entity.health.current()))
             .collect::<std::collections::BTreeMap<_, _>>();
+        let damaging_weapon = |scene: &HeadlessScenario, id| {
+            let rules = &scene.runtime.resources.rules;
+            let weapon = rules.weapon(scene.sim().interner.resolve(id)).unwrap();
+            // A successful mind-control shot is not sustained damage fire;
+            // its FireOnce script can legitimately disband after capturing.
+            weapon.damage > 0
+                && !weapon
+                    .warhead
+                    .as_deref()
+                    .and_then(|name| rules.warhead(name))
+                    .is_some_and(|warhead| warhead.mind_control)
+        };
         let mut balances = std::collections::BTreeMap::<u64, (InternedId, i32)>::new();
         let mut paid = std::collections::BTreeSet::new();
         let mut attacks = std::collections::BTreeMap::new();
@@ -3057,7 +3098,10 @@ mod retail_construction_tests {
                     let TargetKind::Entity(target) = event.target else {
                         continue;
                     };
-                    if !targets.contains_key(&target) || !paid.contains(&event.attacker_id) {
+                    if !targets.contains_key(&target)
+                        || !paid.contains(&event.attacker_id)
+                        || !damaging_weapon(&scene, event.weapon_id)
+                    {
                         continue;
                     }
                     let Some((id, false)) = sim.team_script_vm.team_for_member(event.attacker_id)
@@ -3104,7 +3148,19 @@ mod retail_construction_tests {
                     })
                 }) && damaged
             }),
-            "both natural Allied economies must pay for members, form actual attack teams, leave base and fire at the human: attacks={attacks:?}, damaged={damaged}, teams={:?}",
+            "both natural country{country} economies must pay for members, form actual attack teams, leave base and fire at the human: attacks={attacks:?}, damaged={damaged}, surviving human targets={:?}, teams={:?}",
+            targets
+                .keys()
+                .filter_map(|&id| {
+                    let entity = scene.sim().entities().get(id)?;
+                    Some((
+                        id,
+                        scene.sim().interner.resolve(entity.type_ref()),
+                        entity.owner(),
+                        entity.health.current(),
+                    ))
+                })
+                .collect::<Vec<_>>(),
             scene
                 .sim()
                 .team_script_vm
@@ -3112,18 +3168,36 @@ mod retail_construction_tests {
                 .filter(|team| computers.contains(&team.owner()))
                 .map(|team| (
                     team.owner(),
-                    team.team_type_id(),
+                    team.team_type_id()
+                        .map(|id| scene.sim().interner.resolve(id)),
                     team.cursor(),
                     team.current_action(&scene.sim().team_script_vm),
                     team.members().count(),
-                    team.formed()
+                    team.formed(),
+                    team.members()
+                        .filter_map(|id| {
+                            let actor = scene.sim().entities().get(id)?;
+                            (team.formed() && team.current_action(&scene.sim().team_script_vm) == 0)
+                                .then(|| {
+                                    (
+                                        id,
+                                        scene.sim().interner.resolve(actor.type_ref()),
+                                        paid.contains(&id),
+                                        actor.position,
+                                        actor.mission.effective(),
+                                        actor.attack_target.target(),
+                                        actor.navigation.nav_com(),
+                                    )
+                                })
+                        })
+                        .collect::<Vec<_>>()
                 ))
                 .collect::<Vec<_>>()
         );
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let bytes = save_scene(
             &scene,
-            "AY two natural Allied attack teams after paid members reached the human",
+            "AY two natural attack teams after paid members reached the human",
         );
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         for (&owner, &(team, actor)) in &attacks {
@@ -3147,7 +3221,7 @@ mod retail_construction_tests {
                     let TargetKind::Entity(target) = event.target else {
                         continue;
                     };
-                    if !targets.contains_key(&target) {
+                    if !targets.contains_key(&target) || !damaging_weapon(&scene, event.weapon_id) {
                         continue;
                     }
                     let Some((team, false)) = sim.team_script_vm.team_for_member(event.attacker_id)
@@ -3166,7 +3240,42 @@ mod retail_construction_tests {
                 }
                 resumed.len() == 2
             }),
-            "both same restored teams must emit new shots, not just retain saved orders: {resumed:?}"
+            "both same restored teams must emit new shots, not just retain saved orders: {resumed:?}, originals={:?}, surviving targets={:?}",
+            attacks
+                .iter()
+                .map(|(&owner, &(id, actor))| (
+                    owner,
+                    actor,
+                    scene
+                        .sim()
+                        .entities()
+                        .get(actor)
+                        .map(|entity| scene.sim().interner.resolve(entity.type_ref())),
+                    scene.sim().team_script_vm.team(id).map(|team| (
+                        team.cursor(),
+                        team.current_action(&scene.sim().team_script_vm),
+                        team.members()
+                            .filter_map(|member| scene.sim().entities().get(member).map(|entity| (
+                                member,
+                                entity.owner(),
+                                scene.sim().interner.resolve(entity.type_ref()),
+                                entity.health.current(),
+                                entity.mission.effective(),
+                                entity.attack_target.target(),
+                            )))
+                            .collect::<Vec<_>>()
+                    ))
+                ))
+                .collect::<Vec<_>>(),
+            targets
+                .keys()
+                .filter_map(|&id| scene.sim().entities().get(id).map(|entity| (
+                    id,
+                    scene.sim().interner.resolve(entity.type_ref()),
+                    entity.owner(),
+                    entity.health.current()
+                )))
+                .collect::<Vec<_>>()
         );
     }
 
