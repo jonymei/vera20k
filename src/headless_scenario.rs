@@ -1433,6 +1433,357 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet AI economies naturally build and replace a paid war factory across saves"]
+    fn aymod_same_country_ai_rebuild_paid_war_factory_without_stopping_peer() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                session.options.unit_count = 0;
+                for slot in &mut session.opponents {
+                    slot.team = crate::skirmish_launch::LaunchTeam::Team(1);
+                }
+            },
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard); 2],
+        );
+        for &owner in &computers {
+            scene
+                .runtime
+                .simulation
+                .houses
+                .get_mut(&owner)
+                .unwrap()
+                .set_ai_triggers_active(false);
+        }
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let human = sim.session.current_house().unwrap();
+            let at = aymod_anchor(sim, human);
+            let origins = computers
+                .iter()
+                .map(|&owner| aymod_anchor(sim, owner))
+                .collect::<Vec<_>>();
+            let towns = sim
+                .entities()
+                .values()
+                .filter(|entity| {
+                    entity.owner() != human
+                        && entity.category() == crate::map::entities::EntityCategory::Structure
+                })
+                .map(|entity| {
+                    (
+                        i32::from(entity.position.rx()),
+                        i32::from(entity.position.ry()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let sites = [
+                (at.0 + 20, at.1),
+                (at.0, at.1 + 20),
+                (at.0 - 20, at.1),
+                (at.0, at.1 - 20),
+                at,
+            ]
+            .into_iter()
+            .flat_map(cells_nearest)
+            .filter(|&(x, y)| {
+                origins
+                    .iter()
+                    .all(|&(ox, oy)| (x - ox).abs().max((y - oy).abs()) > 25)
+                    && towns
+                        .iter()
+                        .all(|&(ox, oy)| (x - ox).abs().max((y - oy).abs()) > 12)
+            });
+            // Protect only the idle observer, not either economy under test.
+            // Ordinary base defenses otherwise end this non-combat observation.
+            let observers = spawn_on_free_cells(sim, rules, human, sites, &["GACNST", "GACNST"]);
+            let now = sim.session.binary_frame();
+            for id in observers {
+                crate::sim::superweapon::invulnerability::apply_invulnerability(
+                    sim.substrate.entities.get_mut(id).unwrap(),
+                    now,
+                    60000,
+                    crate::sim::superweapon::invulnerability::InvulnKind::IronCurtain,
+                );
+            }
+        }
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(
+                output.tick.frame_committed && scene.sim().session.outcome_request().is_none(),
+                "economic observation stopped: tick={} outcome={:?} outcome_waiting={} network_waiting={}",
+                scene.sim().session.tick(),
+                scene.sim().session.outcome_request(),
+                output.outcome_waiting,
+                output.network_waiting
+            );
+        };
+        let war = scene
+            .runtime
+            .resources
+            .rules
+            .object("NAWEAP")
+            .unwrap()
+            .base_plan_type_index;
+        let completed = |scene: &HeadlessScenario, owner| {
+            let sim = scene.sim();
+            let node = sim.houses[&owner]
+                .base_plan()
+                .nodes()
+                .iter()
+                .find(|node| node.type_or_control == war)?;
+            let id = crate::sim::ai_base_building::node_building(&sim.substrate, owner, node)?;
+            let entity = sim.entities().get(id)?;
+            (entity.is_ai_alive()
+                && !entity.lifecycle.in_limbo()
+                && entity.mission.effective().known() != Some(MissionType::Construction))
+            .then_some(id)
+        };
+        let mut balances = std::collections::BTreeMap::new();
+        let mut paid = std::collections::BTreeSet::new();
+        let mut spent = computers
+            .iter()
+            .map(|&owner| (owner, scene.sim().houses[&owner].economy().spent_credits()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let observe_payment =
+            |scene: &HeadlessScenario,
+             balances: &mut std::collections::BTreeMap<u64, (InternedId, i32)>,
+             paid: &mut std::collections::BTreeSet<u64>,
+             spent: &mut std::collections::BTreeMap<InternedId, i32>| {
+                let sim = scene.sim();
+                let mut charges = std::collections::BTreeMap::<InternedId, i32>::new();
+                for factory in sim.production().factories().iter_insertion_ordered() {
+                    let Some(product) = factory.object() else {
+                        continue;
+                    };
+                    if sim.interner.resolve(product.type_id) != "NAWEAP" {
+                        continue;
+                    }
+                    assert!(computers.contains(&factory.owner()));
+                    let id = product.entity_id.unwrap();
+                    let (owner, previous) = balances
+                        .entry(id)
+                        .or_insert((factory.owner(), factory.balance()));
+                    assert_eq!(factory.owner(), *owner);
+                    if factory.balance() < *previous {
+                        paid.insert(id);
+                        *charges.entry(*owner).or_default() += *previous - factory.balance();
+                    }
+                    *previous = factory.balance();
+                }
+                for &owner in &computers {
+                    let current = sim.houses[&owner].economy().spent_credits();
+                    let previous = spent.insert(owner, current).unwrap();
+                    assert!(
+                        current - previous >= charges.get(&owner).copied().unwrap_or(0),
+                        "war-factory progress must debit its own House, not its same-country peer"
+                    );
+                }
+            };
+        let mut loaded = std::collections::BTreeSet::new();
+        let developed = (0..18000).any(|_| {
+            step(&mut scene);
+            observe_payment(&scene, &mut balances, &mut paid, &mut spent);
+            for entity in scene.sim().entities().values() {
+                if computers.contains(&entity.owner())
+                    && entity
+                        .miner
+                        .as_ref()
+                        .is_some_and(|miner| !miner.cargo().is_empty())
+                {
+                    loaded.insert(entity.owner());
+                }
+            }
+            computers.iter().all(|&owner| {
+                completed(&scene, owner).is_some_and(|id| paid.contains(&id))
+                    && loaded.contains(&owner)
+                    && scene.sim().houses[&owner].economy().score() > 0
+            })
+        });
+        assert!(
+            developed,
+            "both original MCV starts must develop a paid war factory and real loaded miners/income: wallets={:?}, factories={:?}, paid={paid:?}, loaded={loaded:?}",
+            computers
+                .iter()
+                .map(|owner| scene.sim().houses[owner].economy())
+                .collect::<Vec<_>>(),
+            computers
+                .iter()
+                .map(|&owner| completed(&scene, owner))
+                .collect::<Vec<_>>()
+        );
+        let lost = completed(&scene, computers[0]).unwrap();
+        let peer_factory = completed(&scene, computers[1]).unwrap();
+        let before = computers
+            .iter()
+            .map(|owner| {
+                let wallet = scene.sim().houses[owner].economy();
+                (wallet.spent_credits(), wallet.score())
+            })
+            .collect::<Vec<_>>();
+        let peer_buildings = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                entity.owner() == computers[1]
+                    && entity.category() == crate::map::entities::EntityCategory::Structure
+                    && !entity.lifecycle.in_limbo()
+            })
+            .map(|entity| entity.stable_id())
+            .collect::<std::collections::BTreeSet<_>>();
+        let peer_wallet = scene.sim().houses[&computers[1]].economy().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let hp = sim.entities().get(lost).unwrap().health.current();
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    lost,
+                    hp,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: true,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(lost)
+                .is_some_and(|entity| entity.is_ai_alive())
+        );
+        assert_eq!(scene.sim().houses[&computers[1]].economy(), &peer_wallet);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY first Soviet war factory lost; independent peer economy alive",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(scene.sim().houses[&computers[1]].economy(), &peer_wallet);
+        let mut paid_save = None;
+        let mut replacement = None;
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                observe_payment(&scene, &mut balances, &mut paid, &mut spent);
+                assert!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(peer_factory)
+                        .is_some_and(|entity| entity.is_ai_alive())
+                );
+                let first_node_replanning = scene.sim().houses[&computers[0]]
+                    .base_plan()
+                    .nodes()
+                    .iter()
+                    .find(|node| node.type_or_control == war)
+                    .is_some_and(|node| node.filled && node.packed_cell == 0);
+                if paid_save.is_none() && first_node_replanning {
+                    let pending = scene
+                        .sim()
+                        .production()
+                        .factories()
+                        .iter_insertion_ordered()
+                        .into_iter()
+                        .find_map(|factory| {
+                            let product = factory.object()?;
+                            (factory.owner() == computers[0]
+                                && paid.contains(&product.entity_id?)
+                                && scene.sim().interner.resolve(product.type_id) == "NAWEAP")
+                                .then_some((product.entity_id.unwrap(), factory.balance()))
+                        });
+                    if let Some((id, balance)) = pending {
+                        let bytes =
+                            save_scene(&scene, "AY paid Soviet war-factory replacement in progress");
+                        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                        assert!(
+                            scene
+                                .sim()
+                                .production()
+                                .factories()
+                                .iter_insertion_ordered()
+                                .into_iter()
+                                .any(|factory| {
+                                    factory.owner() == computers[0]
+                                        && factory.balance() == balance
+                                        && factory
+                                            .object()
+                                            .is_some_and(|product| product.entity_id == Some(id))
+                                })
+                        );
+                        paid_save = Some(id);
+                    }
+                }
+                replacement =
+                    completed(&scene, computers[0]).filter(|id| *id != lost && paid.contains(id));
+                let peer_progress = scene.sim().entities().values().any(|entity| {
+                    entity.owner() == computers[1]
+                        && !peer_buildings.contains(&entity.stable_id())
+                        && entity.category() == crate::map::entities::EntityCategory::Structure
+                        && entity.is_ai_alive()
+                        && !entity.lifecycle.in_limbo()
+                        && entity.mission.effective().known() != Some(MissionType::Construction)
+                });
+                paid_save.is_some()
+                    && replacement.is_some()
+                    && peer_progress
+                    && computers.iter().enumerate().all(|(index, owner)| {
+                        let wallet = scene.sim().houses[owner].economy();
+                        wallet.spent_credits() > before[index].0 && wallet.score() > before[index].1
+                    })
+            }),
+            "the first plan's lost factory must be paid and rebuilt while both economies and peer building continue: wallets={:?}, saved={paid_save:?}, replacement={replacement:?}, first_nodes={:?}",
+            computers
+                .iter()
+                .map(|owner| scene.sim().houses[owner].economy())
+                .collect::<Vec<_>>(),
+            computers
+                .iter()
+                .map(|owner| scene.sim().houses[owner]
+                    .base_plan()
+                    .nodes()
+                    .iter()
+                    .find(|node| node.type_or_control == war))
+                .collect::<Vec<_>>()
+        );
+        let replacement = replacement.unwrap();
+        assert_eq!(
+            paid_save,
+            Some(replacement),
+            "the saved paid object must fill the lost first factory's plan node"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY paid replacement completed while peer developed independently",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(completed(&scene, computers[0]), Some(replacement));
+        assert!(
+            computers
+                .iter()
+                .all(|owner| !scene.sim().houses[owner].is_defeated())
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied AI Houses replace a defeated enemy and attack the remaining hostile House"]
     fn aymod_allied_ai_replace_a_defeated_enemy_and_attack_after_load() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
