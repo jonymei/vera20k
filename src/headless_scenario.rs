@@ -1504,6 +1504,122 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; human super-gap commands, hostile fog, power and saved discharge"]
+    fn aymod_human_gap_deploy_expands_hostile_fog_and_restores_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, gap, _) = aymod_nearby_pair("GAGAP2", "NANRCT", true);
+        let owner = scene.sim().entities().get(gap).unwrap().owner();
+        let viewer = house_of(scene.sim(), "Russians");
+        let kind = scene.runtime.resources.rules.object("GAGAP2").unwrap();
+        assert_eq!(
+            (kind.gap_radius_in_cells, kind.super_gap_radius_in_cells),
+            (10, 15)
+        );
+        assert_eq!((kind.power, kind.extra_power.drain()), (-100, 150));
+        assert!(!kind.ai_build_this);
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(gap)
+                .unwrap()
+                .gap_generator
+                .viewers()
+                .get(&viewer)
+                .is_some_and(|deposit| deposit.active())
+                && scene
+                    .sim()
+                    .gap_generator_self_action(gap, &scene.runtime.resources.rules)
+                    == Some(true)
+        }));
+        let source = scene.sim().fog.gap_sources()[&viewer]
+            .iter()
+            .find(|source| source.stable_id == gap)
+            .unwrap();
+        let center = (source.rx, source.ry);
+        // Use a real map cell outside the ordinary circle but inside the
+        // super circle, not just the generator's cached radius field.
+        let edge = cells_nearest((i32::from(center.0), i32::from(center.1)))
+            .into_iter()
+            .find_map(|(x, y)| {
+                let dx = x - i32::from(center.0);
+                let dy = y - i32::from(center.1);
+                if !(121..=169).contains(&(dx * dx + dy * dy)) {
+                    return None;
+                }
+                let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                let cell = scene.sim().resolved_terrain().unwrap().cell(x, y)?;
+                (!cell.outside_playfield).then_some((x, y))
+            })
+            .expect("a playable cell between eleven and thirteen cells from the gap");
+        let assert_gap = |scene: &HeadlessScenario, charged: bool| {
+            let sim = scene.sim();
+            let entity = sim.entities().get(gap).unwrap();
+            assert_eq!(entity.gap_supercharged(), charged);
+            let deposit = entity.gap_generator.viewers().get(&viewer).unwrap();
+            assert!(deposit.active());
+            assert_eq!(deposit.radius(), if charged { 15 } else { 10 });
+            assert!(sim.fog.is_cell_gap_covered(viewer, center.0, center.1));
+            assert_eq!(sim.fog.is_cell_gap_covered(viewer, edge.0, edge.1), charged);
+            assert!(!sim.fog.is_cell_gap_covered(owner, edge.0, edge.1));
+            assert_eq!(
+                sim.building_operational_state(gap, &scene.runtime.resources.rules),
+                Some(true)
+            );
+        };
+        assert_gap(&scene, false);
+        let normal_power = scene.sim().power_states()[&owner].effective_totals();
+        let deploy = |scene: &mut HeadlessScenario, charged: bool| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::UnloadPassengers { transport_id: gap },
+            ));
+            assert!((0..120).any(|_| {
+                tick_with_due_commands(scene);
+                scene.sim().entities().get(gap).unwrap().gap_supercharged() == charged
+            }));
+            // Power publication follows the building's Unload visit.
+            for _ in 0..4 {
+                tick_with_due_commands(scene);
+            }
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let bytes = save_scene(scene, "AY human gap deploy and discharge");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        };
+        deploy(&mut scene, true);
+        assert_gap(&scene, true);
+        assert_eq!(
+            scene.sim().power_states()[&owner].effective_totals(),
+            (normal_power.0, normal_power.1 + 150)
+        );
+        restore(&mut scene);
+        assert_gap(&scene, true);
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            assert_gap(&scene, true);
+        }
+        deploy(&mut scene, false);
+        assert_gap(&scene, false);
+        assert_eq!(
+            scene.sim().power_states()[&owner].effective_totals(),
+            normal_power
+        );
+        restore(&mut scene);
+        assert_gap(&scene, false);
+        for _ in 0..120 {
+            tick_with_due_commands(&mut scene);
+            assert_gap(&scene, false);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_three_ai_base_defense(kind: &str, human_kind: &str) -> (HeadlessScenario, u64) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, computers) = retail_battle_in(

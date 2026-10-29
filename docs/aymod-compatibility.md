@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于5d5bab51d完成新增作者漏项F16：工程师IFV维修停在空指部的飞机。两个既有owner按AY指令解除停机坪限制，保留空中飞机拒绝及Organic输入拒绝；实际AY正常登车/降落/移动/维修实射回血及完整存读续修满通过，NP/stock客户端各13、核心healer各1通过，Alt误入回归1通过。一次只读critic无可操作发现；扩大techno_ai模块200通过/4失败/14忽略，不宣称模块全绿，原因见F16。固定玩家版未动，整体目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于ef2584165补玩家GAGAP2超级裂缝真实验收。正式AY Battle普通Unload展开/收回，敌方FogState实际10→15→10格、House额外耗电150与双方隔离、两次完整存读及各120帧保持通过；既有gap_supercharge_tests5项通过。无生产修改/新critic；固定玩家版未动，整体目标仍开放。此前F16停机坪维修修复及定向验收已本地提交，扩大techno_ai模块四失败仍见F16，不冒称已解决。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -57,6 +57,9 @@
 - 正式生产reader确认GAGAP为GapGenerator/Powered/AIBuildThis，普通与超级半径均15，ExtraPower drain150；玩家GAGAP2普通10/超级15。实际GameMD.exe Building GetSensorRange4566D9..4566FC按Techno+268选择Type+CD3或+CD2；二者都15时，不能把未观察到超级开关当成缺少15格范围。44E29D..44E306的Unload超级开关还会设置额外耗电标志，不能为制造“电脑使用超级”的表象擅加调用或白送电力。本例不证明从未自动toggle，也不把该开关的额外耗电政策宣布已验。
 - 施工后等待真实operational publication，当前人类敌方viewer的deposit必须active/radius15，实际FogState中心有gap，且10格以外/14格以内的合法格确有gap覆盖，不只读配置字段。完整保存/资源恢复后重复上述断言，并正常跑120帧逐帧保持。未声称GPU/GUI、原生同场录像、所有外交/EMP/占领边界或多AI战斗长局通过。
 - 实际新增三AI裂缝1项通过（807秒），原同助手三AI巨炮1项通过，gap_supercharge_tests5项通过；最后仅格式化新测试函数后重编并再跑5项通过。无生产改动、RNG/timer/Detach/保存字段新增，无新critic；未启动GUI、修改MOD/原始存档/固定构建或发布。测试时间长来自普通基地发展，不通过加资源/减成本缩短。
+- 玩家GAGAP2补充aymod_human_gap_deploy_expands_hostile_fog_and_restores_after_load：正式AY Battle玩家实际GAGAP2及NANRCT作为场景输入，普通Command::UnloadPassengers展开/收回，经既有Building Mission_Unload44E29D..44E36B，未直接写supercharged/radius/power。实读同段AY指令确认+268/+669开关、先移除旧gap再按CD3/CD2重加、最后脏化House+5778。配置Power=-100、ExtraPower=-150，所以展开额外150、总耗电250；不是再加250，也不按作者文字修改配置。
+- 新场景要求敌方Russians实际FogState内圈存在，11至13格合法外圈格正常不覆盖、超级覆盖、收回不覆盖；本方同格不受敌对gap覆盖。center来自真实gap admission receipt的高度修正位置，不用建筑原始rx/ry代替。首版夹具误用原位置导致普通阶段外圈已覆盖，查明建筑高度移圆心后改按真实receipt取中心，未改生产几何或放宽开关断言。
+- 展开后House总输出不变/总耗电增加恰150；完整保存恢复保持15格，120正常帧逐帧保持；同一对象普通Unload收回后耗电回原值，再完整保存恢复及120帧维持10格，无残留外圈。新实际场景1项、既有gap_supercharge_tests5项通过；仅测试/台账，无新增权威状态/RNG/timer/Detach/保存字段、无新critic。未覆盖玩家键盘/完整UI、AY实际停电/EMP恢复/换主和自主AI超级开关，不关闭这些边界。
 - A10裂缝新局建造/已配置大半径的基本运行及存读不再列纯待验。异阵营科技占领、实际断电/EMP恢复的AY组合、外交/多AI长期边界仍开放；AI的超级开关原生自动调用条件尚未追全，不能据有限字面字段扫描宣称不存在或擅补。Return Dubai弱攻势仍暂停，本例不是该线的发展/出击诊断。
 
 ### V05反潜机实际防空击杀、保存再生与再出击伤害（2026-10-29）
@@ -1552,7 +1555,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A07 / P1 / 待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | 矿枯、矿车/矿场/重工损失、缺钱后的恢复或败退；无永久等待，长局各 House 资金/生产/团队计数不串 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
 | A09 / P1 / 已修配置、待验 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 真实AY两机已复现action54精确到达仍moving/NavCom，持续观察停在cursor0；显式组件seek到9后Unload被后续Attack接续、两机未部署。三项相关NP开关已核各物理层未设置，对应默认不能解释此停滞；原生相关门同样保留。仍不能擅改悬停参数或直接归为原MOD错误；自然移动→部署→开火→再移动仍开放 |
-| A10 / P1 / 巨炮/裂缝实际建造及裂缝大范围存读已验，边界开放 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。裂缝同样实际付款/落地/建成，其电脑GAGAP普通/超级均15格，实际敌方fog超过10格/完整存读/后续120帧保持；不据此擅造超级切换。隔离进攻组件不等于完整战斗验收；占领科技/GUI、AY停电/EMP组合及自动超级切换的完整原生条件仍开放，不把旧作者bug当当前引擎必然存在 |
+| A10 / P1 / 巨炮/裂缝实际建造及裂缝大范围存读已验，边界开放 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。裂缝同样实际付款/落地/建成，其电脑GAGAP普通/超级均15格，实际敌方fog超过10格/完整存读/后续120帧保持；不据此擅造超级切换。玩家GAGAP2普通Unload展开/收回、实际10→15→10格/额外耗电150、两次存读及持续保持另已验；隔离进攻组件不等于完整战斗验收，占领科技/GUI、AY停电/EMP组合及AI自动超级切换的完整原生条件仍开放，不把旧作者bug当当前引擎必然存在 |
 
 A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](npatch.md)；海陆编队实战验收、择兵同需求策略和可选并行限制仍开放。
 
