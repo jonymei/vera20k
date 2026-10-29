@@ -16,7 +16,8 @@ from tools.spatial_oracle.unit_scatter_state import make_fixture, ACTOR, TYPE, L
 VT, SCENARIO = SCRATCH + 0x8000, SCRATCH + 0x9000
 CELLS = SCRATCH + 0x10000
 ENTRY, QUEUE, SET = [SCRATCH + 0xF000 + i * 0x100 for i in range(3)]
-MAP, TABLE = 0x87F7E8, 0xC00000
+# Keep supplied sparse cells outside the image: AY patch text occupies 0xC27000.
+MAP, TABLE = 0x87F7E8, 0x21000000
 NEIGHBORS = [(10, 9), (11, 9), (11, 10), (11, 11), (10, 11), (9, 11), (9, 10), (9, 9)]
 
 
@@ -25,6 +26,7 @@ def make_source_fixture(case, *, uc=None, cells_base=CELLS):
     # Relocation changes only storage; all table lookups use original code.
     u, call, read32 = make_fixture(case, uc=uc)
     u.mem_map(cells_base, 0x90000)
+    u.mem_map(TABLE, 0x100000)
     u.reg_write(UC_X86_REG_FPCW, 0x0E7F)
     table = bytearray(0x100000)
     overrides = {(x, y): (level, flags) for x, y, level, flags in case.get('cells', [])}
