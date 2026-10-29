@@ -10030,38 +10030,186 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Kirov flight, saved falling bomb and PostMortem expiry"]
     fn aymod_kirov_bomb_flight_and_delayed_barrel_death_survive_load() {
+        aymod_kirov_bomb_lifecycle(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Kirov earns elite through weapon kills and its KTSTLEXP bomb and fuse survive saves"]
+    fn aymod_kirov_earned_elite_bomb_and_delayed_death_survive_load() {
+        aymod_kirov_bomb_lifecycle(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_kirov_bomb_lifecycle(elite: bool) {
         use crate::sim::combat::TargetKind;
+        use crate::sim::combat::veterancy::VeterancyRank;
         use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let mut scene = aymod_battle(0);
-        let (actor, barrel) = {
+        let actor = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
             let owner = house_of(sim, "Americans");
-            let enemy = house_of(sim, "Russians");
-            let actor = spawn_on_free_cells(
+            spawn_on_free_cells(
                 sim,
                 rules,
                 owner,
                 cells_nearest(aymod_anchor(sim, owner)),
                 &["ZEP"],
-            )[0];
+            )[0]
+        };
+        if elite {
+            for _ in 0..12 {
+                if scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind()
+                    == VeterancyRank::Elite
+                {
+                    break;
+                }
+                let victim = {
+                    let runtime = &mut scene.runtime;
+                    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                    let enemy = house_of(sim, "Russians");
+                    sim.houses
+                        .get_mut(&enemy)
+                        .unwrap()
+                        .set_is_human_for_test(true);
+                    let at = sim.entities().get(actor).unwrap().position;
+                    let victim = spawn_on_free_cells(
+                        sim,
+                        rules,
+                        enemy,
+                        cells_nearest((i32::from(at.rx()) + 6, i32::from(at.ry()))),
+                        &["APOC"],
+                    )[0];
+                    // Wounded, sleeping targets isolate kill-earned promotion;
+                    // no rank, experience, damage or cost configuration is set.
+                    sim.substrate
+                        .entities
+                        .get_mut(victim)
+                        .unwrap()
+                        .health
+                        .set(1);
+                    sim.mission_queue_exact(
+                        victim,
+                        MissionId::from_known(MissionType::Sleep),
+                        1,
+                        sim.session.binary_frame(),
+                        &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                    )
+                    .unwrap();
+                    let owner = sim.entities().get(actor).unwrap().owner();
+                    sim.queue_command(CommandEnvelope::new(
+                        owner,
+                        sim.session.tick() + 1,
+                        Command::Attack {
+                            attacker_id: actor,
+                            target_id: victim,
+                        },
+                    ));
+                    victim
+                };
+                let mut fired = false;
+                assert!(
+                    (0..1800).any(|_| {
+                        let output = tick_with_due_commands(&mut scene);
+                        assert!(output.tick.frame_committed);
+                        fired |= output.fire_events.iter().any(|event| {
+                            event.attacker_id == actor && event.target == TargetKind::Entity(victim)
+                        });
+                        fired
+                            && scene
+                                .sim()
+                                .entities()
+                                .get(victim)
+                                .is_none_or(|entity| !entity.is_ai_alive())
+                    }),
+                    "ordinary Kirov weapon fire must kill the wounded promotion target"
+                );
+            }
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind(),
+                VeterancyRank::Elite
+            );
+        }
+        let barrel = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let enemy = house_of(sim, "Russians");
             let at = sim.entities().get(actor).unwrap().position;
             let center = (i32::from(at.rx()), i32::from(at.ry()));
             let sites = cells_nearest(center)
                 .into_iter()
-                .filter(|&(x, y)| (x - center.0).abs().max((y - center.1).abs()) == 8)
+                .filter(|&(x, y)| {
+                    (x - center.0).abs().max((y - center.1).abs()) == 8
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| {
+                                sim.terrain_cell_level(x, y) == sim.terrain_cell_level(at.rx(), at.ry())
+                            })
+                })
                 .collect::<Vec<_>>();
-            let barrel = spawn_on_free_cells(sim, rules, enemy, sites, &["CAMISC02"])[0];
-            (actor, barrel)
+            spawn_on_free_cells(sim, rules, enemy, sites, &["CAMISC02"])[0]
         };
+        if elite {
+            // Range admission includes the building's foundation, whereas a
+            // vertical bomb keeps its own launch XY. Approach with a normal
+            // Move before testing impact/fuse persistence, not a position write.
+            let target = scene.sim().entities().get(barrel).unwrap().position;
+            let sim = &mut scene.runtime.simulation;
+            let owner = sim.entities().get(actor).unwrap().owner();
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: actor,
+                    target_rx: target.rx(),
+                    target_ry: target.ry(),
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(output.tick.frame_committed);
+                    let at = scene.sim().entities().get(actor).unwrap().position;
+                    at.rx() == target.rx() && at.ry() == target.ry()
+                }),
+                "earned-elite Kirov must actually fly over the barrel before the isolated bomb test"
+            );
+        }
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let (owner, expected, initial_health) = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("ZEP").unwrap();
             let primary = rules
-                .weapon(rules.object("ZEP").unwrap().primary().unwrap())
+                .weapon(
+                    if elite {
+                        kind.elite_primary()
+                    } else {
+                        kind.primary()
+                    }
+                    .unwrap(),
+                )
                 .unwrap();
+            assert_eq!(
+                primary.warhead.as_deref(),
+                Some(if elite { "KTSTLEXP" } else { "BlimpHE" })
+            );
             assert!(
                 !rules
                     .projectile(primary.projectile.as_deref().unwrap())
@@ -10118,6 +10266,33 @@ mod retail_construction_tests {
         ));
         let bytes = save_scene(&scene, "AY Kirov bomb before impact");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        if elite {
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(actor)
+                    .unwrap()
+                    .veterancy
+                    .rank_kind(),
+                VeterancyRank::Elite
+            );
+        }
+        let bomb_geometry = scene
+            .sim()
+            .projectiles()
+            .iter()
+            .filter(|(_, p)| p.source_id() == actor)
+            .map(|(_, p)| {
+                (
+                    p.position(),
+                    p.launch_origin(),
+                    p.launch_target(),
+                    p.trajectory(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut impact_states = Vec::new();
         assert!(
             (0..360).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
@@ -10128,11 +10303,21 @@ mod retail_construction_tests {
                         .any(|event| event.attacker_id == actor),
                     "the saved falling bomb, not a replacement release, must cause the hit"
                 );
+                let state = scene.sim().entities().get(barrel).map(|victim| {
+                    (
+                        victim.health.current(),
+                        victim.is_object_alive(),
+                        victim.pending_c4_detonation.pending().is_some(),
+                    )
+                });
+                if impact_states.last() != Some(&state) && impact_states.len() < 16 {
+                    impact_states.push(state);
+                }
                 scene.sim().entities().get(barrel).is_some_and(|victim| {
                     victim.health.current() == 1 && victim.pending_c4_detonation.pending().is_some()
                 })
             }),
-            "the actual saved bomb must hit and arm the barrel's PostMortem fuse"
+            "the actual saved bomb must hit and arm the barrel's PostMortem fuse: elite={elite}, states={impact_states:?}, geometry={bomb_geometry:?}"
         );
         let victim = scene.sim().entities().get(barrel).unwrap();
         assert!(victim.is_object_alive());
