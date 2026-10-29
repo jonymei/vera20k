@@ -21251,12 +21251,21 @@ mod retail_construction_tests {
                     category: ProductionCategory::Infantry,
                 },
             ));
+            let mut clone_cues = 0;
             assert!(
-                (0..120).any(|_| {
-                    tick_with_due_commands(scene);
-                    units(scene).difference(&before).count() == expected
-                }),
-                "{kind} must place {expected} live infantry through ordinary production"
+                    (0..120).any(|_| {
+                        let output = tick_with_due_commands(scene);
+                        clone_cues += output.sound_events.iter().filter(|event| {
+                            matches!(event, crate::sim::world::SimSoundEvent::VocAt { sound_id, .. } if sound_id == "CloningVatsCreate")
+                        }).count();
+                        units(scene).difference(&before).count() == expected
+                    }),
+                    "{kind} must place {expected} live infantry through ordinary production"
+                );
+            assert_eq!(
+                clone_cues,
+                expected - 1,
+                "one spatial cue per actual vat exit"
             );
             assert_eq!(
                 scene.sim().houses[&house].economy().spent_credits() - spent,

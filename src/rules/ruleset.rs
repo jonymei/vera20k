@@ -54,6 +54,10 @@ use crate::util::native_x87::{NativeF32Bits, NativeF64Bits};
 mod building_damage_sound_tests;
 
 #[cfg(test)]
+#[path = "building_creation_sound_tests.rs"]
+mod building_creation_sound_tests;
+
+#[cfg(test)]
 #[path = "command_bar_sound_rules_tests.rs"]
 mod command_bar_sound_rules_tests;
 

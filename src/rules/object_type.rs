@@ -763,6 +763,9 @@ pub struct ObjectType {
     /// retaining the last valid fixed-catalog ID through reached rules passes.
     /// House RecordLastBuilt4FB7CA overrides its class cue with this scalar.
     create_sound: Option<String>,
+    /// BuildingType+E74: ctor45DE70=-1; ReadINI4607C8..4607F8
+    /// retains the previous fixed-catalog ID on an empty/unknown read.
+    building_create_unit_sound: Option<String>,
     /// Retained BuildingType+16B0 and EA4/EA8/EAC; Process owns reached reads.
     secret_lab: crate::rules::secret_lab::SecretLabRules,
     /// `DamageSound=` — `TechnoTypeClass+0x538`, the type's own struck cue.
@@ -2825,7 +2828,12 @@ impl ObjectType {
         self.create_sound.as_deref()
     }
 
-    /// Bind TechnoType+534/+538 in original712E75..712F07 read order,
+    pub fn building_create_unit_sound(&self) -> Option<&str> {
+        self.building_create_unit_sound.as_deref()
+    }
+
+    /// Bind TechnoType+534/+538 (712E75..712F07) and BuildingType+E74
+    /// (4607C8..4607F8) through the same fixed-catalog reference reader,
     /// using only passes where this type existed in the native processing order.
     pub(crate) fn bind_scalar_sound_references(
         &mut self,
@@ -2836,6 +2844,10 @@ impl ObjectType {
             section.and_then(|section| sounds.read_rules_reference(section, "CreateSound"));
         self.damage_sound =
             section.and_then(|section| sounds.read_rules_reference(section, "DamageSound"));
+        if self.category == ObjectCategory::Building {
+            self.building_create_unit_sound =
+                section.and_then(|section| sounds.read_rules_reference(section, "CreateUnitSound"));
+        }
     }
 
     /// `Weapon[index]` (`TechnoTypeClass+0x898 + index*0x1C`): the weapon in
@@ -3343,6 +3355,7 @@ impl ObjectType {
                 .map(|tokens| tokens.into_iter().map(str::to_owned).collect())
                 .unwrap_or_default(),
             create_sound: None,
+            building_create_unit_sound: None,
             secret_lab: Default::default(),
             damage_sound: None,
             move_sound: Vec::new(),

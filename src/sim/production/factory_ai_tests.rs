@@ -129,12 +129,14 @@ fn the_yard_builds_its_choice_and_places_it_on_the_node() {
 /// call; Rust's earlier disposal must preserve the same input facts.
 #[test]
 fn ai_wall_consumption_keeps_its_accounting_and_one_creation_cue() {
-    let mut source = RULES.replace(
-        "[PLAIN]\n",
-        "[PLAIN]\nWall=yes\nCreateSound=FixtureWallCreated\n",
-    );
+    let mut source = RULES
+        .replace(
+            "[PLAIN]\n",
+            "[PLAIN]\nWall=yes\nCreateSound=FixtureWallCreated\n",
+        )
+        .replace("[YARD]\n", "[YARD]\nCreateUnitSound=FactoryCreated\n");
     source.push_str(
-        "\n[OverlayTypes]\n0=PLAIN\n[SoundList]\n0=FixtureWallCreated\n\
+        "\n[OverlayTypes]\n0=PLAIN\n[SoundList]\n0=FixtureWallCreated\n1=FactoryCreated\n\
          [FixtureWallCreated]\nSounds=wall\n",
     );
     let ini = IniFile::from_str(&source);
@@ -164,6 +166,21 @@ fn ai_wall_consumption_keeps_its_accounting_and_one_creation_cue() {
     assert!(
         f.held_object().is_none(),
         "the completed AI factory was removed"
+    );
+    assert_eq!(
+        f.sim
+            .sound_events
+            .iter()
+            .filter_map(|event| {
+                if let crate::sim::world::SimSoundEvent::VocAt { sound_id, .. } = event {
+                    Some(sound_id.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>(),
+        ["FactoryCreated", "FixtureWallCreated"],
+        "producer cue precedes the distinct product RecordLastBuilt cue"
     );
     let cues = f
         .sim

@@ -18,6 +18,32 @@ use super::production_spawn::{
 };
 use super::production_types::*;
 
+/// Building Factory_AI45016D..450198 and NP clone exit4449DF -> C2E8D5.
+/// Both read BuildingType+E74 at the producer's raw Location; only the NP
+/// clone caller supplies Rules+17C (CreateInfantrySound) as a fallback.
+pub(super) fn emit_building_creation_sound(
+    sim: &mut Simulation,
+    rules: &RuleSet,
+    producer_id: u64,
+    fallback: Option<&str>,
+) {
+    let Some(producer) = sim.substrate.entities.get(producer_id) else {
+        return;
+    };
+    let sound = sim
+        .entity_object_type(producer, rules)
+        .and_then(|kind| kind.building_create_unit_sound())
+        .or(fallback);
+    if let Some(sound) = sound {
+        let event = crate::sim::world::SimSoundEvent::voc_at_location(
+            sound.to_owned(),
+            producer,
+            sim.resolved_terrain(),
+        );
+        sim.sound_events.emit(event);
+    }
+}
+
 /// `owner`'s Available_Money, by house name; 0 for a house that does not
 /// exist.
 pub fn credits_for_owner(sim: &Simulation, owner: &str) -> i32 {
@@ -650,6 +676,23 @@ fn exit_at_dock(
         // The coordinate and facing `dock_exit` derived read only the
         // producer and the dock Cell (`0x00444A53..0x00444C7C`), which the
         // copies' exits leave unchanged.
+        // NPAE4449DF -> C2E8D5 plays the vat's cue only after GetDock
+        // succeeds, before the clone's Unlimbo; stock has no such cue here.
+        if crate::rules::NPATCH_ENABLED
+            && sim
+                .substrate
+                .entities
+                .get(producer_id)
+                .and_then(|producer| sim.entity_object_type(producer, rules))
+                .is_some_and(|kind| kind.cloning)
+        {
+            emit_building_creation_sound(
+                sim,
+                rules,
+                producer_id,
+                rules.general.create_infantry_sound(),
+            );
+        }
         exit_cloning_vat_copies(
             sim,
             rules,

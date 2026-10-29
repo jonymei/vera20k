@@ -38,10 +38,6 @@
 //! executed by `tools/ai_base_building_oracle.py`.
 //!
 //! RESIDUALS:
-//! - A placed object plays the building type's `CreateUnitSound=`
-//!   (`+0xE74`, read at `0x004607C8..0x004607F8`) at the building
-//!   (`0x00450198`); among retail types only the Cloning Vats set it, which
-//!   have no `Factory=`.
 //! - The try-later branch also copies an uninitialised stack word into the
 //!   timer's middle field (`+0x554`, `0x004501F1`), which no reader uses.
 //! - Mobile products leave through [`exit_produced_object`], the same
@@ -163,6 +159,9 @@ fn exit_finished_object(
     }
     match exit {
         BuildingExit::Placed => {
+            // Factory_AI45016D..450198 uses the producer's own cue, with
+            // no class/global fallback (unlike the NP clone exit).
+            super::production_queue::emit_building_creation_sound(sim, rules, building, None);
             //4501A4 reads after exit. A consumed wall is still retained at
             //its constructor Location until the frame's shared725C70 drain.
             let object = BuiltObject::capture(sim, product);

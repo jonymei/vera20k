@@ -4140,6 +4140,104 @@ fn cloning_vat_keeps_a_refused_copy_in_limbo() {
     );
 }
 
+#[test]
+fn cloning_exit_uses_building_cue_then_npatch_infantry_fallback_at_the_vat() {
+    use crate::rules::sound_ini::SoundRegistry;
+    use crate::sim::world::{FrameEffects, SimSoundEvent};
+    for (raw, expected) in [("VatCue", "VatCue"), ("Unknown", "InfantryCue")] {
+        let Some((mut sim, mut rules, registry, _)) = stock_yuri_cloning_world() else {
+            return;
+        };
+        let ini = IniFile::from_str(&format!(
+            "[SoundList]\n0=VatCue\n1=InfantryCue\n[AudioVisual]\nCreateInfantrySound=InfantryCue\n[NACLON]\nCreateUnitSound={raw}\n"
+        ));
+        rules.bind_type_sound_references(&ini, &SoundRegistry::from_ini(&ini));
+        let barracks = sim
+            .spawn_object_at_height_with_overlay_registry(
+                "YABRCK",
+                "YuriCountry",
+                14,
+                14,
+                64,
+                0,
+                &rules,
+                &registry,
+            )
+            .unwrap();
+        let vat = sim
+            .spawn_object_at_height_with_overlay_registry(
+                "NACLON",
+                "YuriCountry",
+                22,
+                14,
+                64,
+                0,
+                &rules,
+                &registry,
+            )
+            .unwrap();
+        let product = sim
+            .construct_object_limbo_at_height(
+                "E1",
+                "YuriCountry",
+                0,
+                0,
+                0,
+                0,
+                &rules,
+                FrameEffects::default(),
+            )
+            .unwrap();
+        sim.sound_events.clear_for_test();
+        assert_eq!(
+            super::exit_produced_object(
+                &mut sim,
+                &rules,
+                barracks,
+                product,
+                (0, 0),
+                Some(&registry),
+                FrameEffects::default()
+            ),
+            crate::sim::ai_base_building::BuildingExit::Placed
+        );
+        let cues = sim
+            .sound_events
+            .iter()
+            .filter_map(|event| {
+                if let SimSoundEvent::VocAt {
+                    sound_id,
+                    audible_to,
+                    rx,
+                    ry,
+                    sub_x,
+                    sub_y,
+                    ..
+                } = event
+                {
+                    assert!(audible_to.is_none());
+                    let source = sim.entities().get(vat).unwrap().position;
+                    assert_eq!(
+                        (*rx, *ry, *sub_x, *sub_y),
+                        (source.rx(), source.ry(), source.sub_x(), source.sub_y())
+                    );
+                    Some(sound_id.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            cues,
+            if crate::rules::NPATCH_ENABLED {
+                vec![expected]
+            } else {
+                vec![]
+            }
+        );
+    }
+}
+
 /// The native clone-list helper is reached from the Infantry output arm;
 /// stock `YTNK` follows the vehicle output arm and is not duplicated.
 #[test]
