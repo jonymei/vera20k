@@ -1433,6 +1433,225 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two allied AI Houses launch their own mutators at hostile infantry"]
+    fn aymod_two_allied_ai_mutators_keep_targets_and_recharge_house_local_after_load() {
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::{
+            SimSoundEvent,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                session.options.unit_count = 0;
+                for slot in &mut session.opponents {
+                    slot.team = crate::skirmish_launch::LaunchTeam::Team(1);
+                }
+            },
+            &[(LaunchCountry::from_country_index(2), AiDifficulty::Hard); 2],
+        );
+        let human = scene.sim().session.current_house().unwrap();
+        assert!(crate::map::houses::are_houses_mutually_allied(
+            scene.sim().house_alliances(),
+            scene.sim().interner().resolve(computers[0]),
+            scene.sim().interner().resolve(computers[1])
+        ));
+        let (providers, allies) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let mut providers = Vec::new();
+            for &owner in &computers {
+                sim.houses
+                    .get_mut(&owner)
+                    .unwrap()
+                    .set_ai_triggers_active(false);
+                providers.extend(spawn_on_free_cells(
+                    sim,
+                    rules,
+                    owner,
+                    cells_nearest(aymod_anchor(sim, owner)),
+                    &["YAGNTC", "NANRCT"],
+                ));
+            }
+            let allies = spawn_on_free_cells(
+                sim,
+                rules,
+                computers[1],
+                cells_nearest(aymod_anchor(sim, computers[1])),
+                &["E1"; 6],
+            );
+            (providers, allies)
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            providers.iter().all(|&id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            })
+        }));
+        let sw = scene.sim().interner.get("GeneticConverterSpecial").unwrap();
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            computers
+                .iter()
+                .all(|owner| scene.sim().super_weapons.get(owner).unwrap()[&sw].is_active())
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let ally_hp = allies
+            .iter()
+            .map(|&id| scene.sim().entities().get(id).unwrap().health.current())
+            .collect::<Vec<_>>();
+        for (phase, &owner) in computers.iter().enumerate() {
+            let other = computers[1 - phase];
+            let victims = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    human,
+                    cells_nearest(aymod_anchor(sim, human)),
+                    &["E1"; 2],
+                )
+            };
+            let at = scene.sim().entities().get(victims[0]).unwrap().position;
+            let before_other = {
+                let instance = &scene.sim().super_weapons.get(&other).unwrap()[&sw];
+                assert!(!instance.is_ready());
+                (instance.charge_start_tick(), instance.charge_duration())
+            };
+            {
+                let runtime = &mut scene.runtime;
+                let frame = runtime.simulation.session.binary_frame();
+                let kind = runtime
+                    .resources
+                    .rules
+                    .super_weapon("GeneticConverterSpecial")
+                    .unwrap();
+                // Only charge is supplied: the real provider granted this
+                // existing instance. House strategy and targeting stay live.
+                let instance = runtime
+                    .simulation
+                    .super_weapons
+                    .map_mut_for_test()
+                    .get_mut(&owner)
+                    .unwrap()
+                    .get_mut(&sw)
+                    .unwrap();
+                assert!(instance.set_charge_percentage(100, kind, frame));
+                instance.set_is_ready_for_test(true);
+                instance.set_ready_tick_for_test(frame as i32);
+            }
+            let bytes = save_scene(
+                &scene,
+                "AY one allied AI mutator charged, other independently recharging",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(scene.sim().super_weapons.get(&owner).unwrap()[&sw].is_ready());
+            assert!(
+                (0..900).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    output.sound_events.iter().any(|event| match event {
+                        SimSoundEvent::SuperWeaponLaunched {
+                            owner: fired_by,
+                            sw_type,
+                            world,
+                        } if *sw_type == sw => {
+                            assert_eq!(*fired_by, owner);
+                            assert!(
+                                (world.x / 256 - i32::from(at.rx())).abs() <= 1
+                                    && (world.y / 256 - i32::from(at.ry())).abs() <= 1,
+                                "AI must choose hostile infantry, not the larger allied group"
+                            );
+                            true
+                        }
+                        _ => false,
+                    })
+                }),
+                "charged AI mutator must launch through normal House strategy"
+            );
+            let used = &scene.sim().super_weapons.get(&owner).unwrap()[&sw];
+            assert!(used.is_active() && !used.is_ready());
+            assert!(used.charge_remaining(scene.sim().session.binary_frame() as i32) > 0);
+            let other_instance = &scene.sim().super_weapons.get(&other).unwrap()[&sw];
+            assert_eq!(
+                (
+                    other_instance.charge_start_tick(),
+                    other_instance.charge_duration()
+                ),
+                before_other
+            );
+            assert!(!other_instance.is_ready());
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().entities().values().any(|entity| {
+                        entity.owner() == owner
+                            && entity.is_alive()
+                            && !entity.lifecycle.in_limbo()
+                            && scene.sim().interner.resolve(entity.type_ref()) == "BRUTE"
+                    })
+                }),
+                "the AI launch must actually create its own mutated infantry"
+            );
+            assert!(victims.iter().any(|&id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .is_none_or(|entity| !entity.is_alive())
+            }));
+            assert_eq!(
+                allies
+                    .iter()
+                    .map(|&id| scene.sim().entities().get(id).unwrap().health.current())
+                    .collect::<Vec<_>>(),
+                ally_hp
+            );
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let brutes = sim
+                    .entities()
+                    .values()
+                    .filter(|entity| sim.interner.resolve(entity.type_ref()) == "BRUTE")
+                    .map(|entity| entity.stable_id())
+                    .collect::<Vec<_>>();
+                for id in brutes {
+                    sim.mission_queue_exact(
+                        id,
+                        MissionId::from_known(MissionType::Sleep),
+                        1,
+                        sim.session.binary_frame(),
+                        &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                    )
+                    .unwrap();
+                }
+            }
+            let recharging = scene.sim().super_weapons.get(&owner).unwrap()[&sw].charge_start_tick();
+            let bytes = save_scene(
+                &scene,
+                "AY AI mutation completed with independent cooldowns",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene.sim().super_weapons.get(&owner).unwrap()[&sw].charge_start_tick(),
+                recharging
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual paid AI gap generator and authored fifteen-cell fog after load"]
     fn aymod_three_ai_bases_build_the_authored_super_radius_gap() {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
