@@ -6,6 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
+- 本轮补复制中心实际付费出兵链：GAPILE/E1在NACLON手动Off后仍产原兵+复制兵且只付一次；通过既有ChangeOwner将中心交另一House并完整存读后，旧House E1只产1、新House NAHAND/E2产2，中心UnInit退休后E2只产1。四次生产均真实付款、正常PLACE、生产中/出厂后完整存读；新实际场景1及既有复制出厂4项通过。另发现F23真实缺口：NACLON CreateUnitSound正式Battle accessor为CloningVatsCreate，但BuildingType专用reader/复制出厂音效未接；下轮优先补这条已定位分支，不重复加复制数量微边界。固定版未动，其他门禁及暂停不变。
 - 本轮补高级驻军射程的实际消费者：SNIPE普通CaptureBuilding步行进CAHSE01，正式typed自身AWP14格/驻军OCAWP7格；建筑中心范围按原生基础尺寸变8格，9格外目标强制Attack在保存前后均180帧无射击/无伤，Stop恢复Guard后目标普通Move走近，建筑自主选敌、真正发OCAWP并伤害目标，最后完整存读保持。新场景1、InRange32/2原有ignored、combat_weapon3通过；无生产修复，不冒称全部驻军家族/最远边界或GUI已验。下一步继续其他高频功能，不重复Alt入口/这条驻军微边界；F22容量来源与V01/F11政策仍开放。
 - 本轮新增F22/C10未闭合功能：作者称精英YURI控制5个，正式Battle typed的MindControlE却为10，实际普通Attack捕获/受控击杀receiver升精英/第二次MindControlE捕获仍替换原目标，管理器count1，两段完整存读不变。原生构造/容量准入/替换叶支持保留出生容量，未证明运行时另有扩容writer；不擅改成5或10，不算已兼容。新增实际场景1、CaptureManager29通过；下一步查运行时扩容来源或明确作者设计与原生冲突策略，同时继续其他功能项，不因此暂停整个目标。
 - 本轮补F21作者漏项：恐怖分子/自爆卡车的同方同类型爆炸免伤。实际AY四组普通Attack自爆（两类型各同方/敌方同类型对照）、异型友军受伤、攻击前后完整存读通过；既有TypeImmune与死亡武器owner无需生产修改。V05原始killer控制者修复的独立critic已完成，无可操作发现；固定构建未动，Return Dubai弱攻势继续暂停。
@@ -18,6 +19,20 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### 复制中心：实际付费出兵、Off/换主/退休与完整存读（2026-10-29）
+
+- 新aymod_paid_infantry_cloning_moves_with_the_offline_vat_after_load复用正式AY Battle场景、GAPILE/NACLON和另一House的NAHAND；两方电源/建筑为场景输入，等待正常施工结束，不称已付款走完两套科技树。第二House设human并普通双向Ally，隔离自主进攻和复制兵交火，不把它冒称多AI自主生产验收。
+- 正常SetBuildingOnLine令NACLON的building_online为false，再普通QueueProduction实际生产E1。源产品从正式工厂建立、正常花钱推进到ready54；中途完整保存恢复；通过正常PlaceProducedMobile事件真正出厂后必须有2个本House活体/非limbo E1，spent_credits只增加源产品的正常现价，再完整存读保持相同实体ID。没有test_arm_ready、手写进度/付款/克隆计数或直接生成复制兵。首稿遗漏headless没有侧栏自动PLACE的边界，ready产品未出厂而失败；已补普通事件，不改生产逻辑。
+- 通过既有ChangeOwner权威入口将同一NACLON给另一House并完整存读，旧主新E1只多1、新主NAHAND生产E2多2，双方各只付1次源费用。ChangeOwner是明示场景输入，不宣称工程师可占领通常不可占领的复制中心；中心位于旧基地附近，两House联盟防止交战掩盖归属结果。随后既有UnInit owner退休中心，新主下一次E2只多1，生产中与出厂后存读继续覆盖。此处验证退休，不冒称实弹摧毁或出售全过程。
+- 实读实际AY ExitObject4449D9..444A51/C2E8D5：普通InfantryType工厂遍历自身House+FC复制中心名单，每中心创建一个以中心House为owner的同型对象，并调用该中心ExitObject；没有online/power门。现有exit_cloning_vat_copies及建筑归属/退休owners可完成本例，不给Off中心擅加禁复制，也不另建名单。源和复制兵创建仍使用既有构造/RNG/placement/导航/清理链，本轮无新增状态、RNG抽样、timer写入、Detach或保存字段。
+- 最终新增实际复合场景1（四次生产）、已有placement_tests::cloning三项和stock_yuri_cloning_vat_duplicates一项通过。初次过滤器写production_placement_tests得到0项，已按真实mod placement_tests重跑3项，不把0项算通过。仅测试/台账，不需玩法critic；未启动GUI、改MOD/原始存档/固定版或发布。完整自然科技树、实弹死亡/出售、堵门重试/更多步兵与自主多AI仍开放；复制出厂音效另列F23真实缺口，不能据复制数量通过宣布所有消费者完成。
+
+### F23新增缺口：复制出厂的建筑CreateUnitSound（2026-10-29）
+
+- 生产asset ini-get在正式Battle/XMP03T4经根/模式/地图选择后，NACLON.CreateUnitSound为CloningVatsCreate；非仅根文件文本。现有ObjectType只绑定TechnoType的CreateSound/DamageSound，未保留BuildingType+E74的CreateUnitSound；factory_ai模块本来也有该字段/播放的既有residual，普通General CreateUnitSound不是该建筑字段。
+- 原生BuildingType reader4607C8..4607F8读取类型引用并在空/未知时保留旧ID。复制中心出厂的NP hook4449DF→C2E8D5在Cloning分支读Type+E74，若-1再读Rules+17C，两者均-1不播放；否则C2BBBD在中心原始Location通过7509E0播放，然后跳444A53。该分支在中心自己的ExitObject调用，既有复制数量测试不会证明声音已经接通。
+- 下一步沿既有SoundRegistry/process-layer引用读取与SimSoundEvent owner补BuildingType字段、生命周期和调用，不复制现有CreateSound owner；先核构造默认、确切key/全局fallback身份、stock Factory_AI/其他Place caller及声音位置/空值保留，再做1–3个可在修前失败的聚焦回归和实际AY出厂事件。当前未实施，不更改声音或MOD来绕过；该项为P2表现/音效缺口，不是复制功能缺失，也不外推声音已实际播放到设备。
 
 ### 高级驻军射程：真实进楼、范围外拒射与接近后自主实伤（2026-10-29）
 
@@ -1602,6 +1617,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F21 / P1 / 已有免伤owner，实际自爆与存读已验 | 恐怖分子、自爆卡车同方同类型爆炸免伤 | TypeImmune→ReceiveDamage7019E3..701A38；Suicide FireAt6FDDC0→死亡武器→共享receiver | 实际TERROR/DTRUCK普通Attack自爆，各同方/敌方同类型对照及异型友军受伤、攻击前后存读通过；被击毁/持续辐射/运输死亡、多AI及GUI仍待验，不加兵种特例 |
 
 | F22 / P1 / 实际未达作者多目标要求，扩容来源待核 | 精英YURI同时控制多单位；作者5/正式精英武器10/出生管理器1三者不一致 | Init_Managers6F4090→4717D0保留出生容量；CanCapture/CaptureUnit读取保留值；已有owner不在晋升时扩容 | 真实捕获/经验receiver晋升/精英第二次捕获释放旧目标及两次存读已复现，未实现多目标；下一步证明原生运行时扩容路径或明确冲突策略，不按旧文字擅改数值 |
+
+| F23 / P2 / 已定位缺失，待实现 | 复制中心出厂建筑CreateUnitSound读取与声音事件 | BuildingType4607C8..4607F8/+E74；NP4449DF→C2E8D5→C2BBBD | 正式Battle accessor NACLON=CloningVatsCreate，现有类型reader及复制出口漏接，General/Techno CreateSound不能替代；先补默认/分层读取与原出口，再验证实际AY事件，不把复制数量通过算音效通过 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。

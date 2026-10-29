@@ -21109,6 +21109,189 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; paid infantry cloning follows the vat House through transfer and saves"]
+    fn aymod_paid_infantry_cloning_moves_with_the_offline_vat_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::production::ProductionCategory;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, barracks, vat) = aymod_nearby_pair("GAPILE", "NACLON", true);
+        let owner = scene.sim().entities().get(barracks).unwrap().owner();
+        let other = house_of(scene.sim(), "Russians");
+        let other_barracks = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&other)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let ids = spawn_on_free_cells(
+                sim,
+                rules,
+                other,
+                cells_nearest(aymod_anchor(sim, other)),
+                &["NAHAND", "NANRCT"],
+            );
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["NANRCT"],
+            );
+            let index = |id| {
+                sim.houses()
+                    .order()
+                    .iter()
+                    .position(|&house| house == id)
+                    .unwrap() as i32
+            };
+            let (a, b) = (index(owner), index(other));
+            let tick = sim.session.tick() + 1;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                tick,
+                Command::Ally { house_index: b },
+            ));
+            sim.queue_command(CommandEnvelope::new(
+                other,
+                tick,
+                Command::Ally { house_index: a },
+            ));
+            ids[0]
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            [barracks, vat, other_barracks].into_iter().all(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            })
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::SetBuildingOnLine {
+                entity_id: vat,
+                on: false,
+            },
+        ));
+        tick_with_due_commands(&mut scene);
+        assert!(!scene.sim().entities().get(vat).unwrap().building_online());
+        let produce = |scene: &mut HeadlessScenario, house, kind: &str, expected| {
+            let type_id = scene.sim().interner.get(kind).unwrap();
+            let units = |scene: &HeadlessScenario| -> std::collections::BTreeSet<u64> {
+                scene
+                    .sim()
+                    .entities()
+                    .values()
+                    .filter(|entity| {
+                        entity.owner() == house
+                            && entity.type_ref() == type_id
+                            && entity.is_alive()
+                            && !entity.lifecycle.in_limbo()
+                    })
+                    .map(|entity| entity.stable_id())
+                    .collect()
+            };
+            let before = units(scene);
+            let cost = scene.sim().cost_of(
+                house,
+                scene.runtime.resources.rules.object(kind).unwrap(),
+                &scene.runtime.resources.rules,
+            );
+            let spent = scene.sim().houses[&house].economy().spent_credits();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                house,
+                sim.session.tick() + 1,
+                Command::QueueProduction { type_id },
+            ));
+            assert!(
+                (0..120).any(|_| {
+                    tick_with_due_commands(scene);
+                    scene
+                        .sim()
+                        .production
+                        .factories()
+                        .view(house, ProductionCategory::Infantry)
+                        .is_some_and(|head| head.object.is_some())
+                }),
+                "{kind} must enter ordinary paid production"
+            );
+            let bytes = save_scene(scene, "AY paid infantry before cloning exit");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(scene);
+                    scene
+                        .sim()
+                        .production
+                        .factories()
+                        .view(house, ProductionCategory::Infantry)
+                        .is_some_and(|head| head.progress == 54)
+                }),
+                "{kind} must finish paid production"
+            );
+            // Human mobile delivery needs the sidebar's ordinary PLACE event;
+            // a headless frame does not run that UI owner.
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                house,
+                sim.session.tick() + 1,
+                Command::PlaceProducedMobile {
+                    category: ProductionCategory::Infantry,
+                },
+            ));
+            assert!(
+                (0..120).any(|_| {
+                    tick_with_due_commands(scene);
+                    units(scene).difference(&before).count() == expected
+                }),
+                "{kind} must place {expected} live infantry through ordinary production"
+            );
+            assert_eq!(
+                scene.sim().houses[&house].economy().spent_credits() - spent,
+                cost,
+                "copies must not incur a second product charge"
+            );
+            let after = units(scene);
+            let bytes = save_scene(scene, "AY paid infantry and vat copy after delivery");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(units(scene), after);
+        };
+        produce(&mut scene, owner, "E1", 2);
+        {
+            let runtime = &mut scene.runtime;
+            // Authoritative ownership transition is a scenario input; this
+            // does not claim an Engineer can capture a normally noncapturable vat.
+            runtime.simulation.change_owner_with_rules(
+                vat,
+                other,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        assert_eq!(scene.sim().entities().get(vat).unwrap().owner(), other);
+        let bytes = save_scene(&scene, "AY cloning vat transferred to the other House");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        produce(&mut scene, owner, "E1", 1);
+        produce(&mut scene, other, "E2", 2);
+        aymod_remove_shooter(&mut scene, vat);
+        produce(&mut scene, other, "E2", 1);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Yuri Prime deploy heals a nearby wounded unit"]
     fn aymod_yuri_prime_deploy_heals_a_wounded_ally_after_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
