@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线791201a3f。本轮补A04实际AY困难盟军同House双工厂：Battle/Return Dubai只是隔离水陆地形，不恢复弱攻势调查；关闭新AITrigger以隔离需求竞争，合法生成GAWEAP/GAREFN/GATECH/GAROBO/NANRCT/GAYARD并正常施工，正常create_team创建原0ACCD81C-G幻影与0CA1E67C-G海军猎手需求；不注入钱、产品、成员、选择、队列或进度。普通帧同时观察重工MGTK和船厂DEST/AEGIS/DLPH之一的不同limbo工厂对象、各自未付余额>0；完整存读保持两头ID/类型/余额，后续普通帧两边余额均真实下降，同一原对象都活着落地，再次完整存读保留身份/归属。
-- 新实际场景1、NP FactoryAI13及UnitChoice4通过（后者1 ignored未跑），共18项；无生产修复/新RNG/timer/Detach/保存布局，无新玩法critic。设施/建队是fixture，不是自然科技树/AITrigger/完整两队或出击验收；A04完整舰队集结/战术、多AI及长局仍开放。生产accessor另核两Battle地图TANY/BORIS/BPLN均未配置类型BountyAnim，保留全局MONEY/坐标既有修复；不把六个查询外推全模式/全部类型。固定版/MOD/原档未动、无GUI/发布或遗留执行，Return Dubai弱攻势暂停与V01/F11/F22门禁保持。下一步补A04原队补员/成型与船厂出口消费者，不追加同一双头选择微边界，不调AI权重/兵种值。
+- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，HEAD13a825e7f。前轮是进展（已提交实际双工厂出厂回归）；本轮扩展同一测试到原TeamType完整补员尚未通过，src/headless_scenario.rs为本任务未提交WIP，勿把HEAD旧通过结果当WIP通过。原双头/付款/出厂/存读端点仍通过至扩展断言，但“只由显式两队驱动”的隔离假设被推翻：付费MGTK/DEST已有team20/22；新空队Can_Add两者均None，随100帧空队超时销毁。已有代码team_ai::dissolves只在无成员且超时/曾满时销毁；根DissolveUnfilledTeamDelay=100，不擅加长或禁用。
+- 最新WIP逐帧保持House AITrigger latch=false作隔离，不改配置/权重/钱/成员/产品；实际测试编译成功但在更早“双头同时持有MGTK/原猎手船种”断言失败（18000帧完整补员的旧失败不能当当前因果）。此前就绪等待已通过，却不保证产品未被他队占用；不要用任意team_for_member!=None当指定队招募成功。当前无运行中Cargo；日志TEMP/aymod-ai-dual-recruit.txt及aymod-ai-dual-isolated.txt。下一安全动作先查实际触发latch写入/队伍身份与100帧需求到chooser调度，修正fixture的持续原需求建立/身份追踪，再跑本一例；不为测试发明自动补员/修改引擎招募规则。未判定新增引擎故障、无新生产修复/critic/通过声明；Return Dubai弱攻势仍暂停，V01/F11/F22门禁、固定版/MOD/原档不动，目标仍开放。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1954,6 +1954,8 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 不要为了清单显示“完成”而悄悄抹掉政策残留。
 
 ### A04陆海并行生产：正式编队需求到实际付款出厂（2026-10-30）
+
+- 扩展复核更正：本节HEAD13a825e7f确实证明双工厂的原产品分别付款/出厂/存读；但初始化时关闭一次AITrigger，不足以证明后续无竞争队伍。扩展已观察付费MGTK/DEST被team20/22持有，新显式队Can_Add均None；因此不再把本节当“仅由两支指定队驱动”的证据。逐帧强制关闭触发的WIP连早期指定双头断言也未通过，完整补员/招募身份与触发隔离仍待定位；这些是fixture/待核，不自动成为引擎缺陷。
 
 - 新aymod_ai_land_and_naval_factories_deliver_saved_paid_products在实际AY Battle/Return Dubai一人对困难盟军，保留规则/资金/模式和原AI生产owners。关闭该House新AITrigger，设施通过合法spawn/普通施工提供；正常create_team显式建立原Allied Mirage Tanks(0ACCD81C-G)与Allied Naval Hunters(0CA1E67C-G)，原TaskForce分别需求4MGTK与4DEST/1AEGIS/4DLPH。此为生产组件fixture，不是自然科技/触发出兵，也不恢复用户暂停的弱攻势trace。
 - 普通帧观察两指定工厂同时持有不同、尚欠款的原对象，陆为MGTK、海为原猎手三种之一；不用只出现一次choice作为通过。第一次正式完整存读保持两头ID/类型/各自欠款，恢复后各自原对象的余额实际下降，随后两原对象均活体同House落到地图；第二次完整存读保留ID/类型/归属/非limbo。设施、建队是输入，钱包、选择、产品、成员、队列、进度、付款或PLACE均未注入，不通过人类生产命令替代AI Factory_AI。
