@@ -12051,6 +12051,265 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; moving Mirage disguise, hostile infantry reveal and saved reacquisition before AI fire"]
+    fn aymod_mirage_disguise_survives_movement_reveal_and_reacquisition_saves() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, tank, observer) = aymod_nearby_pair("MGTK", "GAPILL", false);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let enemy = scene.sim().entities().get(observer).unwrap().owner();
+        let sleep = |scene: &mut HeadlessScenario, id| {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    runtime.simulation.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider {
+                        rules: &runtime.resources.rules,
+                    },
+                )
+                .unwrap();
+        };
+        sleep(&mut scene, tank);
+        sleep(&mut scene, observer);
+        let disguised = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .get(tank)
+                .unwrap()
+                .disguise
+                .as_ref()
+                .is_some_and(|state| state.is_disguised())
+        };
+        let scan = |scene: &mut HeadlessScenario| {
+            let runtime = &mut scene.runtime;
+            runtime.simulation.greatest_threat_represented(
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                observer,
+                crate::sim::combat::threat_range::ScanMission::Guard,
+                None,
+            )
+        };
+        let restore = |scene: &mut HeadlessScenario| {
+            let disguise = scene.sim().entities().get(tank).unwrap().disguise.clone();
+            let bytes = save_scene(scene, "AY Mirage movement and infantry reveal");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert_eq!(scene.sim().entities().get(tank).unwrap().disguise, disguise);
+        };
+        {
+            let kind = scene.runtime.resources.rules.object("MGTK").unwrap();
+            assert!(kind.can_disguise && kind.disguise_when_still && !kind.perma_disguise);
+        }
+        assert!((0..180).any(|_| {
+            tick_with_due_commands(&mut scene);
+            disguised(&scene)
+        }));
+        assert_ne!(scan(&mut scene), Some(tank));
+        restore(&mut scene);
+        assert_ne!(scan(&mut scene), Some(tank));
+        let (goal, owner) = {
+            let sim = scene.sim();
+            let at = sim.entities().get(tank).unwrap().position;
+            let gun = sim.entities().get(observer).unwrap().position;
+            let goal = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    (x.abs_diff(at.rx()).max(y.abs_diff(at.ry())) == 2
+                        && x.abs_diff(gun.rx()).max(y.abs_diff(gun.ry())) <= 3
+                        && sim.terrain_cell_level(x, y) == Some(at.z())
+                        && sim.occupancy().get(x, y).is_none()
+                        && sim
+                            .foot_path_zone_precheck(
+                                tank,
+                                crate::sim::components::DriveCoord::cell(x, y, 0),
+                                &scene.runtime.resources.rules,
+                            )
+                            .unwrap())
+                    .then_some((x, y))
+                })
+                .unwrap();
+            (goal, sim.entities().get(tank).unwrap().owner())
+        };
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Move {
+                entity_id: tank,
+                target_rx: goal.0,
+                target_ry: goal.1,
+            },
+        ));
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            crate::sim::movement::motion_query::is_moving(scene.sim().entities().get(tank).unwrap())
+                == Some(true)
+                && !disguised(&scene)
+        }));
+        restore(&mut scene);
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let entity = scene.sim().entities().get(tank).unwrap();
+            (entity.position.rx(), entity.position.ry()) == goal
+                && crate::sim::movement::motion_query::is_moving(entity) == Some(false)
+                && disguised(&scene)
+        }));
+        let state = scene
+            .sim()
+            .entities()
+            .get(tank)
+            .unwrap()
+            .disguise
+            .as_ref()
+            .unwrap();
+        let tree = scene.sim().interner.resolve(state.type_id().unwrap());
+        assert!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .general
+                .default_mirage_disguises
+                .iter()
+                .any(|kind| kind == tree)
+        );
+        assert_ne!(scan(&mut scene), Some(tank));
+        let (infantry, home, near) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let sites = cells_nearest((i32::from(goal.0), i32::from(goal.1)))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (6..=8).contains(
+                        &(x - i32::from(goal.0))
+                            .abs()
+                            .max((y - i32::from(goal.1)).abs()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let infantry = spawn_on_free_cells(sim, rules, enemy, sites, &["E1"])[0];
+            let home = sim.entities().get(infantry).unwrap().position;
+            let near = cells_nearest((i32::from(goal.0), i32::from(goal.1)))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    (x.abs_diff(goal.0).max(y.abs_diff(goal.1)) == 1
+                        && sim.occupancy().get(x, y).is_none()
+                        && sim
+                            .foot_path_zone_precheck(
+                                infantry,
+                                crate::sim::components::DriveCoord::cell(x, y, 0),
+                                rules,
+                            )
+                            .unwrap())
+                    .then_some((x, y))
+                })
+                .unwrap();
+            (infantry, (home.rx(), home.ry()), near)
+        };
+        sleep(&mut scene, infantry);
+        let walk = |scene: &mut HeadlessScenario, goal: (u16, u16)| {
+            let runtime = &mut scene.runtime;
+            let name = runtime.simulation.interner.resolve(enemy).to_owned();
+            assert!(runtime.simulation.apply_command(
+                &name,
+                &Command::Move {
+                    entity_id: infantry,
+                    target_rx: goal.0,
+                    target_ry: goal.1,
+                },
+                Some(&runtime.resources.rules)
+            ));
+        };
+        for visit in 0..2 {
+            walk(&mut scene, near);
+            assert!((0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                !disguised(&scene)
+            }));
+            assert_eq!(scan(&mut scene), Some(tank));
+            restore(&mut scene);
+            if visit == 1 {
+                break;
+            }
+            walk(&mut scene, home);
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let at = scene.sim().entities().get(infantry).unwrap().position;
+                at.rx().abs_diff(goal.0).max(at.ry().abs_diff(goal.1)) >= 2
+            }));
+            let state = scene
+                .sim()
+                .entities()
+                .get(tank)
+                .unwrap()
+                .disguise
+                .as_ref()
+                .unwrap();
+            assert!(!state.is_disguised());
+            assert!(
+                state
+                    .reveal_timer()
+                    .remaining(scene.sim().session.binary_frame() as i32)
+                    > 0
+            );
+            restore(&mut scene);
+            assert!((0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                disguised(&scene)
+            }));
+            assert_ne!(scan(&mut scene), Some(tank));
+            restore(&mut scene);
+            assert_ne!(scan(&mut scene), Some(tank));
+        }
+        let hp = scene.sim().entities().get(tank).unwrap().health.current();
+        let runtime = &mut scene.runtime;
+        runtime
+            .simulation
+            .mission_queue_exact(
+                observer,
+                MissionId::from_known(MissionType::Guard),
+                1,
+                runtime.simulation.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider {
+                    rules: &runtime.resources.rules,
+                },
+            )
+            .unwrap();
+        let mut fired = false;
+        assert!((0..300).any(|_| {
+            let output = tick_with_due_commands(&mut scene);
+            fired |= output.fire_events.iter().any(|event| {
+                event.attacker_id == observer
+                    && event.target == crate::sim::combat::TargetKind::Entity(tank)
+            });
+            fired
+                && scene
+                    .sim()
+                    .entities()
+                    .get(tank)
+                    .is_none_or(|entity| entity.health.current() < hp)
+        }));
+        let bytes = save_scene(&scene, "AY AI hits the infantry-revealed Mirage");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(tank)
+                .is_none_or(|entity| entity.health.current() < hp)
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; moving AI sensors, cloak acquisition and real load"]
     fn aymod_mobile_sensors_update_cloaked_infantry_ai_acquisition_after_load() {
         use crate::sim::command::Command;
