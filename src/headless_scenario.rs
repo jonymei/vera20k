@@ -25098,6 +25098,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Yuri Prime's two slots admit authored transports, enforce total capacity and survive unload and saves"]
     fn aymod_yuri_prime_transport_size_tracks_saved_capacity_and_unload() {
+        aymod_yuri_prime_transport_size(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; V13 diagnostic retains same-cell Enter cancellation until native caller comparison is closed"]
+    fn aymod_yuri_prime_transport_size_same_cell_retry_diagnostic() {
+        aymod_yuri_prime_transport_size(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_yuri_prime_transport_size(retry_same_cell: bool) {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -25319,6 +25331,42 @@ mod retail_construction_tests {
                 ),
                 crate::sim::radio::RadioResponse::Roger
             );
+            if retry_same_cell {
+                let sender = scene.sim().entities().get(overflow).unwrap();
+                let vehicle = scene.sim().entities().get(carrier).unwrap();
+                assert_eq!(
+                    (sender.position.rx(), sender.position.ry()),
+                    (vehicle.position.rx(), vehicle.position.ry())
+                );
+                assert_ne!(
+                    crate::sim::movement::ground_pose::position_world_xy(&sender.position),
+                    crate::sim::movement::ground_pose::position_world_xy(&vehicle.position)
+                );
+                enter(&mut scene, overflow);
+                for _ in 0..90 {
+                    tick_with_due_commands(&mut scene);
+                    assert!(!inside(&scene, overflow));
+                }
+                let sender = scene.sim().entities().get(overflow).unwrap();
+                // V13 diagnosis, not a claim that this limitation is desired.
+                // Replace this expectation if the native caller comparison
+                // establishes a missing arrival/entry effect in this chain.
+                assert_eq!(sender.mission.effective().known(), Some(MissionType::Guard));
+                assert_eq!(sender.navigation.nav_com(), None);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .total_size(),
+                    2
+                );
+                continue;
+            }
             let sim = &mut scene.runtime.simulation;
             sim.queue_command(CommandEnvelope::new(
                 owner,
