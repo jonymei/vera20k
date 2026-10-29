@@ -1978,6 +1978,191 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; allied AI naturally produce attack teams and resume real attacks after a full save"]
+    fn aymod_two_allied_ai_naturally_produce_attack_teams_and_resume_after_load() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::production::ProductionCategory;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(0);
+        let human = scene.sim().session.current_house().unwrap();
+        let origins = computers
+            .iter()
+            .map(|&owner| (owner, aymod_anchor(scene.sim(), owner)))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            // Restore the normal trigger flag before the first frame. The
+            // economic fixture suppresses attacks only for its recovery tests.
+            for &owner in &computers {
+                sim.houses
+                    .get_mut(&owner)
+                    .unwrap()
+                    .set_ai_triggers_active(true);
+            }
+            let at = aymod_anchor(sim, human);
+            // Real unarmed human targets, not supplied AI members or orders.
+            // The two protected observer yards keep normal defeat rules intact.
+            spawn_on_free_cells(sim, rules, human, cells_nearest(at), &["GATECH"; 6]);
+        }
+        let targets = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| entity.owner() == human)
+            .map(|entity| (entity.stable_id(), entity.health.current()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut balances = std::collections::BTreeMap::<u64, (InternedId, i32)>::new();
+        let mut paid = std::collections::BTreeSet::new();
+        let mut attacks = std::collections::BTreeMap::new();
+        let mut damaged = false;
+        assert!(
+            (0..18000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                assert!(output.tick.frame_committed && sim.session.outcome_request().is_none());
+                for factory in sim.production().factories().iter_insertion_ordered() {
+                    if !computers.contains(&factory.owner())
+                        || !matches!(
+                            factory.category(),
+                            ProductionCategory::Infantry
+                                | ProductionCategory::Vehicle
+                                | ProductionCategory::Aircraft
+                        )
+                    {
+                        continue;
+                    }
+                    let Some(id) = factory.object().and_then(|object| object.entity_id) else {
+                        continue;
+                    };
+                    let (owner, previous) = balances
+                        .entry(id)
+                        .or_insert((factory.owner(), factory.balance()));
+                    assert_eq!(*owner, factory.owner());
+                    if factory.balance() < *previous {
+                        paid.insert(id);
+                    }
+                    *previous = factory.balance();
+                }
+                for event in &output.fire_events {
+                    let TargetKind::Entity(target) = event.target else {
+                        continue;
+                    };
+                    if !targets.contains_key(&target) || !paid.contains(&event.attacker_id) {
+                        continue;
+                    }
+                    let Some((id, false)) = sim.team_script_vm.team_for_member(event.attacker_id)
+                    else {
+                        continue;
+                    };
+                    let Some(team) = sim.team_script_vm.team(id) else {
+                        continue;
+                    };
+                    if !computers.contains(&team.owner())
+                        || !team.formed()
+                        || team.current_action(&sim.team_script_vm) != 0
+                        || team
+                            .team_type_id()
+                            .and_then(|id| sim.team_script_vm.team_type_definition(id))
+                            .is_none_or(|definition| definition.is_base_defense)
+                    {
+                        continue;
+                    }
+                    let actor = sim.entities().get(event.attacker_id).unwrap();
+                    assert_eq!(actor.owner(), team.owner());
+                    let (x, y) = origins[&team.owner()];
+                    if (i32::from(actor.position.rx()) - x)
+                        .abs()
+                        .max((i32::from(actor.position.ry()) - y).abs())
+                        < 8
+                    {
+                        continue;
+                    }
+                    attacks.insert(team.owner(), (id, event.attacker_id));
+                }
+                damaged |= targets.iter().any(|(&id, &hp)| {
+                    sim.entities()
+                        .get(id)
+                        .is_none_or(|entity| entity.health.current() < hp)
+                });
+                computers.iter().all(|owner| {
+                    attacks.get(owner).is_some_and(|&(team, actor)| {
+                        sim.team_script_vm.team_for_member(actor) == Some((team, false))
+                            && sim
+                                .entities()
+                                .get(actor)
+                                .is_some_and(|entity| entity.is_ai_alive())
+                    })
+                }) && damaged
+            }),
+            "both natural Allied economies must pay for members, form actual attack teams, leave base and fire at the human: attacks={attacks:?}, damaged={damaged}, teams={:?}",
+            scene
+                .sim()
+                .team_script_vm
+                .teams_in_order()
+                .filter(|team| computers.contains(&team.owner()))
+                .map(|team| (
+                    team.owner(),
+                    team.team_type_id(),
+                    team.cursor(),
+                    team.current_action(&scene.sim().team_script_vm),
+                    team.members().count(),
+                    team.formed()
+                ))
+                .collect::<Vec<_>>()
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY two natural Allied attack teams after paid members reached the human",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for (&owner, &(team, actor)) in &attacks {
+            assert_eq!(
+                scene.sim().team_script_vm.team(team).unwrap().owner(),
+                owner
+            );
+            assert_eq!(
+                scene.sim().team_script_vm.team_for_member(actor),
+                Some((team, false))
+            );
+            assert_eq!(scene.sim().entities().get(actor).unwrap().owner(), owner);
+        }
+        let mut resumed = std::collections::BTreeSet::new();
+        assert!(
+            (0..2400).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                let sim = scene.sim();
+                assert!(output.tick.frame_committed && sim.session.outcome_request().is_none());
+                for event in &output.fire_events {
+                    let TargetKind::Entity(target) = event.target else {
+                        continue;
+                    };
+                    if !targets.contains_key(&target) {
+                        continue;
+                    }
+                    let Some((team, false)) = sim.team_script_vm.team_for_member(event.attacker_id)
+                    else {
+                        continue;
+                    };
+                    for (&owner, &(original, _)) in &attacks {
+                        if team == original {
+                            assert_eq!(
+                                sim.entities().get(event.attacker_id).unwrap().owner(),
+                                owner
+                            );
+                            resumed.insert(owner);
+                        }
+                    }
+                }
+                resumed.len() == 2
+            }),
+            "both same restored teams must emit new shots, not just retain saved orders: {resumed:?}"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied AI Houses replace a defeated enemy and attack the remaining hostile House"]
     fn aymod_allied_ai_replace_a_defeated_enemy_and_attack_after_load() {
         use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
@@ -15022,6 +15207,194 @@ mod retail_construction_tests {
                     .is_some_and(|cargo| cargo.passengers() == [patient])
         }));
         (scene, hospital, patient)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[cfg(not(feature = "ares"))]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real Tesla tank shots preserve hospital healing and discharge across saves"]
+    fn aymod_hospital_treats_through_real_tesla_hits_and_saved_emp_expiry() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for kind in ["GAROBO", "NARADR"] {
+            let (mut scene, hospital, patient) = aymod_hospital_patient_inside(kind, "BRUTE");
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            assert!((0..180).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .mission
+                    .current()
+                    .known()
+                    == Some(MissionType::Repair)
+            }));
+            let shooter = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let enemy = house_of(sim, "Russians");
+                sim.houses
+                    .get_mut(&enemy)
+                    .unwrap()
+                    .set_is_human_for_test(true);
+                let at = sim.entities().get(hospital).unwrap().position;
+                let sites: Vec<_> = cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                    .into_iter()
+                    .filter(|&(x, y)| {
+                        let distance = (x - i32::from(at.rx()))
+                            .abs()
+                            .max((y - i32::from(at.ry())).abs());
+                        (2..=3).contains(&distance)
+                            && u16::try_from(x)
+                                .ok()
+                                .zip(u16::try_from(y).ok())
+                                .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                    })
+                    .collect();
+                let shooter = spawn_on_free_cells(sim, rules, enemy, sites, &["TTNK"])[0];
+                sim.queue_command(CommandEnvelope::new(
+                    enemy,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: shooter,
+                        target_id: hospital,
+                    },
+                ));
+                shooter
+            };
+            let mut fired = false;
+            assert!(
+                (0..240).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(output.tick.frame_committed);
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == shooter && event.target == TargetKind::Entity(hospital)
+                    });
+                    scene
+                        .sim()
+                        .entities()
+                        .get(hospital)
+                        .unwrap()
+                        .emp_remaining()
+                        > 0
+                }),
+                "{kind}: actual TTNK shots must deliver the configured impact EMP"
+            );
+            assert!(fired);
+            let bytes = save_scene(
+                &scene,
+                "AY hospital under actual Tesla tank fire with admitted patient",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            let mut previous_hp = scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .health
+                .current();
+            assert!(
+                (0..600).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(output.tick.frame_committed);
+                    let sim = scene.sim();
+                    let hp = sim.entities().get(patient).unwrap().health.current();
+                    let healed_under_emp = hp > previous_hp
+                        && sim.entities().get(hospital).unwrap().emp_remaining() > 0;
+                    previous_hp = hp;
+                    healed_under_emp
+                }),
+                "{kind}: live EMP from ordinary repeated fire must not reset Building Repair"
+            );
+            // Clear the represented target and sleep to isolate pulse expiry;
+            // this neither removes in-flight shots nor changes the EMP timer.
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                sim.assign_target_represented(
+                    shooter,
+                    None,
+                    rules,
+                    Some(&runtime.resources.overlay_registry),
+                    Default::default(),
+                )
+                .unwrap();
+                sim.mission_queue_exact(
+                    shooter,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            let remaining = scene
+                .sim()
+                .entities()
+                .get(hospital)
+                .unwrap()
+                .emp_remaining();
+            assert!(remaining > 0);
+            let bytes = save_scene(
+                &scene,
+                "AY hospital healed during real EMP before natural expiry",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .emp_remaining(),
+                remaining
+            );
+            assert!(
+                (0..1800).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(output.tick.frame_committed);
+                    let sim = scene.sim();
+                    let patient = sim.entities().get(patient).unwrap();
+                    sim.entities().get(hospital).unwrap().emp_remaining() == 0
+                        && !patient.lifecycle.in_limbo()
+                        && patient.health.current()
+                            == scene
+                                .runtime
+                                .resources
+                                .rules
+                                .object("BRUTE")
+                                .unwrap()
+                                .strength
+                }),
+                "{kind}: EMP must expire naturally and the original patient must leave fully healed"
+            );
+            let bytes = save_scene(&scene, "AY real Tesla hospital treatment finished");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(
+                !scene
+                    .sim()
+                    .entities()
+                    .get(patient)
+                    .unwrap()
+                    .lifecycle
+                    .in_limbo()
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(hospital)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .is_empty()
+            );
+        }
     }
 
     #[cfg(feature = "npatch")]
