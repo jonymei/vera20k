@@ -216,7 +216,13 @@ bounded to 0..1, with integer points conserved rather than duplicated.
 The killer's `GetsBounty`, `VeteranGetsBounty` and `EliteGetsBounty` select bounty
 eligibility by its rank before the kill. Payout is the victim's effective cost
 times its rank's `[CombatDamage] BountyCostMult` family and its own rank's `Bounty`
-family. The defaults are 25/50/100 percent and 1 respectively. Higher-tier absent
+family. VERA's policy defaults are 25/50/100 percent and 1 respectively; these
+are not established native defaults. In NPAE174, initializer B9904D..B99065
+writes global factor float bits 3EA8F5C3/3F000000/3F400000 (about 33/50/75
+percent), and reader B980C9..B9811D passes each retained float as the
+ReadDouble5283D0 default before storing it back to float. AYMod explicitly
+authors 25/50/100 percent, so this constructor difference alone does not
+establish an incorrect payout in its ordinary root configuration. Higher-tier absent
 per-type values inherit the preceding tier. Multipliers are bounded to 0..16.
 Only hostile terminal kills pay, once through the existing KillRecord and
 Economy owners; capture bookkeeping and friendly fire cannot farm cash. The
