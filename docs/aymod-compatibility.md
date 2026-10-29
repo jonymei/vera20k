@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于04db842a9发现并修F14漏项：作者建筑TypeSelect扩展未接，原重工短按T回归先红([]而非三阵营自有重工)。实际732C7A→C2CABA/C2CBC3按同类型、Naval+非零原始Factory、Cloning视16或双UnitRepair分组，接入原type_select_candidates，不扩展held鼠标/框选。NP实体选择9/导航18/AY根实际1、stock实体选择8/导航18通过，Select快照位也验；原生指令静读，无新增原生执行/RNG/timer/Detach/保存字段。输入UI改动不另起玩法critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于bb1ecd649继续作者说明漏项F15：现有selected-building radial owner已覆盖，无生产修改。正式AY根typed的10种可选有武器防御（包含Combat但非IsBaseDefense的YAPSYT/GTGCAN2）均产正范围，取消选择无输出；实际TESLA普通/精英当前武器半径、RGBA/BGRA无窗口GPU可见像素与Z不变通过。原Nuke GPU1、NP/stock radial app各8通过；仅测试/台账，无新critic，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,14 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F15作者防御建筑选中范围：已有owner，补根库存与实际GPU（2026-10-29）
+
+- 作者《内容介绍170507版》要求所有防御建筑选中展示范围。复读实际AY Tactical DrawUnitActionVisuals6DBE39..6DBE72逐个选中对象检查Type+238/HasRadialIndicator后调虚函数+130；Building456750先调GetSensorRange4566B0，再检查online+660和当前人类House50B6F0，不是完整4555D0 operational/Power。GetSensorRange456703..45673D对普通非sensor防御读取GetCurrentWeapon70E1A0的正Range并除256；既有radial_indicators::build/ObjectType::building_sensor_range和共享Game456980/surface-lines GPU已接通，没有新增第二套范围绘制或强开所有建筑flag。
+- 新增aymod_root_armed_defenses_publish_selected_range_indicators，正式IniFile/RuleSet读AY rulesmd根：Building、selectable、非Invisible、已有主/第零武器且(IsBaseDefense或BuildCat=Combat)的10种为GAPILL/NASAM/NALASR/NAFLAK/YAGGUN/ATESLA/TESLA/YAPSYT/GTGCAN/GTGCAN2。逐种要求原配置HasRadialIndicator，合法fixture spawn后正常builder产正半径，空选中名单不产圈，query还核state hash及三RNG流不变。初版仅按IsBaseDefense得8种，会漏作者玩家塔/玩家巨炮，已补Combat类而不是把8种冒称全防御；不改MOD来补标记。
+- 新增aymod_selected_defense_range_reaches_both_offscreen_gpu_formats：实际根TESLA的普通/精英作为明示presentation输入，不称自然击杀晋升；GetCurrentWeapon须分别指向实际Primary/ElitePrimary，范围圈半径恰等于该武器正Range/256，保留原fade/rays。用生产坐标把圆心置于1536x1024视口内，走现有TerrainDrawRenderer的真实surface-lines到RGBA8/BGRA8 sRGB，两种rank/两种格式的圆周cardinal pixel均非背景，整份GPU Z读回不变、空选择无圈及sim hash不变。只是独立范围层输出，不冒称建筑本体/完整App/compositor或原生截图像素全等。
+- 将原Nuke GPU例的现有上传/绘制/读回尾抽为同测试文件私有assert_radials_reach_gpu供两例共用，未新建渲染器或更改生产路径。最终新增根库存1、新GPU1、原Nuke GPU1通过；NP radial app8通过/1新增ignored另显式跑过，stock radial app8通过，共19项通过。GPU两例通过后仅扩充CPU库存筛选并重编/复跑库存和NP/stock app；未重复GPU，渲染代码/输入未再改变。没有运行全仓库/GUI。
+- 本轮确认已有功能并补漏项验收，不是新增生产修复。无新增生产状态、RNG调用、timer写入、Detach、保存字段或新critic；未改MOD/原始存档/固定构建或发布。全部地图/模式层、热保存场景、其他类型/阶段GPU、实际游戏遮挡/选择和完整画面仍开放。继续作者说明整体漏项复核，不把F01–F15局部覆盖视为MOD完整兼容；Return Dubai弱攻势暂停及V01/F11批准门禁保持。
 
 ### F14新增漏项：建筑“选择同类”短按T的NP分组（2026-10-29）
 
@@ -1464,6 +1472,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F12 / P2 / 遭遇战16色及科技设置链已接，网络边界开放 | 扩展遭遇战UI：原8色错配、科技设置及完整MPC连续目录已接，普通滚动点击、启动准入/随机/偏好重开/House传递和无窗口GPU通过 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；目录由启动root唯一helper派生，UI/runtime缓存共用；stock仍8，原生network human随机仍8，local/AI随机按扩展范围 | 完整遭遇战链见F12对应节；BC/BD与WOL My Information已共用扩展目录、偏好恢复和palette；完整AppState/compositor、旧MenuColors及真实网络接收/重连/同色策略、全部popup GPU与玩家GUI仍开放，不把单屏通过称所有UI已兼容 |
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 | F14 / P1 / 建筑短按同类选择已修，GUI/完整输入待验 | 作者新增建筑TypeSelect：同型防御、跨阵营生产类、复制中心视兵营；旧实现普通建筑被dynamic拒绝 | TypeSelect732C7A→C2CABA/C2CBC3；`src/app/input/entity_pick.rs::type_select_candidates`复用原seed/范围/owner/最终准入与Select receiver，比较原始Factory，不混Naval；stock不变 | 红测后NP/stock定向及真实AY根分组通过；完整AppState键盘/屏幕、重复短按、重绑/地图覆盖与GUI仍开放，不改held鼠标或建筑拖框 |
+| F15 / P2 / 已有生产实现，根库存与示例GPU已验 | 作者要求防御建筑选中显示范围；HasRadialIndicator/当前武器范围经原radial owner绘制 | Tactical6DBE39/Building456750/GetSensorRange4566B0；正式AY根10种可选有武器防御均产范围，TESLA普通/精英及RGBA/BGRA GPU与Z不变通过 | 全地图/模式层、其他阶段/类型GPU、完整游戏遮挡/保存恢复及真人GUI仍待验，不强开所有建筑flag |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
