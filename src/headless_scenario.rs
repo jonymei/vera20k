@@ -13646,18 +13646,34 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two already docked ORCAs continue native reload during low power and take off after restored power"]
     fn aymod_two_orcas_keep_reloading_during_saved_airfield_power_loss() {
-        aymod_orca_power_reload("GAAIRC", false);
+        aymod_orca_power_reload("GAAIRC", AirfieldPowerCase::LowPower);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; American AMRADR services existing and newly returning aircraft during low power across saves"]
     fn aymod_american_airfield_admits_a_new_return_during_saved_low_power() {
-        aymod_orca_power_reload("AMRADR", true);
+        aymod_orca_power_reload("AMRADR", AirfieldPowerCase::LowPowerArrival);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_orca_power_reload(dock: &str, incoming: bool) {
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; offline American airfield services existing contacts but refuses a new spent aircraft"]
+    fn aymod_offline_american_airfield_rejects_new_return_but_keeps_pad_service() {
+        aymod_orca_power_reload("AMRADR", AirfieldPowerCase::OfflineArrival);
+    }
+
+    #[cfg(feature = "npatch")]
+    enum AirfieldPowerCase {
+        LowPower,
+        LowPowerArrival,
+        OfflineArrival,
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_orca_power_reload(dock: &str, case: AirfieldPowerCase) {
+        let incoming = !matches!(case, AirfieldPowerCase::LowPower);
+        let offline = matches!(case, AirfieldPowerCase::OfflineArrival);
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::movement::air_movement;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -13737,6 +13753,20 @@ mod retail_construction_tests {
                     .contains(id))
             .then(|| entity.ammo().unwrap().current())
         };
+        let unavailable = |scene: &HeadlessScenario| {
+            let online = scene.sim().entities().get(field).unwrap().building_online();
+            let low = scene.sim().power_states[&owner].is_low_power();
+            let expected_transition = if offline {
+                !online && !low
+            } else {
+                online && low
+            };
+            expected_transition
+                && scene
+                    .sim()
+                    .building_operational_state(field, &scene.runtime.resources.rules)
+                    == Some(false)
+        };
         let mut empty = std::collections::BTreeSet::new();
         assert!(
             (0..6000).any(|_| {
@@ -13765,44 +13795,34 @@ mod retail_construction_tests {
         {
             let runtime = &mut scene.runtime;
             assert!(runtime.simulation.go_building_offline(
-                power,
+                if offline { field } else { power },
                 &runtime.resources.rules,
                 Default::default()
             ));
         }
         assert!((0..180).any(|_| {
             step(&mut scene);
-            scene.sim().power_states[&owner].is_low_power()
-                && scene
-                    .sim()
-                    .building_operational_state(field, &scene.runtime.resources.rules)
-                    == Some(false)
+            unavailable(&scene)
         }));
         let before = planes.map(|id| linked_ammo(&scene, id).unwrap());
         assert!(before.iter().all(|&ammo| ammo > 0 && ammo < capacity));
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let bytes = save_scene(
             &scene,
-            "AY two partially reloaded ORCAs on a genuinely low-power airfield",
+            "AY two partially reloaded ORCAs on an unavailable airfield",
         );
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert_eq!(planes.map(|id| linked_ammo(&scene, id).unwrap()), before);
-        assert!(scene.sim().power_states[&owner].is_low_power());
+        assert!(unavailable(&scene));
         assert!(
             (0..3000).any(|_| {
                 step(&mut scene);
-                assert!(scene.sim().power_states[&owner].is_low_power());
-                assert_eq!(
-                    scene
-                        .sim()
-                        .building_operational_state(field, &scene.runtime.resources.rules),
-                    Some(false)
-                );
+                assert!(unavailable(&scene));
                 planes
                     .iter()
                     .all(|&id| linked_ammo(&scene, id) == Some(capacity))
             }),
-            "Building MissionRepair UnitReload services existing pad contacts even during low power"
+            "Building MissionRepair UnitReload services existing pad contacts even while the airfield is unavailable"
         );
         let arriving = if incoming {
             let (plane, target) = {
@@ -13831,7 +13851,10 @@ mod retail_construction_tests {
                         .radio_contacts
                         .contains(field)
                 );
-                assert!(sim.entities().get(field).unwrap().building_online());
+                assert_eq!(
+                    sim.entities().get(field).unwrap().building_online(),
+                    !offline
+                );
                 sim.queue_command(CommandEnvelope::new(
                     owner,
                     sim.session.tick() + 1,
@@ -13842,46 +13865,93 @@ mod retail_construction_tests {
                 ));
                 (plane, target)
             };
-            let mut empty = false;
-            let mut partial = false;
-            assert!(
-                (0..6000).any(|_| {
-                    step(&mut scene);
-                    assert!(scene.sim().power_states[&owner].is_low_power());
-                    assert_eq!(
-                        scene
-                            .sim()
-                            .building_operational_state(field, &scene.runtime.resources.rules),
-                        Some(false)
-                    );
-                    empty |= scene
+            if offline {
+                let mut empty = false;
+                assert!(
+                    (0..3000).any(|_| {
+                        step(&mut scene);
+                        assert!(unavailable(&scene));
+                        let entity = scene.sim().entities().get(plane).unwrap();
+                        empty |= entity.ammo().unwrap().current() == 0;
+                        empty && entity.crash.is_crashing()
+                    }),
+                    "an empty AirportBound aircraft with no online dock must take the native crash arm"
+                );
+                let bytes = save_scene(
+                    &scene,
+                    "AY new spent ORCA crashes after the offline airfield refuses admission",
+                );
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert!(unavailable(&scene));
+                assert!(
+                    scene
                         .sim()
                         .entities()
                         .get(plane)
                         .unwrap()
-                        .ammo()
+                        .crash
+                        .is_crashing()
+                );
+                assert!(
+                    !scene
+                        .sim()
+                        .entities()
+                        .get(field)
                         .unwrap()
-                        .current()
-                        == 0;
-                    partial |= empty
-                        && linked_ammo(&scene, plane).is_some_and(|ammo| ammo > 0 && ammo < capacity);
-                    partial && linked_ammo(&scene, plane) == Some(capacity)
-                }),
-                "a new spent aircraft must actually enter and reload at the online but low-power American airfield"
-            );
-            Some((plane, target))
+                        .radio_contacts
+                        .contains(plane)
+                );
+                assert!((0..900).any(|_| {
+                    step(&mut scene);
+                    scene.sim().entities().get(plane).is_none()
+                }));
+                for &id in &planes {
+                    assert_eq!(linked_ammo(&scene, id), Some(capacity));
+                }
+                None
+            } else {
+                let mut empty = false;
+                let mut partial = false;
+                assert!(
+                    (0..6000).any(|_| {
+                        step(&mut scene);
+                        assert!(scene.sim().power_states[&owner].is_low_power());
+                        assert_eq!(
+                            scene
+                                .sim()
+                                .building_operational_state(field, &scene.runtime.resources.rules),
+                            Some(false)
+                        );
+                        empty |= scene
+                            .sim()
+                            .entities()
+                            .get(plane)
+                            .unwrap()
+                            .ammo()
+                            .unwrap()
+                            .current()
+                            == 0;
+                        partial |= empty
+                            && linked_ammo(&scene, plane)
+                                .is_some_and(|ammo| ammo > 0 && ammo < capacity);
+                        partial && linked_ammo(&scene, plane) == Some(capacity)
+                    }),
+                    "a new spent aircraft must actually enter and reload at the online but low-power American airfield"
+                );
+                Some((plane, target))
+            }
         } else {
             None
         };
         let bytes = save_scene(
             &scene,
-            "AY two ORCAs finished native reload while their airfield remains low power",
+            "AY existing ORCAs finished native reload while their airfield remains unavailable",
         );
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         {
             let runtime = &mut scene.runtime;
             assert!(runtime.simulation.go_building_online(
-                power,
+                if offline { field } else { power },
                 &runtime.resources.rules,
                 Default::default()
             ));
@@ -13916,7 +13986,7 @@ mod retail_construction_tests {
                 }
                 fired.len() == sorties.len()
             }),
-            "both same aircraft must depart and fire after the low-power/recovery saves"
+            "the same surviving aircraft must depart and fire after the unavailable/recovery saves"
         );
     }
 
