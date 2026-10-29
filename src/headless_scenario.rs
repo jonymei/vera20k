@@ -1652,6 +1652,210 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; authored Iron Curtain team waits for power then resumes actual attack"]
+    fn aymod_iron_curtain_team_waits_for_saved_power_and_attacks_after_launch() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::{
+            SimSoundEvent,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let (mut scene, computers) = retail_battle_in(
+            &root,
+            |session| {
+                session.local_slot_mut().country = LaunchCountry::from_country_index(0);
+                session.options.unit_count = 0;
+            },
+            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+        );
+        let ai = computers[0];
+        let human = scene.sim().session.current_house().unwrap();
+        let (power, curtain) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&ai)
+                .unwrap()
+                .set_ai_triggers_active(false);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest(aymod_anchor(sim, human)),
+                &["GACNST"],
+            );
+            let providers = spawn_on_free_cells(
+                sim,
+                rules,
+                ai,
+                cells_nearest(aymod_anchor(sim, ai)),
+                &["NANRCT", "NAIRON"],
+            );
+            (providers[0], providers[1])
+        };
+        let sw = scene.sim().interner.get("IronCurtainSpecial").unwrap();
+        assert!((0..900).any(|_| {
+            tick_with_due_commands(&mut scene);
+            [power, curtain].iter().all(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            }) && scene.sim().super_weapons.get(&ai).unwrap()[&sw].is_active()
+                && scene.sim().houses[&ai].enemy_house() == Some(human)
+        }));
+        let (team, members) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let team_type = sim.interner.get("0CA1614C-G").unwrap();
+            assert_eq!(
+                sim.interner.resolve(
+                    sim.team_script_vm
+                        .team_type_definition(team_type)
+                        .unwrap()
+                        .script_id
+                ),
+                "0C31EA4C-G"
+            );
+            let types = sim
+                .team_script_vm
+                .task_force_of(team_type)
+                .unwrap()
+                .entries
+                .iter()
+                .flat_map(|entry| {
+                    std::iter::repeat_n(
+                        sim.interner.resolve(entry.member_type.id).to_owned(),
+                        entry.count as usize,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(types, ["APOC", "APOC"]);
+            let names = types.iter().map(String::as_str).collect::<Vec<_>>();
+            let members =
+                spawn_on_free_cells(sim, rules, ai, cells_nearest(aymod_anchor(sim, ai)), &names);
+            let frame = sim.session.binary_frame();
+            let kind = rules.super_weapon("IronCurtainSpecial").unwrap();
+            let instance = sim
+                .super_weapons
+                .map_mut_for_test()
+                .get_mut(&ai)
+                .unwrap()
+                .get_mut(&sw)
+                .unwrap();
+            assert!(instance.set_charge_percentage(100, kind, frame));
+            instance.set_is_ready_for_test(true);
+            instance.set_ready_tick_for_test(frame as i32);
+            assert!(sim.go_building_offline(power, rules, Default::default()));
+            let team = sim.create_team(team_type, Some(ai), rules).unwrap();
+            (team, members)
+        };
+        assert!(
+            (0..6000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .team_script_vm
+                    .team(team)
+                    .is_some_and(|team| team.cursor() == 1)
+            }),
+            "the unmodified team must naturally gather and reach action55"
+        );
+        let assert_waiting = |scene: &HeadlessScenario| {
+            assert!(!scene.sim().power_states[&ai].has_full_power());
+            assert_eq!(scene.sim().team_script_vm.team(team).unwrap().cursor(), 1);
+            assert!(scene.sim().super_weapons.get(&ai).unwrap()[&sw].is_ready());
+            assert!(members.iter().all(|id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(*id)
+                    .unwrap()
+                    .invulnerability
+                    .is_none()
+            }));
+        };
+        assert_waiting(&scene);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY Iron Curtain team waiting on power at action55");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..90 {
+            tick_with_due_commands(&mut scene);
+            assert_waiting(&scene);
+        }
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_online(
+                power,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        assert!((0..300).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    output.sound_events.iter().any(|event| matches!(event,
+                        SimSoundEvent::SuperWeaponLaunched { owner, sw_type, .. } if *owner == ai && *sw_type == sw))
+                }), "power restoration must release action55 and fire the team's own Curtain");
+        assert!(members.iter().any(|id| {
+            scene
+                .sim()
+                .entities()
+                .get(*id)
+                .unwrap()
+                .invulnerability
+                .is_some()
+        }));
+        assert!(!scene.sim().super_weapons.get(&ai).unwrap()[&sw].is_ready());
+        let bytes = save_scene(&scene, "AY authored team after actual Iron Curtain launch");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let before = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| entity.owner() == human)
+            .map(|entity| (entity.stable_id(), entity.health.current()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut attacked = std::collections::BTreeSet::new();
+        assert!(
+            (0..3600).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for event in output
+                    .fire_events
+                    .iter()
+                    .filter(|event| members.contains(&event.attacker_id))
+                {
+                    if let crate::sim::combat::TargetKind::Entity(id) = event.target {
+                        if before.contains_key(&id) {
+                            attacked.insert(id);
+                        }
+                    }
+                }
+                attacked.iter().any(|&id| {
+                    scene
+                        .sim()
+                        .entities()
+                        .get(id)
+                        .is_none_or(|entity| entity.health.current() < before[&id])
+                })
+            }),
+            "the protected team must continue its authored attack and actually damage the enemy"
+        );
+        assert!(
+            scene
+                .sim()
+                .team_script_vm
+                .team(team)
+                .is_some_and(|team| team.cursor() >= 2)
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual paid AI gap generator and authored fifteen-cell fog after load"]
     fn aymod_three_ai_bases_build_the_authored_super_radius_gap() {
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
