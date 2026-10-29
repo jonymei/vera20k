@@ -7,7 +7,7 @@
 ## 当前检查点（2026-10-30）
 
 - 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线69f8e2d75。本轮定位并修复英雄赏金标记位置：原实现使用受害者位置，实际NPAE ReceiveDamage702572→B95D16/B95D99..B95DA9取原始killer的GetCoords(vt48)，B95DC4..B95DEA将动画生在那里。沿唯一record_the_kill结算出口返回获赏killer身份，由world入口调用既有object_get_coords（含地形Z/建筑基础中心）及spawn_named_anim；不另造坐标/赏金owner，不改金额、经验、支付去重、隐形状态或动画时序政策。
-- 原实际AY Tanya/APOC终结receiver例新增断言先失败：MONEY位置36224,20608,416而killer应7360,22336,416；修后真实注册MONEY唯一实例位于killer且完整存读保留同ID/坐标，实际1和NP奖励7通过。此例不是实弹击杀/自然隐形或GPU画面；现行Terminal支付/时点、倍率默认/钳位及类型自定义BountyAnim仍属原政策/开放边界，不以此次坐标修复称全部赏金等价。无新RNG/timer/Detach/保存字段；固定版/MOD/原档未动，无GUI/发布。Return Dubai弱攻势暂停、V01/F11/F22门禁保持；下一步补只读critic及受影响消费者验证后继续其他功能。
+- 原实际AY Tanya/APOC终结receiver例新增断言先失败：MONEY位置36224,20608,416而killer应7360,22336,416；修后真实注册MONEY唯一实例位于killer且完整存读保留同ID/坐标，实际1和NP奖励7通过。此例不是实弹击杀/自然隐形或GPU画面；现行Terminal支付/时点、倍率默认/钳位及类型自定义BountyAnim仍属原政策/开放边界，不以此次坐标修复称全部赏金等价。无新RNG/timer/Detach/保存字段；固定版/MOD/原档未动，无GUI/发布。Return Dubai弱攻势暂停、V01/F11/F22门禁保持；一次只读critic独立核对701900栈帧、attacker ABI/vt48/动画构造与红绿日志，无可操作发现；另原Tanya自然隐形实射1及stock奖励7通过，共16项。当前无执行残留；下一步继续核实际活跃类型覆盖/其他功能缺口，不逐英雄重复坐标样例。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1958,7 +1958,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 - 作者170507称赏金会暴露隐形Tanya、Boris所乘车辆的位置。当前唯一record_the_kill却返回受害者position，world据此spawn_named_anim；原实杀回归只核钱包，漏掉动画出生位置。
 - 实际NPAE TechnoClass::ReceiveDamage702572跳B95D16，保存EBX/EDI后[esp+DC]是原伤害killer。B963D0/B96408按killer等级检查GetsBounty；B95D91..B95D94支付后，B95D99再取同一killer，B95DA0..B95DA9用vt48将GetCoords写入BA7CB4；B95DB1..B95DF7选类型+58或全局+64动画，B95DC4..B95DEA用该坐标、delay0/loop1/flags600/ZAdjust0构造421EA0。Infantry的vt48实际指5F65A0，既有ground_pose::object_get_coords同时负责Foot地形Z及建筑基础中心，不移植第二份坐标算法。此链证明坐标来源，不证明VERA现行RecordKill Terminal支付时机及全部资格/金额公式等价。
 - 结算helper只返回成功获赏的原始killer身份；world在原生成位置改取共享GetCoords并仍调用原spawn_named_anim。controller/passenger/spawn-owner的经验重定向不改变标记身份；无House source或未支付仍不生成。不修改隐形状态，因此本次是标记位置纠正，不是强制解除隐形。
-- 扩展原实际AY Tanya/APOC receiver回归（未直接写钱/动画/坐标）：旧实现MONEY实际在受害者36224,20608,416，断言killer7360,22336,416先红；修后唯一MONEY在killer，正式完整存读保留同ID/坐标。该地图非零地形Z亦由原查询覆盖。实际例1、NP奖励模块7通过；不是自然隐形/完整攻击任务/实际GPU输出，其他英雄/乘车/源退休和类型覆盖仍开放。无新增随机抽样、timer写入、Detach或保存布局。
+- 扩展原实际AY Tanya/APOC receiver回归（未直接写钱/动画/坐标）：旧实现MONEY实际在受害者36224,20608,416，断言killer7360,22336,416先红；修后唯一MONEY在killer，正式完整存读保留同ID/坐标。该地图非零地形Z亦由原查询覆盖。实际例1、NP奖励模块7通过；不是自然隐形/完整攻击任务/实际GPU输出，其他英雄/乘车/源退休和类型覆盖仍开放。无新增随机抽样、timer写入、Detach或保存布局。一次只读critic独立核ABI/原始attacker/原生vt48及生产owner，无可操作发现；追加原Tanya自然隐形实射1和stock奖励7通过，总计16项。自然隐形实射原例不含本次实际击杀，不能把两例拼称完整隐形击杀GPU验收。
 
 ### 赏金读取复核：已证明与仍属政策的边界（2026-10-30）
 
