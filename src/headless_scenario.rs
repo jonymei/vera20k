@@ -13441,6 +13441,209 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; five spent ORCAs reach four pads; the excess aircraft crashes and the survivors reload across saves"]
+    fn aymod_orca_overcapacity_crash_and_survivor_reload_survive_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::movement::air_movement;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let mut scene = aymod_battle(0);
+        let (owner, airfield, planes, targets, capacity, slots) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let owner = house_of(sim, "Americans");
+            let enemy = house_of(sim, "Russians");
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let kind = rules.object("ORCA").unwrap();
+            let dock = kind.dock.first().unwrap();
+            assert!(kind.npatch_aa_combat && kind.airport_bound);
+            assert!(rules.object(dock).unwrap().unit_reload);
+            let slots = rules.object(dock).unwrap().number_of_docks as usize;
+            assert_eq!(slots, 4);
+            let at = aymod_anchor(sim, owner);
+            let airfield = spawn_on_free_cells(sim, rules, owner, cells_nearest(at), &[dock])[0];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((at.0 + 15, at.1)),
+                &["NANRCT"],
+            );
+            // Five planes can survive loss of another airfield in play. This
+            // supplied over-capacity fleet tests docking, not legal production.
+            let planes = spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((at.0 + 5, at.1)),
+                &["ORCA"; 5],
+            );
+            let targets = spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((at.0 + 15, at.1 + 10)),
+                &["NACNST"; 5],
+            );
+            for (&plane, &target) in planes.iter().zip(&targets) {
+                sim.queue_command(CommandEnvelope::new(
+                    owner,
+                    sim.session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: plane,
+                        target_id: target,
+                    },
+                ));
+            }
+            (owner, airfield, planes, targets, kind.ammo, slots)
+        };
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+            output
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let contacts = |scene: &HeadlessScenario| {
+            let field = scene.sim().entities().get(airfield).unwrap();
+            (0..slots)
+                .filter_map(|slot| field.radio_contacts.slot(slot))
+                .collect::<Vec<_>>()
+        };
+        let mut empty = std::collections::BTreeSet::new();
+        let mut crashed = None;
+        assert!(
+            (0..6000).any(|_| {
+                step(&mut scene);
+                for &id in &planes {
+                    if let Some(entity) = scene.sim().entities().get(id) {
+                        if entity.ammo().unwrap().current() == 0 {
+                            empty.insert(id);
+                        }
+                        if entity.crash.is_crashing() && crashed.is_none() {
+                            crashed = Some(id);
+                        }
+                    }
+                }
+                empty.len() == planes.len() && crashed.is_some()
+            }),
+            "all five aircraft must really expend ammo and the excess AirportBound plane must enter its no-dock crash"
+        );
+        let crashed = crashed.unwrap();
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(crashed)
+                .unwrap()
+                .crash
+                .is_crashing()
+        );
+        let held = contacts(&scene);
+        assert_eq!(held.len(), slots);
+        assert!(!held.contains(&crashed));
+        let crash_position = crate::sim::movement::ground_pose::position_world_coord(
+            &scene.sim().entities().get(crashed).unwrap().position,
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY excess spent ORCA is crashing while four pads have separate contacts",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(contacts(&scene), held);
+        let plane = scene.sim().entities().get(crashed).unwrap();
+        assert!(plane.crash.is_crashing());
+        assert_eq!(
+            crate::sim::movement::ground_pose::position_world_coord(&plane.position),
+            crash_position
+        );
+        let survivors = planes
+            .iter()
+            .copied()
+            .filter(|&id| id != crashed)
+            .collect::<std::collections::BTreeSet<_>>();
+        let rearmed = |scene: &HeadlessScenario, id| {
+            scene.sim().entities().get(id).is_some_and(|entity| {
+                entity.is_ai_alive()
+                    && entity.ammo().unwrap().current() == capacity
+                    && air_movement::current_fly_height(entity, scene.sim().resolved_terrain()) == 0
+                    && entity.radio_contacts.contains(airfield)
+            })
+        };
+        assert!(
+            (0..6000).any(|_| {
+                step(&mut scene);
+                let held = contacts(&scene);
+                assert_eq!(
+                    held.iter()
+                        .copied()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .len(),
+                    held.len()
+                );
+                !held.contains(&crashed)
+                    && survivors.iter().all(|&id| rearmed(&scene, id))
+                    && scene.sim().entities().get(crashed).is_none()
+            }),
+            "the excess plane must retire without stealing a pad or stopping the other four reloads"
+        );
+        assert_eq!(
+            contacts(&scene)
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>(),
+            survivors
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY all four surviving ORCAs rearmed after the excess aircraft retired",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            contacts(&scene)
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>(),
+            survivors
+        );
+        for &id in &survivors {
+            assert!(rearmed(&scene, id));
+        }
+        for (&plane, &target) in planes.iter().zip(&targets) {
+            if survivors.contains(&plane) {
+                scene.runtime.simulation.queue_command(CommandEnvelope::new(
+                    owner,
+                    scene.sim().session.tick() + 1,
+                    Command::Attack {
+                        attacker_id: plane,
+                        target_id: target,
+                    },
+                ));
+            }
+        }
+        let mut fired = std::collections::BTreeSet::new();
+        assert!(
+            (0..3000).any(|_| {
+                let output = step(&mut scene);
+                for event in &output.fire_events {
+                    if survivors.contains(&event.attacker_id) {
+                        fired.insert(event.attacker_id);
+                    }
+                }
+                fired == survivors
+            }),
+            "all four same restored aircraft must take off and emit fresh shots, not merely retain full ammo"
+        );
+        assert!(survivors.iter().all(|&id| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .is_some_and(|entity| entity.is_ai_alive())
+        }));
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real ORCA empties on ground target, saves return/partial reload and attacks air after rearming"]
     fn aymod_orca_returns_reloads_and_resumes_air_combat_after_load() {
         aymod_orca_reload_lifecycle(false);
