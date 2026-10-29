@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于79b2e54bc补作者漏项F17：尤里X部署范围治疗。正式AY Battle实际普通ToggleInfantryDeploy发SuperPsiWave，受伤E1与MTNK同时回血，10格外受伤E1不变；治疗前后两次完整存读、已发射rearm保留及后续120帧不重复开火通过。新实际场景1、部署事件/部署武器直接消费者各1通过。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于fa75981c2补实际工业工厂建筑折扣/付款/造价经验消费者。正式AY Battle的NAINDP五种费用系数为1/.8/.8/.900001/.900001；GAPOWR普通排队实际按折后价付款、热存读续完同一产品且另一House报价不串。工厂移除恢复现价、原产品quote保持；MTNK收获相同APOC击杀的两端造价XP对照及三次存读通过。新实际场景1、奖励直接回归6、生产起始报价回归2通过。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,15 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### 工业工厂：实际建筑折扣、付款与两端造价经验（2026-10-29）
+
+- 作者170507文字说装甲降价25%/建筑15%；实际正式AY Battle typed NAINDP为FactoryPlant，五槽Infantry/Units/Aircraft/Buildings/Defenses依次为1、0.8、0.8、0.900001、0.900001。将旧说明与安装配置差异列C08，不擅改MOD成.75/.85，也不把文字差异当引擎不兼容。
+- 新aymod_industrial_plant_discounts_paid_building_without_affecting_another_house，实际AY GACNST/GAPOWR基地作为场景输入，先读双方无工厂的GAPOWR现价，再正常spawn/Unlimbo实际NAINDP并等待施工结束。工厂本身是fixture输入，不声称盟军付费走完苏军科技树；未写House折扣/工厂列表或产品price。
+- 既有House factory-plant projection/成本owner使本方GAPOWR现价降低、另一House不变；普通QueueProduction真正创建limbo产品并记录折后起始quote。生产中完整存读后同一产品正常完成付款成为ready，spent_credits实际增量恰等于该quote，随后再次存读保持同一ready身份。没有手写付款进度或按本轮另造的折扣公式计算golden；不冒称已选落点并在地图建成。
+- 用既有aymod_kill_for_experience正式终结receiver做MTNK/APOC两端对照，不伪称实弹战斗：己方有工厂时MTNK击杀正常价敌方APOC，与移除工厂后同House新MTNK击杀同型敌人相比，折后收获方raw XP更多（其升级分母造价更低）。之后仅向敌House正常Unlimbo工厂，使敌APOC现价降低；第三辆本方正常价MTNK获得的raw XP反而更少，证明受害者造价也进经验分子。未改/手写XP或经验倍率，也未用手算数值作原生golden。
+- 通过既有UnInit owner移除本方工厂，现价恢复但已经付款的产品起始quote不改；第三次完整存读保持本方正常价及三辆车各自经验。成本与XP仍归现有Cost_Of711F00、RecordKill702D40、VeterancyAdd74FF50对应owners，本轮无新原生行为实现/算术移植或native execution。
+- 最终新增实际场景1、npatch_rewards_tests6、production_start_price_tests2通过，共9项。仅测试/台账，无新权威状态/RNG调用/timer写入/Detach/保存字段，无新critic；未启动GUI、改MOD/原始存档/固定构建或发布。工厂自然生产/出售/战斗摧毁、AY所有类别具体折后数值/浮点边界、地图/模式覆盖、付款中失厂、多AI长期经济与GUI仍开放；不能把本次2House定价隔离当自主AI经济抗压通过。
 
 ### F17新增作者漏项：尤里X部署范围治疗（2026-10-29）
 
@@ -1597,6 +1606,8 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C05 / P3 | NASAM的BurstDelay0..3=9不参与实际#174建筑开火ROF，不是遗漏建筑扩展 | Building构造43B71F的vtable7E3EBC，+2C=459EC0返回类号6；Mission_Attack44B6C4..D0经+3CC=6FDD50进入FireAt，6FF274..289经+318=6FCFA0进入GetROF。6FD03E取得类号后只保留Unit1，Building6成为null，6FD067..69跳过delay数组。Unit reader747B03..47才读取四个单数键。另有复数字符串BurstDelays不建立活跃消费者或别名，不能凭字面值扩展NASAM射速 |
 | C06 / P3 | SMIN的TechnoType DeployFacing不消费于NP简易部署方向点；YAREFN建筑同名键已有消费者 | 生产实际规则确认SMIN非simple、DeploysInto=YAREFN，YAREFN朝向0；原生739AD4入口拒绝非simple，MCV转换7395C0..C6→465D70读取目标BuildingType+EDC而非UnitType+5A4。仅关闭这条具体误归因，不宣称所有可能间接调用或其他类型从不使用NP键 |
 | C07 / P2 / 配置差异，部分适用性待核 | Battle/Return Dubai各120对普通/精英槽中，FV槽6、UTNK槽0、XCOMET2槽0/1四项精英名义Range更短；不是未知槽被跳过 | 实际键与typed一致，具体武器/格数及原生读取见V10对应节。SHK实际登FV后6→5.25格、晋升/存读/近距实射通过，不修改MOD或额外补射程；UTNK/XCOMET2常规消费者、其他模式/地图和完整最远几何仍待核，不泛称它们不可达或全部兼容 |
+| C08 / P2 / 作者旧说明与配置差异 | 工业工厂文字为车辆降25%/建筑15%，正式AY Battle typed实际Units/Aircraft=.8、Buildings/Defenses=.900001、Infantry=1 | 保留安装配置；实际建筑折扣付款/存读、双方造价经验对照已验，见工业工厂节；其他模式/地图或未来改版另核，不据文字擅调费用 |
+
 ## 6. 已交付机制和有意政策：不重复“修复”
 
 以下是交接分支已有实现，不再列为纯缺失。macOS 的已有覆盖不冒称 Windows 重跑。

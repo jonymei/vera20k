@@ -1620,6 +1620,289 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual industrial-plant building discount and paid saved production"]
+    fn aymod_industrial_plant_discounts_paid_building_without_affecting_another_house() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::production::{ProductionCategory, ready_building_entity_for_owner};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, yard, _) = aymod_nearby_pair("GACNST", "GAPOWR", true);
+        let owner = scene.sim().entities().get(yard).unwrap().owner();
+        let other = house_of(scene.sim(), "Russians");
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(yard)
+                .unwrap()
+                .mission
+                .effective()
+                .known()
+                != Some(MissionType::Construction)
+        }));
+        let cost = |scene: &HeadlessScenario, house, kind| {
+            scene.sim().cost_of(
+                house,
+                scene.runtime.resources.rules.object(kind).unwrap(),
+                &scene.runtime.resources.rules,
+            )
+        };
+        let before = cost(&scene, owner, "GAPOWR");
+        let other_before = cost(&scene, other, "GAPOWR");
+        let plant = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("NAINDP").unwrap();
+            assert!(kind.factory_plant);
+            assert_eq!(
+                kind.cost_bonuses.map(|value| value.bits()),
+                [
+                    1f32.to_bits(),
+                    0.8f32.to_bits(),
+                    0.8f32.to_bits(),
+                    0.900001f32.to_bits(),
+                    0.900001f32.to_bits()
+                ]
+            );
+            let at = sim.entities().get(yard).unwrap().position;
+            // The acquired plant is a fixture prior, not a claim that this
+            // Allied base has already paid for the Soviet technology tree.
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 10, i32::from(at.ry()))),
+                &["NAINDP"],
+            )[0]
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(plant)
+                .unwrap()
+                .mission
+                .effective()
+                .known()
+                != Some(MissionType::Construction)
+        }));
+        let discounted = cost(&scene, owner, "GAPOWR");
+        assert!(discounted > 0 && discounted < before);
+        assert_eq!(cost(&scene, other, "GAPOWR"), other_before);
+        let type_id = scene.runtime.simulation.intern("GAPOWR");
+        let spent = scene.sim().houses[&owner].economy().spent_credits();
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::QueueProduction { type_id },
+        ));
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .production
+                .factories()
+                .view(owner, ProductionCategory::Building)
+                .is_some_and(|head| head.object.is_some())
+        }));
+        let product = scene
+            .sim()
+            .production
+            .factories()
+            .view(owner, ProductionCategory::Building)
+            .unwrap()
+            .object
+            .unwrap()
+            .entity_id
+            .unwrap();
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(product)
+                .unwrap()
+                .production_start_price(),
+            discounted
+        );
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(product)
+                .unwrap()
+                .lifecycle
+                .in_limbo()
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY industrial-plant discounted building in production",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(cost(&scene, owner, "GAPOWR"), discounted);
+        assert_eq!(cost(&scene, other, "GAPOWR"), other_before);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(product)
+                .unwrap()
+                .production_start_price(),
+            discounted
+        );
+        assert!(
+            (0..3000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                ready_building_entity_for_owner(
+                    scene.sim(),
+                    &scene.runtime.resources.rules,
+                    owner,
+                    type_id,
+                ) == Some(product)
+            }),
+            "the same saved discounted product must really finish payment"
+        );
+        assert_eq!(
+            scene.sim().houses[&owner].economy().spent_credits() - spent,
+            discounted
+        );
+        let bytes = save_scene(&scene, "AY industrial-plant paid discounted building ready");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            ready_building_entity_for_owner(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                owner,
+                type_id
+            ),
+            Some(product)
+        );
+        assert_eq!(cost(&scene, other, "GAPOWR"), other_before);
+        let spawn_tank = |scene: &mut HeadlessScenario| {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest(aymod_anchor(sim, owner)),
+                &["MTNK"],
+            )[0]
+        };
+        let discounted_tank_cost = cost(&scene, owner, "MTNK");
+        let trained_with_plant = spawn_tank(&mut scene);
+        // Both terminal receivers kill the same actual APOC type owned by
+        // the other House. This isolates the recipient's Cost_Of denominator,
+        // not weapon damage, hit geometry or autonomous target selection.
+        aymod_kill_for_experience(&mut scene, trained_with_plant);
+        let cheap_xp = scene
+            .sim()
+            .entities()
+            .get(trained_with_plant)
+            .unwrap()
+            .veterancy
+            .raw()
+            .bits();
+        aymod_remove_shooter(&mut scene, plant);
+        assert_eq!(cost(&scene, owner, "GAPOWR"), before);
+        assert!(cost(&scene, owner, "MTNK") > discounted_tank_cost);
+        assert_eq!(cost(&scene, other, "GAPOWR"), other_before);
+        let trained_without_plant = spawn_tank(&mut scene);
+        aymod_kill_for_experience(&mut scene, trained_without_plant);
+        let normal_xp = scene
+            .sim()
+            .entities()
+            .get(trained_without_plant)
+            .unwrap()
+            .veterancy
+            .raw()
+            .bits();
+        assert!(
+            normal_xp > 0 && cheap_xp > normal_xp,
+            "the discounted recipient requires less kill value for the same experience progress"
+        );
+        let victim_cost = cost(&scene, other, "APOC");
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                other,
+                cells_nearest(aymod_anchor(sim, other)),
+                &["NAINDP"],
+            );
+        }
+        assert!(cost(&scene, other, "APOC") < victim_cost);
+        let trained_on_discounted_victim = spawn_tank(&mut scene);
+        aymod_kill_for_experience(&mut scene, trained_on_discounted_victim);
+        let victim_discount_xp = scene
+            .sim()
+            .entities()
+            .get(trained_on_discounted_victim)
+            .unwrap()
+            .veterancy
+            .raw()
+            .bits();
+        assert!(
+            victim_discount_xp > 0 && victim_discount_xp < normal_xp,
+            "a cheaper victim must award less experience to the same full-price recipient"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(product)
+                .unwrap()
+                .production_start_price(),
+            discounted
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY plant loss restores prices but keeps paid quote and experience",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(cost(&scene, owner, "GAPOWR"), before);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(trained_with_plant)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            cheap_xp
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(trained_without_plant)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            normal_xp
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(trained_on_discounted_victim)
+                .unwrap()
+                .veterancy
+                .raw()
+                .bits(),
+            victim_discount_xp
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_three_ai_base_defense(kind: &str, human_kind: &str) -> (HeadlessScenario, u64) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, computers) = retail_battle_in(
