@@ -28574,6 +28574,11 @@ mod retail_construction_tests {
                     let child = rules
                         .object(child)
                         .expect("configured spawn child must resolve");
+                    assert!(
+                        child.immune_to_psionics,
+                        "{map}: {} cannot be directly mind-controlled",
+                        child.id
+                    );
                     families.push((
                         parent.id.as_str(),
                         child.id.as_str(),
@@ -29908,6 +29913,8 @@ mod retail_construction_tests {
                 cells_nearest((i32::from(target_cell.0), i32::from(target_cell.1))),
                 &["APOC"],
             )[0];
+            // A wounded target is fixture input; the killing Hornet shot is real.
+            sim.substrate.entities.get_mut(target).unwrap().health.set(1);
             sim.mission_queue_exact(
                 target,
                 MissionId::from_known(MissionType::Sleep),
@@ -29918,7 +29925,43 @@ mod retail_construction_tests {
             .unwrap();
             target
         };
+        let controller_xp = scene
+            .sim()
+            .entities()
+            .get(controller)
+            .unwrap()
+            .veterancy
+            .raw();
+        assert!(
+            scene
+                .sim()
+                .entities()
+                .get(controller)
+                .unwrap()
+                .veterancy
+                .rank()
+                < 200
+        );
+        assert!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .npatch_rewards
+                .controller_points(100)
+                > 0
+        );
+        let parent_before = scene.sim().entities().get(carrier).unwrap().veterancy.raw();
+        let child_before = new_wing
+            .iter()
+            .map(|&id| {
+                let child = scene.sim().entities().get(id).unwrap();
+                assert_eq!(child.mind_control.controller(), None);
+                (id, child.veterancy.raw())
+            })
+            .collect::<Vec<_>>();
         attack(&mut scene, target);
+        let mut child_kill_shot = false;
         assert!(
             (0..1200).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
@@ -29932,13 +29975,84 @@ mod retail_construction_tests {
                         .controller(),
                     Some(controller)
                 );
-                output.fire_events.iter().any(|event| {
+                child_kill_shot |= output.fire_events.iter().any(|event| {
                     new_wing.contains(&event.attacker_id)
                         && event.target == crate::sim::combat::TargetKind::Entity(target)
-                })
+                });
+                child_kill_shot
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(target)
+                        .is_none_or(|e| !e.is_alive())
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .veterancy
+                        .raw()
+                        .bits()
+                        > parent_before.bits()
             }),
-            "new-house Hornets must fly and fire under ordinary Attack after load"
+            "new-house Hornets must actually kill and award their controlled carrier after load"
         );
+        // RecordKill702FF0 -> C2C208/C2C49F reads the original killer's
+        // controller. The Hornet is immune/uncontrolled; its parent's Yuri
+        // must not intercept either its own award or the SpawnOwner bonus.
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(controller)
+                .unwrap()
+                .veterancy
+                .raw(),
+            controller_xp
+        );
+        assert!(child_before.iter().any(|&(id, before)| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .is_some_and(|e| e.veterancy.raw().bits() > before.bits())
+        }));
+        let parent_after = scene.sim().entities().get(carrier).unwrap().veterancy.raw();
+        let child_after = new_wing
+            .iter()
+            .filter_map(|&id| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .map(|e| (id, e.veterancy.raw()))
+            })
+            .collect::<Vec<_>>();
+        let bytes = save_scene(
+            &scene,
+            "AY controlled carrier and uncontrolled Hornet retain their real kill awards",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(controller)
+                .unwrap()
+                .veterancy
+                .raw(),
+            controller_xp
+        );
+        assert_eq!(
+            scene.sim().entities().get(carrier).unwrap().veterancy.raw(),
+            parent_after
+        );
+        for (id, experience) in child_after {
+            assert_eq!(
+                scene.sim().entities().get(id).unwrap().veterancy.raw(),
+                experience
+            );
+        }
         {
             let runtime = &mut scene.runtime;
             let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
