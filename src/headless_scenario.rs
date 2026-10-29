@@ -20306,6 +20306,290 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; ordinary and elite Floating Discs directly attack non-drainable defenses"]
+    fn aymod_floating_disc_lasers_defenses_instead_of_draining_at_both_ranks() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        for elite in [false, true] {
+            let (mut scene, disc, defense) = aymod_nearby_pair("DISK", "GAPILL", false);
+            let owner = scene.sim().entities().get(disc).unwrap().owner();
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let kind = rules.object("DISK").unwrap();
+                assert_eq!(kind.secondary(), Some("DiskDrain"));
+                assert!(kind.elite_secondary().is_none());
+                for name in [
+                    "GAPILL", "NASAM", "NALASR", "NAFLAK", "YAGGUN", "ATESLA", "TESLA", "YAPSYT",
+                    "GTGCAN", "GTGCAN2",
+                ] {
+                    assert!(
+                        !rules.object(name).unwrap().drainable,
+                        "{name} does not allow drain at either rank"
+                    );
+                }
+                if elite {
+                    sim.substrate
+                        .entities
+                        .get_mut(disc)
+                        .unwrap()
+                        .veterancy
+                        .set_elite();
+                }
+                sim.mission_queue_exact(
+                    disc,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(defense)
+                    .unwrap()
+                    .mission
+                    .effective()
+                    .known()
+                    != Some(MissionType::Construction)
+            }));
+            let hp = scene
+                .sim()
+                .entities()
+                .get(defense)
+                .unwrap()
+                .health
+                .current();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: disc,
+                    target_id: defense,
+                },
+            ));
+            let assert_no_drain = |scene: &HeadlessScenario| {
+                let sim = scene.sim();
+                assert_eq!(sim.entities().get(disc).unwrap().drain.target(), None);
+                assert!(
+                    sim.entities()
+                        .get(defense)
+                        .is_none_or(|target| target.drain.draining_me().is_none())
+                );
+            };
+            let mut fired = false;
+            assert!(
+                (0..600).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    assert_no_drain(&scene);
+                    // DiskLaser's FireAt6FE460..6FE4EF returns before the
+                    // ordinary bullet fire-event tail; inspect its real owner.
+                    fired |= scene.sim().disk_laser_observations().any(|shot| {
+                        shot.source == Some(disc)
+                            && shot.target == Some(TargetKind::Entity(defense))
+                            && shot.weapon.is_some_and(|weapon| {
+                                scene.sim().interner.resolve(weapon)
+                                    == if elite { "DiskLaserE" } else { "DiskLaser" }
+                            })
+                    });
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(defense)
+                            .is_some_and(|target| target.health.current() < hp)
+                }),
+                "the actual disc laser must damage the defense at elite={elite}"
+            );
+            let pristine = scene.sim().resolved_terrain().unwrap().clone();
+            let remaining = scene
+                .sim()
+                .entities()
+                .get(defense)
+                .unwrap()
+                .health
+                .current();
+            let bytes = save_scene(
+                &scene,
+                "AY disc uses lasers against a non-drainable defense",
+            );
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(defense)
+                    .unwrap()
+                    .health
+                    .current(),
+                remaining
+            );
+            assert_no_drain(&scene);
+            for _ in 0..30 {
+                tick_with_due_commands(&mut scene);
+                assert_no_drain(&scene);
+            }
+            // Direct fixture spawning leaves a disc grounded when its laser
+            // already reaches the pillbox. Fly normally before the airborne
+            // drain control, rather than teleporting it over the plant.
+            let sim = &mut scene.runtime.simulation;
+            let at = sim.entities().get(disc).unwrap().position;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: disc,
+                    target_rx: at.rx() + 3,
+                    target_ry: at.ry(),
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let actor = scene.sim().entities().get(disc).unwrap();
+                    actor.position.rx() == at.rx() + 3
+                        && actor.position.ry() == at.ry()
+                        && actor
+                            .locomotor
+                            .as_ref()
+                            .unwrap()
+                            .jumpjet_runtime()
+                            .unwrap()
+                            .phase()
+                            == crate::sim::movement::jumpjet_movement::jumpjet_flight::STATE_HOLD
+                }),
+                "the fixture disc must fly to its staging cell normally"
+            );
+            // The same source must still drain an authored drainable power
+            // plant; rejecting every DrainWeapon would not satisfy this rule.
+            let power = {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                let enemy = house_of(sim, "Russians");
+                assert!(rules.object("NAPOWR").unwrap().drainable);
+                let at = sim.entities().get(disc).unwrap().position;
+                spawn_on_free_cells(
+                    sim,
+                    rules,
+                    enemy,
+                    cells_nearest((i32::from(at.rx()) + 3, i32::from(at.ry()))),
+                    &["NAPOWR"],
+                )[0]
+            };
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: disc,
+                    target_id: power,
+                },
+            ));
+            assert!(
+                (0..900).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    scene.sim().entities().get(disc).unwrap().drain.target() == Some(power)
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(power)
+                            .unwrap()
+                            .drain
+                            .draining_me()
+                            == Some(disc)
+                }),
+                "power drain failed at elite={elite}: actor={:?}, power={:?}, mission={:?}, target={:?}, nav={:?}, error={:?}",
+                scene.sim().entities().get(disc).unwrap().position,
+                scene.sim().entities().get(power).map(|e| e.position),
+                scene
+                    .sim()
+                    .entities()
+                    .get(disc)
+                    .unwrap()
+                    .mission
+                    .effective(),
+                scene
+                    .sim()
+                    .entities()
+                    .get(disc)
+                    .unwrap()
+                    .attack_target
+                    .target(),
+                scene
+                    .sim()
+                    .entities()
+                    .get(disc)
+                    .unwrap()
+                    .navigation
+                    .nav_com(),
+                scene.sim().selected_weapon_fire_error(
+                    &scene.runtime.resources.rules,
+                    disc,
+                    TargetKind::Entity(power),
+                    true,
+                    Some(&scene.runtime.resources.overlay_registry)
+                )
+            );
+            let bytes = save_scene(&scene, "AY disc still drains an eligible power plant");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert_eq!(
+                scene.sim().entities().get(disc).unwrap().drain.target(),
+                Some(power)
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(power)
+                    .unwrap()
+                    .drain
+                    .draining_me(),
+                Some(disc)
+            );
+            let at = scene.sim().entities().get(disc).unwrap().position;
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Move {
+                    entity_id: disc,
+                    target_rx: at.rx() + 5,
+                    target_ry: at.ry() + 5,
+                },
+            ));
+            assert!((0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(disc)
+                    .unwrap()
+                    .drain
+                    .target()
+                    .is_none()
+            }));
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(power)
+                    .unwrap()
+                    .drain
+                    .draining_me(),
+                None
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Cloning Vats grants remote owner-only self-heal and revokes it across saves"]
     fn aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};

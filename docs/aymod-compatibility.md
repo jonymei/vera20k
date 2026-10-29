@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于3fb044262补作者漏项F18：NACLON赋予House步兵远程自动疗伤，区别于V02医院入驻。正式AY实际E1无源不回血、复制中心落地后远处本方治满/异House不变、两次完整存读、移除源后重新受伤不再回血通过；新增实际场景1，selfheal_tests10通过/1原retail地图ignored未跑。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于ec0ae6041补F19飞碟实际防御攻击/吸电对照：普通与精英实际DiskLaser/DiskLaserE实伤、无防御吸电、完整存读；正常Move起飞后攻击发电厂建立双向吸电链接、保存恢复及移走解绑通过，新增实际场景1。仅测试/台账，无生产修改/新critic；直接地面fixture起飞过渡的提前清目标另留残余，不冒称正常出厂或所有切目标已验；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,15 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F19新增作者漏项：飞碟直接攻击防御建筑（2026-10-29）
+
+- 作者旧说明称精英飞碟不吸防御建筑；实际正式AY Battle的十种防御GAPILL/NASAM/NALASR/NAFLAK/YAGGUN/ATESLA/TESLA/YAPSYT/GTGCAN/GTGCAN2均Drainable=false，而DISK无EliteSecondary，普通/精英共享DiskDrain。列C09配置差异，不添加精英专用禁吸分支或改MOD。
+- 实读当前GameMD.exe：SelectWeapon6F3558..6F35A8按DrainWeapon、目标Drainable、敌我及既有链接选副武器，无精英门；GetWeapon70E140..70E192精英空槽回退普通槽。沿现有weapon-selection与DiskLaser owner，不创建另一套飞碟攻击状态。
+- 新aymod_floating_disc_lasers_defenses_instead_of_draining_at_both_ranks：两等级实际DISK正常Attack已结束施工的GAPILL，观察既有disk_laser_observations的真实DiskLaser/DiskLaserE对象及HP下降，全程两端无吸电链接；完整保存恢复保持HP/无链接并运行30帧。DiskLaser FireAt6FE460..6FE4EF早退于普通fire-event尾，不能以没有普通SimFireEvent断言未开火。
+- 同一飞碟经正常Move起飞抵达暂驻格，再正常Attack实际可吸NAPOWR，建立双向链接；第二次完整存读保持链接，正常Move离开解除双方链接。未瞬移至电厂、直接设置链接或放宽安装条件。链接门70FD8D仍要求源当前Cell的首个地面Building就是目标；FireAt6FDF93..97即使安装失败仍清目标，未擅改。该特殊射击无普通rearm写入/Scenario RNG；移动、AttachDrainAnim和移走清理仍由既有owners执行，无新timer/Detach/保存字段。
+- 残余：最初直接fixture在地面生成DISK，近处激光命中后立即改打电厂，会在升空进入一次phase2时提前尝试安装、因未在电厂格内失败而清目标。实读State1_Ascend54BB80写2、IsMovingNow54D0D0只拒绝0/2之外、UnitGetFireError7411A3..7411D6据此放行，均与现有实现一致；尚未比较正常出厂/原生完整起飞链，不判定引擎bug，也不把它掩作已修。普通空中接近对照已验；地面生成/起飞切目标频率与完整原生结果待核，风险是特殊来源起飞时需重下吸电指令。
+- 新实际场景1通过（含普通/精英及两次存读各一组），credit_income模块12项通过，只格式化新增函数。十种防御的typed门全查，但实弹只选GAPILL；不宣称其他塔、多AI、自主选靶、画面及正常付费出厂均已验。未启动GUI、修改MOD/原档/固定构建或发布。
 
 ### F18新增作者漏项：复制中心提供步兵远程自动疗伤（2026-10-29）
 
@@ -1534,6 +1543,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F18 / P1 / 已有House自愈owner，实际复制中心远程与存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满/异House隔离、移除源后再伤停止及两次存读通过；完整复制/付费建造、换主/电力、其他类别与多AI仍待验 |
 
+| F19 / P1 / 现有选择与DiskLaser owner，普通/精英实际对照已验 | 旧说明精英飞碟直接打防御，实际两等级均如此 | 十种防御Drainable=false；SelectWeapon6F3558，无精英门 | 实际GAPILL实伤/不吸、保存保持；正常起飞后吸NAPOWR/保存/移走解绑通过。地面fixture起飞切目标、其他塔实弹/多AI/正常出厂仍开放，见F19及C09 |
+
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
 
@@ -1617,6 +1628,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | C06 / P3 | SMIN的TechnoType DeployFacing不消费于NP简易部署方向点；YAREFN建筑同名键已有消费者 | 生产实际规则确认SMIN非simple、DeploysInto=YAREFN，YAREFN朝向0；原生739AD4入口拒绝非simple，MCV转换7395C0..C6→465D70读取目标BuildingType+EDC而非UnitType+5A4。仅关闭这条具体误归因，不宣称所有可能间接调用或其他类型从不使用NP键 |
 | C07 / P2 / 配置差异，部分适用性待核 | Battle/Return Dubai各120对普通/精英槽中，FV槽6、UTNK槽0、XCOMET2槽0/1四项精英名义Range更短；不是未知槽被跳过 | 实际键与typed一致，具体武器/格数及原生读取见V10对应节。SHK实际登FV后6→5.25格、晋升/存读/近距实射通过，不修改MOD或额外补射程；UTNK/XCOMET2常规消费者、其他模式/地图和完整最远几何仍待核，不泛称它们不可达或全部兼容 |
 | C08 / P2 / 作者旧说明与配置差异 | 工业工厂文字为车辆降25%/建筑15%，正式AY Battle typed实际Units/Aircraft=.8、Buildings/Defenses=.900001、Infantry=1 | 保留安装配置；实际建筑折扣付款/存读、双方造价经验对照已验，见工业工厂节；其他模式/地图或未来改版另核，不据文字擅调费用 |
+| C09 / P2 / 作者旧说明与配置差异 | 旧说明仅精英飞碟不吸防御；正式Battle十种防御Drainable=false，DISK精英副槽回退普通DiskDrain，原生选择无精英门 | 两等级均按安装配置直接攻击防御，不擅造精英特例；GAPILL实际实伤/存读及空中电厂对照已验，其他塔实弹与起飞边界仍开放 |
 
 ## 6. 已交付机制和有意政策：不重复“修复”
 
