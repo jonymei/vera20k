@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于ec0ae6041补F19飞碟实际防御攻击/吸电对照：普通与精英实际DiskLaser/DiskLaserE实伤、无防御吸电、完整存读；正常Move起飞后攻击发电厂建立双向吸电链接、保存恢复及移走解绑通过，新增实际场景1。仅测试/台账，无生产修改/新critic；直接地面fixture起飞过渡的提前清目标另留残余，不冒称正常出厂或所有切目标已验；固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于2da1e223a修F20/补F08：共享AoECollector按NPAE174 4893BA→7E03A8移除stock爆点高度门，改用既有WH+130平面爆炸标志决定是否收集空中目标，保留原生floor查询/先空后地顺序/3D距离。新地面爆炸回归先失败[]，修后与平面拒绝/stock边界通过；实际AY CAOS死亡爆炸感染正常起飞JUMPJET、两次完整存读与后续倒计时通过。NP AoE31通过/跳过1既有source-owner断言失败；stock31通过/同1失败，见F20。只读critic待跑；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,16 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F20新增作者漏项及F08补链：地面混乱爆炸感染空中单位（2026-10-29）
+
+- 作者明确写混乱雄蜂被打爆也施气、可感染空中单位。正式AY Battle实际CAOS.Explodes=true、DeathWeapon=ChaosAttack，Damage=600、PsychGasCreate.CellSpread=3、Psychedelic=true且WH+130=false。不改MOD/射程/单位数值，也不扩成CAOS主动选择飞机的政策。
+- 新发现原F08只接了+130的PostMortem消费者，漏掉共享范围伤害入口。实读当前GameMD.exe的Apply_area_damage4893B5仍调用Map578080取地面高，4893BA已跳7E03A8；该段读WH+130，为true直达48955E跳过空中循环，否则无条件进4893C3的AircraftTracker收集，不再比较爆点和地面。此+130由既有IsFlatExplosion/CausesDelayKill有序别名reader负责，不增加平行字段或另写气体AoE。
+- 修唯一AoECollector::begin：NP按+130决定空中收集，stock仍用精确爆点高于地面；保留原地面查询副作用、air-before-ground顺序、原3D距离和原有收伤/狂暴owner。适用于所有同一入口的NP爆炸，不做CAOS专属wrapper；平面爆炸即使在空中引爆也不收集空中成员。没有新保存字段/权威状态/随机调用、timer写入或Detach调用；新增合法receiver可按既有owner产生狂暴timer、任务变化、伤亡/RNG/清理，不承诺维持旧漏收目标的后续抽样。
+- 扩展既有gsi_04_07_damage_air_height_gate_and_exact_3d_falloff_boundaries，生产reader读FlatWH.IsFlatExplosion，NP地面正常爆炸要求收集真实tracker对象、FlatWH在地面以上仍拒绝空中；stock保留原高度门/忽略NP键。修前NP断言[]失败；修后上述边界通过。已有257附近/3D falloff/机类折半数值测试保留，不重写数值kernel或新增手算oracle。
+- 新aymod_chaos_drone_death_gasses_airborne_infantry_across_load：真实JUMPJET通过普通Move起飞，现有Sleep fixture隔离反击；其下方合法生成敌方CAOS，不写高度/狂暴/链接。第一次完整保存恢复后正式Super致死receiver触发真实死亡武器/嵌套AoE，高飞者获得正狂暴计时且HP不减；第二次完整存读保持计时，10个普通帧自然减少10。只注入杀死无人车的终结打击，不冒称实弹击杀或持续自主空战。初版误用同House无人车，被既有Psychedelic友军门正确拒绝，已改为敌方出生，不放松友军准入。
+- NP新实际场景1通过；AoE模块最终31通过/显式跳过1既有失败，stock31通过/同1失败。失败gsi_04_07_damage_receiver_pipeline_source_admission_and_house_snapshot期望[100,100,60]、实际[100,60,100]，其native_lists传air_impact=None，根本不进入本次修改门；receiver_call436/485按活攻击者House做AffectsAllies而该夹具先更换源owner，非本修复空中名单/顺序回归。stock本次门完全未变且出现同样失败；不改其断言冒充全绿，留为独立旧测试/语义核对债。首次新增空中名单预期误漏原有splash阈值内对象，已修正成员预期，未改距离算法。
+- 只读critic待执行。实际其他飞行家族/实弹致死、连续多目标混战/多AI/画面仍开放；F08普通BlimpHE地面PostMortem旧链不因此取消，也不能据此关闭整个F08/V06。未启动GUI、修改MOD/原始存档/固定构建或发布。
 
 ### F19新增作者漏项：飞碟直接攻击防御建筑（2026-10-29）
 
@@ -1544,6 +1554,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F18 / P1 / 已有House自愈owner，实际复制中心远程与存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满/异House隔离、移除源后再伤停止及两次存读通过；完整复制/付费建造、换主/电力、其他类别与多AI仍待验 |
 
 | F19 / P1 / 现有选择与DiskLaser owner，普通/精英实际对照已验 | 旧说明精英飞碟直接打防御，实际两等级均如此 | 十种防御Drainable=false；SelectWeapon6F3558，无精英门 | 实际GAPILL实伤/不吸、保存保持；正常起飞后吸NAPOWR/保存/移走解绑通过。地面fixture起飞切目标、其他塔实弹/多AI/正常出厂仍开放，见F19及C09 |
+
+| F20 / P1 / 已补共享AoE空中门，实际AY死亡施气/存读已验 | 混乱雄蜂死亡施气感染飞行者，兼补F08平面爆炸门 | Apply_area_damage4893BA→7E03A8；WH+130既有别名owner→AoECollector→receiver | NP普通地面爆炸收空中/平面爆炸不收，stock高度门保留；真实CAOS死亡爆炸感染自然起飞JUMPJET及热存读/倒计时通过。只读critic待跑，其他家族/实际对战仍开放 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。

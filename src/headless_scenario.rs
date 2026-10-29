@@ -18367,6 +18367,98 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real Chaos Drone death explosion reaches a naturally flying infantryman"]
+    fn aymod_chaos_drone_death_gasses_airborne_infantry_across_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, idle, target) = aymod_nearby_pair("MTNK", "JUMPJET", true);
+        aymod_lift_gattling_target(&mut scene, idle, target);
+        let drone = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let victim = sim.entities().get(target).unwrap();
+            let at = victim.position;
+            let owner = house_of(sim, "Russians");
+            let kind = rules.object("CAOS").unwrap();
+            assert!(kind.explodes);
+            assert_eq!(kind.death_weapon.as_deref(), Some("ChaosAttack"));
+            let gas = rules.weapon(kind.death_weapon.as_deref().unwrap()).unwrap();
+            let wh = rules.warhead(gas.warhead.as_deref().unwrap()).unwrap();
+            assert!(wh.psychedelic && !wh.causes_delay_kill);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()), i32::from(at.ry()))),
+                &["CAOS"],
+            )[0]
+        };
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY airborne infantry before a ground drone death blast",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let victim = scene.sim().entities().get(target).unwrap();
+        assert!(!victim.berserk.is_active());
+        let hp = victim.health.current();
+        assert!(crate::sim::movement::air_movement::is_high_flying(
+            victim,
+            scene.sim().resolved_terrain(),
+            Some((&scene.runtime.resources.rules, &scene.sim().interner)),
+        ));
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let damage = sim.entities().get(drone).unwrap().health.current() + 1;
+            let warhead = sim.interner.intern("Super");
+            // Only the lethal hit is injected. The real CAOS fatal lifecycle,
+            // DeathWeapon and shared AoE must produce the aerial berserk state.
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    drone,
+                    damage,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: false,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        let victim = scene.sim().entities().get(target).unwrap();
+        assert_eq!(
+            victim.health.current(),
+            hp,
+            "psychedelic damage must not remove HP"
+        );
+        assert!(
+            victim.berserk.is_active() && victim.berserk.timer() > 0,
+            "the actual ground-level DeathWeapon must reach a high-flying infantryman"
+        );
+        let timer = victim.berserk.timer();
+        let bytes = save_scene(&scene, "AY aerial berserk from the drone death weapon");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().entities().get(target).unwrap().berserk.timer(),
+            timer
+        );
+        for _ in 0..10 {
+            tick_with_due_commands(&mut scene);
+        }
+        let victim = scene.sim().entities().get(target).unwrap();
+        assert_eq!(victim.health.current(), hp);
+        assert_eq!(victim.berserk.timer(), timer - 10);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real ChaosAttack receiver, berserk rearm and saved natural expiry"]
     fn aymod_gattling_berserk_rearm_survives_load_and_returns_to_normal() {
         aymod_gattling_berserk_lifecycle(false);
