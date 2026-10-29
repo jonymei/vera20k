@@ -13194,6 +13194,176 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real ASW damage, surviving submarine recloak and saved sonar reacquisition"]
+    fn aymod_destroyer_reacquires_a_surviving_recloaked_submarine_after_load() {
+        use crate::sim::combat::{
+            TargetKind, fire_error::FireError, fire_error_world::FireSubject,
+        };
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, ship, sub) = aymod_water_pair_with_target_control("DEST", "SUB", 14, true);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let start = scene.sim().entities().get(ship).unwrap().position;
+        let at = scene.sim().entities().get(sub).unwrap().position;
+        let owner = scene.sim().entities().get(ship).unwrap().owner();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("DEST").unwrap();
+            assert!(kind.sensors && (3..14).contains(&kind.sensors_sight));
+            assert!(rules.object("SUB").unwrap().underwater);
+            for id in [ship, sub] {
+                sim.mission_queue_exact(
+                    id,
+                    MissionId::from_known(MissionType::Sleep),
+                    1,
+                    sim.session.binary_frame(),
+                    &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+                )
+                .unwrap();
+            }
+        }
+        let cloaked = |scene: &HeadlessScenario| {
+            let victim = scene.sim().entities().get(sub).unwrap();
+            assert!(victim.is_ai_alive() && !victim.lifecycle.in_limbo());
+            assert_eq!(
+                crate::sim::movement::ground_pose::position_world_xy(&victim.position),
+                crate::sim::movement::ground_pose::position_world_xy(&at)
+            );
+            assert_eq!(victim.position.z(), at.z());
+            victim.cloak.as_ref().unwrap().is_fully_cloaked()
+        };
+        let sensed = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .fog
+                .has_sensor_for_house(owner, at.rx(), at.ry())
+        };
+        let error = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            FireSubject {
+                world: sim,
+                rules: &scene.runtime.resources.rules,
+                overlay_registry: Some(&scene.runtime.resources.overlay_registry),
+                fog: Some(sim.fog.fire_view(sim.house_alliances())),
+                firer: sim.entities().get(ship).unwrap(),
+                obj: scene.runtime.resources.rules.object("DEST").unwrap(),
+                target: Some(TargetKind::Entity(sub)),
+                weapon_index: 1,
+            }
+            .fire_error(false)
+        };
+        let command = |scene: &mut HeadlessScenario, command| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            cloaked(&scene)
+        }));
+        assert!(!sensed(&scene));
+        assert_eq!(error(&scene), FireError::Cant);
+        for pass in 0..2 {
+            command(
+                &mut scene,
+                Command::Move {
+                    entity_id: ship,
+                    target_rx: at.rx() - 3,
+                    target_ry: at.ry(),
+                },
+            );
+            assert!((0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                sensed(&scene)
+            }));
+            let hp = scene.sim().entities().get(sub).unwrap().health.current();
+            command(
+                &mut scene,
+                Command::Attack {
+                    attacker_id: ship,
+                    target_id: sub,
+                },
+            );
+            let mut fired = false;
+            assert!(
+                (0..1200).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    fired |= output.fire_events.iter().any(|event| {
+                        event.target == TargetKind::Entity(sub)
+                            && scene
+                                .sim()
+                                .entities()
+                                .get(event.attacker_id)
+                                .is_some_and(|child| {
+                                    child.spawn_owner_id.owner() == Some(ship)
+                                        && scene.sim().interner.resolve(child.type_ref()) == "ASW"
+                                })
+                    });
+                    fired
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(sub)
+                            .is_none_or(|victim| victim.health.current() < hp)
+                }),
+                "the original destroyer's ASW must really hit on pass {pass}"
+            );
+            if pass == 1 {
+                let bytes = save_scene(&scene, "AY reacquired submarine hit by real ASW");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(sub)
+                        .is_none_or(|victim| victim.health.current() < hp)
+                );
+                break;
+            }
+            assert!(scene.sim().entities().get(sub).unwrap().is_ai_alive());
+            assert!(
+                !cloaked(&scene),
+                "real damage must break the submarine's cloak"
+            );
+            let bytes = save_scene(&scene, "AY surviving submarine just damaged by ASW");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(!cloaked(&scene));
+            command(&mut scene, Command::Stop { entity_id: ship });
+            command(
+                &mut scene,
+                Command::Move {
+                    entity_id: ship,
+                    target_rx: start.rx(),
+                    target_ry: start.ry(),
+                },
+            );
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(&mut scene);
+                    let mover = scene.sim().entities().get(ship).unwrap();
+                    (mover.position.rx(), mover.position.ry()) == (start.rx(), start.ry())
+                        && crate::sim::movement::motion_query::is_moving(mover) == Some(false)
+                        && !sensed(&scene)
+                        && cloaked(&scene)
+                }),
+                "the wounded submarine must survive, recloak and leave sonar coverage"
+            );
+            assert_eq!(error(&scene), FireError::Cant);
+            let hp = scene.sim().entities().get(sub).unwrap().health.current();
+            let bytes = save_scene(&scene, "AY wounded recloaked submarine outside sonar");
+            scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            assert!(cloaked(&scene) && !sensed(&scene));
+            assert_eq!(error(&scene), FireError::Cant);
+            assert_eq!(
+                scene.sim().entities().get(sub).unwrap().health.current(),
+                hp
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_tanya_submarine_detection_and_attack(elite: bool, reacquire: bool) {
         use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
         use crate::sim::command::{Command, CommandEnvelope};
