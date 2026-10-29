@@ -2598,6 +2598,210 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; depletion and real regrowth preserve separate House no-ore gates and peer income across saves"]
+    fn aymod_resource_regrowth_keeps_no_ore_house_and_peer_separate_after_load() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(1);
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+        };
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                computers.iter().all(|&owner| {
+                    scene.sim().houses[&owner].economy().score() > 0
+                        && !scene.sim().houses[&owner].harvester_no_ore()
+                        && scene.sim().entities().values().any(|entity| {
+                            entity.owner() == owner
+                                && entity.is_ai_alive()
+                                && !entity.lifecycle.in_limbo()
+                                && scene.sim().interner.resolve(entity.type_ref()) == "HARV"
+                                && entity
+                                    .miner
+                                    .as_ref()
+                                    .is_some_and(|miner| !miner.cargo().is_empty())
+                        })
+                })
+            }),
+            "both normal starts must have live loaded miners and income before depletion"
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let wallets = computers
+            .iter()
+            .map(|owner| scene.sim().houses[owner].economy().clone())
+            .collect::<Vec<_>>();
+        let resources_remain = |scene: &HeadlessScenario| {
+            let grid = scene.sim().overlay_grid.as_ref().unwrap();
+            (0..grid.height()).any(|y| {
+                (0..grid.width()).any(|x| {
+                    crate::sim::tiberium::tiberium_cell_view(
+                        grid,
+                        &scene.runtime.resources.overlay_registry,
+                        &scene.runtime.resources.rules.tiberium_types,
+                        (x, y),
+                    )
+                    .is_some()
+                })
+            })
+        };
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let grid = sim.overlay_grid.as_ref().unwrap();
+            let cells = (0..grid.height())
+                .flat_map(|y| (0..grid.width()).map(move |x| (x, y)))
+                .filter(|&cell| {
+                    crate::sim::tiberium::tiberium_cell_view(
+                        grid,
+                        &resources.overlay_registry,
+                        &resources.rules.tiberium_types,
+                        cell,
+                    )
+                    .is_some()
+                })
+                .collect::<Vec<_>>();
+            assert!(!cells.is_empty());
+            // Fast depletion is the pressure fixture, not a claim that these
+            // miners naturally consumed the entire map. Keep reducer topology,
+            // growth queues and terrain publication; never clear overlay bytes.
+            for cell in cells {
+                let outcome = Simulation::reduce_tiberium_at_with_native_context(
+                    &sim.terrain_objects,
+                    &sim.ore_growth_config,
+                    &mut sim.ore_growth_state,
+                    &sim.session,
+                    &mut sim.scenario_rng,
+                    &sim.substrate,
+                    &mut sim.resolved_terrain,
+                    &mut sim.overlay_grid,
+                    &mut sim.dirty_cells,
+                    cell,
+                    12,
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                );
+                assert!(outcome.fully_removed);
+            }
+        }
+        for (index, owner) in computers.iter().enumerate() {
+            assert_eq!(scene.sim().houses[owner].economy(), &wallets[index]);
+            assert!(!scene.sim().houses[owner].harvester_no_ore());
+        }
+        assert!(!resources_remain(&scene));
+        let bytes = save_scene(
+            &scene,
+            "AY exhausted resource overlays before normal AI scan misses",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            !resources_remain(&scene),
+            "restore must not resurrect the depleted overlays"
+        );
+        let owner = computers[0];
+        let peer = computers[1];
+        let parked = |scene: &HeadlessScenario, owner| {
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| {
+                    entity.owner() == owner
+                        && entity.is_ai_alive()
+                        && !entity.lifecycle.in_limbo()
+                        && scene.sim().interner.resolve(entity.type_ref()) == "HARV"
+                })
+                .any(|entity| entity.mission.current().known() == Some(MissionType::Guard))
+        };
+        assert!(
+            (0..3600).any(|_| {
+                step(&mut scene);
+                scene.sim().houses[&owner].harvester_no_ore()
+                    && parked(&scene, owner)
+                    && !scene.sim().houses[&peer].harvester_no_ore()
+                    && scene.sim().houses[&peer].economy().score() > wallets[1].score()
+                    && resources_remain(&scene)
+            }),
+            "a real scan miss must park a miner without stopping the peer as resources regenerate: houses={:?}, miners={:?}",
+            computers
+                .iter()
+                .map(|owner| (*owner, scene.sim().houses[owner].harvester_no_ore()))
+                .collect::<Vec<_>>(),
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| computers.contains(&entity.owner())
+                    && scene.sim().interner.resolve(entity.type_ref()) == "HARV")
+                .map(|entity| (
+                    entity.stable_id(),
+                    entity.owner(),
+                    entity.is_ai_alive(),
+                    entity.lifecycle.in_limbo(),
+                    entity.mission.current(),
+                    entity.mission.handler_state(),
+                    entity.miner.as_ref().unwrap().cargo().len(),
+                    entity.archive_target(),
+                    entity.navigation.nav_com()
+                ))
+                .collect::<Vec<_>>()
+        );
+        let existing = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                computers.contains(&entity.owner())
+                    && scene.sim().interner.resolve(entity.type_ref()) == "HARV"
+            })
+            .map(|entity| entity.stable_id())
+            .collect::<std::collections::BTreeSet<_>>();
+        let bytes = save_scene(
+            &scene,
+            "AY one House has no-ore latch while its peer works with actual regrowth",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().houses[&owner].harvester_no_ore() && parked(&scene, owner));
+        assert!(!scene.sim().houses[&peer].harvester_no_ore());
+        let income = scene.sim().houses[&peer].economy().score();
+        for _ in 0..2400 {
+            step(&mut scene);
+            assert!(scene.sim().houses[&owner].harvester_no_ore());
+            for &house in &computers {
+                assert!(
+                    !scene.sim().houses[&house]
+                        .strategy_emergency()
+                        .all_to_hunt_bias()
+                );
+            }
+            for factory in scene
+                .sim()
+                .production()
+                .factories()
+                .iter_insertion_ordered()
+            {
+                if factory.owner() == owner {
+                    if let Some(object) = factory
+                        .object()
+                        .filter(|object| scene.sim().interner.resolve(object.type_id) == "HARV")
+                    {
+                        assert!(
+                            existing.contains(&object.entity_id.unwrap()),
+                            "no-ore AI must not start paying for another HARV"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            scene.sim().houses[&peer].economy().score() > income,
+            "peer must continue earning after the mixed-state restore"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Yuri AI economies naturally reach tech and recover lost slave miners across saves"]
     fn aymod_two_yuri_ai_recover_slave_mining_without_stopping_peer() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
