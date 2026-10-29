@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- A05续验正式超时空编队：困难盟军Team 0A87472C-G按原TaskForce两MTNK/三MGTK/四SREF、原脚本54→57,9自行集结及双阶段发射；发射前和真实warp中完整存读，实际被传送成员结束warp、离开源区并按原脚本实射伤敌。实际场景1、chronosphere13及super_actions11通过，共25项，chrono_update_position慢测1项未重跑。仅测试/台账，无生产修复；设施/成员/建队/满充为fixture，自然经济/充能/多AI竞争和完整长局仍开放；固定版未动。
+- 本轮基线687bed2a7，继续F18复制中心House自愈生命周期：普通Off后远处本方E1仍治满/异House不治，正式换主/完整存读后旧方失去自愈、新方伤兵治满；移除源后双方计数0且重新受伤不回血。四次完整存读；实际场景1、selfheal13、capture-sale2通过，共16项，另3项ignored未跑。首轮真实电脑接受建筑后正常Selling/退休导致停疗，已按原生4492D7..449368确认，不改玩法；持续换主验收使用明确human夹具隔离自动出售。仅测试/台账，无生产修复；F22多控来源仍未决，固定版未动。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -122,10 +122,12 @@
 ### F18新增作者漏项：复制中心提供步兵远程自动疗伤（2026-10-29）
 
 - 作者170507明确要求复制中心除复制兵外还赋予步兵自动疗伤；这是House自愈增益，不是V02的GAROBO/NARADR Hospital进入/住院/出院。实际类型名NACLON，正式AY Battle typed为Cloning/Powered、InfantryGainSelfHeal=1、UnitsGainSelfHeal=0；实际General的步兵间隔15帧、每次10，未按别的MOD或旧值补常量。
-- 新aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load，正式Super receiver将本方与远处另一House实际E1打成半血；无复制中心的两个周期内两者均不回血。正常spawn/GrandOpening原NACLON在本方患者10格之外，既有Building登记使House.self_heal_infantry自然变1；没有设置自愈计数、患者Health或入驻关系，不声明工厂经过付费科技树。
-- 第一次完整保存恢复保留计数1，普通帧令远处本方患者真正治满，其他House伤兵保持原伤，本方患者从未进入Cargo。沿既有house_self_heal_step/house_heal_arm（Techno6FA8C8..6FA93E）采自身House计数；Building GrandOpening446382..4463B4的授予与Limbo4459AE..4459CA的撤销仍归既有owner，无复制中心专用第二套疗伤循环。
-- 通过既有UnInit owner移除源，House计数回0；正式receiver再次打伤本方患者，第二次完整保存恢复后再跑三个周期，计数仍0且本方/另一House生命不变。此处验证源退休，不伪装成源被实弹摧毁或出售动画的完整过程；Powered并不被本测试擅自解释为House增益随电力即时撤销。
-- 最终新增实际场景1、selfheal_tests10通过/1原retail Arena地图场景ignored未运行。仅测试/台账，无新权威状态/RNG调用/timer写入/Detach/保存字段，无新critic；未启动GUI、改MOD/原档/固定构建或发布。实际付费建造/复制兵、源战斗死亡/出售/换主、断电/EMP政策、Organic车辆分流及自主多AI长局仍开放；不能把本项或医院项当成完整医疗系统已验。
+- aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load正式Super receiver将本方与远处另一House实际E1打伤；无复制中心两个周期均不回血。正常spawn/GrandOpening原NACLON在本方患者10格之外，既有Building登记使House.self_heal_infantry自然变1；没有设置自愈计数、患者Health或入驻关系，不声明中心经过付费科技树。首次完整存读后本方远处患者真正治满，另一House保持原伤，患者未进入Cargo。
+- 续验通过普通SetBuildingOnLine将真实NACLON设Off，再用正式receiver打伤本方患者；第二次完整存读保持Off和House计数1，普通帧仍治满，异House患者仍不治。House自愈不是建筑电力operational效果，不能借Powered擅自加停电撤销。原消费者house_self_heal_step/house_heal_arm（Techno6FA8C8..6FA93E）、GrandOpening446382..4463B4及Limbo4459AE..4459CA仍是唯一owners。
+- 使用正式change_owner_with_rules转交同一中心，旧House计数0、新House1；第三次完整存读后旧方重新受伤的E1持续不治，原先异House伤兵由同一中心的增益真正治满。转交是场景输入，不冒称工程师可占领通常不可占领的NACLON。已重读实际NP448AC8..448B04的旧方扣除及449201..449223的新方加计数，不另设复制中心疗伤状态。
+- 首次续验仍用电脑接收中心，测试预期持续疗伤失败：实际新方先从伤兵HP70治到90，随后计数1→0；追到原中心满血1300、Selling后退休，非患者分流错误。原生Building ChangeOwner4492D7..449368对遭遇战中电脑取得另一非passive House所造建筑发Sell_Back(1)，既有sell_after_owner_change实际执行，不能为本项取消这条规则。最终持续疗伤夹具将接收House显式设human，以隔离自动出售；本例不是多AI自主医疗验收。既有捕获出售原生比较回归本轮另运行2项。
+- 通过既有UnInit owner退休源后双方计数均0，正式receiver再伤新方E1；第四次完整存读保持双方计数0，随后三个周期两方患者HP均不再增加。本例为源退休，不冒称实弹死亡或完整出售动画验收。
+- 最终实际复合场景1、techno_ai::selfheal（普通10+原生数值3）及captured_building_sale普通2通过，共16项。另selfheal的原retail Arena场景1项、capture-sale的零售组件2项ignored未重跑。仅测试/台账，无新增生产权威状态、RNG调用、timer写入、Detach或保存字段，不需玩法critic。正常自愈/换主/退休仍走既有owners；未启动GUI、修改MOD/原始存档/固定构建或发布。中心付费建造、多源叠加/Organic车辆分流、自然缺电/EMP组合、源战斗死亡及自主多AI长局仍开放，不能把本项或医院项当成完整医疗系统已验。
 
 ### 工业工厂：实际建筑折扣、付款与两端造价经验（2026-10-29）
 
@@ -1639,7 +1641,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F17 / P1 / 已有部署治疗owner，实际AY范围与存读已验 | 尤里X部署治疗周围单位，非心控武器 | YURIPR副槽SuperPsiWave→SuperPsiPulse负Verses；现有Infantry部署/弹体/AoE/伤害receiver | 普通部署实际发射，附近E1/MTNK回血、远处E1不变、治疗前后存读及rearm/120帧不重放通过；精确量/边沿、其他敌我/空中/建筑、多AI与画面仍待验 |
 
-| F18 / P1 / 已有House自愈owner，实际复制中心远程与存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满/异House隔离、移除源后再伤停止及两次存读通过；完整复制/付费建造、换主/电力、其他类别与多AI仍待验 |
+| F18 / P1 / House远程自愈、Off/换主/退休存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满、普通Off仍治满、正式换主后旧方停止/新方治满、退休源后双方停止及四次存读通过；电脑接收敌对所造中心会按原生自动出售，持续换主验收以human隔离。中心付费建造、多源叠加/其他类别、自然缺电/EMP及自主多AI仍待验 |
 
 | F19 / P1 / 现有选择与DiskLaser owner，普通/精英实际对照已验 | 旧说明精英飞碟直接打防御，实际两等级均如此 | 十种防御Drainable=false；SelectWeapon6F3558，无精英门 | 实际GAPILL实伤/不吸、保存保持；正常起飞后吸NAPOWR/保存/移走解绑通过。地面fixture起飞切目标、其他塔实弹/多AI/正常出厂仍开放，见F19及C09 |
 

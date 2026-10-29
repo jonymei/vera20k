@@ -21615,6 +21615,7 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; Cloning Vats grants remote owner-only self-heal and revokes it across saves"]
     fn aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scene, patient, _) = aymod_nearby_pair("E1", "GAPOWR", true);
         let owner = scene.sim().entities().get(patient).unwrap().owner();
@@ -21622,6 +21623,12 @@ mod retail_construction_tests {
         let control = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            // Isolate the House ability from the computer's native automatic
+            // sale of a building acquired from a non-passive foreign House.
+            sim.houses
+                .get_mut(&other)
+                .unwrap()
+                .set_is_human_for_test(true);
             spawn_on_free_cells(
                 sim,
                 rules,
@@ -21728,17 +21735,71 @@ mod retail_construction_tests {
                 .passenger_role
                 .is_inside_transport()
         );
-        aymod_remove_shooter(&mut scene, vats);
-        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::SetBuildingOnLine {
+                entity_id: vats,
+                on: false,
+            },
+        ));
+        tick_with_due_commands(&mut scene);
+        assert!(!scene.sim().entities().get(vats).unwrap().building_online());
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 1);
         wound(&mut scene, patient);
-        let wounded_again = hp(&scene, patient);
-        assert!(wounded_again > 0 && wounded_again < strength);
+        restore(&mut scene);
+        assert!(!scene.sim().entities().get(vats).unwrap().building_online());
+        assert!(
+            (0..(period * strength)).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert_eq!(hp(&scene, control), other_before);
+                hp(&scene, patient) == strength
+            }),
+            "manual power-off must not revoke the House's remote infantry self-heal"
+        );
+        {
+            let runtime = &mut scene.runtime;
+            // Ownership is a scenario input, not a claim that an Engineer
+            // can capture this normally noncapturable structure.
+            runtime.simulation.change_owner_with_rules(
+                vats,
+                other,
+                &runtime.resources.rules,
+                Some(&runtime.resources.overlay_registry),
+                Default::default(),
+            );
+        }
+        assert_eq!(scene.sim().entities().get(vats).unwrap().owner(), other);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        assert_eq!(scene.sim().houses[&other].self_heal_infantry(), 1);
+        wound(&mut scene, patient);
+        let old_wounded = hp(&scene, patient);
         restore(&mut scene);
         assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        assert_eq!(scene.sim().houses[&other].self_heal_infantry(), 1);
+        assert!(
+            (0..(period * strength)).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert_eq!(hp(&scene, patient), old_wounded);
+                assert_eq!(scene.sim().houses[&other].self_heal_infantry(), 1);
+                hp(&scene, control) == strength
+            }),
+            "the same vat must heal only the new House after transfer and load"
+        );
+        aymod_remove_shooter(&mut scene, vats);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        assert_eq!(scene.sim().houses[&other].self_heal_infantry(), 0);
+        wound(&mut scene, control);
+        let new_wounded = hp(&scene, control);
+        assert!(new_wounded > 0 && new_wounded < strength);
+        restore(&mut scene);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        assert_eq!(scene.sim().houses[&other].self_heal_infantry(), 0);
         for _ in 0..(period * 3) {
             tick_with_due_commands(&mut scene);
-            assert_eq!(hp(&scene, patient), wounded_again);
-            assert_eq!(hp(&scene, control), other_before);
+            assert_eq!(hp(&scene, patient), old_wounded);
+            assert_eq!(hp(&scene, control), new_wounded);
         }
     }
 
