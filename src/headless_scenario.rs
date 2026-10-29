@@ -20450,6 +20450,138 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; DESO and GI mixed garrison must keep cycling weapons across restore"]
+    fn aymod_deso_mixed_garrison_keeps_firing_after_load() {
+        use crate::sim::combat::{TargetKind, combat_weapon};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, deso) = aymod_nearby_pair("CAHSE01", "DESO", true);
+        let owner = scene.sim().entities().get(building).unwrap().owner();
+        let enemy = house_of(scene.sim(), "Russians");
+        let (gi, target, weapons) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let at = sim.entities().get(building).unwrap().position;
+            let center = (i32::from(at.rx()), i32::from(at.ry()));
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (1..=3).contains(&(x - center.0).abs().max((y - center.1).abs()))
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect::<Vec<_>>();
+            let gi = spawn_on_free_cells(sim, rules, owner, sites.clone(), &["E1"])[0];
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["APOC"])[0];
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            let weapons = ["DESO", "E1"].map(|kind| {
+                combat_weapon::occupant_weapon(rules, rules.object(kind).unwrap(), 0)
+                    .unwrap()
+                    .id
+                    .clone()
+            });
+            assert_eq!(weapons[0], "OCRadBeamWeapon");
+            assert_ne!(weapons[0], weapons[1]);
+            (gi, target, weapons)
+        };
+        for id in [deso, gi] {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::CaptureBuilding {
+                    engineer_id: id,
+                    target_building_id: building,
+                },
+            ));
+        }
+        assert!(
+            (0..600).any(|_| {
+                tick_with_due_commands(&mut scene);
+                let occupants = scene
+                    .sim()
+                    .entities()
+                    .get(building)
+                    .unwrap()
+                    .passenger_role
+                    .occupants();
+                occupants.ids().contains(&deso) && occupants.ids().contains(&gi)
+            }),
+            "both actual infantry must walk into the same building"
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        for restored in [false, true] {
+            if restored {
+                let bytes = save_scene(
+                    &scene,
+                    "AY mixed radiation garrison with live firing cursor",
+                );
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            }
+            let before = scene.sim().entities().get(target).unwrap().health.current();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: target,
+                },
+            ));
+            let mut fired = std::collections::BTreeSet::new();
+            assert!(
+                (0..600).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    for event in &output.fire_events {
+                        if event.attacker_id == building && event.target == TargetKind::Entity(target) {
+                            fired.insert(scene.sim().interner.resolve(event.weapon_id).to_string());
+                        }
+                    }
+                    weapons.iter().all(|weapon| fired.contains(weapon))
+                        && scene
+                            .sim()
+                            .entities()
+                            .get(target)
+                            .is_some_and(|entity| entity.health.current() < before)
+                }),
+                "DESO must not silence the mixed building, restored={restored}, fired={fired:?}"
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .unwrap()
+                    .is_object_alive()
+            );
+            let occupants = scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants();
+            assert_eq!(occupants.ids().len(), 2);
+            assert!(occupants.ids().contains(&deso) && occupants.ids().contains(&gi));
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; a boarded sniper uses the building range before and after load"]
     fn aymod_garrisoned_sniper_cannot_extend_building_range_after_load() {
         use crate::sim::combat::{TargetKind, combat_weapon};
