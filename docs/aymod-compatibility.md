@@ -22,8 +22,9 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线34666d46c，干净源码、无遗留执行。本轮回查F12当前调用：正式skirmish_session::resolve_network_launch的ShellRandomAssignmentState使用multiplayer_color_count；固定HOUSE_COLOR_COUNT的resolve_launch_session/try_resolve_shell_random_assignments_with受cfg(test/test-support)限制，不能据搜索结果改生产。AppState::rules优先当前runtime再fallback frontend_rules，shell_main_menu已同步投影两个消费者。CnCNet导入的8色检查属独立离线协议边界，不是当前大厅路径；原网络human随机8仍为既有原生不对称。静读未发现新截回8色的普通启动缺口，不代表完整事件泵/网络/GPU验收已完成。
-- 当前待办已在文首按“确认缺生产接线/策略门禁/验收债”分开，避免继续按武器型号无限追加测试。F11仍是已确认、实际配置使用的光照运行时缺口，但此前跨模块接线批准门禁保持；本轮请求用户明确是否解除此项，不从自动goal续接推断同意。V01/F22策略、Return Dubai弱攻势暂停和固定版/MOD/原档边界不变。本轮仅核源与整理当前索引，无新玩法/测试运行或兼容完成声明；完整目标保持开放。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于989ec1c71。本轮复核非盟军巨炮既有修复b5a046558：无进展尾只留原生literal GAPLUG，不把GTGCAN等不满足前置的候选强塞计划；三阵营实际付款/落地证据保留，固定版cfb479750不含且旧计划不追溯删除。不重复修改AI权重/兵种数值，Return Dubai弱攻势专项继续暂停。
+- 英雄赏金实际receiver场景迁入唯一共享battle_test_evidence，core与客户端共用，不复制战斗fixture/绘制owner；补普通帧调度至可见帧、原ID完整存读及自然退休。实际MONEY的物理SHP frame0为空，首版GPU断言0像素失败属fixture时点，等待生产scheduler后两种sRGB格式均有实际像素，保存恢复逐像素一致，退休后为0；绘制前后state_hash/RNG不变。GPU1及核心实际1通过，无新生产玩法/保存布局/RNG/timer/Detach或新critic，未启动GUI/改MOD/原档/固定版/发布。固定EXE仍42,237,952字节、2026-10-26 20:57:58。
+- 下一步继续功能清单中有实际消费者的剩余链，不以相似武器/单位变体无限增加验收；英雄乘车/原始源退休、完整自然隐形致死与其他功能生命周期仍开放。本轮不推断F11批准，V01/F22策略门禁保持；当前GPU只隔离赏金父对象，不冒称全地图合成/完整GUI认证。F12普通启动目录静读结论保留，网络/完整事件泵仍待验。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -2000,13 +2001,15 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 - 结算helper只返回成功获赏的原始killer身份；world在原生成位置改取共享GetCoords并仍调用原spawn_named_anim。controller/passenger/spawn-owner的经验重定向不改变标记身份；无House source或未支付仍不生成。不修改隐形状态，因此本次是标记位置纠正，不是强制解除隐形。
 - 扩展原实际AY Tanya/APOC receiver回归（未直接写钱/动画/坐标）：旧实现MONEY实际在受害者36224,20608,416，断言killer7360,22336,416先红；修后唯一MONEY在killer，正式完整存读保留同ID/坐标。该地图非零地形Z亦由原查询覆盖。实际例1、NP奖励模块7通过；不是自然隐形/完整攻击任务/实际GPU输出，其他英雄/乘车/源退休和类型覆盖仍开放。无新增随机抽样、timer写入、Detach或保存布局。一次只读critic独立核ABI/原始attacker/原生vt48及生产owner，无可操作发现；追加原Tanya自然隐形实射1和stock奖励7通过，总计16项。自然隐形实射原例不含本次实际击杀，不能把两例拼称完整隐形击杀GPU验收。
 
+- 后续实际GPU接续：共享visit_aymod_tanya_bounty_after_load驱动同一receiver场景，正常scheduler越过物理MONEY空白frame0，再用实际AY atlas、build_display_effect_instances、Display lowering及普通sprite replay绘出原MONEY父对象。BGRA/RGBA sRGB两种格式有像素，完整存读后同帧像素完全一致，自然退休后无父对象/零像素；绘制不改变state_hash/RNG。实际GPU1、核心共用场景1通过。这里只隔离该父对象，非自然完整隐形致死、乘车、多AI或全场GUI认证；本轮无生产修复，不重做critic。
+
 ### 赏金读取复核：已证明与仍属政策的边界（2026-10-30）
 
 - 实际NPAE Process668EF0调用B96000，B96008先调用扩展ReadRulesB98000；另有加载尾67E720→C2A2C0/C2A2CE仅在bl=1时，以887048指向的INI再读扩展规则。后者的完整文件身份/调用顺序仍须追，不能从静态入口直接宣称所有层或所有重载已等价。
 - B980C9..B9811D依次读取CombatDamage的BountyCostMult、VeteranBountyCostMult、EliteBountyCostMult：当前+58/+5C/+60的float扩成double作默认，调用ReadDouble5283D0，再FSTP回float。B9904D..B99065构造写入3EA8F5C3/3F000000/3F400000（约33%/50%/75%），而当前VERA采用25%/50%/100%的明确兼容政策；实际AY根恰有显式25%/50%/100%，因此不能用构造差异宣称当前根金额错误，也不擅自改变政策。
 - B98120..B9814E对BountyAnim用128字节ReadString528A10；返回0跳过，非空调用AnimType factory428B80后存扩展+64。原生名称解析/none及注册顺序须与现有动画引用owner核对，尚未据此证明实际消费者错误。不要先建第二个赏金动画注册表。
 - 当前NpatchRewards::read调用的IniSection reader可通过projected_values/fold_rules_values消费保留读取历史，故“合并视图必定丢失逐层默认”是假设而非缺陷。ReadDouble的present junk共享政策是返回0，不是ReadInt失败hex的保留语义；未执行原生坏输入，不能以函数形参默认推断扫描失败的结果。
-- 本轮只读实际指令/当前owner并更新台账，无新原生执行语料、玩法修改或回归运行。赏金默认/钳位/算术政策、动画真实绘制及未闭合加载链继续开放，不增加一个已确认缺失项，也不宣布赏金全兼容。
+- 本轮只读实际指令/当前owner并更新台账，无新原生执行语料、玩法修改或回归运行。赏金默认/钳位/算术政策、完整合成/其他英雄动画绘制及未闭合加载链继续开放，不增加一个已确认缺失项，也不宣布赏金全兼容。
 - 后续生产accessor核实际Battle/XMP03T4与Return Dubai：TANY/BORIS/BPLN的类型BountyAnim均key_present=false，三者是根GetsBounty家族的物理使用者；原全局MONEY仍是当前已验证消费者。此处不证明所有其他类型/模式无覆盖，也不把尚未实现的类型动画覆盖写成当前已复现故障。
 
 ## 7. 建议适配顺序与验收矩阵

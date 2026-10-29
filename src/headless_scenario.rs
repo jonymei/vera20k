@@ -488,7 +488,7 @@ impl HeadlessScenario {
 mod retail_construction_tests {
     #[cfg(feature = "npatch")]
     use super::battle_test_evidence::{
-        RescueTransfer, aymod_grappled_ship_at_shore, visit_aymod_dolphin_rescue_after_load,
+        RescueTransfer, aymod_anchor, aymod_grappled_ship_at_shore, visit_aymod_dolphin_rescue_after_load,
     };
     use super::battle_test_evidence::{
         cells_nearest, house_of, spawn_on_free_cells, tick_with_due_commands,
@@ -4794,20 +4794,6 @@ mod retail_construction_tests {
                 .collect::<Vec<_>>()
         );
         (scene, placed.unwrap())
-    }
-
-    #[cfg(feature = "npatch")]
-    fn aymod_anchor(sim: &Simulation, owner: InternedId) -> (i32, i32) {
-        sim.entities()
-            .values()
-            .find(|entity| entity.owner() == owner)
-            .map(|entity| {
-                (
-                    i32::from(entity.position.rx()),
-                    i32::from(entity.position.ry()),
-                )
-            })
-            .expect("the loaded house has its starting force")
     }
 
     #[cfg(feature = "npatch")]
@@ -10569,87 +10555,7 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real AY bounty reader/kill-credit integration"]
     fn aymod_tanya_kill_receiver_pays_real_house_bounty() {
-        use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
-        use crate::sim::movement::ground_pose::object_get_coords;
-        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
-        let mut scenario = aymod_battle(0);
-        let runtime = &mut scenario.runtime;
-        let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
-        let america = house_of(sim, "Americans");
-        let russia = house_of(sim, "Russians");
-        let american_cells = cells_nearest(aymod_anchor(sim, america));
-        let russian_cells = cells_nearest(aymod_anchor(sim, russia));
-        let tanya =
-            spawn_on_free_cells(sim, &resources.rules, america, american_cells, &["TANY"])[0];
-        let target =
-            spawn_on_free_cells(sim, &resources.rules, russia, russian_cells, &["APOC"])[0];
-        let killer_location =
-            object_get_coords(sim.entities().get(tanya).unwrap(), sim.resolved_terrain());
-        let victim_location =
-            object_get_coords(sim.entities().get(target).unwrap(), sim.resolved_terrain());
-        assert_ne!(killer_location, victim_location);
-        let weapon = resources.rules.object("TANY").unwrap().primary().unwrap();
-        let warhead = resources
-            .rules
-            .weapon(weapon)
-            .unwrap()
-            .warhead
-            .as_deref()
-            .unwrap();
-        let warhead = sim.interner.intern(warhead);
-        let health = sim.entities().get(target).unwrap().health.current();
-        let before = crate::sim::credit_income::available_money(&sim.houses, america);
-        let hit = EntityDamageEvent::direct_receiver(
-            target,
-            health,
-            0,
-            tanya,
-            Some(america),
-            warhead,
-            ReceiverCallFlags {
-                ignore_defenses: true,
-                arg6: true,
-            },
-        );
-        sim.commit_direct_damage_receiver(
-            &resources.rules,
-            Some(&resources.overlay_registry),
-            hit,
-            Default::default(),
-        );
-        assert!(
-            sim.entities()
-                .get(target)
-                .is_none_or(|entity| entity.health.current() <= 0 || entity.death.is_dying())
-        );
-        assert!(
-            crate::sim::credit_income::available_money(&sim.houses, america) > before,
-            "the real AY Tanya kill must pay spendable credits, not only score or experience"
-        );
-        let bounty = sim
-            .anims()
-            .filter(|(_, anim)| sim.interner.resolve(anim.type_id()) == "MONEY")
-            .map(|(id, anim)| (*id, anim.world_coord()))
-            .collect::<Vec<_>>();
-        assert_eq!(bounty.len(), 1);
-        assert_eq!(
-            bounty[0].1,
-            crate::sim::anim_class::AnimWorldCoord {
-                x: killer_location.x,
-                y: killer_location.y,
-                z: killer_location.z,
-            },
-            "the bounty marker reveals the killer, not the victim"
-        );
-        let pristine = sim.resolved_terrain().unwrap().clone();
-        let bytes = save_scene(&scenario, "AY bounty marker at the hero's location");
-        scenario.runtime.simulation = restored_retail(&scenario, &pristine, &bytes);
-        assert!(
-            scenario
-                .sim()
-                .anims()
-                .any(|(id, anim)| { *id == bounty[0].0 && anim.world_coord() == bounty[0].1 })
-        );
+        super::battle_test_evidence::visit_aymod_tanya_bounty_after_load(|_, _, _| {});
     }
 
     #[cfg(feature = "npatch")]
