@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线d266bb972，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增A01正式双同盟困难盟军从正常MCV开局自然付费出兵/编队/离基地/攻击玩家，完整存读后同一两支正式进攻队再开火；没有预置AI成员、建队或攻击目标。V02新增GAROBO/NARADR实际敌方TTNK普通Attack施加EMP、热存读后EMP期间患者真实加血、停止施加后自然到期/治满出院及再次存读。最终两场景和直接消费者共35项通过；仅测试/台账，无玩法、保存字段、RNG或timer逻辑改动，不需玩法critic。固定版、MOD/原档及Return Dubai暂停均未动，无推送/PR。前轮双苏联失重工恢复、双尤里自然高级科技/奴隶矿恢复及存读覆盖保留，见A02/A07。A09原生停滞修正尚未获明确设计授权，F22/V01/F11门禁仍保留；下一步继续普通矿车/矿场损失及其他开放功能，不重复已通过的医院EMP或奴隶矿微边界，不以本场景推断Return Dubai弱攻势已解决。
+- 本轮基线8d497d5ec，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：A02/A07新增双同盟困难苏联普通矿车损失恢复。正常MCV开局，两家真实载矿/收入并建成NATECH、均无旧HARV产品在limbo时，通过无攻击者终结receiver摧毁第一家全部活矿车；损失边界完整存读核其无活矿车、另一方钱包不变。后续正常AI实际付费的新HARV在生产中完整存读保持对象/应付款，正式出厂载矿且两家取得新收入；该车载矿时第三次完整存读后正常清空Cargo、两家再次取得新收入。无AI钱/设施/单位/选择/队列注入；仍隔离进攻触发并保护人类观察基地，不冒称实战灭矿/矿枯/缺钱。新增实际场景1、ai_unit_choice4、ai_build_need14、FactoryAI13通过，共32项；无生产修复/新保存字段/RNG/timer逻辑，不需玩法critic。前轮双盟军自然出兵和医院真实TTNK覆盖见下节，已通过的双尤里奴隶矿及失重工恢复保留。固定构建、MOD/原档及Return Dubai暂停未动，无推送/PR；A09/F22/V01/F11门禁保留。下一步继续普通矿场损失恢复，再补缺钱/矿枯等开放链，不重复已通过的单车补产微边界。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -23,6 +23,13 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/其他脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### A02/A07双苏联：全失矿车后的付费补车与卸矿存读（2026-10-29）
+
+- 新增aymod_two_soviet_ai_replace_lost_miners_without_stopping_peer，使用正式AY Battle/XMP03T4和共享双AI经济fixture：正常MCV/初始资金，两家同盟困难苏联。等待两家均有当前真实矿物Cargo/累计收入、正常施工完成NATECH，且活HARV的在图/含limbo名单一致，排除损失前已有旧矿车产品等待出厂。人类观察基地/保护及停用进攻触发为既有隔离fixture，不注入AI单位、钱、科技、生产选择或计时器。
+- 无攻击者Super终结receiver摧毁第一家全部活HARV，不直接UnInit或把死亡当成任意删对象；不是实弹灭矿测试。损失边界无活HARV（含limbo），另一家钱包即刻不变；第一次完整保存恢复后重复两断言。只损矿车、不损矿场或改资金，因此不声称走过低资金卖楼/Hunt路径。
+- 之后由正常House/生产owner补车，逐帧观察第一方实际工厂新HARV对象ID及应付款下降，要求仍有余额；不能用免费矿场附车或旧产品替代。第二次完整存读保持同一产品和余额，后续同一ID必须正式出厂、活着载矿，两家实际收入均超过损失前。载矿时第三次完整存读核Cargo不空，继续正常帧后该车活着清空Cargo且两家再取得新收入，不只核保留的旧收入分数。
+- 最终实际场景1、ai_unit_choice::tests4、ai_build_need::tests14、production::factory_ai::tests13通过，共32项；UnitChoice里既有Return Dubai earliest-team ignored项未运行，保持暂停。初次误用工厂观察返回Vec的any导致测试编译失败，补into_iter后通过；FactoryAI首个过滤器漏中0项，已按真实模块重跑13项，不计0项为通过。仅测试/台账，无新增玩法/权威状态、RNG调用、timer写入、Detach或保存布局，各原owner按原生命周期运行；无需新玩法critic。未启动游戏/GUI、改MOD/原始存档/固定构建或发布。普通矿场损失、盟军超时空矿车、缺钱/矿枯、战斗干扰/连续长局仍开放，不关闭A02/A07。
 
 ### A01自然双盟军进攻、V02真实磁暴坦克医院链（2026-10-29）
 
@@ -1732,7 +1739,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | ID / 优先级 / 状态 | 机制与代码入口 | 多电脑对战收口条件 |
 | --- | --- | --- |
 | A01 / P1 / 双盟军自然付费组队出基地实射及存读续攻已验，其余待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 正式AY双同盟困难盟军正常开局、各自自然付费成员/正式非防御队成型/离初始基地8格外对原玩家目标实射、人类实伤、完整存读后同一两队再次开火已验；AI无成员/建队/命令注入，人类保护观察基地/目标为fixture。其他阵营自然全链、损耗补员/重建及连续长局仍待验，不以一次出击关闭A01，不能被永久空队占满 Max |
-| A02 / P1 / 双苏联重工恢复、双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。盟军高级科技、苏联高级科技、普通矿场矿车损失、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
+| A02 / P1 / 双苏联高级科技/失重工与失矿车恢复、双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。新增两家苏联NATECH自然建成、第一方全失矿车后新HARV实际付款/生产中存读/出厂载矿/载矿存读卸矿且两家新收入续进已验，非实战灭矿且未改资金。盟军高级科技、普通矿场损失、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
 | A03 / P1 / 同盟双AI第三方败亡后重选及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，第三方正常旗标败亡/待处理存读后均重选人类，再存读及各自正式APOC队实射/人类实伤已验；成员/建队等为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、旧在途队伍重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
 | A04 / P1 / 待核+待验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
 | A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；自然经济/全程充能、其他超武/多AI竞争及长局仍待验；光照另见F11 |
