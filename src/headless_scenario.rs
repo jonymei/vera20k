@@ -2003,6 +2003,224 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet economies recover lost refineries and original miners deliver to the paid replacement"]
+    fn aymod_two_soviet_ai_rebuild_refineries_and_resume_original_miners_after_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(1);
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+        };
+        let live_type = |scene: &HeadlessScenario, owner, name: &str| {
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| {
+                    entity.owner() == owner
+                        && entity.is_ai_alive()
+                        && scene.sim().interner.resolve(entity.type_ref()) == name
+                })
+                .map(|entity| entity.stable_id())
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                computers.iter().all(|&owner| {
+                    let sim = scene.sim();
+                    let refineries = live_type(&scene, owner, "NAREFN");
+                    !refineries.is_empty()
+                        && refineries.iter().all(|&id| {
+                            let entity = sim.entities().get(id).unwrap();
+                            !entity.lifecycle.in_limbo()
+                                && entity.mission.effective().known() != Some(MissionType::Construction)
+                        })
+                        && !live_type(&scene, owner, "NAWEAP").is_empty()
+                        && sim.houses[&owner].economy().score() > 0
+                        && live_type(&scene, owner, "HARV").iter().any(|&id| {
+                            let entity = sim.entities().get(id).unwrap();
+                            !entity.lifecycle.in_limbo()
+                                && entity
+                                    .miner
+                                    .as_ref()
+                                    .is_some_and(|miner| !miner.cargo().is_empty())
+                        })
+                })
+            }),
+            "both normal economies must have earned income, complete refineries and real loaded miners"
+        );
+        let owner = computers[0];
+        let peer = computers[1];
+        let lost = live_type(&scene, owner, "NAREFN");
+        let original_miners = live_type(&scene, owner, "HARV");
+        let peer_wallet = scene.sim().houses[&peer].economy().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            for &id in &lost {
+                let hp = sim.entities().get(id).unwrap().health.current();
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        id,
+                        hp,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+        }
+        assert!(live_type(&scene, owner, "NAREFN").is_empty());
+        assert_eq!(
+            scene.sim().houses[&owner]
+                .tracking()
+                .resource_destinations(),
+            0
+        );
+        assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
+        assert!(original_miners.iter().any(|&id| {
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .is_some_and(|entity| entity.is_ai_alive())
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY all Soviet refineries lost with original miners still alive",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene.sim().houses[&owner]
+                .tracking()
+                .resource_destinations(),
+            0
+        );
+        assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
+        let mut balances = std::collections::BTreeMap::new();
+        let mut replacement = None;
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                for factory in scene
+                    .sim()
+                    .production()
+                    .factories()
+                    .iter_insertion_ordered()
+                {
+                    if factory.owner() != owner {
+                        continue;
+                    }
+                    let Some(object) = factory.object() else {
+                        continue;
+                    };
+                    if scene.sim().interner.resolve(object.type_id) != "NAREFN" {
+                        continue;
+                    }
+                    let id = object.entity_id.unwrap();
+                    assert!(!lost.contains(&id));
+                    let previous = balances.entry(id).or_insert(factory.balance());
+                    if factory.balance() < *previous && factory.balance() > 0 {
+                        replacement = Some((id, factory.balance()));
+                        return true;
+                    }
+                    *previous = factory.balance();
+                }
+                false
+            }),
+            "AI must pay for a new refinery through ordinary construction"
+        );
+        let (replacement, balance) = replacement.unwrap();
+        let bytes = save_scene(
+            &scene,
+            "AY replacement refinery paid product still in factory",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            scene
+                .sim()
+                .production()
+                .factories()
+                .iter_insertion_ordered()
+                .into_iter()
+                .any(|factory| {
+                    factory.owner() == owner
+                        && factory.balance() == balance
+                        && factory
+                            .object()
+                            .is_some_and(|object| object.entity_id == Some(replacement))
+                })
+        );
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                scene
+                    .sim()
+                    .entities()
+                    .get(replacement)
+                    .is_some_and(|entity| {
+                        entity.is_ai_alive()
+                            && !entity.lifecycle.in_limbo()
+                            && entity.mission.effective().known() != Some(MissionType::Construction)
+                    })
+            }),
+            "same paid refinery must be placed and finish normal construction"
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY replacement refinery standing before original miner delivery",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        let incomes = computers
+            .iter()
+            .map(|owner| scene.sim().houses[owner].economy().score())
+            .collect::<Vec<_>>();
+        let mut cargo = std::collections::BTreeMap::new();
+        let mut delivered = false;
+        assert!(
+            (0..3600).any(|_| {
+                let income_before = scene.sim().houses[&owner].economy().score();
+                step(&mut scene);
+                let sim = scene.sim();
+                for &id in &original_miners {
+                    let Some(entity) = sim.entities().get(id).filter(|entity| entity.is_ai_alive())
+                    else {
+                        continue;
+                    };
+                    let amount = entity.miner.as_ref().unwrap().cargo().len();
+                    let previous = cargo.insert(id, amount).unwrap_or(amount);
+                    if amount < previous
+                        && entity.radio_contacts.slot(0) == Some(replacement)
+                        && sim.houses[&owner].economy().score() > income_before
+                    {
+                        delivered = true;
+                    }
+                }
+                delivered
+                    && computers
+                        .iter()
+                        .enumerate()
+                        .all(|(index, owner)| sim.houses[owner].economy().score() > incomes[index])
+            }),
+            "an original surviving HARV must unload at the same paid replacement, with both Houses earning after restore"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Yuri AI economies naturally reach tech and recover lost slave miners across saves"]
     fn aymod_two_yuri_ai_recover_slave_mining_without_stopping_peer() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
