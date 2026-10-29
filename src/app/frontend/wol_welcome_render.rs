@@ -525,7 +525,12 @@ pub(crate) fn render_wol_page(
         (Painted::MyInfo(layout), true) => {
             crate::app::shell_wol::my_info::page(state).map(|page| {
                 crate::app::frontend::skirmish_shell_render::paint_wol_my_info_children(
-                    state, page, layout,
+                    state.frontend.skirmish_shell_chrome.as_ref(),
+                    &state.renderer.bit_font,
+                    state.rules(),
+                    page,
+                    layout,
+                    |key| resolve_csf(state, key).into_owned(),
                 )
             })
         }

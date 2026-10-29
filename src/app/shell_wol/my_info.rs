@@ -14,6 +14,10 @@ use crate::ui::main_menu_dialogs::options::LauncherCue;
 use crate::ui::skirmish_shell::{SkirmishComboItem, SkirmishCountryChoice};
 use crate::ui::wol_my_info::*;
 
+#[cfg(all(test, feature = "npatch"))]
+#[path = "my_info_gpu_tests.rs"]
+mod gpu_tests;
+
 fn view(persona: &WolPersona) -> MyInfoPersona {
     MyInfoPersona {
         server: persona.server.clone(),
@@ -54,13 +58,14 @@ fn country_rows(state: &AppState) -> Vec<MyInfoRow> {
 
 /// `0x4E43C0` releases every colour, so `0x4E45A0` lists
 /// `GUI:RandomAsSymbols` (-2) and every startup palette swatch.
-fn color_rows(state: &AppState) -> Vec<MyInfoRow> {
+fn color_rows(
+    rules: Option<&crate::rules::ruleset::RuleSet>,
+    label: impl Fn(SkirmishComboItem) -> String,
+) -> Vec<MyInfoRow> {
     crate::ui::skirmish_shell::available_color_choices(
-        state
-            .rules()
-            .map_or(crate::skirmish_launch::HOUSE_COLOR_COUNT, |rules| {
-                rules.multiplayer_color_count
-            }),
+        rules.map_or(crate::skirmish_launch::HOUSE_COLOR_COUNT, |rules| {
+            rules.multiplayer_color_count
+        }),
         None,
         [],
     )
@@ -71,10 +76,7 @@ fn color_rows(state: &AppState) -> Vec<MyInfoRow> {
             data: index as i32,
             swatch: Some(index),
         },
-        _ => MyInfoRow::text(
-            crate::app::frontend::skirmish_shell_render::combo_item_label(state, item),
-            -2,
-        ),
+        _ => MyInfoRow::text(label(item), -2),
     })
     .collect()
 }
@@ -90,7 +92,9 @@ pub(super) fn open(state: &mut AppState) {
     let auto_login = auto_login_names(state);
     let default_text = service::resolve(state, DEFAULT_KEY);
     let countries = country_rows(state);
-    let colors = color_rows(state);
+    let colors = color_rows(state.rules(), |item| {
+        crate::app::frontend::skirmish_shell_render::combo_item_label(state, item)
+    });
     let Some(visit) = state.frontend.wol.as_mut() else {
         return;
     };

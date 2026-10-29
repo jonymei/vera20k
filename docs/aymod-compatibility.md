@@ -6,13 +6,13 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于2da1e223a修F20/补F08：共享AoECollector按NPAE174 4893BA→7E03A8移除stock爆点高度门，改用既有WH+130平面爆炸标志决定是否收集空中目标，保留原生floor查询/先空后地顺序/3D距离。新地面爆炸回归先失败[]，修后与平面拒绝/stock边界通过；实际AY CAOS死亡爆炸感染正常起飞JUMPJET、两次完整存读与后续倒计时通过。NP AoE31通过/跳过1既有source-owner断言失败；stock31通过/同1失败，见F20。只读critic独立核指令/reader/生产caller后无可操作发现；固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于0034627c1补F12 WOL个人信息颜色集成验收：生产color_rows/子控件painter改接既有只读输入，正式AppState调用者同步迁移，不再为无窗口测试构造窗口或复制颜色表。真实AY目录第16色经滚动选择、临时WolInfoFile保存重开到GPU的折叠/弹出色块一致；800/BGRA与1280/RGBA两格式、深度不写通过。新GPU1、NP/stock各MyInfo6/profile7通过；纯UI/测试，无玩法/协议/保存布局变更或新critic，无待完成Cargo。完整页面合成/事件泵/网络仍开放；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
 - V01独立供电/失联Drive政策、F11跨模块光照接线批准门禁不变；一般“继续功能”不解除。功能优先，UI随后，完整PLAN有效。
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
-- 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
+- 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
 
@@ -153,8 +153,12 @@
 - BC/BD/C2/C9设置及WOL My Information改用既有RuleSet.multiplayer_color_count与available_color_choices，不新增目录或改变协议准入。网络AI偏好恢复的固定8门禁改用同一runtime count；先红测具体15被替换为0/random，修后LAN/WOL重开、地图fallback和扩展行保持通过。stock仍8。
 - 实读实际AY网络恢复5ED9FA..5EDA06→4E49A0，4E4A43..4E4A50经BA9008至BA90F0运行时末端遍历；WOL初始化799910中的799A48→4E43C0、799A54→4E45A0共用目录。Persona setter77A7A0..77A7B2不夹到8，保留脏标记/保存owner；网络human随机仍原生8，不扩大为16。
 - 两个renderer的折叠/弹出色块改传实际color_schemes及npatch_dropdown_colors给原house_color_tint；不另造RGB表。网络超容量忽略占用阈值由8改为目录count，保留既有容量耗尽政策，不新造同色规则。
-- NP与stock各session64、MyInfo6、WOL profile7、network view3通过。MyInfo普通thumb拖到底/选15/刷新保留15为组件测试，行由测试提供，不冒称AppState实际color_rows集成；profile通过临时文件保存/重开15，不接触用户文件。共享GPU实际MPC16在800x600/BGRA及1280x720/RGBA通过，不冒称完整网络/WOL compositor通过。
-- 一次只读critic无可操作发现。完整网络收发/peer/重连、完整compositor与AppState接线、所有popup画面、真人GUI及旧MenuColors仍开放。无GUI、MOD配置/原始存档/固定构建/协议放宽或发布改动。
+- 此前NP与stock各session64、MyInfo6、WOL profile7、network view3通过，组件thumb拖到底/选15/刷新保留15及共享MPC16 GPU结果保留；本轮不重跑session/network全模块。原组件手工供色行的范围由以下真实行/painter组合例补充，不把旧结果说成本轮完整AppState实测。
+- 本轮让唯一color_rows直接接Option<RuleSet>与原标签函数，唯一paint_wol_my_info_children直接接同一atlas/font/rules/label只读借用；正式open及WOL compositor调用者同步供给原state.rules()/chrome/font及共享resolve_csf。AppState.rules在前端回退frontend_rules的链已静读；没有新缓存、颜色注册表、特殊renderer或测试专用绘制实现，也没有改变原颜色/文字政策。
+- 新aymod_wol_profile_color_sixteen_reaches_real_page_paint_after_reopen实际加载AY root/CSF/GAME.FNT/chrome，color_rows(None)仍8色加随机，真实rules目录为16色加随机。经原popup/scroll-thumb/row_at/select leaf选15，不手工拼色行或改MOD；临时WolInfoFile走正常setter/save/load，重开同一页面仍选15。仍不是OS鼠标事件泵或真实WOL服务器数据。
+- 同一生产子控件painter经正常BatchRenderer上传/绘制/回读，在800x600/Bgra8UnormSrgb与1280x720/Rgba8UnormSrgb中，重开后的folded face中心像素等于末行popup中心像素且异于先前MPC01，深度全为1。已查看800弹出/1280重开诊断图；只画页面子控件，没有背板、按钮列或过渡波，不能把黑色诊断背景当成游戏缺陷或完整compositor已验。
+- 最终新GPU复合例1项通过，NP/stock各MyInfo6、profile7通过；最后复用resolve_csf后再跑新GPU1及stock MyInfo6通过，无待完成Cargo。仅UI参数边界和测试，无模拟状态/RNG/timer/Detach/保存布局或协议改动，不需玩法critic；所有偏好文件及PNG在临时目录，未提交输出或触碰用户文件。
+- 一次只读critic无可操作发现。完整网络收发/peer/重连、完整compositor、AppState事件泵、peer/重连、其他popup画面、真人GUI及旧MenuColors仍开放；实际MyInfo颜色行与子控件painter组合不再是纯手工fixture。无GUI、MOD配置/原始存档/固定构建/协议放宽或发布改动。
 
 ### V10坠落飞兵：NP跳过步兵Health=1复活（更新2026-10-29）
 
