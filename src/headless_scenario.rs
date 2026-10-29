@@ -12990,6 +12990,124 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; authored land and naval AI demands pay and leave separate factories across a mid-production save"]
+    fn aymod_ai_land_and_naval_factories_deliver_saved_paid_products() {
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let mut launch = battle_session(
+            map,
+            &[(LaunchCountry::from_country_index(0), AiDifficulty::Hard)],
+        );
+        launch.local_slot_mut().country = LaunchCountry::from_country_index(1);
+        launch.options.unit_count = 0;
+        let mut scene = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+        let ai = house_of(scene.sim(), "Americans");
+        assert!(!scene.sim().houses[&ai].is_human());
+        let factories = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&ai)
+                .unwrap()
+                .set_ai_triggers_active(false);
+            let at = aymod_anchor(sim, ai);
+            let buildings = spawn_on_free_cells(
+                sim,
+                rules,
+                ai,
+                cells_nearest(at),
+                &["GAWEAP", "GAREFN", "GATECH", "GAROBO", "NANRCT"],
+            );
+            let yard = aymod_spawn_service_building(sim, rules, ai, "GAYARD", at);
+            [buildings[0], yard]
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            factories.iter().all(|id| {
+                scene.sim().entities().get(*id).is_some_and(|entity| {
+                    entity.mission.effective().known() != Some(MissionType::Construction)
+                })
+            })
+        }));
+        {
+            let runtime = &mut scene.runtime;
+            for name in ["0ACCD81C-G", "0CA1E67C-G"] {
+                let kind = runtime.simulation.interner.get(name).unwrap();
+                runtime
+                    .simulation
+                    .create_team(kind, Some(ai), &runtime.resources.rules)
+                    .expect("the original Mirage and Naval Hunters TeamTypes");
+            }
+        }
+        let heads = |scene: &HeadlessScenario| {
+            factories.map(|id| {
+                let factory = scene.sim().production().factories().building_factory(id)?;
+                let object = factory.object()?;
+                Some((object.entity_id?, object.type_id, factory.balance()))
+            })
+        };
+        let demanded = |scene: &HeadlessScenario| {
+            let [Some(land), Some(ship)] = heads(scene) else {
+                return false;
+            };
+            scene.sim().interner.resolve(land.1) == "MGTK"
+                && matches!(
+                    scene.sim().interner.resolve(ship.1),
+                    "DEST" | "AEGIS" | "DLPH"
+                )
+                && land.2 > 0
+                && ship.2 > 0
+        };
+        assert!(
+            (0..9000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                demanded(&scene)
+            }),
+            "both authored demands must reach separate live factories"
+        );
+        let products = heads(&scene).map(Option::unwrap);
+        assert_ne!(products[0].0, products[1].0);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY AI has simultaneous paid land and naval production heads",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(heads(&scene), products.map(Some));
+        let mut paid = [false; 2];
+        assert!(
+            (0..9000).any(|_| {
+                tick_with_due_commands(&mut scene);
+                for (index, head) in heads(&scene).into_iter().enumerate() {
+                    if let Some(head) = head.filter(|head| head.0 == products[index].0) {
+                        paid[index] |= head.2 < products[index].2;
+                    }
+                }
+                products.iter().all(|(id, _, _)| {
+                    scene.sim().entities().get(*id).is_some_and(|entity| {
+                        entity.owner() == ai && entity.is_ai_alive() && !entity.lifecycle.in_limbo()
+                    })
+                })
+            }),
+            "both original saved factory objects must be delivered onto the map"
+        );
+        assert!(paid.into_iter().all(|seen| seen));
+        let bytes = save_scene(
+            &scene,
+            "AY AI delivered both original land and naval products",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for (id, kind, _) in products {
+            let entity = scene.sim().entities().get(id).unwrap();
+            assert_eq!((entity.owner(), entity.type_ref()), (ai, kind));
+            assert!(!entity.lifecycle.in_limbo());
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; paid Soviet transport changes factories across shipyard retirement and saves"]
     fn aymod_soviet_transport_factory_fallback_after_load() {
         aymod_transport_factory_fallback(1, "NAWEAP", "NAYARD", "SAPC", "SAPC2");

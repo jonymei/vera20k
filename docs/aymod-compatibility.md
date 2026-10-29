@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线69f8e2d75。本轮定位并修复英雄赏金标记位置：原实现使用受害者位置，实际NPAE ReceiveDamage702572→B95D16/B95D99..B95DA9取原始killer的GetCoords(vt48)，B95DC4..B95DEA将动画生在那里。沿唯一record_the_kill结算出口返回获赏killer身份，由world入口调用既有object_get_coords（含地形Z/建筑基础中心）及spawn_named_anim；不另造坐标/赏金owner，不改金额、经验、支付去重、隐形状态或动画时序政策。
-- 原实际AY Tanya/APOC终结receiver例新增断言先失败：MONEY位置36224,20608,416而killer应7360,22336,416；修后真实注册MONEY唯一实例位于killer且完整存读保留同ID/坐标，实际1和NP奖励7通过。此例不是实弹击杀/自然隐形或GPU画面；现行Terminal支付/时点、倍率默认/钳位及类型自定义BountyAnim仍属原政策/开放边界，不以此次坐标修复称全部赏金等价。无新RNG/timer/Detach/保存字段；固定版/MOD/原档未动，无GUI/发布。Return Dubai弱攻势暂停、V01/F11/F22门禁保持；一次只读critic独立核对701900栈帧、attacker ABI/vt48/动画构造与红绿日志，无可操作发现；另原Tanya自然隐形实射1及stock奖励7通过，共16项。当前无执行残留；下一步继续核实际活跃类型覆盖/其他功能缺口，不逐英雄重复坐标样例。
+- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线791201a3f。本轮补A04实际AY困难盟军同House双工厂：Battle/Return Dubai只是隔离水陆地形，不恢复弱攻势调查；关闭新AITrigger以隔离需求竞争，合法生成GAWEAP/GAREFN/GATECH/GAROBO/NANRCT/GAYARD并正常施工，正常create_team创建原0ACCD81C-G幻影与0CA1E67C-G海军猎手需求；不注入钱、产品、成员、选择、队列或进度。普通帧同时观察重工MGTK和船厂DEST/AEGIS/DLPH之一的不同limbo工厂对象、各自未付余额>0；完整存读保持两头ID/类型/余额，后续普通帧两边余额均真实下降，同一原对象都活着落地，再次完整存读保留身份/归属。
+- 新实际场景1、NP FactoryAI13及UnitChoice4通过（后者1 ignored未跑），共18项；无生产修复/新RNG/timer/Detach/保存布局，无新玩法critic。设施/建队是fixture，不是自然科技树/AITrigger/完整两队或出击验收；A04完整舰队集结/战术、多AI及长局仍开放。生产accessor另核两Battle地图TANY/BORIS/BPLN均未配置类型BountyAnim，保留全局MONEY/坐标既有修复；不把六个查询外推全模式/全部类型。固定版/MOD/原档未动、无GUI/发布或遗留执行，Return Dubai弱攻势暂停与V01/F11/F22门禁保持。下一步补A04原队补员/成型与船厂出口消费者，不追加同一双头选择微边界，不调AI权重/兵种值。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1903,7 +1903,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A01 / P1 / 三阵营各双AI自然付费出击及原队存读续射已验，其余待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 正式AY双同盟困难盟军正常开局、各自自然付费成员/正式非防御队成型/离初始基地8格外对原玩家目标实射、人类实伤、完整存读后同一两队再次开火已验；AI无成员/建队/命令注入，人类保护观察基地/目标为fixture。苏联/尤里各双同盟困难电脑亦已正常付费成队、出基地用正伤害非心控武器实射，完整存读后同一两队新射击；尤里24座可损伤人类目标为fixture，三例不是混合阵营同局。混合阵营、损耗补员/重建及连续长局仍待验，不以一次出击关闭A01，不能被永久空队占满 Max |
 | A02 / P1 / 双苏联高级科技/失重工、矿车、矿场恢复与双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。新增两家苏联NATECH自然建成、第一方全失矿车后新HARV实际付款/生产中存读/出厂载矿/载矿存读卸矿且两家新收入续进已验，非实战灭矿且未改资金。另已验第一方全失NAREFN后接收点归零、新矿场实际付款/生产中存读/同对象施工完成、落地存读后原HARV向新矿场交矿且双方新收入续进。盟军高级科技、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
 | A03 / P1 / 同盟双AI第三方败亡后重选及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，第三方正常旗标败亡/待处理存读后均重选人类，再存读及各自正式APOC队实射/人类实伤已验；成员/建队等为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、旧在途队伍重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
-| A04 / P1 / 待核+待验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
+| A04 / P1 / 同House陆海双头付款/出厂存读已验，编队战术仍待核验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
 | A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；自然经济/全程充能、其他超武/多AI竞争及长局仍待验；光照另见F11 |
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 同阵营双AI失重工/普通矿车矿场/尤里奴隶矿恢复已验，长期压力待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | A02的苏联失首重工与尤里全部在图奴隶矿设施损失后，正常生产/采矿恢复且同盟同阵营另一House继续发展、完整存读已验；失矿为无攻击者终结receiver，非实战夺奴隶/长期抗压。双苏联另已验全失HARV后的同对象付费补产/载矿存读卸矿、全失NAREFN后的同对象付费重建/存读后原HARV向新矿场交矿，双方新收入持续。新增双苏联零现金/全失矿场后普通策略自动非基地Selling、出售中存读、付费重建/原车交矿及双House新收入续进已验，零现金为fixture而非自然耗资；新增实际仅余兵营/零现金/退款不足条件下原HARV普通Hunt、完整存读后自行找敌开火实伤且另一家继续收入已验，关闭short_game为明确fixture；另已验当前矿层耗尽后真实再生、一方NoOre/Guard与另一方继续收入共存、两次完整存读和后续2400帧NoOre补车门禁；不是永久无再生耗尽。永久矿枯/停车后重新起步、其他阵营/幸存兵种、快速游戏败亡竞态和长期资金/生产/团队隔离仍开放 |
@@ -1953,6 +1953,12 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 继续以 [npatch.md](npatch.md) / [npatch-emp.md](npatch-emp.md) 为机制说明 owner。
 不要为了清单显示“完成”而悄悄抹掉政策残留。
 
+### A04陆海并行生产：正式编队需求到实际付款出厂（2026-10-30）
+
+- 新aymod_ai_land_and_naval_factories_deliver_saved_paid_products在实际AY Battle/Return Dubai一人对困难盟军，保留规则/资金/模式和原AI生产owners。关闭该House新AITrigger，设施通过合法spawn/普通施工提供；正常create_team显式建立原Allied Mirage Tanks(0ACCD81C-G)与Allied Naval Hunters(0CA1E67C-G)，原TaskForce分别需求4MGTK与4DEST/1AEGIS/4DLPH。此为生产组件fixture，不是自然科技/触发出兵，也不恢复用户暂停的弱攻势trace。
+- 普通帧观察两指定工厂同时持有不同、尚欠款的原对象，陆为MGTK、海为原猎手三种之一；不用只出现一次choice作为通过。第一次正式完整存读保持两头ID/类型/各自欠款，恢复后各自原对象的余额实际下降，随后两原对象均活体同House落到地图；第二次完整存读保留ID/类型/归属/非limbo。设施、建队是输入，钱包、选择、产品、成员、队列、进度、付款或PLACE均未注入，不通过人类生产命令替代AI Factory_AI。
+- 最终新实际1、NP factory_ai::tests13、ai_unit_choice::tests4通过，共18项；chooser另1 ignored未跑不计通过。没有找到需改的新生产缺陷，无新增权威状态/RNG/timer/Detach/保存布局，无新玩法critic。不代表整队已成型、海军已离厂驶向目标/集结/作战、所有资金与出口竞争、多AI或长局通过；A04相应残余保持。固定玩家构建/MOD配置/原始存档不动，无GUI或发布。
+
 ### 英雄赏金标记：受害者位置改为原始击杀者位置（2026-10-30）
 
 - 作者170507称赏金会暴露隐形Tanya、Boris所乘车辆的位置。当前唯一record_the_kill却返回受害者position，world据此spawn_named_anim；原实杀回归只核钱包，漏掉动画出生位置。
@@ -1967,6 +1973,7 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 - B98120..B9814E对BountyAnim用128字节ReadString528A10；返回0跳过，非空调用AnimType factory428B80后存扩展+64。原生名称解析/none及注册顺序须与现有动画引用owner核对，尚未据此证明实际消费者错误。不要先建第二个赏金动画注册表。
 - 当前NpatchRewards::read调用的IniSection reader可通过projected_values/fold_rules_values消费保留读取历史，故“合并视图必定丢失逐层默认”是假设而非缺陷。ReadDouble的present junk共享政策是返回0，不是ReadInt失败hex的保留语义；未执行原生坏输入，不能以函数形参默认推断扫描失败的结果。
 - 本轮只读实际指令/当前owner并更新台账，无新原生执行语料、玩法修改或回归运行。赏金默认/钳位/算术政策、动画真实绘制及未闭合加载链继续开放，不增加一个已确认缺失项，也不宣布赏金全兼容。
+- 后续生产accessor核实际Battle/XMP03T4与Return Dubai：TANY/BORIS/BPLN的类型BountyAnim均key_present=false，三者是根GetsBounty家族的物理使用者；原全局MONEY仍是当前已验证消费者。此处不证明所有其他类型/模式无覆盖，也不把尚未实现的类型动画覆盖写成当前已复现故障。
 
 ## 7. 建议适配顺序与验收矩阵
 
