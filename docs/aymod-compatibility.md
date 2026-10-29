@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线fed7a4dd3，前轮F26实际多源/Off/逐源退休及存读已通过。本轮回到作者说明/当前生产owner核对，未找到可据此直接实施的新增非门禁功能缺口；不把未验边界或默认未启用扩展改标为缺失。已纠正首份玩家版历史段落的F09/F10陈旧状态及F29同格重试的过期“尚未修复”表述，现行状态以对应表和V13为准。
-- 赏金读取新静态证据：Process668EF0→B96000/B96008→B98000；B980C9..B9811D依次以扩展+58/+5C/+60当前float作ReadDouble5283D0默认并写回float，B9904D..B99065构造位模式为3EA8F5C3/3F000000/3F400000。这证明原生构造默认不是现行政策25/50/100%，不证明实际AY显式配置金额有误。初步“合并视图丢分层”假设被ini_value::fold_rules_values/projected_values推翻；坏float读入也不能误称“失败保留”，见共享reader异常输入政策。未改玩法/数值/状态、未运行Cargo，下一步先核BountyAnim解析/保留和真实模式覆盖适用性，再决定是否需修；不要重做已排除的分层假设或盲改默认值。Return Dubai弱攻势仍暂停，V01/F11/F22门禁保持，固定版/MOD/原档不动，完整目标仍开放。
+- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线69f8e2d75。本轮定位并修复英雄赏金标记位置：原实现使用受害者位置，实际NPAE ReceiveDamage702572→B95D16/B95D99..B95DA9取原始killer的GetCoords(vt48)，B95DC4..B95DEA将动画生在那里。沿唯一record_the_kill结算出口返回获赏killer身份，由world入口调用既有object_get_coords（含地形Z/建筑基础中心）及spawn_named_anim；不另造坐标/赏金owner，不改金额、经验、支付去重、隐形状态或动画时序政策。
+- 原实际AY Tanya/APOC终结receiver例新增断言先失败：MONEY位置36224,20608,416而killer应7360,22336,416；修后真实注册MONEY唯一实例位于killer且完整存读保留同ID/坐标，实际1和NP奖励7通过。此例不是实弹击杀/自然隐形或GPU画面；现行Terminal支付/时点、倍率默认/钳位及类型自定义BountyAnim仍属原政策/开放边界，不以此次坐标修复称全部赏金等价。无新RNG/timer/Detach/保存字段；固定版/MOD/原档未动，无GUI/发布。Return Dubai弱攻势暂停、V01/F11/F22门禁保持；下一步补只读critic及受影响消费者验证后继续其他功能。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1945,13 +1945,20 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 | 已付款生产头暂停/恢复 | EMP不退款/重建，手动Off和用户Hold不被到期覆盖；已有实际MOD生产场景和保存状态回归 | Windows运行与多工厂/多House |
 | 乘员/母子机经验 | BFRT乘员先升、精英回退载具；飞机子机保留自身奖励并额外训练母体，母体等级采样时仅提高弱子机、再生按Trainable继承；已有实际BFRT Enter与航母再生存读场景 | 见 V05/F13；不是所有驻军链都已验 |
 | 控制者经验 | 有效非精英控制者分配既有XP，精英/无效回退普通受益者；实际尤里场景 | 比例限制与整数守恒为[政策](npatch.md)，不是所有 #174 算术已证 |
-| 英雄赏金 | Tanya实杀产生可支配金钱；敌对终结击杀只结一次，普通/精英击杀和去重有回归 | 默认值/钳制/比例是政策；动画外观未单独验，其他英雄未全部实际场景验 |
+| 英雄赏金 | Tanya终结receiver产生可支配金钱；敌对终结击杀只结一次，普通/精英击杀和去重有回归；已修MONEY误生受害者位置，实际AY改生原始killer处并完整存读通过 | 默认值/钳制/比例/支付时点是政策；实际自然隐形实杀/GPU动画外观、类型自定义BountyAnim及其他英雄未全部验 |
 | 永久控制/间谍劫车 | Spy登车成功消耗自身；精英尤里夺建筑后移除控制者仍保有建筑；实际空中ORCA夺取/移除源后永久归属/三次存读及新主机场降落已验；拒绝/落空有回归 | 普通对空临时控制、其他家族及Windows多AI换主/补员；不创建临时manager竞争owner |
 | 存档地形、窗口边滚 | baseline ClearTile/LAT变体重绑与缺失radar派生面重建已修；出窗口停止边滚 | 不宣称所有存档或启动白屏已修。作者原引擎“不支持读档”不等于要求VERA禁用存档 |
 
 经验、赏金、EMP、混合扩展、负数generic前置处理和切电root生命周期的有意差异，
 继续以 [npatch.md](npatch.md) / [npatch-emp.md](npatch-emp.md) 为机制说明 owner。
 不要为了清单显示“完成”而悄悄抹掉政策残留。
+
+### 英雄赏金标记：受害者位置改为原始击杀者位置（2026-10-30）
+
+- 作者170507称赏金会暴露隐形Tanya、Boris所乘车辆的位置。当前唯一record_the_kill却返回受害者position，world据此spawn_named_anim；原实杀回归只核钱包，漏掉动画出生位置。
+- 实际NPAE TechnoClass::ReceiveDamage702572跳B95D16，保存EBX/EDI后[esp+DC]是原伤害killer。B963D0/B96408按killer等级检查GetsBounty；B95D91..B95D94支付后，B95D99再取同一killer，B95DA0..B95DA9用vt48将GetCoords写入BA7CB4；B95DB1..B95DF7选类型+58或全局+64动画，B95DC4..B95DEA用该坐标、delay0/loop1/flags600/ZAdjust0构造421EA0。Infantry的vt48实际指5F65A0，既有ground_pose::object_get_coords同时负责Foot地形Z及建筑基础中心，不移植第二份坐标算法。此链证明坐标来源，不证明VERA现行RecordKill Terminal支付时机及全部资格/金额公式等价。
+- 结算helper只返回成功获赏的原始killer身份；world在原生成位置改取共享GetCoords并仍调用原spawn_named_anim。controller/passenger/spawn-owner的经验重定向不改变标记身份；无House source或未支付仍不生成。不修改隐形状态，因此本次是标记位置纠正，不是强制解除隐形。
+- 扩展原实际AY Tanya/APOC receiver回归（未直接写钱/动画/坐标）：旧实现MONEY实际在受害者36224,20608,416，断言killer7360,22336,416先红；修后唯一MONEY在killer，正式完整存读保留同ID/坐标。该地图非零地形Z亦由原查询覆盖。实际例1、NP奖励模块7通过；不是自然隐形/完整攻击任务/实际GPU输出，其他英雄/乘车/源退休和类型覆盖仍开放。无新增随机抽样、timer写入、Detach或保存布局。
 
 ### 赏金读取复核：已证明与仍属政策的边界（2026-10-30）
 

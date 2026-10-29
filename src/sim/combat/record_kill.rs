@@ -274,7 +274,7 @@ fn record_the_kill(
     victim_cost: i32,
     callback: KillCallback,
     rules: &RuleSet,
-) -> Option<AnimWorldCoord> {
+) -> Option<u64> {
     let Some(victim) = entities.get(victim_id) else {
         return None;
     };
@@ -340,7 +340,6 @@ fn record_the_kill(
     } else {
         0
     };
-    let location = crate::sim::movement::ground_pose::position_world_coord(&victim.position);
     if let Some(killer_id) = killer_id {
         award_kill_experience(
             entities, rules, interner, killer_id, victim_id, points, houses,
@@ -369,11 +368,7 @@ fn record_the_kill(
             callback,
         );
     }
-    (paid > 0).then_some(AnimWorldCoord {
-        x: location.x,
-        y: location.y,
-        z: location.z,
-    })
+    (paid > 0).then_some(killer_id).flatten()
 }
 
 impl crate::sim::world::Simulation {
@@ -426,7 +421,7 @@ impl crate::sim::world::Simulation {
             .object_type(victim.type_ref(), rules)
             .map_or(0, |object| rules.cost_of(object, victim_house.as_ref()));
         self.record_kill_tag_prefix(victim_id, source, context);
-        let bounty_location = record_the_kill(
+        let bounty_killer = record_the_kill(
             &mut self.substrate.entities,
             &mut self.houses,
             &self.interner,
@@ -437,9 +432,21 @@ impl crate::sim::world::Simulation {
             callback,
             rules,
         );
-        if let Some(location) = bounty_location
+        if let Some(killer) = bounty_killer.and_then(|id| self.entities().get(id))
             && let Some(name) = rules.npatch_rewards.bounty_anim.as_deref()
         {
+            // NPAE TechnoClass::ReceiveDamage702572 -> B95D16:
+            // B95D99..B95DA9 calls the original killer's GetCoords(vt48),
+            // then B95DC4..B95DEA constructs the bounty anim there.
+            let coord = crate::sim::movement::ground_pose::object_get_coords(
+                killer,
+                self.resolved_terrain.as_ref(),
+            );
+            let location = AnimWorldCoord {
+                x: coord.x,
+                y: coord.y,
+                z: coord.z,
+            };
             self.spawn_named_anim(rules, name, location, 0, 0x600, 0);
         }
         #[cfg(any(test, feature = "test-support"))]

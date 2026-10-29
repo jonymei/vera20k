@@ -227,7 +227,10 @@ per-type values inherit the preceding tier. Multipliers are bounded to 0..16.
 Only hostile terminal kills pay, once through the existing KillRecord and
 Economy owners; capture bookkeeping and friendly fire cannot farm cash. The
 balance cannot overflow, and registered `BountyAnim` uses the existing AnimClass
-owner at the victim's position.
+owner at the original killer's GetCoords, not at the victim. This coordinate
+source follows NPAE174 ReceiveDamage702572 -> B95D16, B95D99..B95DA9 and
+AnimClass construction B95DC4..B95DEA. Existing payment timing and arithmetic
+remain the policies described here, not a port of the full native damage hook.
 
 `IsPermaControlled=yes` MindControl warheads retain ordinary capture admission
 but commit directly through the existing permanent-control owner, without a
