@@ -8,6 +8,7 @@ Stop execute. Restart rows continue at original520F40 and stop BEFORE520FAF:
 no intervening InfantryAI or downstream Doing/zone logic is emulated here.
 """
 from pathlib import Path
+import sys
 import struct
 from unicorn import Uc,UC_ARCH_X86,UC_MODE_32,UC_HOOK_CODE
 from unicorn.x86_const import UC_X86_REG_EAX,UC_X86_REG_ECX,UC_X86_REG_EIP,UC_X86_REG_ESP,UC_X86_REG_FPCW
@@ -26,9 +27,9 @@ def query(row):
  def read32(p):return struct.unpack('<I',u.mem_read(p,4))[0]
  def ret(cleanup,result):
   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,result&0xffffffff);u.reg_write(UC_X86_REG_EIP,read32(sp));u.reg_write(UC_X86_REG_ESP,sp+4+cleanup)
- def call(entry,this,args):
+ def call(entry,this,args,*,count=100000):
   sp=STACK_BASE+STACK_SIZE-0x1000;u.mem_write(sp,dwords(RET_MAGIC,*args));u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_ECX,this)
-  run_checked(u,entry,RET_MAGIC,count=100000,required_addresses=[entry]);assert u.reg_read(UC_X86_REG_ESP)==sp+4*(len(args)+1)
+  run_checked(u,entry,RET_MAGIC,count=count,required_addresses=[entry]);assert u.reg_read(UC_X86_REG_ESP)==sp+4*(len(args)+1)
  u.mem_write(VT,bytes(u.mem_read(0x7EB058,0x600)));u.mem_write(TVT,bytes(u.mem_read(0x7F5C70,0x600)))
  u.mem_write(ACTOR,dwords(VT));u.mem_write(TARGET,dwords(TVT));u.mem_write(ACTOR+0x21C,dwords(HOUSE));u.mem_write(HOUSE+0x1EC,bytes([int(row.get('human',True))]))
  if row.get('astar_null'):
@@ -77,9 +78,38 @@ def query(row):
    events.append(['find_path_false',read32(0xA8ED84),list(struct.unpack('<III',u.mem_read(sp+4,12)))]);ret(12,0)
   elif address in [0x520F40,0x520F72,0x520F97,0x520FA9,0x75B03B,0x75B06C,0x75B085,0x75B2BC,0x75B580,0x4D3810,0x521DD0,0x4DC030,0x56D100,0x4D3710,0x4D9FF0,0x41BDD0,0x5F65A0,0x6F7970,0x565730,0x6F77B0,0x5B3040,0x51AA40,0x51AD11,0x4D94B0,0x75ADA0,0x75ACB0,0x4D3920,0x521B40,0x4D896E]:events.append(hex(address))
  u.hook_add(UC_HOOK_CODE,observer)
+ if 'transport_capacity' in row:
+  # Supplied live objects, using original constructor defaults for fields
+  # reached by the object setter and Mission_Enter (Foot4D31E0).
+  pool=SCRATCH+0x30000;u.mem_map(pool,0x4000)
+  for obj,items in [(ACTOR,pool+0x3000),(TARGET,pool+0x3100)]:
+   u.mem_write(obj+0xE0,dwords(0x7E180C,items,1))
+   u.mem_write(obj+0x588,dwords(0x7E91EC))
+   u.mem_write(obj+0x55C,packed(10,10))
+   u.mem_write(obj+0x5C4,dwords(0xffffffff))
+  u.mem_write(ACTOR+0x14,dwords(5));u.mem_write(TARGET+0x14,dwords(7))
+  u.mem_write(ACTOR+0x520,dwords(0xffffffff))
+  u.mem_write(ACTOR+0x9C,dwords(2752,2624,0))
+  u.mem_write(TARGET+0x9C,dwords(2688,2688,0))
+  u.mem_write(TARGET+0x684,b'\xff');u.mem_write(TARGET+0xAC,dwords(5))
+  u.mem_write(TARGET+0x21C,dwords(HOUSE));u.mem_write(TARGET+0x90,b'\x01')
+  u.mem_write(TARGET+0x6C,dwords(800));u.mem_write(TARGET+0x6C4,dwords(pool))
+  u.mem_write(pool+0x5E0,dwords(row['transport_capacity']))
+  u.mem_write(pool+0x388,struct.pack('<d',2.0))
+  u.mem_write(TYPE+0x380,struct.pack('<d',1.0))
+  node=pool+0x2000;node_type=pool+0x2800
+  u.mem_write(TARGET+0x114,dwords(1,node));u.mem_write(node,dwords(0x7EB058))
+  u.mem_write(node+0x6C0,dwords(node_type))
+  u.mem_write(node_type+0x380,struct.pack('<d',2.0))
+  for cell in (CELL,CELL+0x200):u.mem_write(cell+0xE4,dwords(TARGET))
+  scenario=SCRATCH+0x1E000;u.mem_write(0xA8B230,dwords(scenario))
+  call(0x65C6D0,scenario+0x218,[0x12345678],count=200000)
+  loco=pool+0x3200;call(0x4AF540,loco,[])
+  u.mem_write(loco+0xC,dwords(TARGET));u.mem_write(loco+0x14,dwords(1))
+  u.mem_write(TARGET+0x674,dwords(loco+4))
  u.mem_write(ACTOR+0x5A4,dwords(0));u.mem_write(LOCO+0x14,dwords(1));u.mem_write(LOCO+0x34,b'\0');u.mem_write(LOCO+0x1C,dwords(0,0,0))
  initial_timer=dict(start_frame=read32(ACTOR+0x640),duration=read32(ACTOR+0x648))
- call(0x51AA40,ACTOR,[CELL+0x200,1])
+ call(0x51AA40,ACTOR,[TARGET if 'transport_capacity' in row else CELL+0x200,1])
  def base_state():return dict(xyz=list(struct.unpack('<iii',u.mem_read(ACTOR+0x9C,12))),speed=struct.unpack("<d",u.mem_read(ACTOR+0x578,8))[0],retries=read32(ACTOR+0x64C),frame=read32(0xA8ED84),movement_timer=dict(start_frame=read32(ACTOR+0x640),duration=read32(ACTOR+0x648)),reference=list(struct.unpack('<hh',u.mem_read(ACTOR+0x558,4))),nav_queue_count=read32(ACTOR+0x598),nav_queue_entries=list(struct.unpack('<II',u.mem_read(SCRATCH+0x1A000,8))),queue=list(struct.unpack('<iiii',u.mem_read(ACTOR+0x5E0,16))),head=list(struct.unpack('<iii',u.mem_read(LOCO+0x28,12))),destination=list(struct.unpack('<iii',u.mem_read(LOCO+0x1C,12))),nav=read32(ACTOR+0x5A4),moving=u.mem_read(LOCO+0x34,1)[0],motion=u.mem_read(LOCO+0x36,1)[0])
  def state():
   result=base_state()
@@ -90,6 +120,7 @@ def query(row):
  for frame in row.get('frames',[100,108,109]):
   u.mem_write(0xA8ED84,dwords(frame))
   events.clear()
+  if 'transport_capacity' in row:u.mem_write(ACTOR+0x5E0,dwords(0xffffffff))
   call(0x75AEC0,LOCO,[0])
   phase=dict(state=state(),events=list(events))
   if row.get('restart'):
@@ -98,7 +129,30 @@ def query(row):
    run_checked(u,0x520F40,0x520FAF,count=100000,required_addresses=[0x520F40])
    phase['restart']=dict(state=state(),events=list(events))
   phases.append(phase)
- return dict(input=row,initial_movement_timer=initial_timer,setter=before,phases=phases)
+ result=dict(input=row,initial_movement_timer=initial_timer,setter=before,phases=phases)
+ if 'transport_capacity' in row:
+  call(0x737430,TARGET,[ACTOR,0xF,0xA8EC30])
+  result['can_load']=u.reg_read(UC_X86_REG_EAX)
+  # Exclude only the Rate/RNG tail; the idle class receiver and Commence run.
+  sp=STACK_BASE+STACK_SIZE-0x1000;u.mem_write(sp,dwords(RET_MAGIC))
+  u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_ECX,ACTOR)
+  run_checked(u,0x4D9290,0x4D946C,count=100000,required_addresses=[0x4D9290])
+  result['enter']=dict(mission=read32(ACTOR+0xAC),nav=bool(read32(ACTOR+0x5A4)),
+                       cargo_count=read32(TARGET+0x114))
+ return result
+
+def generate_transport_retry():
+ """Only observed outputs consumed by the actual AY transport regression."""
+ result=[]
+ for capacity in (6,5):
+  row=query(dict(mission=7,target=False,retries=10,native_find_path=True,
+                 astar_null=True,destination_x=10,frames=[100],transport_capacity=capacity))
+  result.append(dict(capacity=capacity,can_load=row['can_load'],
+                     setter=dict(nav=bool(row['setter']['nav']),moving=bool(row['setter']['moving'])),
+                     failed_path=dict(nav=bool(row['phases'][0]['state']['nav']),
+                                      moving=bool(row['phases'][0]['state']['moving'])),
+                     enter=row['enter']))
+ return result
 
 def generate():
  rows=[dict(mission=2,target=False,retries=n) for n in (10,1,0,256,0xffffffff)]
@@ -112,6 +166,26 @@ def generate():
  return [query(row) for row in rows]
 
 if __name__=='__main__':
+ if '--transport-retry' in sys.argv:
+  finish_vectors(generate_transport_retry,Path(__file__).with_name('walk_transport_retry.json'),
+   argv=[arg for arg in sys.argv[1:] if arg != '--transport-retry'],
+   provenance=provenance(
+    scope='Same-cell Infantry object destination, failed Walk path and Foot Enter idle continuation.',
+    entry_points={'setter':0x51AA40,'walk':0x75AEC0,'find_path':0x4D3920,'enter':0x4D9290,
+                  'can_load':0x737430,'foot_constructor_defaults':0x4D31E0},
+    assumptions=['AY executable selected by VERA20K_GAMEMD_EXE. Live object/House/type/map fields '
+      'are supplied, not a scene constructor. Sender cell10,10 sub192,64, transport sub128,128; '
+      'equal height0, cargo one Size2, sender Size1, SizeLimit2, capacities6/5. Original vtables '
+      'and Drive/Walk constructors run. Contacts empty, ordinary human Enter7, no Archive, '
+      'no Team or mega-mission; Foot4D32EC initializes mega-mission to-1 (zero is active). '
+      'NavQueue vtable7E91EC and no voice index follow Foot constructor state.',
+      'Original CanLoad, setters, failed-path wrapper, Stop and Enter execute. Enter stops at '
+      '4D946C before Rate/RNG tail, after idle receiver and Commence. No whole InfantryAI, '
+      'full command admission, occupancy lifecycle, nonempty contacts or native SAV replay.'],
+    substitutions=['Only AStar4CBBA0 result NULL, grounded in original same-cell/same-height '
+      '429BF3..429C0A to42A451. Original caller/failure/idle effects execute; no supplied radio '
+      'reply or cargo mutation. OS Interlocked imports retain the existing fixture seam.']))
+  raise SystemExit
  finish_vectors(generate,Path(__file__).with_suffix('.json'),provenance=provenance(
   scope='Original Infantry51AA40 accepted Cell setter then full Walk75AEC0: 18 supplied FindPath failure rows, one actual FindPath4D3920 raw-zone rejection row and four original-wrapper/AStar-NULL-result rows (Clear/Water current-cell contrasts); failure/cancellation consequences and connected520F40..520FAF effective-Move restart prefix. No AStar search failure, full InfantryAI/Doing, successful movement or Rust parity claim.',
   entry_points={'setter':0x51AA40,'foot_setter':0x4D94B0,'walk_constructor':0x75AA90,'process':0x75AEC0,'find_path':0x4D3920,'astar_result_seam':0x4CBBA0,'startup_directions':0x49F2F0,'infantry_failure_receiver':0x51DAF0,'foot_zone_predicate':0x4D3810,'can_reach_zone':0x56D100,'failure_receiver':0x521DD0,'mission_receiver':0x4DC030,'stop':0x75ADA0,'restart_prefix':0x520F40,'restart_endpoint':0x520FAF},

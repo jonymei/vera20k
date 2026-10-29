@@ -25103,8 +25103,8 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; V13 diagnostic retains same-cell Enter cancellation until native caller comparison is closed"]
-    fn aymod_yuri_prime_transport_size_same_cell_retry_diagnostic() {
+    #[ignore = "requires VERA20K_AYMOD_DIR; same-cell Enter follows native cancellation and recovers through a saved fresh approach"]
+    fn aymod_yuri_prime_transport_size_same_cell_retry_matches_native_and_recovers() {
         aymod_yuri_prime_transport_size(true);
     }
 
@@ -25332,6 +25332,28 @@ mod retail_construction_tests {
                 crate::sim::radio::RadioResponse::Roger
             );
             if retry_same_cell {
+                // Infantry51AA40 -> Walk75AEC0 -> FootMissionEnter4D9290.
+                // Same-cell NULL AStar result; original failure and idle run.
+                let native: serde_json::Value = serde_json::from_str(include_str!(
+                    "../tools/spatial_oracle/walk_transport_retry.json"
+                ))
+                .unwrap();
+                let native = native
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["capacity"].as_i64() == Some(i64::from(capacity)))
+                    .unwrap();
+                assert_eq!(
+                    crate::sim::radio::receive::unit_can_enter_radio(
+                        scene.sim(),
+                        carrier,
+                        Some(overflow),
+                        &scene.runtime.resources.rules,
+                    )
+                    .code(),
+                    native["can_load"].as_u64().unwrap() as u8
+                );
                 let sender = scene.sim().entities().get(overflow).unwrap();
                 let vehicle = scene.sim().entities().get(carrier).unwrap();
                 assert_eq!(
@@ -25343,16 +25365,44 @@ mod retail_construction_tests {
                     crate::sim::movement::ground_pose::position_world_xy(&vehicle.position)
                 );
                 enter(&mut scene, overflow);
-                for _ in 0..90 {
+                for phase in ["setter", "failed_path"] {
+                    tick_with_due_commands(&mut scene);
+                    let sender = scene.sim().entities().get(overflow).unwrap();
+                    assert!(!inside(&scene, overflow));
+                    assert_eq!(
+                        sender.navigation.nav_com().is_some(),
+                        native[phase]["nav"].as_bool().unwrap()
+                    );
+                    assert_eq!(
+                        crate::sim::movement::motion_query::is_moving(sender),
+                        native[phase]["moving"].as_bool()
+                    );
+                }
+                for _ in 0..88 {
                     tick_with_due_commands(&mut scene);
                     assert!(!inside(&scene, overflow));
                 }
                 let sender = scene.sim().entities().get(overflow).unwrap();
-                // V13 diagnosis, not a claim that this limitation is desired.
-                // Replace this expectation if the native caller comparison
-                // establishes a missing arrival/entry effect in this chain.
-                assert_eq!(sender.mission.effective().known(), Some(MissionType::Guard));
-                assert_eq!(sender.navigation.nav_com(), None);
+                assert_eq!(
+                    sender.mission.effective().raw(),
+                    native["enter"]["mission"].as_i64().unwrap() as i32
+                );
+                assert_eq!(
+                    sender.navigation.nav_com().is_some(),
+                    native["enter"]["nav"].as_bool().unwrap()
+                );
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(carrier)
+                        .unwrap()
+                        .passenger_role
+                        .cargo()
+                        .unwrap()
+                        .count(),
+                    native["enter"]["cargo_count"].as_u64().unwrap() as u32
+                );
                 assert_eq!(
                     scene
                         .sim()
