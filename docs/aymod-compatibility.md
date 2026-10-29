@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于c2b987e41核A10电脑裂缝：正式AY typed的GAGAP普通/超级半径均15，GAGAP2才10/15；实际三困难AI基地发展中盟军付款/落地/建成GAGAP，敌方实际fog覆盖10格外，完整存读及120帧保持。原三AI巨炮回归1项、gap_supercharge5项通过；无生产修改/新critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于32ea13e2e继续铁幕/护盾混合功能：正常双向Ally，独立施放House实际先IC后FS/先FS后IC两路；第一段完整存读后再发第二种，严格按最后发射的kind和原配置duration覆盖，不取最大值。第二段存读保留timer/kind、两个超武fade、护盾施放方blackout及射手rearm；受保护方blackout逐帧0，已有攻击持续免伤且最终到期恢复实际伤害。新复合1/原单保护复合1/invulnerability6/force_shield8通过。无生产修改/新critic，固定版未动，整体目标开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -14,7 +14,15 @@
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
-- V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+- V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### 铁幕与护盾先后覆盖：正常联盟、两次保存及独立停电（2026-10-29）
+
+- 新增aymod_allied_mixed_protection_replaces_timer_without_sharing_blackout，复用原aymod_existing_attack_survives_launched_protection_and_full_save的唯一aymod_attack_under_launched_protection。正式AY场景的敌方建筑归独立human Defender，另一human ShieldCaster持实际NANRCT/NATECH；Defender持实际NANRCT/NATECH/NAIRON。双方普通Command::Ally以实际House顺序索引互相结盟，生产are_houses_mutually_allied核真，不写alliance表。两个施放者分离，避免把护盾自己停电导致铁幕来源离线误判为混合保护失败。
+- 受害建筑先被普通MTNK Attack实际打伤；两路分别IC→FS及FS→IC。充满Super是明确fixture输入，提供者/正式SPECIAL_PLACE发射、准入和效果仍走生产；不声称自然充能或AI自主选点。第一种保护完整保存恢复后再跑12帧、正常发第二种，必须实际改变kind、重写start且duration恰好等于第二种的实际General值，两种时长确实不同。
+- 实读实际Techno::IronCurtain70E2B0..70E2F4无max/保留更长门，直接覆盖+18C start/+194 duration、清+1A4并覆写+1C4种类。第二次完整保存恢复保留最终kind/timer、最后超武及原护盾的fade、护盾施放方blackout和射手rearm。Defender的blackout在第二次发射、恢复和后续每帧为0；ShieldCaster确有独立blackout，不把盟友受保护等同盟友也断电。
+- 不重新下Attack或篡改伤害/保护时长：原目标一直保留，最终保护期间必须持续实际开火但HP不减，按最后timer自然到期后原攻击真实伤害恢复。原IC-only/FS-only对照保留并通过。本轮新增混合复合1（两方向）、原单保护复合1（两种）及invulnerability6、force_shield8通过，共16个测试；没有跑全仓库。
+- 仅测试/台账，无生产状态、RNG、timer写入、Detach或保存布局新增，不需玩法critic；无GUI、MOD配置/原始存档/固定构建或发布改动。混合保护基本替换/伤害/存读和正常双向结盟不再列纯待验；联盟撤销、受保护对象/施放源退休或换主、多AI自主施放/反击和画面仍开放。F11光照门禁与Return Dubai暂停不变。
 
 ### A10电脑裂缝：普通配置已是15格，不凭“未切超级”加AI政策（2026-10-29）
 
@@ -1476,7 +1484,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 船厂维修免伤已按737CE4→7E0495修正：仅NP伤害查询排除UnitRepair，不误用Naval；其他工厂查询保留，真实付费维修受击/修满/释放及stock保护回归通过。
 不是直接把船伤害转给船厂；实际AY Return Dubai已补正常付费修船/受击前存读/另一DEST真实炮击在维修联系仍活跃时损伤船及受击后存读，见当前V10节。共格船厂的合法AoE不取消，其他家族/持续攻防与GUI仍待验。
 飞机维修建筑点击已按417E24的NP无条件跳转接入：Select不被stock NoEnter覆盖，Alt仍走Move；实际GADEPT/GAYARD运动与无误入回归通过，详见当前检查点。
-铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；实际AY已有Attack在正式IC/FS发射后保持目标、保护免伤、保存恢复和自然到期恢复伤害已验；实际ForceShield fade提示一次/提示后存读不重播、blackout remaining1精确清除和用电实射恢复已验；三House单向联盟两发重叠、独立blackout/fade/接收刷新与三次存读已验；混合保护、正常外交输入、反击/直接脚本与自主多AI仍待验。
+铁幕/力场自动新选敌和对象点击准入已接6F826E→7E0AFC及700444→7E0B35，包含Immune筛除、C4/渗透的共享准入、到期恢复和实际AY Guard保存恢复验收；实际AY已有Attack在正式IC/FS发射后保持目标、保护免伤、保存恢复和自然到期恢复伤害已验；实际ForceShield fade提示一次/提示后存读不重播、blackout remaining1精确清除和用电实射恢复已验；三House单向联盟两发重叠、独立blackout/fade/接收刷新与三次存读已验；正常双向Ally及独立施放House的IC→FS/FS→IC实际覆盖、两段完整存读、最后timer到期恢复伤害和独立blackout已验；混合保护特殊退休/换主、联盟撤销、反击/直接脚本与自主多AI仍待验。
 光棱支援招募已按44B388→7E04BB接LastOperational采样，真实Off/存读/独立开火/On/重新联击通过；不现场重算供电，不取消已排定束，EMP/缺电/绘制边界仍开放。
 Arcing/SubjectToCliffs联合射程分支已接6F7404→C2D5ED，覆盖实体/mapless、桥面/射线及真实AY普通/精英巨炮typed查询；其他精英退射程原因、实际炮口与攻击验收仍开放。
 作者明确点名的TELE已核实际主槽12→13、副槽11→12格，实际边界查询及普通实射→经验receiver晋升→存读→精英建筑实射通过，见对应节；不是通用精英加射程补丁，也不冒称最远炮口/车辆抬升已验。

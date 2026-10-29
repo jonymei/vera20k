@@ -3732,6 +3732,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; launched IC/FS keeps an existing attack through protection, save and natural expiry"]
     fn aymod_existing_attack_survives_launched_protection_and_full_save() {
+        aymod_attack_under_launched_protection(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; reciprocal diplomacy, mixed IC/FS replacement and saved independent blackout"]
+    fn aymod_allied_mixed_protection_replaces_timer_without_sharing_blackout() {
+        aymod_attack_under_launched_protection(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_attack_under_launched_protection(mixed: bool) {
         use crate::sim::combat::TargetKind;
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::superweapon::chronosphere_tests::charge_super;
@@ -3752,6 +3764,14 @@ mod retail_construction_tests {
                 "ProtectedDefender",
                 LaunchCountry::from_country_index(u32::from(country.0)),
             );
+            let shield_owner = if mixed {
+                scene.add_human_house(
+                    "MixedShieldCaster",
+                    LaunchCountry::from_country_index(u32::from(country.0)),
+                )
+            } else {
+                defender
+            };
             {
                 let runtime = &mut scene.runtime;
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -3770,6 +3790,24 @@ mod retail_construction_tests {
                     cells_nearest((i32::from(at.rx()) + 16, i32::from(at.ry()))),
                     &["NANRCT", "NATECH", "NAIRON"],
                 );
+                if mixed {
+                    spawn_on_free_cells(
+                        sim,
+                        rules,
+                        shield_owner,
+                        cells_nearest((i32::from(at.rx()) + 24, i32::from(at.ry()))),
+                        &["NANRCT", "NATECH"],
+                    );
+                    for (from, to) in [(defender, shield_owner), (shield_owner, defender)] {
+                        let house_index =
+                            sim.houses.order().iter().position(|&id| id == to).unwrap() as i32;
+                        sim.queue_command(CommandEnvelope::new(
+                            from,
+                            sim.session.tick() + 1,
+                            Command::Ally { house_index },
+                        ));
+                    }
+                }
                 let owner = sim.entities().get(tank).unwrap().owner();
                 sim.queue_command(CommandEnvelope::new(
                     owner,
@@ -3792,14 +3830,26 @@ mod retail_construction_tests {
                 }) && fired,
                 "ordinary Attack must damage the victim before protection"
             );
-            let sw = {
+            if mixed {
+                assert!(crate::map::houses::are_houses_mutually_allied(
+                    scene.sim().house_alliances(),
+                    scene.sim().interner.resolve(defender),
+                    scene.sim().interner.resolve(shield_owner),
+                ));
+            }
+            let mut launch_owner = if kind == InvulnKind::ForceShield {
+                shield_owner
+            } else {
+                defender
+            };
+            let mut sw = {
                 let sim = &mut scene.runtime.simulation;
                 // Charged Super is the fixture input boundary; providers and
                 // SPECIAL_PLACE launch are real, natural charging is separate.
-                let sw = charge_super(sim, defender, name);
+                let sw = charge_super(sim, launch_owner, name);
                 let at = sim.entities().get(target).unwrap().position;
                 sim.queue_command(CommandEnvelope::new(
-                    defender,
+                    launch_owner,
                     sim.session.tick() + 1,
                     Command::LaunchSuperWeapon {
                         sw_type_id: sw,
@@ -3809,7 +3859,97 @@ mod retail_construction_tests {
                 ));
                 sw
             };
+            let mut shield_sw = (kind == InvulnKind::ForceShield).then_some(sw);
             tick_with_due_commands(&mut scene);
+            let mut kind = kind;
+            if mixed {
+                let first = scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .unwrap()
+                    .invulnerability
+                    .as_ref()
+                    .unwrap();
+                assert_eq!(first.kind(), kind);
+                let first_timer = first.timer();
+                let pristine = scene.sim().resolved_terrain().unwrap().clone();
+                let bytes = save_scene(
+                    &scene,
+                    "AY first protection before allied mixed replacement",
+                );
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(
+                    scene
+                        .sim()
+                        .entities()
+                        .get(target)
+                        .unwrap()
+                        .invulnerability
+                        .as_ref()
+                        .unwrap()
+                        .timer(),
+                    first_timer
+                );
+                for _ in 0..12 {
+                    tick_with_due_commands(&mut scene);
+                }
+                let second_name = if kind == InvulnKind::IronCurtain {
+                    kind = InvulnKind::ForceShield;
+                    launch_owner = shield_owner;
+                    "ForceShieldSpecial"
+                } else {
+                    kind = InvulnKind::IronCurtain;
+                    launch_owner = defender;
+                    "IronCurtainSpecial"
+                };
+                let sim = &mut scene.runtime.simulation;
+                sw = charge_super(sim, launch_owner, second_name);
+                if kind == InvulnKind::ForceShield {
+                    shield_sw = Some(sw);
+                }
+                let at = sim.entities().get(target).unwrap().position;
+                sim.queue_command(CommandEnvelope::new(
+                    launch_owner,
+                    sim.session.tick() + 1,
+                    Command::LaunchSuperWeapon {
+                        sw_type_id: sw,
+                        target_rx: at.rx(),
+                        target_ry: at.ry(),
+                    },
+                ));
+                tick_with_due_commands(&mut scene);
+                let second = scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .unwrap()
+                    .invulnerability
+                    .as_ref()
+                    .unwrap()
+                    .timer();
+                // Techno::IronCurtain70E2B0..70E2F4 overwrites the timer
+                // and ForceShield kind; it does not keep the longer protection.
+                assert!(second.start_frame() > first_timer.start_frame());
+                let rules = &scene.runtime.resources.rules.general;
+                assert_eq!(
+                    second.duration(),
+                    if kind == InvulnKind::IronCurtain {
+                        rules.iron_curtain_duration
+                    } else {
+                        rules.force_shield_duration
+                    }
+                );
+                assert_ne!(second.duration(), first_timer.duration());
+                let sim = scene.sim();
+                assert_eq!(
+                    sim.power_states[&defender].blackout_remaining(sim.session.binary_frame()),
+                    0
+                );
+                assert!(
+                    sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame()) > 0
+                );
+            }
             let target_entity = scene.sim().entities().get(target).unwrap();
             let shield = target_entity
                 .invulnerability
@@ -3826,9 +3966,11 @@ mod retail_construction_tests {
             for elapsed in 0..duration + 240 {
                 if elapsed == 12 {
                     let sim = scene.sim();
-                    let fade = sim.super_weapons.get(&defender).unwrap()[&sw].fade();
+                    let fade = sim.super_weapons.get(&launch_owner).unwrap()[&sw].fade();
+                    let shield_fade =
+                        shield_sw.map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade());
                     let blackout =
-                        sim.power_states[&defender].blackout_remaining(sim.session.binary_frame());
+                        sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame());
                     let rearm = sim.entities().get(tank).unwrap().rearm_timer;
                     let pristine = sim.resolved_terrain().unwrap().clone();
                     let bytes = save_scene(&scene, "AY existing attack under launched protection");
@@ -3844,14 +3986,43 @@ mod retail_construction_tests {
                             .timer(),
                         protection
                     );
-                    assert_eq!(sim.super_weapons.get(&defender).unwrap()[&sw].fade(), fade);
                     assert_eq!(
-                        sim.power_states[&defender].blackout_remaining(sim.session.binary_frame()),
+                        sim.super_weapons.get(&launch_owner).unwrap()[&sw].fade(),
+                        fade
+                    );
+                    assert_eq!(
+                        shield_sw.map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade()),
+                        shield_fade
+                    );
+                    assert_eq!(
+                        sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame()),
                         blackout
                     );
+                    if mixed {
+                        assert_eq!(
+                            sim.entities()
+                                .get(target)
+                                .unwrap()
+                                .invulnerability
+                                .as_ref()
+                                .unwrap()
+                                .kind(),
+                            kind
+                        );
+                        assert_eq!(
+                            sim.power_states[&defender].blackout_remaining(sim.session.binary_frame()),
+                            0
+                        );
+                    }
                     assert_eq!(sim.entities().get(tank).unwrap().rearm_timer, rearm);
                 }
                 let frame = scene.sim().session.binary_frame();
+                if mixed {
+                    assert_eq!(
+                        scene.sim().power_states[&defender].blackout_remaining(frame),
+                        0
+                    );
+                }
                 assert_eq!(
                     scene
                         .sim()
