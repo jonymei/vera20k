@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-30）
 
-- 本轮基线a6e2feab2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：V13已缩至同格不同subcell重入，不是远距寻路/容量残留。实际BFRT/HTK载具28,87中心128,128，sender同格192,64；Enter后首次moving/保留对象Nav，下一帧Nav清/moving停，随后Guard。新增aymod_yuri_prime_transport_size_same_cell_retry_diagnostic复用唯一fixture，双载具90帧保留当前诊断（不当原生正确政策）；原换位置完整重载测试保留。实际2、failed_path6、walk_host4共12通过，初错模块0项已纠正且不计数。实际AY429BF3..429C0A→42A451拒同格同高度零路径；复用现有walk_failed_path并补Scenario原生RNG初始化/空路径首项后，原75AEC0→4D3920/+500/Stop/空setter有同格取消的有限执行证据；AStar结果按已读分支供NULL，Nav是Cell非真实transport，未执行完整对象入场/后续MissionEnter，不据此关闭V13或强造自动入车。仅测试/台账，无生产修复/新critic；固定版/MOD/原档/GUI/发布均未动，暂停与门禁保持。下一安全动作补同格Object Nav/载具占格条件的原生调用者对照，再决定差异或偏离政策，不先改路径/装载owner。
+- 本轮基线741a326fe，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。V13补真实Unit对象Nav/同格载具与radio的有限原生执行：两种容量均准入Roger，原setter接受对象/开始移动，空路径失败后清Nav/停止，Cargo不增；后续原MissionEnter到Rate前仍Enter，不能与Rust最终Guard等同，不关闭完整生命周期。实际双载具测试新增取消后完整存读、普通Move离开再Enter成功及登车后存读，两项通过。隔离工具的稀疏表原与AY补丁代码重叠，已迁出映像并以先失败后通过的单项回归保护；原零售语料--check输出不变。Python全套937项：1失败（独立hashbrown特性图差异）、6错误（Windows符号链接权限）、49跳过；不报全绿。仅工具/测试/台账，无新玩法政策/保存布局/critic。无Cargo遗留；未推送/PR，固定构建/MOD/原档/GUI未动。下一安全动作继续V13双方contact清理及InfantryAI/任务调度的原生差异，或其他高频功能残余；不强装Cargo、不调AI权重，Return Dubai弱攻势暂停和V01/F11门禁保持。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -22,7 +22,7 @@
 - Building+30C NaturalParticleSystem在当前Battle/XMP03T4和Return Dubai正式typed列表中均为None/位置0，通用非空配置生命周期仍未实现；不是+308/+310或RefinerySmoke，证据与适用性见下文唯一对应节。不能把NaturalSmokeLocation擅作别名。
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面/对空YAGGUN建筑调度三等级及双计时已验，其他倍率/特殊回调仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
-- V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/其他脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+- V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/其他脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项历史结果不覆盖本轮；本轮937项失败/错误及独立原因见当前首条和V13节。
 
 ### A07实际资源再生：无矿标记与另一House采矿并存（2026-10-29）
 
@@ -209,6 +209,11 @@
 - 静态实读当前AY：AStar429BF3..429C0A比较起终cell与高度，匹配则42A451..42A45A清EAX返回NULL；Walk75ACB0 MoveTo只设置目标/移动字节，没有直接登车；75AFEE..75B067失败后重新取live目的地，CloseEnough且未tether时经class+480清目的地。复用existing tools.spatial_oracle.walk_failed_path.query，Enter7、空路径首项-1、同格(10,10)子位置64,64到中心128,128；补现有fixture缺的Scenario指针及原生65C6D0初始化随机流，执行原51AA40 Setter/75AEC0/4D3920/51DAF0/Stop及后续空setter。AStar仅在原4CBBA0边界按已读同格分支供NULL；没有替换失败清理、Setter或Stop。最终原始XYZ不动，NavCom0、Walk destination0、moving/motion0，当前mission仍Enter7；未继续原生MissionEnter/完整InfantryAI。因此这是同格取消路径的一致证据，不是整个transport对象链已原生回放。
 - 原生试验边界必须保留：第一次缺Scenario在65C82E越界；补原生seed后，fixture旧路径首项2导致走另一条已有路径，不可拿它当反证；供与实际一致的空首项-1后才执行上述失败链。该试验Nav目标为Cell，不含真实BFRT对象/同格载具占格与radio准入，没有证明它们不触发额外原生效果。未新增工具文件/原生语料/寄存器或调用日志入库，不冒称所有原生重试皆停滞。
 - 最终两实际（新诊断及原容量）2、walk_failed_path_tests6、walk_host::tests4共12通过。failed-path第一次多写模块名导致0项，已纠正，不计空过滤器。无生产修复/状态/RNG/timer/Detach/保存布局变更或新玩法critic；原路径失败/任务调度仍走各自owner。频率目前此固定同格两载具序列可复现，风险为运输装载需要额外Move。下一步补对象Nav、载具占格/radio及后续原生MissionEnter的连接，再决定引擎差异或明确非原生政策；不先加容量/强装Cargo/伪造PerCell。未启动GUI、改MOD/原档/固定版或发布。
+
+- 续验先纠正隔离工具自身：walk_failed_path原0xC00000稀疏表会覆盖AY的实际补丁C2BD1A，现移至映像外0x21000000并单独映射。新Python回归在合成扩展映像内放哨兵，旧实现明确清零失败，新实现保留代码且cell索引正确；不执行伪造的游戏代码。原零售walk_failed_path --check保持既有输出，不写语料。此前Cell有限路径未经过该NP分支，不能外推对象链；第一轮对象失败在被覆盖代码，不是原游戏崩溃。
+- 修正工具后，复用同一query作scratch对象对照：原Unit/Infantry vtable、实际Drive构造器4AF540、Foot构造的NavQueue vtable7E91EC、普通Guard/Foot字段、双方contacts空槽；对象/House/Size等为供应状态，不是完整场景构造。sender同格192,64、transport中心128,128，单个Size2旧cargo，sender Size1、SizeLimit2，容量6/5两次均执行原Unit737430得到Roger1。原Infantry51AA40接真实对象Nav并移动；实际FindPath包装内仅AStar返回按已读同格分支供NULL，随后原Stop/空setter清Nav、停步，坐标不变、cargo仍1。再执行原FootMissionEnter4D9290到4D946C的Rate/RNG尾之前，仍Enter7，无额外入车；没有替换radio答复、装载或Stop。原目标缺locomotor会走COM E_POINTER，补真实Drive后才继续；NavQueue/语音索引初始化亦须供应，不能把未构造字段的fault视为游戏缺陷。
+- 对照尚未闭合：此有限原生MissionEnter仍Enter，而实际Rust在90帧后Guard；还需双方contact/Archive、原InfantryAI与调度次序，不能将这差异直接归因到MissionEnter或宣布运输功能已等价。本轮不改生产路径/任务政策。实际两项现均要求普通Move后原拒绝者真正重新上车；同格诊断另在取消状态完整存读，恢复仍Guard/Nav空/在外，再走正常恢复链；最后再次完整存读，YURIPR和E1均仍在车内且总Size3。最终定向Rust2通过，无新增生产状态、RNG调用、timer/Detach或保存布局，无新玩法critic。
+- Python最终候选全套937项，1失败/6错误/49跳过（881通过）：六项cache/seed的Windows WinError1314符号链接权限错误；唯一cargo_run依赖图比较失败独立复跑仍出现，差异限hashbrown0.16.1的workspace默认features与core子集，相关manifest/lock/runner未改，不为本链修无关依赖。新单项回归及原零售语料复验均通过。固定EXE仍42,237,952字节、修改时间2026-10-26 20:57:58；无游戏启动、MOD/原档/固定版/发布变更。
 
 ### F28作者漏项：矿石精炼器的独立定时收入（2026-10-29）
 
@@ -1828,7 +1833,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V09 / P2 / 活跃10类基本实际消费者已验，扩展范围开放 | 其他 stock 箱子与无键补丁 | 正式XMP03T4/Return Dubai均10种非零效果，未移植Napalm/ICBM/Gas/Tiberium无随机/初始固定/动作108消费者。F02/F03加上实际Armor/Firepower、HealBase、Speed、Veteran、Money/Reveal/Unit的基本效果与存读通过；Unit实得AMCV并正常移动，资金/迷雾保留独立House对照。不扩大为全部随机单位、放置失败/重入、其他地图/模式、动态触发及画面通过 |
 | V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、AY三组中心工程师夺取/三次存读/新主支持及运动恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
 
-| V13 / P1 / 双载具同格重试已复现，原生取消链部分一致，完整对象链待核 | 满员拒绝过的原E1与BFRT/HTK同格不同子位置时再次Enter清Nav回Guard，普通Move离开后重入可用 | 只读CanEnter给Roger、Cargo2/6，不能归因容量未清；Enter步行/终点准入待追 | 已保留实际诊断及原生空路径/Stop/取消有限执行；Cell Nav而非真实载具，完整对象Nav/占格/radio及后续MissionEnter仍待对照。不强装Cargo/改Size或扩大容量，见V13节 |
+| V13 / P1 / 双载具同格重试已复现，原生取消链部分一致，完整对象链待核 | 满员拒绝过的原E1与BFRT/HTK同格不同子位置时再次Enter清Nav回Guard，普通Move离开后重入可用 | 只读CanEnter给Roger、Cargo2/6，不能归因容量未清；Enter步行/终点准入待追 | 实际取消后存读/走开重入及登车存读已验；原生真实Unit对象Nav/同格/radio至MissionEnter的有限执行亦取消且未装载，但原生仍Enter、Rust最终Guard的完整contact/调度链待核。不强装Cargo/改Size或扩大容量，见V13节 |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
 秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，

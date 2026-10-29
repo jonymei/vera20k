@@ -15,11 +15,13 @@ from tools.native_oracle import load_image,run_checked,STACK_BASE,STACK_SIZE,SCR
 from tools.spatial_oracle.map_queries import dwords,packed
 
 ACTOR,TARGET,TYPE,HOUSE,LOCO,VT,TVT,CELL,CVT,WEAPON,WEAPON_SLOT,RULES=[SCRATCH+i*0x2000 for i in range(12)]
-MAP,TABLE,DUMMY=0x87F7E8,0xC00000,0xABDC50
+# AY's NP code occupies the old 0xC00000 sparse-table range.
+MAP,TABLE,DUMMY=0x87F7E8,0x21000000,0xABDC50
 
 def query(row):
  u=Uc(UC_ARCH_X86,UC_MODE_32);load_image(u)
  u.mem_map(STACK_BASE,STACK_SIZE);u.mem_map(SCRATCH,0x20000);u.mem_map(RET_MAGIC,0x1000)
+ u.mem_map(TABLE,0x100000)
  u.reg_write(UC_X86_REG_FPCW,0x0E7F)
  def read32(p):return struct.unpack('<I',u.mem_read(p,4))[0]
  def ret(cleanup,result):

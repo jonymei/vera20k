@@ -1728,8 +1728,10 @@ mod retail_construction_tests {
                                 .then_some((product.entity_id.unwrap(), factory.balance()))
                         });
                     if let Some((id, balance)) = pending {
-                        let bytes =
-                            save_scene(&scene, "AY paid Soviet war-factory replacement in progress");
+                        let bytes = save_scene(
+                            &scene,
+                            "AY paid Soviet war-factory replacement in progress",
+                        );
                         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
                         assert!(
                             scene
@@ -1848,7 +1850,8 @@ mod retail_construction_tests {
                                 && entity.is_ai_alive()
                                 && !entity.lifecycle.in_limbo()
                                 && sim.interner.resolve(entity.type_ref()) == "NATECH"
-                                && entity.mission.effective().known() != Some(MissionType::Construction)
+                                && entity.mission.effective().known()
+                                    != Some(MissionType::Construction)
                         })
                 })
             }),
@@ -2057,7 +2060,8 @@ mod retail_construction_tests {
                         && refineries.iter().all(|&id| {
                             let entity = sim.entities().get(id).unwrap();
                             !entity.lifecycle.in_limbo()
-                                && entity.mission.effective().known() != Some(MissionType::Construction)
+                                && entity.mission.effective().known()
+                                    != Some(MissionType::Construction)
                         })
                         && !live_type(&scene, owner, "NAWEAP").is_empty()
                         && (!cashless
@@ -2328,7 +2332,9 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; a Soviet AI unable to fund recovery sends original miners hunting and attacks after a save"]
     fn aymod_broke_soviet_ai_hunts_with_original_miners_after_load() {
         use crate::map::entities::EntityCategory;
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scene, computers) = aymod_two_ai_economies_with(1, |session| {
@@ -2414,7 +2420,8 @@ mod retail_construction_tests {
             let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
             let warhead = sim.interner.intern("Super");
             for id in lost {
-                let Some(entity) = sim.entities().get(id).filter(|entity| entity.is_ai_alive()) else {
+                let Some(entity) = sim.entities().get(id).filter(|entity| entity.is_ai_alive())
+                else {
                     continue;
                 };
                 let hp = entity.health.current();
@@ -2976,10 +2983,9 @@ mod retail_construction_tests {
         assert!(
             (0..2400).any(|_| {
                 step(&mut scene);
-                computers
-                    .iter()
-                    .enumerate()
-                    .all(|(index, owner)| scene.sim().houses[owner].economy().score() > incomes[index])
+                computers.iter().enumerate().all(|(index, owner)| {
+                    scene.sim().houses[owner].economy().score() > incomes[index]
+                })
             }),
             "both restored Yuri economies must continue earning, not just retain old scores"
         );
@@ -3719,7 +3725,8 @@ mod retail_construction_tests {
                     .unwrap();
                 }
             }
-            let recharging = scene.sim().super_weapons.get(&owner).unwrap()[&sw].charge_start_tick();
+            let recharging =
+                scene.sim().super_weapons.get(&owner).unwrap()[&sw].charge_start_tick();
             let bytes = save_scene(
                 &scene,
                 "AY AI mutation completed with independent cooldowns",
@@ -5115,10 +5122,9 @@ mod retail_construction_tests {
                     .iter()
                     .any(|event| event.attacker_id == shooter)
             );
-            rider_fired |= output
-                .fire_events
-                .iter()
-                .any(|event| event.attacker_id == rider && event.target == TargetKind::Entity(shooter));
+            rider_fired |= output.fire_events.iter().any(|event| {
+                event.attacker_id == rider && event.target == TargetKind::Entity(shooter)
+            });
         }
         assert!(
             rider_fired,
@@ -5151,7 +5157,8 @@ mod retail_construction_tests {
                 tick_with_due_commands(&mut scene);
                 let tank = scene.sim().entities().get(carrier).unwrap();
                 (tank.position.rx(), tank.position.ry()) == exit_cell
-                    && crate::sim::movement::ground_pose::position_world_xy(&tank.position) != position
+                    && crate::sim::movement::ground_pose::position_world_xy(&tank.position)
+                        != position
             }),
             "the same tank must regain ordinary movement after EMP expires"
         );
@@ -5426,7 +5433,9 @@ mod retail_construction_tests {
                     .unwrap()
                     .pending_building_fire
                     .pending()
-                    .is_some_and(|pending| matches!(pending.fire(), DelayedFire::SupportBeam { .. }))
+                    .is_some_and(|pending| {
+                        matches!(pending.fire(), DelayedFire::SupportBeam { .. })
+                    })
             }));
             let pending = scene
                 .sim()
@@ -5984,7 +5993,8 @@ mod retail_construction_tests {
             let owner = sim.entities().get(master).unwrap().owner();
             let at = sim.entities().get(master).unwrap().position;
             let center = (i32::from(at.rx()), i32::from(at.ry()));
-            let power = spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["GAPOWR"])[0];
+            let power =
+                spawn_on_free_cells(sim, rules, owner, cells_nearest(center), &["GAPOWR"])[0];
             let sites = cells_nearest(center)
                 .into_iter()
                 .filter(|&(x, y)| {
@@ -6205,7 +6215,10 @@ mod retail_construction_tests {
                     .unwrap()
                     .pending_building_fire
                     .pending()
-                    .is_some_and(|pending| matches!(pending.fire(), DelayedFire::SupportBeam { .. }))
+                    .is_some_and(|pending| matches!(
+                        pending.fire(),
+                        DelayedFire::SupportBeam { .. }
+                    ))
             );
             if output
                 .fire_events
@@ -7252,7 +7265,8 @@ mod retail_construction_tests {
                     0
                 );
                 assert!(
-                    sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame()) > 0
+                    sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame())
+                        > 0
                 );
             }
             let target_entity = scene.sim().entities().get(target).unwrap();
@@ -7272,10 +7286,10 @@ mod retail_construction_tests {
                 if elapsed == 12 {
                     let sim = scene.sim();
                     let fade = sim.super_weapons.get(&launch_owner).unwrap()[&sw].fade();
-                    let shield_fade =
-                        shield_sw.map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade());
-                    let blackout =
-                        sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame());
+                    let shield_fade = shield_sw
+                        .map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade());
+                    let blackout = sim.power_states[&shield_owner]
+                        .blackout_remaining(sim.session.binary_frame());
                     let rearm = sim.entities().get(tank).unwrap().rearm_timer;
                     let pristine = sim.resolved_terrain().unwrap().clone();
                     let bytes = save_scene(&scene, "AY existing attack under launched protection");
@@ -7296,11 +7310,13 @@ mod retail_construction_tests {
                         fade
                     );
                     assert_eq!(
-                        shield_sw.map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade()),
+                        shield_sw
+                            .map(|id| sim.super_weapons.get(&shield_owner).unwrap()[&id].fade()),
                         shield_fade
                     );
                     assert_eq!(
-                        sim.power_states[&shield_owner].blackout_remaining(sim.session.binary_frame()),
+                        sim.power_states[&shield_owner]
+                            .blackout_remaining(sim.session.binary_frame()),
                         blackout
                     );
                     if mixed {
@@ -7315,7 +7331,8 @@ mod retail_construction_tests {
                             kind
                         );
                         assert_eq!(
-                            sim.power_states[&defender].blackout_remaining(sim.session.binary_frame()),
+                            sim.power_states[&defender]
+                                .blackout_remaining(sim.session.binary_frame()),
                             0
                         );
                     }
@@ -7414,7 +7431,9 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; boarded Engineer IFV repairs a normally docked aircraft across full saves"]
     fn aymod_engineer_ifv_repairs_a_docked_orca_across_load() {
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::world::{
@@ -7615,10 +7634,9 @@ mod retail_construction_tests {
         assert!(
             (0..1800).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
-                fired |= output
-                    .fire_events
-                    .iter()
-                    .any(|event| event.attacker_id == ifv && event.target == TargetKind::Entity(plane));
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == ifv && event.target == TargetKind::Entity(plane)
+                });
                 fired && scene.sim().entities().get(plane).unwrap().health.current() > hp
             }),
             "the IFV must fire its repair weapon and increase the parked plane's HP"
@@ -7765,7 +7783,10 @@ mod retail_construction_tests {
                 .into_iter()
                 .find(|&(x, y)| {
                     let near = |p: crate::sim::components::Position| {
-                        (x - i32::from(p.rx())).abs().max((y - i32::from(p.ry())).abs()) <= 1
+                        (x - i32::from(p.rx()))
+                            .abs()
+                            .max((y - i32::from(p.ry())).abs())
+                            <= 1
                     };
                     near(at)
                         && near(friend)
@@ -7780,7 +7801,13 @@ mod retail_construction_tests {
                                             crate::sim::movement::locomotor::MovementLayer::Ground,
                                         )
                                     })
-                                    && sim.overlay_grid.as_ref().unwrap().cell(x, y).overlay_id.is_none()
+                                    && sim
+                                        .overlay_grid
+                                        .as_ref()
+                                        .unwrap()
+                                        .cell(x, y)
+                                        .overlay_id
+                                        .is_none()
                             })
                 })
                 .expect("an empty adjacent crate cell inside both units' radius");
@@ -7803,7 +7830,13 @@ mod retail_construction_tests {
             ));
         }
         let granted = |scene: &HeadlessScenario, id| {
-            scene.sim().entities().get(id).unwrap().cloak.as_ref()
+            scene
+                .sim()
+                .entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
                 .is_some_and(|cloak| cloak.crate_granted())
         };
         for _ in 0..600 {
@@ -7812,15 +7845,29 @@ mod retail_construction_tests {
                 break;
             }
         }
-        assert!(granted(&scene, tank), "ordinary Drive must collect the Cloak crate");
-        assert!(granted(&scene, infantry), "nearby infantry receives the instance ability");
+        assert!(
+            granted(&scene, tank),
+            "ordinary Drive must collect the Cloak crate"
+        );
+        assert!(
+            granted(&scene, infantry),
+            "nearby infantry receives the instance ability"
+        );
         let bytes = save_scene(&scene, "AY Cloak crate");
         scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
         assert!(granted(&scene, tank) && granted(&scene, infantry));
         for _ in 0..300 {
             tick_with_due_commands(&mut scene);
             if [tank, infantry].into_iter().all(|id| {
-                scene.sim().entities().get(id).unwrap().cloak.as_ref().unwrap().is_fully_cloaked()
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .unwrap()
+                    .cloak
+                    .as_ref()
+                    .unwrap()
+                    .is_fully_cloaked()
             }) {
                 return;
             }
@@ -8582,7 +8629,9 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     fn aymod_rocketeer_fall(with_saves: bool, ground_guard: bool) {
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
         let (mut scene, actor, ground_target) = aymod_nearby_pair("JUMPJET", "GAPOWR", true);
@@ -8993,7 +9042,9 @@ mod retail_construction_tests {
                             && sim.terrain_cell_level(x, y) == Some(at.z())
                             && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
                             && sim.occupancy().get(x, y).is_none_or(|cell| {
-                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                                cell.is_empty_on(
+                                    crate::sim::movement::locomotor::MovementLayer::Ground,
+                                )
                             })
                             && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
                     })
@@ -9162,7 +9213,9 @@ mod retail_construction_tests {
                                 .unwrap()
                                 .is_walkable_for_infantry(x, y)
                             && scene.sim().occupancy().get(x, y).is_none_or(|cell| {
-                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                                cell.is_empty_on(
+                                    crate::sim::movement::locomotor::MovementLayer::Ground,
+                                )
                             })
                     })
                     .expect("a real free destination for the awarded vehicle");
@@ -9248,7 +9301,9 @@ mod retail_construction_tests {
                         })
                         && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
                 })
-                .expect("an adjacent Veteran crate cell also inside the untrainable building radius");
+                .expect(
+                    "an adjacent Veteran crate cell also inside the untrainable building radius",
+                );
             assert!(crate::sim::crates::place_crate(
                 sim,
                 &resources.rules,
@@ -9769,7 +9824,9 @@ mod retail_construction_tests {
                             && sim.terrain_cell_level(x, y) == Some(at.z())
                             && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
                             && sim.occupancy().get(x, y).is_none_or(|cell| {
-                                cell.is_empty_on(crate::sim::movement::locomotor::MovementLayer::Ground)
+                                cell.is_empty_on(
+                                    crate::sim::movement::locomotor::MovementLayer::Ground,
+                                )
                             })
                             && sim.overlay_grid().unwrap().cell(x, y).overlay_id.is_none()
                     })
@@ -10275,7 +10332,8 @@ mod retail_construction_tests {
                             .ok()
                             .zip(u16::try_from(y).ok())
                             .is_some_and(|(x, y)| {
-                                sim.terrain_cell_level(x, y) == sim.terrain_cell_level(at.rx(), at.ry())
+                                sim.terrain_cell_level(x, y)
+                                    == sim.terrain_cell_level(at.rx(), at.ry())
                             })
                 })
                 .collect::<Vec<_>>();
@@ -11427,7 +11485,9 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; moving cloaked SNIPE crosses a fixed DOG circle across hot saves"]
     fn aymod_moving_cloaked_target_crosses_fixed_sensors_after_load() {
         use crate::rules::terrain_rules::LandType;
-        use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
+        use crate::sim::combat::{
+            TargetKind, fire_error::FireError, fire_error_world::FireSubject,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::movement::ground_pose::position_world_coord;
@@ -11924,7 +11984,8 @@ mod retail_construction_tests {
                 .collect();
             let dogs =
                 spawn_on_free_cells(sim, &resources.rules, enemy, sites.clone(), &["DOG", "DOG"]);
-            let allied_detector = spawn_on_free_cells(sim, &resources.rules, ally, sites, &["DOG"])[0];
+            let allied_detector =
+                spawn_on_free_cells(sim, &resources.rules, ally, sites, &["DOG"])[0];
             (dogs[0], dogs[1], allied_detector, radius)
         };
         for id in [first, last, allied_detector] {
@@ -13195,7 +13256,9 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     fn aymod_tanya_submarine_detection_and_attack(elite: bool, reacquire: bool) {
-        use crate::sim::combat::{TargetKind, fire_error::FireError, fire_error_world::FireSubject};
+        use crate::sim::combat::{
+            TargetKind, fire_error::FireError, fire_error_world::FireSubject,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -15007,7 +15070,8 @@ mod retail_construction_tests {
             (0..900).any(|_| {
                 tick_with_due_commands(&mut scene);
                 scene.sim().entities().values().any(|actor| {
-                    actor.owner() == ai && scene.sim().interner.resolve(actor.type_ref()) == "GACNST"
+                    actor.owner() == ai
+                        && scene.sim().interner.resolve(actor.type_ref()) == "GACNST"
                 })
             }),
             "normal AI MCV deployment must provide the friendly-base gather prerequisite"
@@ -15146,9 +15210,9 @@ mod retail_construction_tests {
                 waiting |= action == 43;
                 let fortress = sim.entities().get(carrier).unwrap();
                 let full = riders.iter().all(|id| {
-                    sim.entities()
-                        .get(*id)
-                        .is_some_and(|rider| rider.passenger_role.open_transport_id() == Some(carrier))
+                    sim.entities().get(*id).is_some_and(|rider| {
+                        rider.passenger_role.open_transport_id() == Some(carrier)
+                    })
                 });
                 if !saved
                     && full
@@ -17875,7 +17939,11 @@ mod retail_construction_tests {
                 sim.queue_command(CommandEnvelope::new(
                     owner,
                     sim.session.tick() + 1,
-                    Command::clicked_mission(second, MissionType::Enter, TargetKind::Entity(hospital)),
+                    Command::clicked_mission(
+                        second,
+                        MissionType::Enter,
+                        TargetKind::Entity(hospital),
+                    ),
                 ));
                 second
             };
@@ -19514,7 +19582,8 @@ mod retail_construction_tests {
             let point =
                 crate::sim::movement::ground_pose::object_get_coords(hull, sim.resolved_terrain());
             let center = (point.x / 256, point.y / 256);
-            let reach = combat_weapon::occupied_reach_cells(rules.object("CAHSE01").unwrap(), rules);
+            let reach =
+                combat_weapon::occupied_reach_cells(rules.object("CAHSE01").unwrap(), rules);
             let weapon =
                 combat_weapon::occupant_weapon(rules, rules.object("SNIPE").unwrap(), 0).unwrap();
             assert_eq!(weapon.id, "OCAWP");
@@ -20269,8 +20338,10 @@ mod retail_construction_tests {
                 let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
                 let actor = sim.entities().get(building).unwrap();
                 let owner = actor.owner();
-                let at =
-                    crate::sim::movement::ground_pose::object_get_coords(actor, sim.resolved_terrain());
+                let at = crate::sim::movement::ground_pose::object_get_coords(
+                    actor,
+                    sim.resolved_terrain(),
+                );
                 let center = (at.x / 256, at.y / 256);
                 let sites = cells_nearest(center)
                     .into_iter()
@@ -20339,8 +20410,9 @@ mod retail_construction_tests {
                         .projectiles()
                         .iter()
                         .find_map(|(&id, p)| {
-                            (p.source_id() == building && p.target() == ProjectileTarget::Entity(next))
-                                .then_some(id)
+                            (p.source_id() == building
+                                && p.target() == ProjectileTarget::Entity(next))
+                            .then_some(id)
                         })
                         .expect("the survivor's first resumed missile is still in flight");
                     let bytes = save_scene(&scene, "AY sole garrison survivor resumed firing");
@@ -20360,7 +20432,8 @@ mod retail_construction_tests {
                     // rearm timer and the first resumed missile in flight.
                     restored = true;
                 }
-                if shots >= 3 && scene.sim().entities().get(next).unwrap().health.current() < initial_hp
+                if shots >= 3
+                    && scene.sim().entities().get(next).unwrap().health.current() < initial_hp
                 {
                     break;
                 }
@@ -21021,7 +21094,6 @@ mod retail_construction_tests {
                 .is_none_or(|actor| !actor.is_object_alive())
         }));
     }
-
 
     #[cfg(feature = "npatch")]
     #[test]
@@ -24238,7 +24310,9 @@ mod retail_construction_tests {
                                 && u16::try_from(x)
                                     .ok()
                                     .zip(u16::try_from(y).ok())
-                                    .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                                    .is_some_and(|(x, y)| {
+                                        sim.terrain_cell_level(x, y) == Some(at.z())
+                                    })
                         })
                         .collect::<Vec<_>>()
                 };
@@ -24393,7 +24467,8 @@ mod retail_construction_tests {
                             unresolved.push((kind.id.as_str(), index, name));
                         }
                     }
-                    let Some(normal) = kind.weapon_at(index).and_then(|name| rules.weapon(name)) else {
+                    let Some(normal) = kind.weapon_at(index).and_then(|name| rules.weapon(name))
+                    else {
                         continue;
                     };
                     let Some(elite) = kind
@@ -24452,7 +24527,9 @@ mod retail_construction_tests {
     #[ignore = "requires VERA20K_AYMOD_DIR; actual SHK gunner and authored shorter elite Tesla IFV range"]
     fn aymod_tesla_ifv_keeps_its_authored_shorter_elite_weapon_after_saved_promotion() {
         use crate::sim::combat::veterancy::RANK_ELITE_U16;
-        use crate::sim::combat::{TargetKind, combat_weapon, in_range, line_of_fire::LineOfFireInputs};
+        use crate::sim::combat::{
+            TargetKind, combat_weapon, in_range, line_of_fire::LineOfFireInputs,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -25365,7 +25442,11 @@ mod retail_construction_tests {
                         .total_size(),
                     2
                 );
-                continue;
+                restore(&mut scene);
+                let sender = scene.sim().entities().get(overflow).unwrap();
+                assert_eq!(sender.mission.effective().known(), Some(MissionType::Guard));
+                assert_eq!(sender.navigation.nav_com(), None);
+                assert!(!inside(&scene, overflow));
             }
             let sim = &mut scene.runtime.simulation;
             sim.queue_command(CommandEnvelope::new(
@@ -25408,6 +25489,21 @@ mod retail_construction_tests {
                     entity.position
                 ))
             );
+            assert_eq!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(carrier)
+                    .unwrap()
+                    .passenger_role
+                    .cargo()
+                    .unwrap()
+                    .total_size(),
+                3
+            );
+            restore(&mut scene);
+            assert!(inside(&scene, overflow));
+            assert!(inside(&scene, yuri));
             assert_eq!(
                 scene
                     .sim()
@@ -26908,7 +27004,10 @@ mod retail_construction_tests {
             "the elite psychic weapon must actually capture an airborne Aircraft"
         );
         assert!(shot_in_air);
-        assert!(airborne(&scene), "capture must finish before the ORCA lands");
+        assert!(
+            airborne(&scene),
+            "capture must finish before the ORCA lands"
+        );
         let assert_owned = |scene: &HeadlessScenario| {
             let captured = scene.sim().entities().get(plane).unwrap();
             assert!(captured.health.current() > 0 && !captured.lifecycle.in_limbo());
@@ -27121,7 +27220,8 @@ mod retail_construction_tests {
             assert!((0..600).any(|_| {
                 let output = tick_with_due_commands(scene);
                 fired |= output.fire_events.iter().any(|event| {
-                    event.attacker_id == yuri && scene.sim().interner.resolve(event.weapon_id) == weapon
+                    event.attacker_id == yuri
+                        && scene.sim().interner.resolve(event.weapon_id) == weapon
                 });
                 scene
                     .sim()
@@ -28187,7 +28287,9 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     fn aymod_destroyer_asw_lifecycle(real_aa: bool) {
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::combat::{
+            EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind,
+        };
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -28215,7 +28317,8 @@ mod retail_construction_tests {
                     terrain.cell(x, y).is_some_and(|cell| {
                         !cell.outside_playfield
                             && !cell.bridge_facts.has_structural_bridge()
-                            && cell.land_type == crate::rules::terrain_rules::LandType::Water.as_index()
+                            && cell.land_type
+                                == crate::rules::terrain_rules::LandType::Water.as_index()
                             && sim.occupancy().get(x, y).is_none()
                     })
                 };
@@ -28315,7 +28418,8 @@ mod retail_construction_tests {
                                     !cell.outside_playfield
                                         && !cell.bridge_facts.has_structural_bridge()
                                         && cell.land_type
-                                            == crate::rules::terrain_rules::LandType::Water.as_index()
+                                            == crate::rules::terrain_rules::LandType::Water
+                                                .as_index()
                                 })
                         })
                         .collect();
@@ -28331,7 +28435,8 @@ mod retail_construction_tests {
                             event.attacker_id == aa && event.target == TargetKind::Entity(child)
                         });
                         let victim = scene.sim().entities().get(child);
-                        damaged |= fired && victim.is_some_and(|entity| entity.health.current() < hp);
+                        damaged |=
+                            fired && victim.is_some_and(|entity| entity.health.current() < hp);
                         fired && damaged && victim.is_none_or(|entity| !entity.is_alive())
                     }),
                     "{kind}: ordinary AEGIS Guard must actually shoot down the ASW"
@@ -29154,9 +29259,6 @@ mod retail_construction_tests {
         let spawned = spawn_on_free_cells(sim, rules, house, cells, types);
         (house, spawned)
     }
-
-
-
 
     /// Two retail Yuri TeamTypes whose members are spawned beside the Yuri
     /// house's base once the bases stand: "Yuri Infantry - M1" (`05FFB46C-G`,
@@ -30485,7 +30587,6 @@ mod retail_construction_tests {
         assert!(deployed.is_some(), "the MCV did not deploy");
         assert!(done.is_some(), "the team stayed on its script");
     }
-
 
     /// A Normal Soviet house's Rhino, in no team, shot by a GI beside it:
     /// `UnitClass::ReceiveDamage`'s computer-owner response gives it the GI
