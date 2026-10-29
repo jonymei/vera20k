@@ -6,6 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
+- 本轮补高级驻军射程的实际消费者：SNIPE普通CaptureBuilding步行进CAHSE01，正式typed自身AWP14格/驻军OCAWP7格；建筑中心范围按原生基础尺寸变8格，9格外目标强制Attack在保存前后均180帧无射击/无伤，Stop恢复Guard后目标普通Move走近，建筑自主选敌、真正发OCAWP并伤害目标，最后完整存读保持。新场景1、InRange32/2原有ignored、combat_weapon3通过；无生产修复，不冒称全部驻军家族/最远边界或GUI已验。下一步继续其他高频功能，不重复Alt入口/这条驻军微边界；F22容量来源与V01/F11政策仍开放。
 - 本轮新增F22/C10未闭合功能：作者称精英YURI控制5个，正式Battle typed的MindControlE却为10，实际普通Attack捕获/受控击杀receiver升精英/第二次MindControlE捕获仍替换原目标，管理器count1，两段完整存读不变。原生构造/容量准入/替换叶支持保留出生容量，未证明运行时另有扩容writer；不擅改成5或10，不算已兼容。新增实际场景1、CaptureManager29通过；下一步查运行时扩容来源或明确作者设计与原生冲突策略，同时继续其他功能项，不因此暂停整个目标。
 - 本轮补F21作者漏项：恐怖分子/自爆卡车的同方同类型爆炸免伤。实际AY四组普通Attack自爆（两类型各同方/敌方同类型对照）、异型友军受伤、攻击前后完整存读通过；既有TypeImmune与死亡武器owner无需生产修改。V05原始killer控制者修复的独立critic已完成，无可操作发现；固定构建未动，Return Dubai弱攻势继续暂停。
 - 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于574ad0af0修V05原始击杀者的控制者选择：唯一award_kill_experience按702FF0→C2C208/C2C241读原killer的controller，不从经验已重定向的carrier/launcher/occupant取。双向组件回归先失败后通过；实际YURI普通Attack控制BFRT、E1正常上车、终结receiver的两级经验与两次完整存读通过，原未捕获要塞场景通过。NP/stock奖励各7、NP CaptureManager及Veterancy12通过；只读critic独立核对原始指令/生产调用/回归后无可操作发现。经验比例/等级回退/兵种数值不改，固定玩家版未动，完整目标仍开放。
@@ -17,6 +18,14 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### 高级驻军射程：真实进楼、范围外拒射与接近后自主实伤（2026-10-29）
+
+- 作者170507要求高级步兵进楼后不把自身长射程带入驻军。正式AY Battle/XMP03T4 typed确认SNIPE普通AWP为14格，OccupyWeapon为OCAWP/7格；不是让原14格武器简单套一个显示圈。原有Building GetWeapon4526F0及occupant_weapon负责换武器，不新增另一套驻军武器选择。
+- 独立实读实际AY InRange6F727A..6F729F：IsOccupied成立就以Building vt+404结果加Rules+F48、左移8替换武器射程。458E00按基础较短边长除2取整，GreatestThreat6F917D..6F91A3以同一范围再加1控制搜索圈，但候选最终仍要过InRange。CAHSE01本例基础补偿1、OccupyWeaponRange7，因此中心范围8，不是把作者“7格”当成从中心量起的硬截断；本轮不改数值或另做min(武器射程,7格)。
+- 新aymod_garrisoned_sniper_cannot_extend_building_range_after_load使用普通CaptureBuilding让实际SNIPE步行进楼，不直接写名单/limbo。敌E2合法生成于同层9格轴向外圈，处于自身AWP射程之内却在建筑范围外；正常Attack在保存前后各180普通帧均无该目标fire_event、HP不变。夹具起初误把实际驻军OCAWP当成原14格武器做长射程断言而失败，按正式reader核实两槽后修夹具，未改配置/生产规则迎合测试。
+- 正常Stop恢复建筑Guard，再由目标House正常Move走向附近同层可走格；不重发建筑Attack、不瞬移目标。原驻军实际自行选敌，必须产生以该目标为对象的OCAWP真实射击，并令目标HP降低/死亡；之后再次完整保存恢复保持目标生命结果。对方House设human、目标初期Sleep用于隔离组件，不称电脑自主进楼或进攻战术验收。
+- 最终新实际场景1项通过；InRange模块32通过/2原有ignored未运行，combat_weapon模块3通过，无全仓库运行。仅测试/台账，无新增生产状态、RNG抽样、timer写入、Detach或保存字段，不需玩法critic；未启动GUI、修改MOD/原始存档/固定版或发布。其他高级驻军/等级、精确炮口最远边界、地形/空中目标、长期多AI及画面仍开放；这条基本消费者不再列为完全未验，也不据此关闭V05。
 
 ### F22新增作者漏项/C10差异：精英尤里的多目标容量仍未闭合（2026-10-29）
 

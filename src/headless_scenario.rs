@@ -15370,6 +15370,183 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; a boarded sniper uses the building range before and after load"]
+    fn aymod_garrisoned_sniper_cannot_extend_building_range_after_load() {
+        use crate::sim::combat::{TargetKind, combat_weapon};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::{MissionId, MissionType};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, building, sniper) = aymod_nearby_pair("CAHSE01", "SNIPE", true);
+        let owner = scene.sim().entities().get(building).unwrap().owner();
+        let enemy = house_of(scene.sim(), "Russians");
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::CaptureBuilding {
+                engineer_id: sniper,
+                target_building_id: building,
+            },
+        ));
+        assert!((0..400).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(building)
+                .unwrap()
+                .passenger_role
+                .occupants()
+                .ids()
+                .contains(&sniper)
+        }));
+        let (target, near) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            sim.houses
+                .get_mut(&enemy)
+                .unwrap()
+                .set_is_human_for_test(true);
+            let hull = sim.entities().get(building).unwrap();
+            let at = hull.position;
+            let point =
+                crate::sim::movement::ground_pose::object_get_coords(hull, sim.resolved_terrain());
+            let center = (point.x / 256, point.y / 256);
+            let reach = combat_weapon::occupied_reach_cells(rules.object("CAHSE01").unwrap(), rules);
+            let weapon =
+                combat_weapon::occupant_weapon(rules, rules.object("SNIPE").unwrap(), 0).unwrap();
+            assert_eq!(weapon.id, "OCAWP");
+            assert_eq!(weapon.range_leptons, 7 * 256);
+            let primary = rules
+                .weapon(rules.object("SNIPE").unwrap().primary().unwrap())
+                .unwrap();
+            let outer = reach + 1;
+            assert!(
+                primary.range_leptons > outer * 256,
+                "sniper range {} must exceed building reach {reach} and outer ring {outer}",
+                primary.range_leptons
+            );
+            let sites = cells_nearest(center)
+                .into_iter()
+                .filter(|&(x, y)| {
+                    ((x == center.0 && (y - center.1).abs() == outer)
+                        || (y == center.1 && (x - center.0).abs() == outer))
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| sim.terrain_cell_level(x, y) == Some(at.z()))
+                })
+                .collect::<Vec<_>>();
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["E2"])[0];
+            let destination = cells_nearest(center)
+                .into_iter()
+                .find(|&(x, y)| {
+                    let d = (x - center.0).abs().max((y - center.1).abs());
+                    (2..=3).contains(&d)
+                        && u16::try_from(x)
+                            .ok()
+                            .zip(u16::try_from(y).ok())
+                            .is_some_and(|(x, y)| {
+                                sim.terrain_cell_level(x, y) == Some(at.z())
+                                    && sim.path_grid().unwrap().is_walkable_for_infantry(x, y)
+                            })
+                })
+                .unwrap();
+            sim.mission_queue_exact(
+                target,
+                MissionId::from_known(MissionType::Sleep),
+                1,
+                sim.session.binary_frame(),
+                &crate::sim::mission::authority::LiveReadyInputProvider { rules },
+            )
+            .unwrap();
+            (target, destination)
+        };
+        let hp = scene.sim().entities().get(target).unwrap().health.current();
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        for restored in [false, true] {
+            if restored {
+                let bytes = save_scene(&scene, "AY long-range sniper inside occupied building");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+            }
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: building,
+                    target_id: target,
+                },
+            ));
+            for _ in 0..180 {
+                let output = tick_with_due_commands(&mut scene);
+                assert!(
+                    !output
+                        .fire_events
+                        .iter()
+                        .any(|event| event.attacker_id == building
+                            && event.target == TargetKind::Entity(target))
+                );
+                assert_eq!(
+                    scene.sim().entities().get(target).unwrap().health.current(),
+                    hp
+                );
+            }
+        }
+        let sim = &mut scene.runtime.simulation;
+        sim.queue_command(CommandEnvelope::new(
+            owner,
+            sim.session.tick() + 1,
+            Command::Stop {
+                entity_id: building,
+            },
+        ));
+        sim.queue_command(CommandEnvelope::new(
+            enemy,
+            sim.session.tick() + 1,
+            Command::Move {
+                entity_id: target,
+                target_rx: near.0 as u16,
+                target_ry: near.1 as u16,
+            },
+        ));
+        let mut fired = false;
+        assert!(
+            (0..900).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == building
+                        && event.target == TargetKind::Entity(target)
+                        && scene.sim().interner.resolve(event.weapon_id) == "OCAWP"
+                });
+                scene
+                    .sim()
+                    .entities()
+                    .get(target)
+                    .is_none_or(|entity| entity.health.current() < hp)
+            }),
+            "the same saved garrison must acquire and damage the approaching infantry"
+        );
+        assert!(fired);
+        let health = scene
+            .sim()
+            .entities()
+            .get(target)
+            .map(|entity| entity.health.current());
+        let bytes = save_scene(&scene, "AY garrison sniper hit after target approached");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(target)
+                .map(|entity| entity.health.current()),
+            health
+        );
+    }
+
+    #[cfg(feature = "npatch")]
     fn aymod_garrison_missile_in_flight(
         target_type: &str,
     ) -> (HeadlessScenario, u64, u64, Vec<u64>, u64) {
