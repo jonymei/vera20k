@@ -1432,12 +1432,7 @@ mod retail_construction_tests {
     }
 
     #[cfg(feature = "npatch")]
-    #[test]
-    #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet AI economies naturally build and replace a paid war factory across saves"]
-    fn aymod_same_country_ai_rebuild_paid_war_factory_without_stopping_peer() {
-        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
-        use crate::sim::mission::MissionType;
-        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+    fn aymod_two_ai_economies(country: u32) -> (HeadlessScenario, Vec<InternedId>) {
         let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
         let (mut scene, computers) = retail_battle_in(
             &root,
@@ -1448,7 +1443,10 @@ mod retail_construction_tests {
                     slot.team = crate::skirmish_launch::LaunchTeam::Team(1);
                 }
             },
-            &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard); 2],
+            &[(
+                LaunchCountry::from_country_index(country),
+                AiDifficulty::Hard,
+            ); 2],
         );
         for &owner in &computers {
             scene
@@ -1512,6 +1510,17 @@ mod retail_construction_tests {
                 );
             }
         }
+        (scene, computers)
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet AI economies naturally build and replace a paid war factory across saves"]
+    fn aymod_same_country_ai_rebuild_paid_war_factory_without_stopping_peer() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(1);
         let step = |scene: &mut HeadlessScenario| {
             let output = tick_with_due_commands(scene);
             assert!(
@@ -1779,6 +1788,191 @@ mod retail_construction_tests {
             computers
                 .iter()
                 .all(|owner| !scene.sim().houses[owner].is_defeated())
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; two Yuri AI economies naturally reach tech and recover lost slave miners across saves"]
+    fn aymod_two_yuri_ai_recover_slave_mining_without_stopping_peer() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::mission::MissionType;
+        use crate::sim::slave_manager::ManagerState;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(2);
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(
+                output.tick.frame_committed && scene.sim().session.outcome_request().is_none(),
+                "Yuri economic observation must commit actual frames, tick={} outcome={:?}",
+                scene.sim().session.tick(),
+                scene.sim().session.outcome_request()
+            );
+        };
+        let working = |scene: &HeadlessScenario, owner| {
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| {
+                    entity.owner() == owner
+                        && entity.is_ai_alive()
+                        && !entity.lifecycle.in_limbo()
+                        && entity
+                            .slave_manager
+                            .as_ref()
+                            .is_some_and(|manager| manager.state() == ManagerState::Working)
+                })
+                .map(|entity| entity.stable_id())
+                .collect::<Vec<_>>()
+        };
+        let tech = |scene: &HeadlessScenario, owner| {
+            scene.sim().entities().values().any(|entity| {
+                entity.owner() == owner
+                    && scene.sim().interner.resolve(entity.type_ref()) == "YATECH"
+                    && entity.is_ai_alive()
+                    && !entity.lifecycle.in_limbo()
+                    && entity.mission.effective().known() != Some(MissionType::Construction)
+            })
+        };
+        let mut loaded = std::collections::BTreeSet::new();
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                for entity in scene.sim().entities().values() {
+                    if computers.contains(&entity.owner())
+                        && entity.slave.owner().is_some()
+                        && !entity.slave.cargo().is_empty()
+                    {
+                        loaded.insert(entity.owner());
+                    }
+                }
+                computers.iter().all(|&owner| {
+                    loaded.contains(&owner)
+                        && tech(&scene, owner)
+                        && !working(&scene, owner).is_empty()
+                        && scene.sim().houses[&owner].economy().score() > 0
+                })
+            }),
+            "both Yuri starts must reach actual tech with loaded slaves and earned income: {:?}",
+            computers
+                .iter()
+                .map(|&owner| (
+                    owner,
+                    tech(&scene, owner),
+                    working(&scene, owner),
+                    scene.sim().houses[&owner].economy()
+                ))
+                .collect::<Vec<_>>()
+        );
+        let lost = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| {
+                entity.owner() == computers[0]
+                    && entity.is_ai_alive()
+                    && !entity.lifecycle.in_limbo()
+                    && entity.slave_manager.is_some()
+            })
+            .map(|entity| entity.stable_id())
+            .collect::<Vec<_>>();
+        assert!(!lost.is_empty());
+        let before = computers
+            .iter()
+            .map(|owner| {
+                let wallet = scene.sim().houses[owner].economy();
+                (wallet.score(), wallet.spent_credits())
+            })
+            .collect::<Vec<_>>();
+        let peer = scene.sim().houses[&computers[1]].economy().clone();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            for &id in &lost {
+                let hp = sim.entities().get(id).unwrap().health.current();
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        id,
+                        hp,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+        }
+        assert!(working(&scene, computers[0]).is_empty());
+        assert_eq!(scene.sim().houses[&computers[1]].economy(), &peer);
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY Yuri lost all on-map slave miners; peer economy intact",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(scene.sim().houses[&computers[1]].economy(), &peer);
+        assert!(working(&scene, computers[0]).is_empty());
+        loaded.clear();
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                for entity in scene.sim().entities().values() {
+                    if computers.contains(&entity.owner())
+                        && entity.slave.owner().is_some_and(|id| !lost.contains(&id))
+                        && !entity.slave.cargo().is_empty()
+                    {
+                        loaded.insert(entity.owner());
+                    }
+                }
+                computers.iter().enumerate().all(|(index, &owner)| {
+                    let wallet = scene.sim().houses[&owner].economy();
+                    loaded.contains(&owner)
+                        && !working(&scene, owner).is_empty()
+                        && tech(&scene, owner)
+                        && wallet.score() > before[index].0
+                        && wallet.spent_credits() > before[index].1
+                })
+            }),
+            "lost Yuri mining must recover naturally while the peer still earns and builds: {:?}",
+            computers
+                .iter()
+                .map(|&owner| (
+                    owner,
+                    working(&scene, owner),
+                    scene.sim().houses[&owner].economy()
+                ))
+                .collect::<Vec<_>>()
+        );
+        let replacements = working(&scene, computers[0]);
+        assert!(replacements.iter().all(|id| !lost.contains(id)));
+        let bytes = save_scene(
+            &scene,
+            "AY Yuri replacement slave miners working; both incomes resumed",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(working(&scene, computers[0]), replacements);
+        let incomes = computers
+            .iter()
+            .map(|owner| scene.sim().houses[owner].economy().score())
+            .collect::<Vec<_>>();
+        assert!(
+            (0..2400).any(|_| {
+                step(&mut scene);
+                computers
+                    .iter()
+                    .enumerate()
+                    .all(|(index, owner)| scene.sim().houses[owner].economy().score() > incomes[index])
+            }),
+            "both restored Yuri economies must continue earning, not just retain old scores"
         );
     }
 
