@@ -1,0 +1,8 @@
+{
+  "elite_damage": 10,
+  "elite_full_with_one": true,
+  "elite_rank_cache": 0,
+  "normal_damage": 1,
+  "normal_full_with_one": true,
+  "selected_elite_damage": 10
+}

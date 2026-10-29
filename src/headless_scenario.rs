@@ -27597,11 +27597,54 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; promotion type-conversion hooks are absent in each actual Yuri rules layer"]
+    fn aymod_yuri_upgrade_transform_is_unset_in_every_battle_layer() {
+        use crate::rules::retail_sources::{RetailRulesSources, select_mode_ini};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let assets = AssetManager::new(&root, MediaArchiveMode::STOCK_DIGITAL).unwrap();
+        let sources = RetailRulesSources::select(&assets).unwrap();
+        let mode = select_mode_ini(&assets, Some("MPBattleMD.ini")).unwrap();
+        for map_name in ["XMP03T4.MAP", "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm"] {
+            let map =
+                crate::map::source::load_map_by_name_or_path_with_assets(&root, map_name, &assets)
+                    .unwrap()
+                    .map;
+            for (layer, ini) in [
+                ("RULESMD", Some(&sources.rulesmd.ini)),
+                (
+                    "LANGRULE",
+                    sources.langrule.as_ref().map(|source| &source.ini),
+                ),
+                ("MPBattleMD", mode.as_ref()),
+                (map_name, Some(&map.ini)),
+            ] {
+                let Some(ini) = ini else { continue };
+                // NP C27117..4C reads these exact keys into type extension
+                // +A8/+A4; C28090 only converts the type when enabled.
+                let yuri = ini.section_or_empty("YURI");
+                for key in ["UseNewUpgradeSystem", "NextStage"] {
+                    assert!(
+                        !yuri.is_present(key),
+                        "{map_name}/{layer}: YURI authors {key}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; elite weapon does not reconstruct a Yuri capture manager"]
     fn aymod_promoted_yuri_retains_single_capture_manager_across_load() {
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        // Original InitManagers6F4090, NP rank hooks C28090/C2D825 and
+        // finite CaptureManager471A50, not a full native capture replay.
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../tools/spatial_oracle/capture_promotion_capacity.json"
+        ))
+        .unwrap();
         let (mut scene, yuri, first) = aymod_nearby_pair("YURI", "MTNK", false);
         let owner = scene.sim().entities().get(yuri).unwrap().owner();
         let enemy = scene.sim().entities().get(first).unwrap().owner();
@@ -27619,7 +27662,8 @@ mod retail_construction_tests {
             assert!((0..600).any(|_| {
                 let output = tick_with_due_commands(scene);
                 fired |= output.fire_events.iter().any(|event| {
-                    event.attacker_id == yuri && scene.sim().interner.resolve(event.weapon_id) == weapon
+                    event.attacker_id == yuri
+                        && scene.sim().interner.resolve(event.weapon_id) == weapon
                 });
                 scene
                     .sim()
@@ -27648,15 +27692,30 @@ mod retail_construction_tests {
             )
             .unwrap();
             let kind = rules.object("YURI").unwrap();
-            assert_eq!(rules.weapon(kind.primary().unwrap()).unwrap().damage, 1);
+            assert_eq!(
+                i64::from(rules.weapon(kind.primary().unwrap()).unwrap().damage),
+                native["normal_damage"].as_i64().unwrap()
+            );
             // The later duplicate MindControlE definition is effective input,
             // not the author's older description of five links.
             assert_eq!(
-                rules.weapon(kind.elite_primary().unwrap()).unwrap().damage,
-                10
+                i64::from(rules.weapon(kind.elite_primary().unwrap()).unwrap().damage),
+                native["elite_damage"].as_i64().unwrap()
             );
         }
         capture(&mut scene, first, "MindControl");
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(yuri)
+                .unwrap()
+                .capture_manager
+                .as_ref()
+                .unwrap()
+                .is_full(),
+            native["normal_full_with_one"].as_bool().unwrap()
+        );
         for _ in 0..4 {
             if scene.sim().entities().get(yuri).unwrap().veterancy.rank() == 200 {
                 break;
@@ -27698,6 +27757,28 @@ mod retail_construction_tests {
         let assert_replaced = |scene: &HeadlessScenario| {
             let sim = scene.sim();
             assert_eq!(sim.entities().get(yuri).unwrap().veterancy.rank(), 200);
+            let entity = sim.entities().get(yuri).unwrap();
+            assert_eq!(
+                i64::from(entity.veterancy.rank_cache()),
+                native["elite_rank_cache"].as_i64().unwrap()
+            );
+            assert_eq!(
+                entity.capture_manager.as_ref().unwrap().is_full(),
+                native["elite_full_with_one"].as_bool().unwrap()
+            );
+            let kind = scene.runtime.resources.rules.object("YURI").unwrap();
+            assert_eq!(
+                i64::from(
+                    scene
+                        .runtime
+                        .resources
+                        .rules
+                        .weapon(kind.elite_primary().unwrap())
+                        .unwrap()
+                        .damage
+                ),
+                native["selected_elite_damage"].as_i64().unwrap()
+            );
             assert!(sim.entities().get(first).unwrap().is_alive());
             assert_eq!(
                 sim.entities()

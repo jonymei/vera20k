@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-30）
 
-- 本轮基线843141913，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。V04新增实际MGTK普通Move解伪装/运动中存读/停稳重新选原配置树，敌方E1正常走近揭露、离开后的正剩余reveal timer热存读/自然重新伪装；电脑GAPILL候选准入随状态拒绝/恢复，最后普通Guard实射且目标出现新伤并保存。实际1、mirage构造1、GreatestThreat disguise4、combat Mirage2共8通过，原生慢测5未跑；首个错模块0项已纠正不计数。仅测试/台账，测试编辑的语法和Result<bool>误用已修，无生产修复/新状态/RNG调用/timer/Detach/保存布局或玩法critic，无Python改动。无Cargo遗留、未推送/PR，固定版/MOD/原始存档/GUI未动。下一安全动作继续高频开放功能/AI链；本例不覆盖幻影自身开火blink、桥面/多步兵名单或自主多AI走位，不重复本同格运输/Alt入口/巨炮已核链。Return Dubai弱攻势暂停、V01/F11门禁保持。
+- 本轮基线567af2054，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。F22新原生隔离对照执行实际Infantry GetWeapon、InitManagers整段capture构造/注册、6FA054晋升分支（含C28090和C2D825）、有限CaptureManager Update与IsFull：普通武器1建出的原manager在精英武器选10后仍满于一个目标，没有扩容；不是完整原生捕获/整局。新增正式源层核对，Battle两图的RULESMD/可选LANGRULE/模式/地图均未给YURI写UseNewUpgradeSystem/NextStage，因此该type转换候选不适用。唯一旧overload VM新增模式，1条精简原生输出由已有真实捕获/经验晋升/替换/两次存读场景消费。新增层检查1、实际晋升1、CaptureManager29共31通过；AY专项和原零售默认--check均通过。Python最终937项：881通过、49跳过、1独立依赖图失败、6符号链接权限错误，未报全绿。仅工具/测试/台账，无生产修复/权威状态/RNG/timer/Detach/保存布局或玩法critic。无Cargo遗留/发布，固定版/MOD/原档/GUI未动。F22作者5/当前武器10/有限原生仍1的冲突继续开放，不强改容量；下一步可补原生成功第二次捕获全链/明确设计选择，同时推进其他功能，V01/F11门禁及Return Dubai弱攻势暂停保持。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -144,6 +144,11 @@
 - 新aymod_promoted_yuri_retains_single_capture_manager_across_load：普通YURI真实Attack捕获MTNK，控制关系建立后复用正式终结receiver给该MTNK击杀经验，YURI通过现有100%经验分享升精英，不直接写精英或控制节点。此处击杀不是坦克实弹；捕获两次均为真实普通Attack，并要求实际MindControl/MindControlE发射事件。对方House及非射手Sleep仅隔离组件。
 - 晋升持一目标时完整存读，随后第二次捕获必须真的使用MindControlE；第一辆活车归还原House并清controller，第二辆归本方、controller=YURI，管理器count仍1。再次完整存读保持等级及上述关系。此测试锁定当前诊断事实，不是将“只能控1个”宣布为作者功能已实现；后续查得真实扩容路径或获明确设计选择时应同步调整本例，不保留竞争容量owner。
 - 最终新增实际场景1、CaptureManager模块29项通过；最后只调整一处格式，无生产行为、权威状态、RNG抽样、timer写入、Detach或保存字段变化，不需玩法critic。未启动GUI、修改MOD/原始存档/固定构建或发布。F22仍开放：需证明实际NP扩容writer及调用条件，或明确选择偏离当前已读原生的设计；不得擅选5/10、清掉旧受控队伍或借此改AI权重。
+- 2026-10-30续查实际NP晋升入口发现另一分支6FA078→C28090：读取TechnoType+A90扩展+A4的UseNewUpgradeSystem、+A8的NextStage，满足时按类改type/设等级/补HP；不是CaptureManager扩容。读入C27117..C2714C，字面值BA41C8/BA41B3，默认由710AF0构造710B00清EBX、711680→B95920扩展分配、B959B6/B959BC写零。新增aymod_yuri_upgrade_transform_is_unset_in_every_battle_layer，经现有AssetManager/RetailRulesSources/模式与地图生产解析，确认XMP03T4/Return Dubai各物理层YURI两键均未配置。未因新发现一条原生分支就实现当前MOD不用的类型升级系统，也未拿普通文本搜索替代实际源层核对。
+- 复用现有capture_overload_update.Fixture，新增--promotion-capacity：原Infantry vtable7EB058、供应普通武器Damage1/精英10、MindControl=true/Infinite=false、type/House和非满全局registry；原6F4090..6F40F8执行实际GetWeapon及完整4717D0构造/注册，观察保留容量1。供应raw veterancy0→2.0与原cache2，执行6FA054..6FA14B（要求经过C28090、C2D825）、原有限471A50及GetWeapon；选择精英Damage10，原manager身份/容量1不变，cache为0。供应count1但无虚构node遍历，原IsFull普通/精英均true；非本地House只跳晋升音效/UI分支。初始化缺Rules指针的首次fault已补供应上下文，不是游戏崩溃。原生片段不证明整个TechnoAI/成功捕获/第二次释放/原SAV/外部注入行为已回放。
+- capture_promotion_capacity.json仅1条实际Rust消费的输入/输出；sidecar记录可复跑命令和上述供应/排除边界，无栈/寄存器/调用日志或可执行文件/仓库source hash。既有实际YURI场景读取该输出核正式普通/精英武器值、持一目标时IsFull、精英cache及两次存读后的状态；真实第二次Attack/替换旧目标原端点继续保留，不因有限原生结果就宣布作者多控要求已实现。
+- 本轮源层检查1、实际晋升1、CaptureManager29共31通过；实际AY专项--check与原零售overload默认--check均输出不变。Python最终候选937项：881通过、49跳过、1失败（既有独立cargo_run依赖特性图）、6错误（WinError1314符号链接权限），相关manifest/lock/runner未改，不修无关失败或报全绿。无新增生产玩法/权威状态/RNG调用/timer写入/Detach/保存布局，无新玩法critic。固定EXE仍42,237,952字节、2026-10-26 20:57:58；未启动GUI、改MOD/原始存档/固定版或发布。F22仍属设计/原生范围冲突待决，不默选5/10；此对照只排除了这条出生→晋升→有限Update的自动扩容假说。
+
 
 ### F21新增作者漏项：自爆单位的同方同类型免伤（2026-10-29）
 
@@ -1811,7 +1816,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F21 / P1 / 已有免伤owner，实际自爆与存读已验 | 恐怖分子、自爆卡车同方同类型爆炸免伤 | TypeImmune→ReceiveDamage7019E3..701A38；Suicide FireAt6FDDC0→死亡武器→共享receiver | 实际TERROR/DTRUCK普通Attack自爆，各同方/敌方同类型对照及异型友军受伤、攻击前后存读通过；被击毁/持续辐射/运输死亡、多AI及GUI仍待验，不加兵种特例 |
 
-| F22 / P1 / 实际未达作者多目标要求，扩容来源待核 | 精英YURI同时控制多单位；作者5/正式精英武器10/出生管理器1三者不一致 | Init_Managers6F4090→4717D0保留出生容量；CanCapture/CaptureUnit读取保留值；已有owner不在晋升时扩容 | 真实捕获/经验receiver晋升/精英第二次捕获释放旧目标及两次存读已复现，未实现多目标；下一步证明原生运行时扩容路径或明确冲突策略，不按旧文字擅改数值 |
+| F22 / P1 / 实际未达作者多目标要求，有限原生对照亦未扩容 | 精英YURI同时控制多单位；作者5/正式精英武器10/出生管理器1三者不一致 | Init_Managers6F4090→4717D0保留出生容量；CanCapture/CaptureUnit读取保留值；已有owner不在晋升时扩容 | 真实捕获/经验晋升/精英第二次捕获替换及两次存读已验；原生实际武器选择/出生构造/两条NP晋升钩子/有限Update亦保持单目标满员。两图YURI各层未启用类型升级替代路径。不是原生成功捕获全链回放，作者多控要求仍未达；继续补完整运行时证据或明确设计选择，不擅选5/10 |
 
 | F23 / P2 / 已接读取及生产事件，设备/GUI待验 | 复制中心出厂建筑CreateUnitSound与普通AI工厂类型cue | BuildingType4607C8..4607F8/+E74；NP4449DF→C2E8D5→C2BBBD；FactoryAI450198 | 正式AY付费复制音效0→1红绿、Off/换主/退休及存读、类型/全局回退与中心位置、stock隔离及AI建筑/产品cue顺序通过；fast AY/正版地图加载通过，音频设备/完整客户端仍待验 |
 
