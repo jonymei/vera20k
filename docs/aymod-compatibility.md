@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线dcf3306ba，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：F06新增美国AMRADR本体手动Off对照。原两架半弹/落地联系在Off后继续补满；第三架正常Attack打空后被拒新入场，沿已有AirportBound无dock分支坠毁，坠毁中完整存读后自然退休；原两架完整存读/On后再次实射。共三次完整存读。实际新Off1、美国低电新入场1、原GAAIRC低电1、airfield_reload2/radio::receive18/idle_entry1全部通过，共24项。仅测试/台账，无生产修复或新critic。固定构建元数据不变，未启动游戏、改MOD/原档或发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作按F24补苏联/尤里运输艇陆海工厂切换的实际付费链，不继续堆机场微边界。
+- 本轮基线ac79c7ad6，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：F24补苏联SAPC/SAPC2和尤里YHVR/YHVR2实际陆海工厂切换。原盟军测试提取唯一aymod_transport_factory_fallback，三阵营各用实际国家/工厂/船厂，正常付款/出厂、船厂建成切换准入、退休后恢复重工，再付费出不同ID运输艇；每例五次完整存读，三次逐笔费用核验。最终三实际场景3项、can_build::tests11项通过/1既有外部规则ignored未跑，共14项通过。无生产修复/新critic，已验证的机场本体Off见F06对应节。固定EXE仍42237952字节/2026-10-26 20:57:58；未启动游戏、改MOD/原档或发布。Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续清单其他高频机制的开放链，不重复机场/运输艇同链微边界；自主多AI海陆生产竞争A04与实际运输/换主仍开放。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -1695,6 +1695,13 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   下一安全动作：继续完整NP施加/恢复链，并按PLAN推进箱子、F08/F09/F11/F12及实际AI未验项；
   不因F07重分类或一个场景通过宣称整个海军/NPatch/MOD完成。
 
+
+### F24三阵营运输艇陆海工厂切换与存读（2026-10-29）
+
+- 原aymod_transport_factory_fallback_tracks_shipyard_lifecycle_after_load保留盟军入口，提取唯一aymod_transport_factory_fallback；新增aymod_soviet_transport_factory_fallback_after_load及aymod_yuri_transport_factory_fallback_after_load。正式AY Battle/Return Dubai分层加载，三例分别以Americans/Russians/YuriCountry开局，实际GAWEAP/GAYARD/LCRF/LCRF2、NAWEAP/NAYARD/SAPC/SAPC2、YAWEAP/YAYARD/YHVR/YHVR2，不改国家Owner、MOD前置或Naval。
+- 每例在无船厂时正常QueueProduction/付款/PLACE出陆军类型；船厂正常完成施工后CanBuild禁止陆军类型、允许海军类型，再从Ship队列付款出海军类型。船厂经已有UnInit退休、完整存读后陆军入口恢复，再次付款出不同ID陆军类型；三件产品最终均存活且非limbo。每次生产中完整存读，加船厂建成/退休两次，共五次；各次spent_credits差值等于实际cost_of，没有写进度/产品位置/队列/金钱。
+- 最终三实际场景3项、sim::production::can_build::tests11项通过，后者另1项需外部规则路径的既有ignored未跑，共14项通过；首次三例通过后仅格式化编辑的测试块，最终候选已重跑。CanBuild4F7870/NP负前置及原Factory/PLACE/UnInit owners无需生产修改。无新权威状态、RNG/timer/Detach或保存字段、无新玩法critic；设施/电源为生成fixture，产品为实际付款生产，不能称设施自然付费/科技树或实战毁场。未启动GUI/游戏、改MOD/原档/固定版或发布。船厂Off/EMP/换主、在途队列、实际搭载/航行和自主AI海陆竞争仍开放；普通AI原生提前成功分支不套人类负前置门。
+
 ## 3. 功能缺口与适配进度
 
 每一行是一条可独立收口的玩法链，不要求合并成一个大改动。
@@ -1733,7 +1740,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F23 / P2 / 已接读取及生产事件，设备/GUI待验 | 复制中心出厂建筑CreateUnitSound与普通AI工厂类型cue | BuildingType4607C8..4607F8/+E74；NP4449DF→C2E8D5→C2BBBD；FactoryAI450198 | 正式AY付费复制音效0→1红绿、Off/换主/退休及存读、类型/全局回退与中心位置、stock隔离及AI建筑/产品cue顺序通过；fast AY/正版地图加载通过，音频设备/完整客户端仍待验 |
 
-| F24 / P1 / 盟军陆海工厂切换实际付款/出厂/存读已验，其余待验 | 作者170507要求运输艇默认从船厂造，无船厂时可从战车工厂造；不是同一类型动态改Naval | LCRF的GAWEAP前置/NegativePrerequisite=GAYARD，LCRF2的GAYARD前置/Naval；既有CanBuild4F7870及NP负前置、Factory/PLACE owners | 正式Battle/Return Dubai，GAWEAP付款出LCRF→GAYARD建成后禁LCRF/Ship队列付款出LCRF2→退休船厂/存读后重新付款出不同ID的LCRF，五次完整存读及三次费用已验。设施/电源生成、正常施工、直接UnInit退休是fixture，非科技树/设施付费/实弹摧毁。SAPC/SAPC2、YHVR/YHVR2实际生产、船厂Off/EMP/换主/在途队列和自主AI仍待验；普通AI的原生CanBuild提前成功分支不因作者文字擅加人类负前置门 |
+| F24 / P1 / 三阵营陆海工厂切换实际付款/出厂/存读已验，其余待验 | 作者170507要求运输艇默认从船厂造，无船厂时可从战车工厂造；不是同一类型动态改Naval | LCRF的GAWEAP前置/NegativePrerequisite=GAYARD，LCRF2的GAYARD前置/Naval；既有CanBuild4F7870及NP负前置、Factory/PLACE owners | 正式Battle/Return Dubai，GAWEAP付款出LCRF→GAYARD建成后禁LCRF/Ship队列付款出LCRF2→退休船厂/存读后重新付款出不同ID的LCRF，五次完整存读及三次费用已验。设施/电源生成、正常施工、直接UnInit退休是fixture，非科技树/设施付费/实弹摧毁。苏联NAWEAP/NAYARD的SAPC/SAPC2、尤里YAWEAP/YAYARD的YHVR/YHVR2亦已走同一实际付费/三件产品/五次存读链。船厂Off/EMP/换主/在途队列和自主AI仍待验；普通AI的原生CanBuild提前成功分支不因作者文字擅加人类负前置门 |
 
 | F25 / P2 / 正式Battle基础颜色/精英星标两格式GPU已验，完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。其他类型/全部模式地图、存读/换主/出驻后的完整界面与GUI仍待验，无新增绘制逻辑 |
 
