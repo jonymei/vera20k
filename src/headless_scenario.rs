@@ -10914,6 +10914,181 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; paid transport switches between land factory and shipyard across saves"]
+    fn aymod_transport_factory_fallback_tracks_shipyard_lifecycle_after_load() {
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::production::{CanBuild, ProductionCategory, can_build};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let mut scene = load_session(
+            &root,
+            map,
+            0x00C0_FFEE,
+            battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            ),
+        )
+        .unwrap();
+        let owner = scene.sim().session.current_house().unwrap();
+        let factory = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = aymod_anchor(sim, owner);
+            spawn_on_free_cells(sim, rules, owner, cells_nearest(at), &["GAWEAP", "NANRCT"])[0]
+        };
+        let finished = |scene: &HeadlessScenario, id| {
+            scene.sim().entities().get(id).is_some_and(|entity| {
+                entity.is_ai_alive()
+                    && entity.mission.effective().known() != Some(MissionType::Construction)
+            })
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            finished(&scene, factory)
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let admission = |scene: &HeadlessScenario, land: bool| {
+            let rules = &scene.runtime.resources.rules;
+            for (kind, allowed) in [("LCRF", land), ("LCRF2", !land)] {
+                let object = rules.object(kind).unwrap();
+                assert_eq!(object.naval, kind == "LCRF2");
+                assert_eq!(
+                    can_build(scene.sim(), rules, owner, object, false, true),
+                    if allowed { CanBuild::Yes } else { CanBuild::No },
+                    "{kind}"
+                );
+            }
+        };
+        let produce = |scene: &mut HeadlessScenario, kind: &str, category| {
+            let type_id = scene.sim().interner.get(kind).unwrap();
+            let previous = scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| entity.owner() == owner && entity.type_ref() == type_id)
+                .map(|entity| entity.stable_id())
+                .collect::<std::collections::BTreeSet<_>>();
+            let cost = scene.sim().cost_of(
+                owner,
+                scene.runtime.resources.rules.object(kind).unwrap(),
+                &scene.runtime.resources.rules,
+            );
+            let spent = scene.sim().houses[&owner].economy().spent_credits();
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::QueueProduction { type_id },
+            ));
+            assert!(
+                (0..120).any(|_| {
+                    tick_with_due_commands(scene);
+                    scene
+                        .sim()
+                        .production()
+                        .factories()
+                        .view(owner, category)
+                        .is_some_and(|head| head.object.is_some())
+                }),
+                "{kind}: normal queue must start"
+            );
+            let bytes = save_scene(scene, "AY paid transport production before delivery");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert!(
+                (0..1800).any(|_| {
+                    tick_with_due_commands(scene);
+                    scene
+                        .sim()
+                        .production()
+                        .factories()
+                        .view(owner, category)
+                        .is_some_and(|head| head.progress == 54)
+                }),
+                "{kind}: normal paid production must finish"
+            );
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::PlaceProducedMobile { category },
+            ));
+            let mut delivered = None;
+            assert!(
+                (0..180).any(|_| {
+                    tick_with_due_commands(scene);
+                    delivered = scene
+                        .sim()
+                        .entities()
+                        .values()
+                        .find(|entity| {
+                            entity.owner() == owner
+                                && entity.type_ref() == type_id
+                                && !previous.contains(&entity.stable_id())
+                                && entity.is_ai_alive()
+                                && !entity.lifecycle.in_limbo()
+                        })
+                        .map(|entity| entity.stable_id());
+                    delivered.is_some()
+                }),
+                "{kind}: PLACE must deliver a real on-map transport"
+            );
+            assert_eq!(
+                scene.sim().houses[&owner].economy().spent_credits() - spent,
+                cost
+            );
+            delivered.unwrap()
+        };
+        admission(&scene, true);
+        let land = produce(&mut scene, "LCRF", ProductionCategory::Vehicle);
+        let yard = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = aymod_anchor(sim, owner);
+            aymod_spawn_service_building(sim, rules, owner, "GAYARD", at)
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            finished(&scene, yard)
+        }));
+        admission(&scene, false);
+        let bytes = save_scene(&scene, "AY shipyard disables land transport fallback");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        admission(&scene, false);
+        let ship = produce(&mut scene, "LCRF2", ProductionCategory::Ship);
+        {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .uninit_with_rules(yard, &runtime.resources.rules);
+        }
+        admission(&scene, true);
+        let bytes = save_scene(
+            &scene,
+            "AY shipyard retired; land transport fallback restored",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        admission(&scene, true);
+        let replacement = produce(&mut scene, "LCRF", ProductionCategory::Vehicle);
+        assert_ne!(
+            replacement, land,
+            "fallback must deliver a newly paid land transport"
+        );
+        for id in [land, ship, replacement] {
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .is_some_and(|entity| entity.is_ai_alive() && !entity.lifecycle.in_limbo())
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real naval fire damages a ship during paid shipyard repair across saves"]
     fn aymod_repairing_destroyer_takes_real_naval_fire_after_load() {
         use crate::sim::command::{Command, CommandEnvelope};
