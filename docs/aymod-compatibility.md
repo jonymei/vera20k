@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于bb1ecd649继续作者说明漏项F15：现有selected-building radial owner已覆盖，无生产修改。正式AY根typed的10种可选有武器防御（包含Combat但非IsBaseDefense的YAPSYT/GTGCAN2）均产正范围，取消选择无输出；实际TESLA普通/精英当前武器半径、RGBA/BGRA无窗口GPU可见像素与Z不变通过。原Nuke GPU1、NP/stock radial app各8通过；仅测试/台账，无新critic，固定版未动，整体目标开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于5d5bab51d完成新增作者漏项F16：工程师IFV维修停在空指部的飞机。两个既有owner按AY指令解除停机坪限制，保留空中飞机拒绝及Organic输入拒绝；实际AY正常登车/降落/移动/维修实射回血及完整存读续修满通过，NP/stock客户端各13、核心healer各1通过，Alt误入回归1通过。一次只读critic无可操作发现；扩大techno_ai模块200通过/4失败/14忽略，不宣称模块全绿，原因见F16。固定玩家版未动，整体目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,16 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F16新增漏项：工程师IFV维修空指部停机坪上的飞机（2026-10-29）
+
+- 作者《内容介绍170507版》明确要求维修车可维修停在空指部的飞机；不同于V10的Alt飞机误入维修厂/船厂。现有输入owner仍沿stock拒绝停在建筑上的飞机，新客户端回归在修复前实际失败None对Some(Repair)。
+- 实读AY GameMD.exe的Unit::What_Action73FDE1→7E09E6：Aircraft继续73FDE6，但73FE04..07建筑结果判断已NOP；非Aircraft在7E09EF..7E0A03检查Type Organic+D97，为真回73FE48保留base action。沿unit_repair_action接入，未将输入政策重复施加到已下达Attack。
+- 实际AY场景最初仍在Facing后丢目标、飞机HP75不涨；继续追既有healer_target_drop_step，实读Techno::AI6FAA6F..6FAAE9：6FAAAE仍jg6FAAE4拒绝空中飞机，但6FAAE0改JMP6FAAEF跳过建筑结果拒绝。只在NP跳过此停机坪拒绝，保留空中/外交/治疗武器判断；未放宽Unit FireAt736E7E的ILLEGAL目标规则。
+- 正式AY Battle场景中，ENGINEER普通Enter进入FV，ORCA普通Enter降落GAAIRC且双方radio有效/高度0，FV普通Move/Stop到合法邻格；正式Super伤害receiver制造非致死损伤，完整保存/恢复后普通Attack实际产FV对ORCA的fire_event并回血，再存读后无新命令修满、保持停机坪联系，最后再次存读。空指部也可能参与回血，本例不把全部治疗量/修满速度归给IFV。
+- 最终NP/stock retail_ifv_repair_tests各13通过（含普通坦克修理消费者、停机坪输入、DLPH Organic反例），核心healer边界NP/stock各1通过，实际AY场景两次通过；既有AY Alt维修厂/船厂运动回归1通过。桥梁修理slow两项本轮普通过滤均忽略，未作为通过证据。一次独立只读critic重读原指令，无可操作发现。
+- 扩大techno_ai模块200通过/4失败/14忽略。已读失败边界：deployed_guard unsupported control只构造fixture检查above_tenth；hover reanchor在advance_tick之前恢复后的state_hash不等；infantry oracle E1正伤害rearm20对22；move_arrival目标实体2不存在、burst index1对0。本次新分支均要求Unit治疗武器的Aircraft目标或输入query，不触及上述失败路径；未改其预期、未重跑基线，记录为其他既有问题，不宣称模块全绿。
+- 无新权威状态/保存字段、RNG调用、timer写入或Detach；原有维修开火、rearm和目标清理仍归共享owners。GUI、其他飞机/维修武器家族、电脑自主选择维修目标及治疗量/时序对照仍开放；未启动游戏、改MOD/原档/固定玩家版或发布。下一步继续作者漏项及现有功能边界复核；Return Dubai弱攻势暂停和V01/F11批准门禁保持。
 
 ### F15作者防御建筑选中范围：已有owner，补根库存与实际GPU（2026-10-29）
 
@@ -1473,6 +1483,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F13 / P2 / 已实现，待画面验收 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人实际Enter后的生产坐标已验；不扩大数组。下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 | F14 / P1 / 建筑短按同类选择已修，GUI/完整输入待验 | 作者新增建筑TypeSelect：同型防御、跨阵营生产类、复制中心视兵营；旧实现普通建筑被dynamic拒绝 | TypeSelect732C7A→C2CABA/C2CBC3；`src/app/input/entity_pick.rs::type_select_candidates`复用原seed/范围/owner/最终准入与Select receiver，比较原始Factory，不混Naval；stock不变 | 红测后NP/stock定向及真实AY根分组通过；完整AppState键盘/屏幕、重复短按、重绑/地图覆盖与GUI仍开放，不改held鼠标或建筑拖框 |
 | F15 / P2 / 已有生产实现，根库存与示例GPU已验 | 作者要求防御建筑选中显示范围；HasRadialIndicator/当前武器范围经原radial owner绘制 | Tactical6DBE39/Building456750/GetSensorRange4566B0；正式AY根10种可选有武器防御均产范围，TESLA普通/精英及RGBA/BGRA GPU与Z不变通过 | 全地图/模式层、其他阶段/类型GPU、完整游戏遮挡/保存恢复及真人GUI仍待验，不强开所有建筑flag |
+
+| F16 / P1 / 已修停机坪维修输入与目标保留，实际AY存读已验 | 作者工程师IFV维修空指部上的飞机 | Unit73FDE1→7E09E6及73FE04..07 NOP；Techno6FAAE0→6FAAEF | 沿现有unit_repair_action/healer_target_drop_step解除NP停机坪拒绝，保留空中拒绝及Organic输入政策；实际登车/降落/实射回血/存读续修满通过。其他家族、AI自主维修和GUI仍待验 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。

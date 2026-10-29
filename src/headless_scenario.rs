@@ -4107,6 +4107,231 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; boarded Engineer IFV repairs a normally docked aircraft across full saves"]
+    fn aymod_engineer_ifv_repairs_a_docked_orca_across_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::mission::MissionType;
+        use crate::sim::world::{
+            UnitRepairAction,
+            bridge_test_evidence::{restored_retail, save_scene},
+        };
+        let (mut scene, ifv, engineer) = aymod_nearby_pair("FV", "ENGINEER", true);
+        let owner = scene.sim().entities().get(ifv).unwrap().owner();
+        let (pad, plane) = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(ifv).unwrap().position;
+            let sites = || cells_nearest((i32::from(at.rx()) + 8, i32::from(at.ry())));
+            let pad = spawn_on_free_cells(sim, rules, owner, sites(), &["GAAIRC"])[0];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                owner,
+                cells_nearest((i32::from(at.rx()) + 24, i32::from(at.ry()))),
+                &["NANRCT"],
+            );
+            let plane = spawn_on_free_cells(sim, rules, owner, sites(), &["ORCA"])[0];
+            (pad, plane)
+        };
+        let queue = |scene: &mut HeadlessScenario, command| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(owner, sim.session.tick() + 1, command));
+        };
+        queue(
+            &mut scene,
+            Command::clicked_mission(engineer, MissionType::Enter, TargetKind::Entity(ifv)),
+        );
+        queue(
+            &mut scene,
+            Command::clicked_mission(plane, MissionType::Enter, TargetKind::Entity(pad)),
+        );
+        let docked = |scene: &HeadlessScenario| {
+            let sim = scene.sim();
+            let aircraft = sim.entities().get(plane).unwrap();
+            aircraft.radio_contacts.contains(pad)
+                && sim
+                    .entities()
+                    .get(pad)
+                    .unwrap()
+                    .radio_contacts
+                    .contains(plane)
+                && crate::sim::movement::air_movement::current_fly_height(
+                    aircraft,
+                    sim.resolved_terrain(),
+                ) == 0
+        };
+        assert!(
+            (0..1800).any(|_| {
+                tick_with_due_commands(&mut scene);
+                docked(&scene)
+                    && scene
+                        .sim()
+                        .entities()
+                        .get(engineer)
+                        .unwrap()
+                        .passenger_role
+                        .inside_transport_id()
+                        == Some(ifv)
+            }),
+            "the Engineer must really board and the ORCA must normally land on its pad"
+        );
+        // Bring the repair vehicle alongside before damaging the aircraft:
+        // an ordinary airfield may finish its own repairs during a long drive.
+        let destination = {
+            let sim = scene.sim();
+            let at = sim.entities().get(plane).unwrap().position;
+            cells_nearest((i32::from(at.rx()), i32::from(at.ry())))
+                .into_iter()
+                .find_map(|(x, y)| {
+                    let (x, y) = (u16::try_from(x).ok()?, u16::try_from(y).ok()?);
+                    let cell = sim.resolved_terrain().unwrap().cell(x, y)?;
+                    (!cell.outside_playfield
+                        && sim.mover_can_enter(
+                            ifv,
+                            (x as i16, y as i16),
+                            crate::sim::movement::infantry_entry::InfantryEntryArgs::REPAIR,
+                            crate::sim::movement::infantry_entry::EntryQueryMode::CheckLocomotor,
+                            &scene.runtime.resources.rules,
+                            Some(&scene.runtime.resources.overlay_registry),
+                        ) == Ok(0))
+                    .then_some((x, y))
+                })
+                .unwrap()
+        };
+        queue(
+            &mut scene,
+            Command::Move {
+                entity_id: ifv,
+                target_rx: destination.0,
+                target_ry: destination.1,
+            },
+        );
+        assert!((0..1800).any(|_| {
+            tick_with_due_commands(&mut scene);
+            let unit = scene.sim().entities().get(ifv).unwrap();
+            (unit.position.rx(), unit.position.ry()) == destination
+                && unit.navigation.nav_com().is_none()
+        }));
+        queue(&mut scene, Command::Stop { entity_id: ifv });
+        assert!((0..120).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene
+                .sim()
+                .entities()
+                .get(ifv)
+                .unwrap()
+                .mission
+                .effective()
+                .known()
+                == Some(MissionType::Guard)
+                && crate::sim::movement::motion_query::is_moving(
+                    scene.sim().entities().get(ifv).unwrap(),
+                ) != Some(true)
+        }));
+        let strength = scene
+            .runtime
+            .resources
+            .rules
+            .object("ORCA")
+            .unwrap()
+            .strength;
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    plane,
+                    strength / 2,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: true,
+                    },
+                ),
+                Default::default(),
+            );
+        }
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let sim = scene.sim();
+            let hp = sim.entities().get(plane).unwrap().health.current();
+            let weapon = sim.entities().get(ifv).unwrap().current_weapon_number();
+            let rearm = sim.entities().get(ifv).unwrap().rearm_timer;
+            let bytes = save_scene(
+                scene,
+                "AY Engineer IFV repairing an aircraft on its real pad",
+            );
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+            assert!(docked(scene));
+            let sim = scene.sim();
+            assert_eq!(sim.entities().get(plane).unwrap().health.current(), hp);
+            assert_eq!(
+                sim.entities().get(ifv).unwrap().current_weapon_number(),
+                weapon
+            );
+            assert_eq!(sim.entities().get(ifv).unwrap().rearm_timer, rearm);
+            assert_eq!(
+                sim.entities()
+                    .get(engineer)
+                    .unwrap()
+                    .passenger_role
+                    .inside_transport_id(),
+                Some(ifv)
+            );
+        };
+        restore(&mut scene);
+        assert!(
+            scene.sim().entities().get(ifv).unwrap().in_playfield(),
+            "the parked repair IFV must be in the playable map after restore"
+        );
+        assert_eq!(
+            scene
+                .sim()
+                .unit_repair_action(ifv, plane, owner, &scene.runtime.resources.rules),
+            Some(UnitRepairAction::Repair)
+        );
+        let hp = scene.sim().entities().get(plane).unwrap().health.current();
+        assert!(hp > 0 && hp < strength);
+        queue(
+            &mut scene,
+            Command::Attack {
+                attacker_id: ifv,
+                target_id: plane,
+            },
+        );
+        let mut fired = false;
+        assert!(
+            (0..1800).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output
+                    .fire_events
+                    .iter()
+                    .any(|event| event.attacker_id == ifv && event.target == TargetKind::Entity(plane));
+                fired && scene.sim().entities().get(plane).unwrap().health.current() > hp
+            }),
+            "the IFV must fire its repair weapon and increase the parked plane's HP"
+        );
+        restore(&mut scene);
+        assert!(
+            (0..1800).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert!(docked(&scene));
+                scene.sim().entities().get(plane).unwrap().health.current() == strength
+            }),
+            "the saved repair attack must finish without a new order or leaving the pad"
+        );
+        restore(&mut scene);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual aircraft Alt move over a service depot"]
     fn aymod_aircraft_alt_move_does_not_enter_or_repair_at_a_depot() {
         use crate::sim::command::{Command, CommandEnvelope};

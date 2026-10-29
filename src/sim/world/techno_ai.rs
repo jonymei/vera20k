@@ -2103,7 +2103,9 @@ fn screen_visual_character(
 ///   (`0x006FAA21..0x006FAA69`);
 /// - a Unit drops an Aircraft target that is airborne (GetHeight vt+0x1C8
 ///   above 0) or stands on a building's Cell (`0x0047C520` at its Location,
-///   `0x006FAA6F..0x006FAAE9`).
+///   `0x006FAA6F..0x006FAAE9`). AY NPatch replaces the building-result
+///   branch at `0x006FAAE0` with JMP `0x006FAAEF`, retaining only the
+///   airborne refusal (source: AY GameMD.exe instructions).
 ///
 /// IsAlliedWith on an object asks its owner; a Cell or an ownerless object is
 /// never allied. Both alliance arms ask the object's own house (+0x21C).
@@ -2200,7 +2202,7 @@ fn healer_target_drop_step(sim: &mut Simulation, id: u64, rules: &RuleSet) {
             crate::sim::movement::locomotor::MovementLayer::Ground,
         )
         .is_some();
-    if airborne || padded {
+    if airborne || (!cfg!(feature = "npatch") && padded) {
         drop(sim);
     }
 }
@@ -2603,7 +2605,10 @@ mod tests {
             ),
             Some(pad)
         );
-        assert_eq!(run(&mut sim, ifv, orca), None);
+        assert_eq!(
+            run(&mut sim, ifv, orca),
+            cfg!(feature = "npatch").then_some(TargetKind::Entity(orca))
+        );
         // A Cell is never allied.
         sim.substrate
             .entities

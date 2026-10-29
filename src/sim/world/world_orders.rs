@@ -276,7 +276,16 @@ impl Simulation {
             return (target.category() != EntityCategory::Structure)
                 .then_some(UnitRepairAction::Select);
         }
-        if target.category() == EntityCategory::Aircraft {
+        // NPAE Unit::What_Action73FDE1 ->7E09E6 keeps the Aircraft branch
+        // but NOPs73FE04..06, so a pad's building no longer rejects repair.
+        // Its non-Aircraft arm7E09EF..7E0A03 also refuses Organic targets.
+        if cfg!(feature = "npatch")
+            && target.category() != EntityCategory::Aircraft
+            && target_type.organic
+        {
+            return None;
+        }
+        if !cfg!(feature = "npatch") && target.category() == EntityCategory::Aircraft {
             //73FDE1..73FE06: a grounded aircraft on a building is excluded.
             let coord = crate::sim::movement::ground_pose::position_world_coord(&target.position);
             let cell = self.resolved_terrain.as_ref().and_then(|terrain| {
