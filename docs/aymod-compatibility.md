@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于fa75981c2补实际工业工厂建筑折扣/付款/造价经验消费者。正式AY Battle的NAINDP五种费用系数为1/.8/.8/.900001/.900001；GAPOWR普通排队实际按折后价付款、热存读续完同一产品且另一House报价不串。工厂移除恢复现价、原产品quote保持；MTNK收获相同APOC击杀的两端造价XP对照及三次存读通过。新实际场景1、奖励直接回归6、生产起始报价回归2通过。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
+- 工作区D:/Workshop/vera20k-aymod-audit，分支feature/aymod-integration-resume，基于3fb044262补作者漏项F18：NACLON赋予House步兵远程自动疗伤，区别于V02医院入驻。正式AY实际E1无源不回血、复制中心落地后远处本方治满/异House不变、两次完整存读、移除源后重新受伤不再回血通过；新增实际场景1，selfheal_tests10通过/1原retail地图ignored未跑。仅测试/台账，无生产修改/新critic；固定玩家版未动，完整目标仍开放。
 - 玩家固定入口D:/Workshop/vera20k/target/AYMOD-test-20261026-burst.cmd、标签aymod-playtest-20261026-burst、源cfb479750不变。未启动GUI、未改MOD配置/原始存档、未替换固定构建；后续修复不会自动进入该版。
 - 纯NP保存布局因私有生命周期bool改为enum而变化，当前构建存读已验；旧布局由既有校验拒绝，不提供强读/迁移或重写原档。固定构建仍使用自己的旧布局，不受本分支源码变化影响。
 - Return Dubai弱攻势线继续暂停，不调AI权重/兵种数值。此前陆海双队列/Walk集结有修复，跨水区FNPC、SCHP hold、抗压和多AI长局仍开放；非盟军巨炮修复b5a046558已通过三阵营计划及实际AY三困难AI基地发展/巨炮生产落地验证。固定版不含，旧计划/巨炮不追溯删除；裂缝实际付款/建成/15格fog与存读本轮已验，GUI及占领异阵营科技后的边界未验。
@@ -15,6 +15,14 @@
 - 下一安全动作：继续其他高频功能残余；V06地面YAGGUN建筑调度三等级已验，对空精确双计时仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，旧控制者指针选择仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项失败/错误保留，本轮无Python工具改动。
+
+### F18新增作者漏项：复制中心提供步兵远程自动疗伤（2026-10-29）
+
+- 作者170507明确要求复制中心除复制兵外还赋予步兵自动疗伤；这是House自愈增益，不是V02的GAROBO/NARADR Hospital进入/住院/出院。实际类型名NACLON，正式AY Battle typed为Cloning/Powered、InfantryGainSelfHeal=1、UnitsGainSelfHeal=0；实际General的步兵间隔15帧、每次10，未按别的MOD或旧值补常量。
+- 新aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load，正式Super receiver将本方与远处另一House实际E1打成半血；无复制中心的两个周期内两者均不回血。正常spawn/GrandOpening原NACLON在本方患者10格之外，既有Building登记使House.self_heal_infantry自然变1；没有设置自愈计数、患者Health或入驻关系，不声明工厂经过付费科技树。
+- 第一次完整保存恢复保留计数1，普通帧令远处本方患者真正治满，其他House伤兵保持原伤，本方患者从未进入Cargo。沿既有house_self_heal_step/house_heal_arm（Techno6FA8C8..6FA93E）采自身House计数；Building GrandOpening446382..4463B4的授予与Limbo4459AE..4459CA的撤销仍归既有owner，无复制中心专用第二套疗伤循环。
+- 通过既有UnInit owner移除源，House计数回0；正式receiver再次打伤本方患者，第二次完整保存恢复后再跑三个周期，计数仍0且本方/另一House生命不变。此处验证源退休，不伪装成源被实弹摧毁或出售动画的完整过程；Powered并不被本测试擅自解释为House增益随电力即时撤销。
+- 最终新增实际场景1、selfheal_tests10通过/1原retail Arena地图场景ignored未运行。仅测试/台账，无新权威状态/RNG调用/timer写入/Detach/保存字段，无新critic；未启动GUI、改MOD/原档/固定构建或发布。实际付费建造/复制兵、源战斗死亡/出售/换主、断电/EMP政策、Organic车辆分流及自主多AI长局仍开放；不能把本项或医院项当成完整医疗系统已验。
 
 ### 工业工厂：实际建筑折扣、付款与两端造价经验（2026-10-29）
 
@@ -1523,6 +1531,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F16 / P1 / 已修停机坪维修输入与目标保留，实际AY存读已验 | 作者工程师IFV维修空指部上的飞机 | Unit73FDE1→7E09E6及73FE04..07 NOP；Techno6FAAE0→6FAAEF | 沿现有unit_repair_action/healer_target_drop_step解除NP停机坪拒绝，保留空中拒绝及Organic输入政策；实际登车/降落/实射回血/存读续修满通过。其他家族、AI自主维修和GUI仍待验 |
 
 | F17 / P1 / 已有部署治疗owner，实际AY范围与存读已验 | 尤里X部署治疗周围单位，非心控武器 | YURIPR副槽SuperPsiWave→SuperPsiPulse负Verses；现有Infantry部署/弹体/AoE/伤害receiver | 普通部署实际发射，附近E1/MTNK回血、远处E1不变、治疗前后存读及rearm/120帧不重放通过；精确量/边沿、其他敌我/空中/建筑、多AI与画面仍待验 |
+
+| F18 / P1 / 已有House自愈owner，实际复制中心远程与存读已验 | 复制中心赋予本House步兵自动疗伤，非进入医院 | NACLON InfantryGainSelfHeal=1；General 15帧/10生命；Building登记/撤销→House计数→Techno自愈 | 实际远处E1无源/有源治满/异House隔离、移除源后再伤停止及两次存读通过；完整复制/付费建造、换主/电力、其他类别与多AI仍待验 |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。

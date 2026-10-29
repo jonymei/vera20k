@@ -20306,6 +20306,138 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; Cloning Vats grants remote owner-only self-heal and revokes it across saves"]
+    fn aymod_cloning_vats_remote_self_heal_stops_after_provider_loss_and_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, patient, _) = aymod_nearby_pair("E1", "GAPOWR", true);
+        let owner = scene.sim().entities().get(patient).unwrap().owner();
+        let other = house_of(scene.sim(), "Russians");
+        let control = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                other,
+                cells_nearest(aymod_anchor(sim, other)),
+                &["E1"],
+            )[0]
+        };
+        let strength = scene.runtime.resources.rules.object("E1").unwrap().strength;
+        let period = scene
+            .runtime
+            .resources
+            .rules
+            .general
+            .self_heal_infantry_frames;
+        assert_eq!(period, 15);
+        assert_eq!(
+            scene
+                .runtime
+                .resources
+                .rules
+                .general
+                .self_heal_infantry_amount,
+            10
+        );
+        let wound = |scene: &mut HeadlessScenario, target| {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            sim.commit_direct_damage_receiver(
+                &resources.rules,
+                Some(&resources.overlay_registry),
+                EntityDamageEvent::direct_receiver(
+                    target,
+                    strength / 2,
+                    0,
+                    RAD_NO_ATTACKER,
+                    None,
+                    warhead,
+                    ReceiverCallFlags {
+                        ignore_defenses: true,
+                        arg6: true,
+                    },
+                ),
+                Default::default(),
+            );
+        };
+        wound(&mut scene, patient);
+        wound(&mut scene, control);
+        let hp = |scene: &HeadlessScenario, target| {
+            scene.sim().entities().get(target).unwrap().health.current()
+        };
+        let before = hp(&scene, patient);
+        let other_before = hp(&scene, control);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        for _ in 0..(period * 2) {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(hp(&scene, patient), before);
+            assert_eq!(hp(&scene, control), other_before);
+        }
+        let vats = {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let kind = rules.object("NACLON").unwrap();
+            assert!(kind.cloning && kind.powered);
+            assert_eq!(kind.infantry_gain_self_heal, 1);
+            assert_eq!(kind.units_gain_self_heal, 0);
+            let at = sim.entities().get(patient).unwrap().position;
+            let sites = cells_nearest((i32::from(at.rx()) + 12, i32::from(at.ry())))
+                .into_iter()
+                .filter(|&(x, y)| {
+                    (x - i32::from(at.rx()))
+                        .abs()
+                        .max((y - i32::from(at.ry())).abs())
+                        >= 10
+                });
+            spawn_on_free_cells(sim, rules, owner, sites, &["NACLON"])[0]
+        };
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().houses[&owner].self_heal_infantry() == 1
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let restore = |scene: &mut HeadlessScenario| {
+            let bytes = save_scene(scene, "AY Cloning Vats remote infantry healing");
+            scene.runtime.simulation = restored_retail(scene, &pristine, &bytes);
+        };
+        restore(&mut scene);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 1);
+        assert!(
+            (0..(period * strength)).any(|_| {
+                tick_with_due_commands(&mut scene);
+                assert_eq!(hp(&scene, control), other_before);
+                hp(&scene, patient) == strength
+            }),
+            "a remote wounded GI must heal without entering the Cloning Vats"
+        );
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(patient)
+                .unwrap()
+                .passenger_role
+                .is_inside_transport()
+        );
+        aymod_remove_shooter(&mut scene, vats);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        wound(&mut scene, patient);
+        let wounded_again = hp(&scene, patient);
+        assert!(wounded_again > 0 && wounded_again < strength);
+        restore(&mut scene);
+        assert_eq!(scene.sim().houses[&owner].self_heal_infantry(), 0);
+        for _ in 0..(period * 3) {
+            tick_with_due_commands(&mut scene);
+            assert_eq!(hp(&scene, patient), wounded_again);
+            assert_eq!(hp(&scene, control), other_before);
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; actual Yuri Prime deploy heals a nearby wounded unit"]
     fn aymod_yuri_prime_deploy_heals_a_wounded_ally_after_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
