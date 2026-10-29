@@ -25096,6 +25096,204 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; kill-earned elite Virus fires mutation bullets and the saved death animation creates one Brute"]
+    fn aymod_virus_earned_elite_mutation_round_survives_death_animation_save() {
+        use crate::sim::combat::TargetKind;
+        use crate::sim::combat::veterancy::VeterancyRank;
+        use crate::sim::command::{Command, CommandEnvelope};
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, actor, first) = aymod_nearby_pair("VIRUS", "SPY", false);
+        let owner = scene.sim().entities().get(actor).unwrap().owner();
+        let enemy = scene.sim().entities().get(first).unwrap().owner();
+        scene
+            .runtime
+            .simulation
+            .houses
+            .get_mut(&enemy)
+            .unwrap()
+            .set_is_human_for_test(true);
+        let attack = |scene: &mut HeadlessScenario, target| {
+            let sim = &mut scene.runtime.simulation;
+            sim.queue_command(CommandEnvelope::new(
+                owner,
+                sim.session.tick() + 1,
+                Command::Attack {
+                    attacker_id: actor,
+                    target_id: target,
+                },
+            ));
+        };
+        let spawn_victim = |scene: &mut HeadlessScenario, round: usize| {
+            let runtime = &mut scene.runtime;
+            let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+            let at = sim.entities().get(actor).unwrap().position;
+            let (dx, dy) = [(7, 0), (0, 7), (-7, 0), (0, -7)][round % 4];
+            spawn_on_free_cells(
+                sim,
+                rules,
+                enemy,
+                cells_nearest((i32::from(at.rx()) + dx, i32::from(at.ry()) + dy)),
+                &["SPY"],
+            )[0]
+        };
+        let mut ordinary = false;
+        for round in 0..12 {
+            if scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .veterancy
+                .rank_kind()
+                == VeterancyRank::Elite
+            {
+                break;
+            }
+            let victim = if round == 0 {
+                first
+            } else {
+                spawn_victim(&mut scene, round)
+            };
+            attack(&mut scene, victim);
+            assert!(
+                (0..1200).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    ordinary |= output.fire_events.iter().any(|event| {
+                        event.attacker_id == actor
+                            && scene.sim().interner.resolve(event.weapon_id) == "Virusgun"
+                    });
+                    scene
+                        .sim()
+                        .entities()
+                        .get(victim)
+                        .is_none_or(|entity| entity.health.current() <= 0)
+                }),
+                "normal Virus fire must finish the training target"
+            );
+        }
+        assert!(ordinary);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .veterancy
+                .rank_kind(),
+            VeterancyRank::Elite
+        );
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(&scene, "AY Virus earned elite through normal weapon kills");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert_eq!(
+            scene
+                .sim()
+                .entities()
+                .get(actor)
+                .unwrap()
+                .veterancy
+                .rank_kind(),
+            VeterancyRank::Elite
+        );
+        let victim = spawn_victim(&mut scene, 0);
+        let mutate = {
+            let rules = &scene.runtime.resources.rules;
+            let unit = rules.object("VIRUS").unwrap();
+            let weapon = rules.weapon(unit.elite_primary().unwrap()).unwrap();
+            assert_eq!(weapon.id, "VirusgunE");
+            assert_eq!(
+                rules
+                    .warhead(weapon.warhead.as_deref().unwrap())
+                    .unwrap()
+                    .inf_death,
+                9
+            );
+            rules.general.infantry_death_anim(9).unwrap().to_owned()
+        };
+        let before = scene
+            .sim()
+            .entities()
+            .values()
+            .filter(|entity| scene.sim().interner.resolve(entity.type_ref()) == "BRUTE")
+            .map(|entity| entity.stable_id())
+            .collect::<std::collections::BTreeSet<_>>();
+        attack(&mut scene, victim);
+        let mut fired = false;
+        let mut death_anim = None;
+        assert!(
+            (0..1200).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                fired |= output.fire_events.iter().any(|event| {
+                    event.attacker_id == actor
+                        && event.target == TargetKind::Entity(victim)
+                        && scene.sim().interner.resolve(event.weapon_id) == "VirusgunE"
+                });
+                death_anim = scene
+                    .sim()
+                    .anims()
+                    .find(|(_, anim)| {
+                        scene.sim().interner.resolve(anim.type_id()) == mutate
+                            && anim.owner_house() == Some(owner)
+                    })
+                    .map(|(id, _)| *id);
+                fired && death_anim.is_some()
+            }),
+            "elite real fire must enter the owned mutation death animation"
+        );
+        let death_anim = death_anim.unwrap();
+        let bytes = save_scene(
+            &scene,
+            "AY elite Virus mutation animation before creating its Brute",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            scene
+                .sim()
+                .anims()
+                .any(|(id, anim)| *id == death_anim && anim.owner_house() == Some(owner))
+        );
+        let mutants = |scene: &HeadlessScenario| {
+            scene
+                .sim()
+                .entities()
+                .values()
+                .filter(|entity| {
+                    !before.contains(&entity.stable_id())
+                        && scene.sim().interner.resolve(entity.type_ref()) == "BRUTE"
+                        && entity.is_ai_alive()
+                        && !entity.lifecycle.in_limbo()
+                })
+                .map(|entity| (entity.stable_id(), entity.owner()))
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            (0..1200).any(|_| {
+                tick_with_due_commands(&mut scene);
+                !mutants(&scene).is_empty()
+            }),
+            "saved mutation animation must create a real on-map Brute"
+        );
+        let born = mutants(&scene);
+        assert_eq!(born.len(), 1);
+        assert_eq!(born[0].1, owner);
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scene);
+        }
+        assert_eq!(mutants(&scene), born);
+        let bytes = save_scene(&scene, "AY mutation product and completed animation");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        for _ in 0..180 {
+            tick_with_due_commands(&mut scene);
+        }
+        assert_eq!(
+            mutants(&scene),
+            born,
+            "finished death animation must not produce another mutant after loading"
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; Industrial Plant and Cloning Vats independently heal mechanical and organic units across source loss and saves"]
     fn aymod_industrial_and_cloning_self_heal_keep_unit_classes_separate_after_load() {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};

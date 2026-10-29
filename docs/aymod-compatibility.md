@@ -6,7 +6,7 @@
 
 ## 当前检查点（2026-10-29）
 
-- 本轮基线eeaeae462，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F26工业工厂车辆自愈遗漏项，并补F18 Organic Unit通道。正式AY Return Dubai的DEST/DLPH/E1，同House普通受伤：无源只有独立单点自愈；NAINDP仅给机械DEST额外大步治疗，NACLON再给Organic海豚及步兵独立治疗。两源并存/逐个UnInit退休、四次完整存读核(Units,Infantry)计数(1,0)/(1,1)/(0,1)/(0,0)，逐帧大步治疗随正确来源消失，固有SelfHealing保留。最终新实际1、原复制中心1、selfheal普通10/原生数值3通过，共15通过/1既有ignored未跑。初稿DNOA及DLPH有固有SelfHealing，不能假设零治疗，已改按原有独立单点自愈与House额外大步治疗区分，不改配置或关闭固有能力。仅测试/台账，无生产修复/新critic；设施/伤势/换主为隔离fixture，不称自然生产/AI治疗。固定版未动，无GUI/MOD/原档/发布；Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续高频功能/作者遗漏或多AI损耗补员，不重复已验初次出击及自愈微边界。
+- 本轮基线3e61813a2，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume：新增F27作者漏项，精英VIRUS基因变异子弹。实际AY Battle VIRUS正常Attack敌SPY、真实耗血/击杀升精英（无rank/XP/HP写入），晋升完整存读后发VirusgunE/VirusM，进入归攻击方的GENDEATH；死亡动画中完整存读后正常生成唯一活体落地BRUTE，后续180帧/产物再次存读再180帧不重复生成。最终实际1、GeneticConverter9、Veterancy12共22通过，无生产修复/新critic。初稿AnimId借用跨restore编译错误、误用friendly fixture导致零XP已纠正，非玩法缺陷；无MOD/原档/固定版/GUI/发布变更。Return Dubai暂停及A09/F22/V01/F11门禁保持。下一安全动作继续作者遗漏或其他高频功能；普通/精英驻军弹、空中免变异/建筑拒绝边界、变异后战斗/多AI及画面仍开放，不把单场功能通过写成全部病毒体系完成。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
 - F23已接入：BuildingType.CreateUnitSound经原SoundRegistry/分层历史读取，复制出口NP使用类型cue或全局CreateInfantrySound，stock不新增复制cue；共用生产音效出口补齐普通Factory_AI的类型cue，并保持在产品RecordLastBuilt之前。实际付费复制场景先因0/应1音效事件失败、修后含Off/换主/退休/存读四次生产通过；NP reader1/FactoryAI13/clone4，stock reader1/FactoryAI8/clone4通过，另有实际场景1。fast parity-digest分别真实载入AY/正版XMP03T4并运行1帧；非玩家游戏/GUI、未动固定版。声音设备/GUI仍待真人验，不把音效项外推到全MOD完成；继续其他高频功能，F22/V01/F11和Return Dubai暂停边界不变。
@@ -192,6 +192,14 @@
 - 通过既有UnInit owner退休源后双方计数均0，正式receiver再伤新方E1；第四次完整存读保持双方计数0，随后三个周期两方患者HP均不再增加。本例为源退休，不冒称实弹死亡或完整出售动画验收。
 - 最终实际复合场景1、techno_ai::selfheal（普通10+原生数值3）及captured_building_sale普通2通过，共16项。另selfheal的原retail Arena场景1项、capture-sale的零售组件2项ignored未重跑。仅测试/台账，无新增生产权威状态、RNG调用、timer写入、Detach或保存字段，不需玩法critic。正常自愈/换主/退休仍走既有owners；未启动GUI、修改MOD/原始存档/固定构建或发布。中心付费建造、多源叠加/Organic车辆分流、自然缺电/EMP组合、源战斗死亡及自主多AI长局仍开放，不能把本项或医院项当成完整医疗系统已验。
 
+
+
+### F27作者漏项：精英病毒狙击手的基因变异子弹（2026-10-29）
+
+- 作者170507明确说精英VIRUS由病毒子弹改为基因变异子弹；旧F01只列其老兵隐形，未列这条武器死亡后续。正式AY Battle typed VIRUS.ElitePrimary=VirusgunE，Warhead=VirusM、InfDeath=9，General.InfantryMutate=GENDEATH；沿原Infantry ReceiveDamage5188AE..518B2C变异准入/动画owner与原MakeInfantry生产链，不新增另一套变异系统或按名字特判。
+- 新aymod_virus_earned_elite_mutation_round_survives_death_animation_save，正式AY Battle/XMP03T4、VIRUS与敌方SPY场景输入；敌House切human隔离自主行为，后续目标在射手四个方向附近正常落地。VIRUS普通Attack真正发Virusgun、正常伤害击杀并获经验升Elite，不改HP/等级/经验/伤害或生产配置。晋升后首次完整存读保持等级，再给新活体目标普通Attack，要求真实VirusgunE fire_event且原生产链出现归射手House的GENDEATH，不直接调用变异receiver或刷BRUTE。
+- GENDEATH仍活跃时第二次完整存读保持原动画ID/House，正常帧生成唯一活体非limbo BRUTE，归攻击方。继续180帧仍只有同一产物，第三次完整存读后再180帧仍无重复生成。原动画/占格/MakeInfantry owners正常更新与清理，不强制完成动画或手写产物坐标/归属；未验证新狂兽人随后战斗或全部动画像素。
+- 最终实际1、genetic_converter::tests9、veterancy::tests12，共22项通过。初稿将借用AnimId跨restore导致编译失败，改为保留ID值；首次运行误把fixture的friendly参数当作human隔离，导致同方击杀无XP，已改为真实敌House并独立切human；两者均非生产缺陷，不改经验准则掩盖。仅测试/台账，无生产修复/新增状态/RNG/timer/Detach/保存字段或新玩法critic；未启动GUI、修改MOD/原档/固定版或发布。驻军精英弹、空中InfDeath9免伤、建筑/桥梁准入、变异产物战斗、多AI及实际绘制仍开放。
 
 ### F26工业工厂车辆自愈、F18有机海军分流（2026-10-29）
 
@@ -1764,6 +1772,8 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F25 / P2 / 正式Battle基础颜色/精英星标两格式GPU已验，完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。其他类型/全部模式地图、存读/换主/出驻后的完整界面与GUI仍待验，无新增绘制逻辑 |
 
 | F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。其他家族/多源叠加/Off/EMP/战斗死亡及自主多AI仍待验 |
+
+| F27 / P1 / 实际击杀晋升/精英发射/死亡动画产物与三次存读已验 | 精英病毒狙击手改用基因变异子弹 | VIRUS.ElitePrimary=VirusgunE→VirusM.InfDeath9→GENDEATH→原MakeInfantry owner | 普通Attack实际击杀晋升、精英弹实射、动画中保存及唯一归攻击方BRUTE落地、产物保存后不重复生成已验。驻军弹/空中免伤/建筑桥梁准入/产物战斗/多AI及画面仍待验，单位/受控House为fixture |
 
 F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界；F11运行时接线未完成。**适用原生效果尚未全部证明**，
 不能直接依据键名写实现。F01–F03、F13 是首版新增的明确生产路径缺口；F13的五槽容量本身正确，缺的是NPAE循环。
