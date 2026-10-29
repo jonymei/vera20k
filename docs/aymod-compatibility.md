@@ -6,8 +6,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 本轮基线d0672c565，工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume。V05新增aymod_v3_terminal_impact_awards_parent_before_saved_missile_retirement：正式AY Battle/XMP03T4合法spawn普通V3/10格同层敌APOC，目标预置1HP/Sleep且敌House human为隔离fixture；没有直接伤害/经验/飞行位置写入。普通Attack令原V3ROCKET真实离开limbo并出母体槽，正常Stop只停母体；目标仍活/子机SpawnOwner仍指母体时第一次完整存读保留同manager/源链接。原663030 Detonate的6632C7调用ApplyAreaDamage后、6632D3虚调用UnInit前，RecordKill702FF0/C2C49F仍能通过原killer取SpawnOwner；正常帧必须同时观察原V3弹头impact请求、目标真正死亡、旧导弹退休和母体raw从0增加。第二次完整存读保留母体经验/旧源不存在；正常再生得到不同ID的替补、期间母体经验不重复增加，新子机继承母体raw/SpawnOwner，第三次完整存读保持。不是全血目标、所有导弹几何/控制者换主/多AI战斗或全部经验算术认证。
-- 最终新实际1、原DEST/DRED/BSUB/V3/VLAD连续晋升/热保存再生组合实际1、NP奖励7通过，共9项，retail环境及REQUIRE_RETAIL_INI=1。仅测试/台账，无生产权威状态、RNG抽样、timer写入、Detach或保存布局新增；各原owner正常执行已有副作用，无新玩法critic。未启动GUI、修改MOD/原档/固定版或发布，当前无遗留执行。下一安全动作回到总清单核对明确缺生产实现与仅缺验收的项目，优先非门禁生产缺口，不按每个导弹型号无限扩展同一例；F12完整AppState到启动/颜色消费者链是后续可查入口，不能据此解除F11光照批准门禁。V01/F11设计/批准门禁、F22容量设计冲突及Return Dubai弱攻势暂停保持。
+- 当前工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基线25c3c2831。本轮只扩展F26既有实际AY治疗场景：第二座NAINDP正常施工完成后House机械治疗计数2；正常GoOffline关闭第二座，受伤并完整存读后仍为2，实际机械DEST的周期治疗增量为两份配置量（独立SelfHealing可另加1）；退休关闭的第二座、再次受伤存读后计数1，实际增量恢复一份。随后原测试继续退休最后NAINDP与NACLON，分别验证机械/Organic/步兵通道正确撤销。两设施与伤势是fixture，不代表自然科技树/付费建造；未覆盖EMP/自然战斗死亡或自主多AI。
+- 原生HouseClass::GetUnitSelfHealStep50D9F0实际指令读取Rules+3C并乘House+168，与现有治疗owner一致。扩展后的实际AY场景1通过，techno_ai_selfheal_tests模块通过，NP基地planner11通过/1 ignored；零新生产修复、RNG/timer/Detach/保存字段，不需要新玩法critic。固定EXE仍42237952字节/2026-10-26 20:57:58，未启动GUI或修改MOD/原档/固定版。非盟军巨炮既有修复b5a046558保留；Return Dubai弱攻势继续暂停，V01/F11/F22门禁不变。下一步转其他功能链的实际缺口，不继续增加同一治疗倍率微边界；功能优先于UI，目标仍未全部完成。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1833,7 +1833,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F25 / P2 / 正式Battle基础颜色/精英星标两格式GPU已验，完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。其他类型/全部模式地图、存读/换主/出驻后的完整界面与GUI仍待验，无新增绘制逻辑 |
 
-| F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。其他家族/多源叠加/Off/EMP/战斗死亡及自主多AI仍待验 |
+| F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。双NAINDP叠加、第二座Off仍保留双份周期治疗、退休后恢复单份及两次额外完整存读已验；其他家族/EMP/战斗死亡及自主多AI仍待验 |
 
 | F27 / P1 / 实际击杀晋升/精英发射/死亡动画产物与三次存读已验 | 精英病毒狙击手改用基因变异子弹 | VIRUS.ElitePrimary=VirusgunE→VirusM.InfDeath9→GENDEATH→原MakeInfantry owner | 普通Attack实际击杀晋升、精英弹实射、动画中保存及唯一归攻击方BRUTE落地、产物保存后不重复生成已验。驻军弹/空中免伤/建筑桥梁准入/产物战斗/多AI及画面仍待验，单位/受控House为fixture |
 

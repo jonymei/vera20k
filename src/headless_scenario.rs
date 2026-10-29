@@ -27066,6 +27066,57 @@ mod retail_construction_tests {
             }),
             "both grant channels must independently heal their admitted unit classes"
         );
+        let second_plant = add_provider(&mut scene, "NAINDP");
+        assert!((0..600).any(|_| {
+            tick_with_due_commands(&mut scene);
+            scene.sim().houses[&owner].self_heal_units() == 2
+        }));
+        {
+            let runtime = &mut scene.runtime;
+            assert!(runtime.simulation.go_building_offline(
+                second_plant,
+                &runtime.resources.rules,
+                Default::default()
+            ));
+        }
+        wound(&mut scene, &patients);
+        restore(&mut scene);
+        assert!(
+            !scene
+                .sim()
+                .entities()
+                .get(second_plant)
+                .unwrap()
+                .building_online()
+        );
+        assert_eq!(scene.sim().houses[&owner].self_heal_units(), 2);
+        // HouseClass::GetUnitSelfHealStep50D9F0 multiplies the amount by
+        // the placed-source count, independently of GoOffline452360.
+        let amount = scene.runtime.resources.rules.general.self_heal_unit_amount;
+        assert!(amount > 1 && amount * 2 + 1 < strengths[0] / 2);
+        assert!((0..period * 2).any(|_| {
+            let before = health(&scene);
+            tick_with_due_commands(&mut scene);
+            let delta = health(&scene)[0] - before[0];
+            assert!((0..=1).contains(&delta) || (amount * 2..=amount * 2 + 1).contains(&delta));
+            delta >= amount * 2
+        }));
+        {
+            let runtime = &mut scene.runtime;
+            runtime
+                .simulation
+                .uninit_with_rules(second_plant, &runtime.resources.rules);
+        }
+        wound(&mut scene, &patients);
+        restore(&mut scene);
+        assert_eq!(scene.sim().houses[&owner].self_heal_units(), 1);
+        assert!((0..period * 2).any(|_| {
+            let before = health(&scene);
+            tick_with_due_commands(&mut scene);
+            let delta = health(&scene)[0] - before[0];
+            assert!((0..=1).contains(&delta) || (amount..=amount + 1).contains(&delta));
+            delta >= amount
+        }));
         {
             let runtime = &mut scene.runtime;
             runtime
