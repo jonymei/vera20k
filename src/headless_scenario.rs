@@ -2005,6 +2005,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet economies recover lost refineries and original miners deliver to the paid replacement"]
     fn aymod_two_soviet_ai_rebuild_refineries_and_resume_original_miners_after_load() {
+        aymod_soviet_refinery_recovery(false);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; a cashless Soviet AI sells its own buildings and resumes mining while its ally keeps earning"]
+    fn aymod_cashless_soviet_ai_sells_to_rebuild_refinery_across_load() {
+        aymod_soviet_refinery_recovery(true);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_soviet_refinery_recovery(cashless: bool) {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
@@ -2039,6 +2051,13 @@ mod retail_construction_tests {
                                 && entity.mission.effective().known() != Some(MissionType::Construction)
                         })
                         && !live_type(&scene, owner, "NAWEAP").is_empty()
+                        && (!cashless
+                            || live_type(&scene, owner, "NATECH").iter().any(|&id| {
+                                let entity = sim.entities().get(id).unwrap();
+                                !entity.lifecycle.in_limbo()
+                                    && entity.mission.effective().known()
+                                        != Some(MissionType::Construction)
+                            }))
                         && sim.houses[&owner].economy().score() > 0
                         && live_type(&scene, owner, "HARV").iter().any(|&id| {
                             let entity = sim.entities().get(id).unwrap();
@@ -2097,6 +2116,23 @@ mod retail_construction_tests {
                 .get(id)
                 .is_some_and(|entity| entity.is_ai_alive())
         }));
+        if cashless {
+            // Pressure fixture only: no refinery can pay the retained ore,
+            // and this House starts recovery without spendable cash.
+            scene
+                .runtime
+                .simulation
+                .houses
+                .get_mut(&owner)
+                .unwrap()
+                .economy_mut()
+                .set_credits_for_test(0);
+            assert!(crate::sim::ai_build_need::check_build_need(
+                scene.sim(),
+                &scene.runtime.resources.rules,
+                owner,
+            ));
+        }
         let pristine = scene.sim().resolved_terrain().unwrap().clone();
         let bytes = save_scene(
             &scene,
@@ -2112,9 +2148,46 @@ mod retail_construction_tests {
         assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
         let mut balances = std::collections::BTreeMap::new();
         let mut replacement = None;
+        let mut sold = std::collections::BTreeSet::new();
+        let mut saved_sale = false;
         assert!(
             (0..18000).any(|_| {
                 step(&mut scene);
+                if cashless {
+                    for entity in scene.sim().entities().values() {
+                        if entity.owner() == owner
+                            && entity.mission.current().known() == Some(MissionType::Selling)
+                        {
+                            assert_ne!(scene.sim().interner.resolve(entity.type_ref()), "NACNST");
+                            sold.insert(entity.stable_id());
+                        }
+                    }
+                    if !saved_sale && !sold.is_empty() {
+                        let wallet = scene.sim().houses[&owner].economy().clone();
+                        let peer_wallet = scene.sim().houses[&peer].economy().clone();
+                        let bytes = save_scene(
+                            &scene,
+                            "AY cashless AI automatic building sales still pending",
+                        );
+                        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                        assert_eq!(scene.sim().houses[&owner].economy(), &wallet);
+                        assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
+                        for &id in &sold {
+                            assert_eq!(
+                                scene
+                                    .sim()
+                                    .entities()
+                                    .get(id)
+                                    .unwrap()
+                                    .mission
+                                    .current()
+                                    .known(),
+                                Some(MissionType::Selling)
+                            );
+                        }
+                        saved_sale = true;
+                    }
+                }
                 for factory in scene
                     .sim()
                     .production()
@@ -2143,6 +2216,12 @@ mod retail_construction_tests {
             }),
             "AI must pay for a new refinery through ordinary construction"
         );
+        if cashless {
+            assert!(
+                saved_sale && !sold.is_empty(),
+                "no automatic building sale funded recovery"
+            );
+        }
         let (replacement, balance) = replacement.unwrap();
         let bytes = save_scene(
             &scene,
@@ -2217,6 +2296,22 @@ mod retail_construction_tests {
             }),
             "an original surviving HARV must unload at the same paid replacement, with both Houses earning after restore"
         );
+        if cashless {
+            assert!(
+                !scene.sim().houses[&owner]
+                    .strategy_emergency()
+                    .all_to_hunt_bias()
+            );
+            assert!(!live_type(&scene, owner, "NACNST").is_empty());
+            assert!(
+                sold.iter().all(|&id| scene
+                    .sim()
+                    .entities()
+                    .get(id)
+                    .is_none_or(|entity| !entity.is_ai_alive())),
+                "observed sales must finish, not just retain pending orders"
+            );
+        }
     }
 
     #[cfg(feature = "npatch")]
