@@ -167,7 +167,6 @@ class Fixture:
         initialize_nearby_zone_plane(u, size=(16, 16), plane=self.m.alloc(0x20000),
                                     rows=self.m.alloc(0x100))
         u.mem_write(MAP + 0xF4, dwords(16, 16, 0, 0, 32, 32))
-        u.mem_write(0x87F924, dwords(0xC00000))
         for entry in (0x561710, 0x5617A0, 0x5617C0, 0x5617E0):
             self.call(entry, 0, [])
         u.mem_write(self.bullet + 0x10C, dwords(ACTOR))

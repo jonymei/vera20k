@@ -767,7 +767,6 @@ class EngineerJoinedFixture(construction.JoinedFixture):
             u.mem_write(address, bytes(inputs.u.mem_read(address, length)))
         u.mem_write(HOUSE + 0x34, dwords(inputs.country))
         u.mem_write(0x887324, dwords(construction.JOINED_MEMORY + 0x5000))
-        u.mem_write(0x87F924, dwords(0xC00000))
         u.mem_map(0x31000000, 0x600000)
         u.mem_write(0x87F7E8 + 0x68, dwords(0x31000000, 0x40000, 0x31100000))
         for entry in (0x561710, 0x5617A0, 0x5617C0, 0x5617E0):

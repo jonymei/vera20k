@@ -542,7 +542,6 @@ class ComposedStates:
         initialize_nearby_zone_plane(u, size=(16, 16), plane=COMPOSED_STORAGE + 0x48000,
                                     rows=COMPOSED_STORAGE + 0x4D000)
         u.mem_write(MAP + 0xF4, dwords(16, 16, 0, 0, 32, 32))
-        u.mem_write(0x87F924, dwords(0xC00000))
         u.mem_write(0x887324, dwords(COMPOSED_STORAGE + 0x30000))
         # make_source_fixture's historical speed table is overwritten by the
         # same physical land reader after its map binding, not a supplied cost.
