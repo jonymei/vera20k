@@ -219,6 +219,7 @@ pub enum ShellCaptureCheckpoint {
     SkirmishExpandedColors,
     SkirmishExpandedApplied,
     SkirmishExpandedInGame,
+    SkirmishLightingRestartInGame,
     MoviesPage0x101Steady,
     /// Exit Game on `0xE2`: after the teardown slide, the confirmation over
     /// the empty shell backdrop (state 6).
@@ -558,6 +559,7 @@ impl ShellCaptureCheckpoint {
             "skirmish-expanded-colors" => Ok(Self::SkirmishExpandedColors),
             "skirmish-expanded-applied" => Ok(Self::SkirmishExpandedApplied),
             "skirmish-expanded-in-game" => Ok(Self::SkirmishExpandedInGame),
+            "skirmish-lighting-restart-in-game" => Ok(Self::SkirmishLightingRestartInGame),
             CHECKPOINT_SKIRMISH_0X6B_STEADY => Ok(Self::Skirmish0x6BSteady),
             CHECKPOINT_SKIRMISH_0X105_STEADY => Ok(Self::Skirmish0x105Steady),
             CHECKPOINT_SKIRMISH_0X105_CANCEL_STEADY => Ok(Self::Skirmish0x105CancelSteady),
@@ -772,6 +774,7 @@ impl ShellCaptureCheckpoint {
             Self::SkirmishExpandedColors => "skirmish-expanded-colors",
             Self::SkirmishExpandedApplied => "skirmish-expanded-applied",
             Self::SkirmishExpandedInGame => "skirmish-expanded-in-game",
+            Self::SkirmishLightingRestartInGame => "skirmish-lighting-restart-in-game",
             Self::MoviesPage0x101Steady => CHECKPOINT_MOVIES_0X101_STEADY,
             Self::MainMenu0xE2ExitConfirm => CHECKPOINT_MAIN_MENU_0XE2_EXIT_CONFIRM,
             Self::MovieList0x129Steady => CHECKPOINT_MOVIE_LIST_0X129_STEADY,
@@ -2200,21 +2203,18 @@ impl ShellCaptureSession {
             ShellCaptureCheckpoint::Skirmish0x102Steady => {
                 Some(skirmish::SkirmishCapture::default())
             }
-            ShellCaptureCheckpoint::SkirmishExpandedColors => {
-                Some(skirmish::SkirmishCapture::expanded(
-                    skirmish::ExpandedSetupTarget::Colors,
-                ))
-            }
-            ShellCaptureCheckpoint::SkirmishExpandedApplied => {
-                Some(skirmish::SkirmishCapture::expanded(
-                    skirmish::ExpandedSetupTarget::Applied,
-                ))
-            }
-            ShellCaptureCheckpoint::SkirmishExpandedInGame => {
-                Some(skirmish::SkirmishCapture::expanded(
-                    skirmish::ExpandedSetupTarget::InGame,
-                ))
-            }
+            ShellCaptureCheckpoint::SkirmishExpandedColors => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Colors),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedApplied => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Applied),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedInGame => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::InGame),
+            ),
+            ShellCaptureCheckpoint::SkirmishLightingRestartInGame => Some(
+                skirmish::SkirmishCapture::loading(skirmish::LoadingTarget::LightingRestart),
+            ),
             ShellCaptureCheckpoint::Skirmish0x102BackSlideOut(tick) => {
                 Some(skirmish::SkirmishCapture::slide_out(tick))
             }
@@ -4221,6 +4221,7 @@ mod tests {
             "skirmish-expanded-colors",
             "skirmish-expanded-applied",
             "skirmish-expanded-in-game",
+            "skirmish-lighting-restart-in-game",
         ] {
             let output = new_output_path(name);
             let mut values = valid_args(&output);

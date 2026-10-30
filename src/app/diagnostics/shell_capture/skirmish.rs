@@ -57,6 +57,8 @@ enum Phase {
     /// The game's Leave was confirmed: the abort exit runs and the shell
     /// resumes.
     Quitting,
+    /// Back out through Single Player to the root before the next match.
+    LightingRestartBack,
     /// In the game: the MCV deploys, then the Construction Yard is sold.
     Defeating,
     /// The score page `0x108` is up after the defeat.
@@ -87,6 +89,8 @@ pub(super) enum LoadingTarget {
     Diplomacy,
     /// Expanded color/technology inputs, then ordinary loading and live play.
     ExpandedGame,
+    /// Load an active lighting save, Leave, then start a fresh ordinary match.
+    LightingRestart,
 }
 
 /// In-game frames before the quit route presses Leave.
@@ -211,6 +215,10 @@ pub(super) struct SkirmishCapture {
     expanded_applied: bool,
     expanded_snapshot: Option<Value>,
     expanded_game: Option<Value>,
+    lighting_restart_loaded: bool,
+    lighting_restart_normal_rgb: Option<[i32; 3]>,
+    lighting_restarted: bool,
+    lighting_restart: Option<Value>,
 }
 
 #[derive(Clone, Copy)]
@@ -757,6 +765,7 @@ impl SkirmishCapture {
             Some(
                 LoadingTarget::AfterQuit
                     | LoadingTarget::ExpandedGame
+                    | LoadingTarget::LightingRestart
                     | LoadingTarget::DefeatScore
                     | LoadingTarget::DefeatContinue
                     | LoadingTarget::Diplomacy
@@ -1160,7 +1169,9 @@ impl SkirmishCapture {
                 } else if self.expanded.is_some()
                     && self.selected_scene.is_some()
                     && (!self.expanded_colors_opened
-                        || (self.expanded.is_some_and(|target| target != ExpandedSetupTarget::Colors)
+                        || (self
+                            .expanded
+                            .is_some_and(|target| target != ExpandedSetupTarget::Colors)
                             && !self.expanded_applied))
                 {
                     // Do not repeat idle mouse moves: the native common handler
@@ -1451,6 +1462,41 @@ impl SkirmishCapture {
                             state.match_state.input.cursor_x,
                             state.match_state.input.cursor_y]}));
                 }
+            }
+            (Phase::Quitting, PresentedShell::Skirmish)
+                if self.loading == Some(LoadingTarget::LightingRestart)
+                    && self.settled(state)? =>
+            {
+                self.route.push(json!({"dialog": 0x102, "frame": frame,
+                    "action": "lighting match returned to settled Skirmish; Back"}));
+                App::handle_skirmish_back(state);
+                self.phase = Phase::LightingRestartBack;
+            }
+            (Phase::LightingRestartBack, PresentedShell::SinglePlayer)
+                if state.frontend.shell_first_paint_slide.is_none()
+                    && state.frontend.shell_exit.is_none() =>
+            {
+                self.route.push(json!({"dialog": 0x100, "frame": frame,
+                    "action": "MainMenu"}));
+                App::handle_single_player_shell_action(
+                    state,
+                    crate::ui::single_player_shell::SinglePlayerShellAction::MainMenu,
+                );
+            }
+            (Phase::LightingRestartBack, PresentedShell::MainMenu)
+                if steady_main_menu_capture_ready(MainMenuCaptureSnapshot::from_state(state))? =>
+            {
+                self.route.push(json!({"dialog": 0xe2, "frame": frame,
+                    "action": "lighting match returned to root MainMenu"}));
+                self.lighting_restarted = true;
+                self.in_game_frames = 0;
+                self.phase = Phase::MainMenu;
+            }
+            (Phase::Starting, _)
+                if self.loading == Some(LoadingTarget::LightingRestart)
+                    && state.frontend.screen == GameScreen::InGame =>
+            {
+                self.advance_lighting_restart(state, frame)?;
             }
             (Phase::Starting, _)
                 if self.loading == Some(LoadingTarget::ExpandedGame)
@@ -1787,6 +1833,15 @@ impl SkirmishCapture {
                 && state.frontend.screen == GameScreen::InGame
                 && self.expanded_game.is_some());
         }
+        if self.loading == Some(LoadingTarget::LightingRestart) {
+            return Ok(self.phase == Phase::Starting
+                && state.frontend.screen == GameScreen::InGame
+                && self.lighting_restarted
+                && self
+                    .lighting_restart
+                    .as_ref()
+                    .is_some_and(|value| value.get("fresh_match").is_some()));
+        }
         if let Some(target) = self.loading {
             let next = match target {
                 LoadingTarget::Blank => crate::app::loading::pump::NextLoadingFrame::Blank,
@@ -1796,6 +1851,7 @@ impl SkirmishCapture {
                 | LoadingTarget::DefeatContinue
                 | LoadingTarget::Diplomacy => crate::app::loading::pump::NextLoadingFrame::First,
                 LoadingTarget::ExpandedGame => unreachable!("expanded live target handled above"),
+                LoadingTarget::LightingRestart => unreachable!("lighting restart handled above"),
             };
             return Ok(self.phase == Phase::Starting
                 && state.frontend.screen == GameScreen::Loading
@@ -1899,7 +1955,95 @@ impl SkirmishCapture {
         if let Some(snapshot) = &self.expanded_game {
             manifest["expanded_game"] = snapshot.clone();
         }
+        if let Some(snapshot) = &self.lighting_restart {
+            manifest["lighting_restart"] = snapshot.clone();
+        }
         manifest
+    }
+
+    fn advance_lighting_restart(&mut self, state: &mut AppState, frame: u32) -> Result<()> {
+        use crate::sim::scenario_session::ScenarioLightingProfile;
+        self.in_game_frames += 1;
+        if !self.lighting_restart_loaded && self.in_game_frames == QUIT_AFTER_FRAMES {
+            let grid = state.match_state.match_presentation.lighting.grid();
+            self.lighting_restart_normal_rgb = Some(grid.color_scheme_rgb());
+            ensure!(
+                grid.color_scheme_rgb() == grid.color_scheme_normal_rgb(),
+                "initial fresh match already has alternate scheme lighting"
+            );
+            #[cfg(feature = "dev-overlays")]
+            crate::app::persistence::commands::quickload(state);
+            #[cfg(not(feature = "dev-overlays"))]
+            anyhow::bail!("lighting restart capture requires dev-overlays");
+            self.lighting_restart_loaded = true;
+            self.route
+                .push(json!({"frame": frame, "action": "ordinary quickload requested"}));
+            return Ok(());
+        }
+        let observing_old = !self.lighting_restarted
+            && self.lighting_restart_loaded
+            && self.in_game_frames == QUIT_AFTER_FRAMES + 1;
+        let observing_new = self.lighting_restarted && self.in_game_frames == QUIT_AFTER_FRAMES;
+        if !observing_old && !observing_new {
+            return Ok(());
+        }
+        let sim = &state
+            .match_state
+            .sim_runtime
+            .as_ref()
+            .context("lighting restart lost runtime")?
+            .simulation;
+        let lighting = sim.session().lighting();
+        let selected = lighting.selected_profile();
+        let dominator_rgb = lighting.profile_rgb(ScenarioLightingProfile::Dominator);
+        let map_dominator_rgb = lighting.dominator().alternate_rgb();
+        let grid_rgb = state
+            .match_state
+            .match_presentation
+            .lighting
+            .grid()
+            .color_scheme_rgb();
+        // House Convert normal RGB is independent of the map's ground RGB;
+        // compare it with the initial fresh-match owner, not Scenario.normal.
+        if observing_old {
+            ensure!(
+                selected == ScenarioLightingProfile::Dominator
+                    && dominator_rgb[1] == 0
+                    && dominator_rgb != map_dominator_rgb
+                    && grid_rgb == dominator_rgb,
+                "save did not present active custom Dominator lighting"
+            );
+        } else {
+            ensure!(
+                selected == ScenarioLightingProfile::Normal
+                    && dominator_rgb == map_dominator_rgb
+                    && Some(grid_rgb) == self.lighting_restart_normal_rgb,
+                "fresh match retained outgoing lighting or its SW source: selected={selected:?}, dominator={dominator_rgb:?}, map_dominator={map_dominator_rgb:?}, render={grid_rgb:?}, baseline={:?}",
+                self.lighting_restart_normal_rgb
+            );
+            ensure!(
+                sim.session().tick() > 0 && sim.session().tick() < 100,
+                "fresh match did not restart its simulation clock"
+            );
+        }
+        let snapshot = json!({"simulation_tick": sim.session().tick(),
+            "selected_profile": format!("{selected:?}"), "dominator_rgb": dominator_rgb,
+            "map_dominator_rgb": map_dominator_rgb, "render_scheme_rgb": grid_rgb,
+            "initial_fresh_scheme_rgb": self.lighting_restart_normal_rgb});
+        self.lighting_restart.get_or_insert_with(|| json!({}))[if observing_old {
+            "outgoing_match"
+        } else {
+            "fresh_match"
+        }] = snapshot;
+        self.route
+            .push(json!({"frame": frame, "action": if observing_old {
+            "active Dominator presented; Leave" } else { "fresh match lighting observed" }}));
+        Self::set_pointer(state, self.rest_point());
+        if observing_old {
+            crate::app::input::abort::activate(state, crate::ui::shell::abort::AbortButton::Leave);
+            self.phase = Phase::Quitting;
+        }
+        Ok(())
     }
 }
 

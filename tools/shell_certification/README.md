@@ -46,6 +46,48 @@ They do not exercise OS/winit event dispatch, preferences reopening, network
 receive/reconnect or occupied-color policies. The in-game check bounds offline
 Start Game consumers; it is not a network or all-configuration certification.
 
+## AYMOD Lighting Restart Observation
+
+`skirmish-lighting-restart-in-game` observes world teardown through the actual
+shell, rather than resetting a standalone lighting object. Build with
+`--no-default-features --features npatch,dev-overlays` through `tools.cargo_run`.
+Use the isolated AYMOD config/DX12/owned-process procedure above and an isolated
+`saves/` directory containing **only a copy** of an active Dominator save. The
+[hot-load profile](../map_observation.aymod-dominator-hotload.example.json) and
+[instructions](../map_observation.md#computer-psychic-dominator-observation)
+produce one at tick 8199 through the normal save owner. Do not use personal saves
+or rewrite a source save. This is VERA same-layout snapshot loading, not native
+SAV compatibility.
+
+```text
+vera20k --shell-capture skirmish-lighting-restart-in-game --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
+```
+
+The route enters Skirmish and starts an ordinary match. After 30 presented
+in-game frames it invokes the existing quickload request owner directly (not a
+synthetic keyboard event). It requires the next presented world to have active
+custom Dominator lighting in both Scenario and the live presentation grid. Leave
+then queues ordinary EXIT; the returned Skirmish Back and Single Player Main
+Menu actions reach the root `0xE2`. The normal Single Player/Skirmish/Start Game
+route starts another match, and its 30th presented frame is captured.
+
+The additive `lighting_restart` block projects `outgoing_match` and `fresh_match`:
+clock, selected profile, effective/map Dominator RGB and presentation scheme RGB.
+The new match must select Normal, return effective Dominator RGB to that map's
+own profile (clearing the old SW source), restart its clock and match the initial
+fresh match's scheme RGB. House Convert normal RGB and map ground RGB are
+independent; the diagnostic compares the same owner across fresh matches, not
+those two different consumers. In the actual AY run, the outgoing tick 8200 was
+Dominator with effective/scheme RGB `[700,0,700]`; the new tick 30 was Normal,
+map/effective Dominator `[850,200,300]`, and fresh scheme `[1000,1000,1000]`.
+
+Check the route includes the root Main Menu, the frame length/SHA and the actual
+full in-game image. The production quit/load/input/presentation owners are reused;
+no simulation lighting or source metadata is assigned by the controller. This is
+one offline AY restart lifecycle, not OS input enrollment, every map/theater,
+network reconnection or native pixel certification. The ordinary sealed-stock
+checkpoint keeps its existing manifest and guards.
+
 ## Stock Certification
 
 This package validates the one-shot production `main-menu-0xe2-steady` capture
