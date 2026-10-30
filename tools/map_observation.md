@@ -1670,6 +1670,65 @@ RGB returned byte-for-byte after the restored effect ended. This bounds one
 full-client same-content save/load lifecycle, not other simultaneous effects or
 map replacement. Keep saves, captures and decoded images in scratch only.
 
+### Replacing an active Dominator world with another map save
+
+The same normal quickload route can test a different map's lighting without a
+new diagnostic loader. Use a **new, empty** scratch working directory with the
+isolated AYMOD config above and `npatch,dev-overlays`. First create a contrasting
+destination map and two profiles from the tracked input (run from the checkout;
+replace the absolute scratch path with a new directory):
+
+```python
+import json
+from pathlib import Path
+
+repo = Path.cwd()
+scratch = Path("C:/path/to/new-crossmap-capture")
+scratch.mkdir(exist_ok=False)
+original = repo / "tools/map_observation/examples/ai_psychic_dominator.map"
+text = original.read_text(encoding="utf-8")
+normal_rgb = "Red=1.0\nGreen=1.0\nBlue=1.0"
+assert text.count(normal_rgb) == 1
+text = text.replace(normal_rgb, "Red=0.4\nGreen=0.7\nBlue=0.3", 1)
+text = text.replace("Name=Computer Psychic Dominator Observation",
+                    "Name=AY Cross-map Normal Lighting Fixture", 1)
+alternate = scratch / "alternate-lighting.map"
+alternate.write_text(text, encoding="utf-8")
+source = repo / "tools/map_observation.aymod-dominator-lighting.example.json"
+for name, map_path, ticks, at, key in [
+    ("seed", alternate, 101, 100, "M"),
+    ("crossmap", original, 8600, 8200, "N"),
+]:
+    profile = json.loads(source.read_text(encoding="utf-8"))
+    profile["launch"]["selected_map_file"] = str(map_path)
+    profile["ticks"] = ticks
+    profile["gestures"] = [{"issue_after_step": at, "gesture": {
+        "kind": "key", "key": key, "modifiers": ["Ctrl", "Shift"]}}]
+    if key == "N":
+        profile["allow_load_segments"] = True
+    (scratch / (name + ".json")).write_text(
+        json.dumps(profile, indent=2) + "\n", encoding="utf-8")
+```
+
+Add the isolated `config.toml` to this directory, then capture `seed.json` before
+`crossmap.json`, using the existing wrapper, the same executable and the same
+scratch `--cwd`. The seed's sole save at tick 100 must be the repository's newest
+save. Do not copy personal saves or reuse a directory with other saves. The
+outgoing map still naturally charges and launches its Dominator; the second
+profile only loads the other map at step 8200, during the tint.
+
+In the actual DX12 run, the ordinary prepared-load/commit route rewound 8200 to
+100. The destination `(40,58)` cell's palette matched the independently captured
+seed for all 400 restored steps, ending at tick 500. Its tile, A-buffer and
+physical pixel matched too, rather than retaining outgoing Dominator RGB. The
+seed, immediate restored endpoint (an 8201-step copy) and continued endpoint
+passed bundle checks and were viewed. These establish a different-lighting map
+save replacing an active effect, not main-menu/new-game transitions, arbitrary
+theater/size replacement, simulation-hash equality, or whole-window pixel parity.
+The capture's top-level source identity describes the initial launch; use the
+actual load segment and destination baseline to interpret the restored epoch.
+Do not apply the original target-identity expectations across that epoch.
+
 The map's Ambient=1.0 matches this AY SuperType's Ambient=100, so this case
 demonstrates RGB switching/restoration, not an ambient fade curve. It does not
 replace the existing saved/two-launch TMP tests or prove simultaneous effects,
