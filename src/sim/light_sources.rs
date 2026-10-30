@@ -277,18 +277,31 @@ impl Simulation {
     /// then fading-in Nuke/Chrono, then active Dominator. This differs from
     /// both UpdateLighting's selection and a Cell's Ground/Level reader.
     pub fn palette_constructor_rgb(&self) -> Option<[i32; 3]> {
-        let profile = if crate::sim::superweapon::lightning_storm::raging(self) {
+        let lighting = self.session.lighting();
+        // NPAE174 LightConvert555E50: disabled arms fall through; chrono
+        // retains the map's nuke RGB even with a remembered SW definition.
+        let profile = if crate::sim::superweapon::lightning_storm::raging(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Ion)
+        {
             ScenarioLightingProfile::Ion
-        } else if self.session.lighting().nuke_flash_fading_in()
-            || self.session.chrono_screen().active()
+        } else if lighting.nuke_flash_fading_in()
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Nuke)
         {
             ScenarioLightingProfile::Nuke
-        } else if crate::sim::superweapon::psychic_dominator::active(self) {
+        } else if self.session.chrono_screen().active() {
+            return Some(
+                lighting
+                    .map_profile(ScenarioLightingProfile::Nuke)
+                    .alternate_rgb(),
+            );
+        } else if crate::sim::superweapon::psychic_dominator::active(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Dominator)
+        {
             ScenarioLightingProfile::Dominator
         } else {
             return None;
         };
-        Some(self.session.lighting().profile(profile).alternate_rgb())
+        Some(lighting.profile_rgb(profile))
     }
 
     /// The profile whose Ground/Level a cell's refresh reads
@@ -301,11 +314,20 @@ impl Simulation {
     /// its flash fades in (`NukeFlash::IsFadingIn @ 0x0053A110`, `0x0048450F`),
     /// else the ordinary one.
     pub fn lighting_cell_profile(&self) -> ScenarioLightingProfile {
-        if crate::sim::superweapon::lightning_storm::raging(self) {
+        // NPAE174 Cell::ProcessColourComponents484473: Ion, active Domi
+        // (including status5), then fading-in Nuke, each gated by Lighting.
+        let lighting = self.session.lighting();
+        if crate::sim::superweapon::lightning_storm::raging(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Ion)
+        {
             ScenarioLightingProfile::Ion
-        } else if crate::sim::superweapon::psychic_dominator::active(self) {
+        } else if crate::sim::superweapon::psychic_dominator::active(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Dominator)
+        {
             ScenarioLightingProfile::Dominator
-        } else if self.session.lighting().nuke_flash_fading_in() {
+        } else if lighting.nuke_flash_fading_in()
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Nuke)
+        {
             ScenarioLightingProfile::Nuke
         } else {
             ScenarioLightingProfile::Normal
@@ -321,13 +343,20 @@ impl Simulation {
     /// (`53BAD0`, set by127/53B460) shares the first nuke arm. Original
     /// controls: superweapon_oracle.json/update_lighting, chrono=1.
     pub(crate) fn update_lighting(&mut self) {
-        let profile = if self.session.lighting().nuke_flash_fading_in()
-            || self.session.chrono_screen().active()
+        // NPAE174 Scenario::UpdateLighting53C280: disabled Nuke falls
+        // through to Storm, then Domi; disabled Storm also falls through.
+        let lighting = self.session.lighting();
+        let profile = if (lighting.nuke_flash_fading_in() || self.session.chrono_screen().active())
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Nuke)
         {
             ScenarioLightingProfile::Nuke
-        } else if crate::sim::superweapon::lightning_storm::raging(self) {
+        } else if crate::sim::superweapon::lightning_storm::raging(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Ion)
+        {
             ScenarioLightingProfile::Ion
-        } else if crate::sim::superweapon::psychic_dominator::tints_scenario(self) {
+        } else if crate::sim::superweapon::psychic_dominator::tints_scenario(self)
+            && lighting.profile_lighting_enabled(ScenarioLightingProfile::Dominator)
+        {
             ScenarioLightingProfile::Dominator
         } else {
             ScenarioLightingProfile::Normal

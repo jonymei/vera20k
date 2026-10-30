@@ -6,7 +6,8 @@
 //! One Dominator runs at a time (the globals `0x00A9FA48..0x00A9FAC8`), and
 //! ClickFire refuses another while it does (`fire.rs`). The launch raises
 //! `[General] DominatorFirstAnim=` 750 leptons over the target and tints the
-//! scenario with the map's `Dominator*=` lighting (`light_sources`). Once the
+//! scenario with the map's `Dominator*=` lighting (NP uses the remembered
+//! SWType's lighting when enabled; `light_sources`). Once the
 //! anim has played `DominatorFireAtPercentage=` of its frames, MindControlArea
 //! strikes: a screen ripple (an IonBlast, `sim::world::ion_blast`) and
 //! `DominatorSecondAnim=` on the cell, `DominatorDamage=` with
@@ -141,6 +142,14 @@ pub(super) fn launch(
     sw_type: InternedId,
     (rx, ry): (u16, u16),
 ) -> bool {
+    // NPAE174 Super::Launch6CCDB1 stores BA91EC before rawReady+6F.
+    if let Some(sw) = rules.super_weapon(sim.interner.resolve(sw_type)) {
+        sim.session.lighting_mut().remember_superweapon_lighting(
+            crate::sim::scenario_session::ScenarioLightingProfile::Dominator,
+            sw_type,
+            sw.npatch_lighting,
+        );
+    }
     if !super::is_charged(sim, owner, sw_type) {
         return false;
     }

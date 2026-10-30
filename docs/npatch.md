@@ -337,7 +337,7 @@ follow.
 The build capability is recorded per combination: a save from one combination cannot load in
 another, so a mixed build never reads a save written by a single-extension build.
 
-## Superweapon lighting reader (runtime integration still open)
+## Superweapon lighting reader and runtime
 
 NPAE174 SuperWeaponType constructorB97600 zeroes the extension. ReadINI6CED28
 enters B97080 after AuxBuilding. First initialization shares byte+126 across
@@ -357,10 +357,16 @@ Common B970C0 reads LightAmbient/Red/Green/Blue/Ground/Level/
 LightAmbientChangeRate as retained native integers, then Lighting as a retained
 bool, even when disabled. No map-double scale or clamp is applied.
 
-This reader does not yet apply NP lighting to gameplay/presentation. Remaining
-integration needs separate last-Nuke/Storm/Dominator type identities (writes
-6CDA5B/6CCD33/6CCDB1 precede admission), immutable map profiles, three distinct
-selection priorities, literal Ground/Level for full NP relights, fade and restore.
+Launch now binds separate last-Nuke/Storm/Dominator identities and immutable
+definition snapshots before admission (6CDA5B/6CCD33/6CCDB1), without changing map
+profiles. Scenario UpdateLighting53C280, LightConvert555E50 and Cell484473 retain
+their different selection priorities and fall through disabled Lighting arms.
+NP full relights use literal Ground/Level; status5 restores the global tint but
+keeps active-Dominator cell/constructor selection until the ambient fade ends.
+Actual layered AY launch, full resource save/restore and a second launch are
+exercised through physical TMP GPU output in
+`aymod_dominator_lighting_reaches_terrain_gpu_after_load_and_restores`.
+This is an isolated terrain consumer, not full-window/native pixel equivalence.
 The55B3D6 rate branch is nuclear phases or TAction127 chrono screen, not storm
 and not Chronosphere SW; it reads the last nuclear profile even for that screen.
 Storm alone uses the ordinary Rules rate; Dominator's rate ignores Lighting.

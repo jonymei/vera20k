@@ -3,6 +3,132 @@
 
 use super::*;
 
+/// Actual layered AY launch, ordinary effect frames and full resource restore.
+/// Readiness is a fixture; this does not claim natural construction/charging.
+#[cfg(feature = "npatch")]
+pub fn visit_aymod_dominator_lighting_after_load(
+    mut visit: impl FnMut(
+        &str,
+        &HeadlessScenario,
+        (u16, u16),
+        &[crate::sim::light_sources::LightingEvent],
+    ),
+) {
+    use crate::sim::command::Command;
+    use crate::sim::scenario_session::ScenarioLightingProfile;
+    use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let session = battle_session(
+        "XMP03T4.MAP",
+        &[(LaunchCountry::from_country_index(1), AiDifficulty::Easy)],
+    );
+    let mut scene = load_session(&root, "XMP03T4.MAP", 0x53AE50, session).unwrap();
+    let owner = house_of(scene.sim(), "Americans");
+    let name = scene.sim().interner.resolve(owner).to_owned();
+    let anchor = aymod_anchor(scene.sim(), owner);
+    let probe = (anchor.0 as u16, anchor.1 as u16);
+    let target = scene
+        .sim()
+        .resolved_terrain()
+        .unwrap()
+        .cells()
+        .iter()
+        .find(|cell| {
+            scene.sim().entities().values().all(|entity| {
+                i32::from(entity.position.rx()).abs_diff(i32::from(cell.rx)) > 12
+                    || i32::from(entity.position.ry()).abs_diff(i32::from(cell.ry)) > 12
+            }) && scene
+                .sim()
+                .playfield_bounds()
+                .unwrap()
+                .contains_geometry_packed(i32::from(cell.rx), i32::from(cell.ry))
+        })
+        .map(|cell| (cell.rx, cell.ry))
+        .unwrap();
+    let pristine = scene.sim().resolved_terrain().unwrap().clone();
+    let sw = scene.sim().interner.get("PsychicDominatorSpecial").unwrap();
+    let definition = scene
+        .runtime
+        .resources
+        .rules
+        .super_weapon("PsychicDominatorSpecial")
+        .unwrap();
+    assert!(definition.npatch_lighting.enabled());
+    assert_eq!(
+        &definition.npatch_lighting.profile()[..6],
+        &[100, 70, 0, 70, 0, 3]
+    );
+    let map_profile = scene.sim().session.lighting().dominator();
+    visit("before", &scene, probe, &[]);
+    // A second use must reuse the type without inheriting an active prior fade.
+    for iteration in 0..2 {
+        let instance = scene
+            .runtime
+            .simulation
+            .super_weapons
+            .instance_mut(&owner, &sw)
+            .unwrap();
+        instance.set_is_active_for_test(true);
+        instance.set_is_ready_for_test(true);
+        instance.set_is_suspended_for_test(false);
+        assert!(scene.runtime.apply_command_for_test(
+            &name,
+            &Command::LaunchSuperWeapon {
+                sw_type_id: sw,
+                target_rx: target.0,
+                target_ry: target.1,
+            }
+        ));
+        assert_eq!(
+            scene.sim().session.lighting().selected_profile(),
+            ScenarioLightingProfile::Dominator
+        );
+        assert_eq!(
+            scene.sim().session.lighting().alternate_rgb(),
+            Some([700, 0, 700])
+        );
+        let events = scene.runtime.simulation.take_lighting_events();
+        visit("launched", &scene, probe, &events);
+        let mut finished = false;
+        for frame in 0..900 {
+            let output = tick_with_due_commands(&mut scene);
+            assert!(output.tick.frame_committed);
+            visit("frame", &scene, probe, &output.lighting_events);
+            if frame == 8 && iteration == 0 {
+                assert!(crate::sim::superweapon::psychic_dominator::tints_scenario(
+                    scene.sim()
+                ));
+                visit("saving", &scene, probe, &[]);
+                let bytes = save_scene(&scene, "AY Dominator lighting during first anim");
+                scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+                assert_eq!(
+                    scene.sim().session.lighting().alternate_rgb(),
+                    Some([700, 0, 700])
+                );
+                visit("restored", &scene, probe, &[]);
+            }
+            if !crate::sim::superweapon::psychic_dominator::active(scene.sim()) {
+                assert_eq!(
+                    scene.sim().session.lighting().selected_profile(),
+                    ScenarioLightingProfile::Normal
+                );
+                assert_eq!(
+                    scene.sim().session.lighting().current_ambient(),
+                    scene.sim().session.lighting().normal().ambient_percent
+                );
+                assert_eq!(scene.sim().session.lighting().dominator(), map_profile);
+                visit("finished", &scene, probe, &[]);
+                finished = true;
+                break;
+            }
+        }
+        assert!(
+            finished,
+            "Dominator returns from its actual animations and ambient fade"
+        );
+    }
+}
+
 /// The first house of `country`.
 pub(super) fn house_of(sim: &Simulation, country: &str) -> crate::sim::intern::InternedId {
     let country_id = sim.interner.get(country).expect("retail country interned");

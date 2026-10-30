@@ -22,10 +22,7 @@ use std::path::PathBuf;
 #[ignore = "requires stock retail assets, a diagnostic authored lamp map and a GPU"]
 fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
     use super::lighting::MatchLighting;
-    use crate::assets::asset_manager::{AssetManager, MediaArchiveMode};
     use crate::map::lighting::{CellLightGrid, parse_lighting};
-    use crate::map::terrain::{TerrainCell, TerrainGrid, TilePlacement};
-    use crate::map::theater::{TileKey, load_theater, load_tile_images};
 
     let root = PathBuf::from(std::env::var_os("RA2_DIR").expect("retail root"));
     let map = std::env::var("VERA20K_LAMP_PROBE_MAP").expect("authored diagnostic map");
@@ -56,49 +53,7 @@ fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
     // app-only immutable template. Snapshot that same terrain for this view.
     let terrain_snapshot = scenario.sim().resolved_terrain().unwrap().clone();
     let terrain = &terrain_snapshot;
-    let cell = terrain.cell(rx, ry).expect("lamp has real terrain");
-    let (tile_id, sub_tile) = terrain.presentation_tile(cell);
-    let key = TileKey {
-        tile_id,
-        sub_tile,
-        variant: 0,
-    };
-    let mut assets = AssetManager::new(&root, MediaArchiveMode::STOCK_DIGITAL).unwrap();
-    let theater = load_theater(&mut assets, &scenario.map.header.theater).unwrap();
-    let tile = load_tile_images(
-        &assets,
-        &theater.lookup,
-        &theater.iso_palette,
-        &HashSet::from([key]),
-    )
-    .remove(&key)
-    .expect("actual map TMP decodes");
-    let placement = TilePlacement {
-        uv_origin: [0.0; 2],
-        uv_size: [1.0; 2],
-        pixel_size: [tile.width as f32, tile.height as f32],
-        draw_offset: [tile.offset_x as f32, tile.offset_y as f32],
-    };
-    let grid = TerrainGrid {
-        cells: vec![TerrainCell {
-            screen_x: -(tile.offset_x as f32),
-            screen_y: -(tile.offset_y as f32),
-            tile_id,
-            sub_tile,
-            z: cell.level,
-            rx,
-            ry,
-            variant: 0,
-            tint: [1.0; 3],
-            radar_left: [0; 3],
-            radar_right: [0; 3],
-        }],
-        world_width: tile.width as f32,
-        world_height: tile.height as f32,
-        origin_x: 0.0,
-        origin_y: 0.0,
-        bridge_middle_tiles: None,
-    };
+    let probe = TerrainLightingProbe::new(&scenario, &root, rx, ry);
     let mut lighting = MatchLighting::default();
     lighting.install(
         CellLightGrid::new(),
@@ -121,20 +76,7 @@ fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
         lit_additive > 0,
         "stock lamp must reach the live lighting owner"
     );
-    let lookup = |_, _, _| Some(placement);
-    let instance = crate::render::terrain_instances::build_visible_instances(
-        &grid,
-        Some(lighting.grid()),
-        0.0,
-        0.0,
-        tile.width as f32,
-        tile.height as f32,
-        Some(&lookup),
-        None,
-    )
-    .normal
-    .remove(0);
-    let lit_pixels = crate::render::depth_gpu_tests::render_terrain_lighting_probe(&tile, instance);
+    let lit_pixels = probe.render(lighting.grid());
 
     scenario
         .runtime
@@ -168,20 +110,7 @@ fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
             .raw_additive_intensity,
         0
     );
-    let instance = crate::render::terrain_instances::build_visible_instances(
-        &grid,
-        Some(lighting.grid()),
-        0.0,
-        0.0,
-        tile.width as f32,
-        tile.height as f32,
-        Some(&lookup),
-        None,
-    )
-    .normal
-    .remove(0);
-    let dark_pixels =
-        crate::render::depth_gpu_tests::render_terrain_lighting_probe(&tile, instance);
+    let dark_pixels = probe.render(lighting.grid());
     let changed = lit_pixels
         .iter()
         .zip(&dark_pixels)
@@ -202,7 +131,7 @@ fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
         "positive stock lamp must brighten actual terrain"
     );
     eprintln!(
-        "GALITE({rx},{ry}), stock tile {tile_id}/{sub_tile}, scalar {lit_scalar}->{dark_scalar}, additive {lit_additive}->0, GPU changed {changed}/{} pixels",
+        "GALITE({rx},{ry}), stock tile, scalar {lit_scalar}->{dark_scalar}, additive {lit_additive}->0, GPU changed {changed}/{} pixels",
         lit_pixels.len()
     );
     if let Some(out) = std::env::var_os("VERA20K_LAMP_PROBE_OUTPUT") {
@@ -219,11 +148,162 @@ fn stock_lamp_loaded_by_scenario_changes_actual_terrain_pixels() {
             image::save_buffer(
                 out.join(name),
                 &bytes,
-                tile.width,
-                tile.height,
+                probe.tile.width,
+                probe.tile.height,
                 image::ColorType::Rgba8,
             )
             .unwrap();
         }
+    }
+}
+
+struct TerrainLightingProbe {
+    tile: crate::map::theater::TileImage,
+    grid: crate::map::terrain::TerrainGrid,
+    placement: crate::map::terrain::TilePlacement,
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires AYMOD retail assets and GPU; real Dominator launch/frame/save/restore reaches physical TMP pixels"]
+fn aymod_dominator_lighting_reaches_terrain_gpu_after_load_and_restores() {
+    use super::lighting::MatchLighting;
+    use crate::map::lighting::{CellLightGrid, parse_lighting};
+    let root = PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let mut lighting = MatchLighting::default();
+    let mut probe = None;
+    let mut saved_pixels = None;
+    let mut launches = 0;
+    let mut finishes = 0;
+    let mut restored = false;
+    crate::headless_scenario::battle_test_evidence::visit_aymod_dominator_lighting_after_load(
+        |phase, scene, cell, events| {
+            let terrain = scene.sim().resolved_terrain().unwrap();
+            if phase == "before" || phase == "restored" {
+                lighting.install(
+                    CellLightGrid::new(),
+                    parse_lighting(&scene.map.ini),
+                    2,
+                    Some((terrain, scene.sim())),
+                    None,
+                );
+            } else {
+                lighting.apply_events(terrain, events);
+                lighting.refresh(terrain, scene.sim(), 2);
+            }
+            let probe = probe
+                .get_or_insert_with(|| TerrainLightingProbe::new(scene, &root, cell.0, cell.1));
+            if matches!(
+                phase,
+                "before" | "launched" | "saving" | "restored" | "finished"
+            ) {
+                let pixels = probe.render(lighting.grid());
+                let totals = pixels.iter().fold([0_u64; 3], |mut sum, pixel| {
+                    for channel in 0..3 {
+                        sum[channel] += u64::from(pixel[channel]);
+                    }
+                    sum
+                });
+                if matches!(phase, "launched" | "saving" | "restored") {
+                    assert!(totals[0] + totals[2] > 0, "real TMP must remain visible");
+                    assert_eq!(totals[1], 0, "LightGreen=0 must reach final terrain pixels");
+                } else {
+                    assert!(
+                        totals[1] > 0,
+                        "ordinary map lighting restores the green channel"
+                    );
+                }
+                match phase {
+                    "launched" => launches += 1,
+                    "saving" => saved_pixels = Some(pixels),
+                    "restored" => {
+                        assert_eq!(Some(&pixels), saved_pixels.as_ref());
+                        restored = true;
+                    }
+                    "finished" => finishes += 1,
+                    _ => {}
+                }
+            }
+        },
+    );
+    assert_eq!((launches, finishes, restored), (2, 2, true));
+}
+
+impl TerrainLightingProbe {
+    fn new(
+        scenario: &crate::headless_scenario::HeadlessScenario,
+        root: &std::path::Path,
+        rx: u16,
+        ry: u16,
+    ) -> Self {
+        use crate::assets::asset_manager::{AssetManager, MediaArchiveMode};
+        use crate::map::terrain::{TerrainCell, TerrainGrid, TilePlacement};
+        use crate::map::theater::{TileKey, load_theater, load_tile_images};
+        let terrain = scenario.sim().resolved_terrain().unwrap();
+        let cell = terrain.cell(rx, ry).unwrap();
+        let (tile_id, sub_tile) = terrain.presentation_tile(cell);
+        let key = TileKey {
+            tile_id,
+            sub_tile,
+            variant: 0,
+        };
+        let mut assets = AssetManager::new(&root, MediaArchiveMode::STOCK_DIGITAL).unwrap();
+        let theater = load_theater(&mut assets, &scenario.map.header.theater).unwrap();
+        let tile = load_tile_images(
+            &assets,
+            &theater.lookup,
+            &theater.iso_palette,
+            &HashSet::from([key]),
+        )
+        .remove(&key)
+        .expect("actual map TMP decodes");
+        let placement = TilePlacement {
+            uv_origin: [0.0; 2],
+            uv_size: [1.0; 2],
+            pixel_size: [tile.width as f32, tile.height as f32],
+            draw_offset: [tile.offset_x as f32, tile.offset_y as f32],
+        };
+        let grid = TerrainGrid {
+            cells: vec![TerrainCell {
+                screen_x: -(tile.offset_x as f32),
+                screen_y: -(tile.offset_y as f32),
+                tile_id,
+                sub_tile,
+                z: cell.level,
+                rx,
+                ry,
+                variant: 0,
+                tint: [1.0; 3],
+                radar_left: [0; 3],
+                radar_right: [0; 3],
+            }],
+            world_width: tile.width as f32,
+            world_height: tile.height as f32,
+            origin_x: 0.0,
+            origin_y: 0.0,
+            bridge_middle_tiles: None,
+        };
+        Self {
+            tile,
+            grid,
+            placement,
+        }
+    }
+
+    fn render(&self, light: &crate::map::lighting::CellLightGrid) -> Vec<[u8; 4]> {
+        let lookup = |_, _, _| Some(self.placement);
+        let instance = crate::render::terrain_instances::build_visible_instances(
+            &self.grid,
+            Some(light),
+            0.0,
+            0.0,
+            self.tile.width as f32,
+            self.tile.height as f32,
+            Some(&lookup),
+            None,
+        )
+        .normal
+        .remove(0);
+        crate::render::depth_gpu_tests::render_terrain_lighting_probe(&self.tile, instance)
     }
 }
