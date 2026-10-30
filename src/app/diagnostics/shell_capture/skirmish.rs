@@ -85,6 +85,8 @@ pub(super) enum LoadingTarget {
     /// The game runs [`QUIT_AFTER_FRAMES`] frames, then Tab opens the
     /// Diplomacy dialog `0x73` through the production key path; it settled.
     Diplomacy,
+    /// Expanded color/technology inputs, then ordinary loading and live play.
+    ExpandedGame,
 }
 
 /// In-game frames before the quit route presses Leave.
@@ -157,6 +159,7 @@ const RANDOM_MAP_MAP_SIZE_FACE_POINT: (i32, i32) = (350, 196);
 pub(super) enum ExpandedSetupTarget {
     Colors,
     Applied,
+    InGame,
 }
 
 #[derive(Default)]
@@ -207,6 +210,7 @@ pub(super) struct SkirmishCapture {
     expanded_colors_opened: bool,
     expanded_applied: bool,
     expanded_snapshot: Option<Value>,
+    expanded_game: Option<Value>,
 }
 
 #[derive(Clone, Copy)]
@@ -557,7 +561,11 @@ impl SkirmishCapture {
             }
             self.expanded_colors_opened = true;
             self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "expanded color popup scrolled to end"}));
-        } else if self.expanded == Some(ExpandedSetupTarget::Applied) && !self.expanded_applied {
+        } else if self
+            .expanded
+            .is_some_and(|target| target != ExpandedSetupTarget::Colors)
+            && !self.expanded_applied
+        {
             let shell = &state.frontend.skirmish_shell_state;
             let maps = state.frontend.scenario_catalog.shell_maps();
             let open = shell
@@ -590,6 +598,9 @@ impl SkirmishCapture {
                 "expanded settings did not apply through input"
             );
             self.expanded_applied = true;
+            if self.expanded == Some(ExpandedSetupTarget::InGame) {
+                self.loading = Some(LoadingTarget::ExpandedGame);
+            }
             self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "last color selected; technology clicked to minimum"}));
         }
         Self::set_pointer(state, self.rest_point());
@@ -745,6 +756,7 @@ impl SkirmishCapture {
             self.loading,
             Some(
                 LoadingTarget::AfterQuit
+                    | LoadingTarget::ExpandedGame
                     | LoadingTarget::DefeatScore
                     | LoadingTarget::DefeatContinue
                     | LoadingTarget::Diplomacy
@@ -1148,7 +1160,7 @@ impl SkirmishCapture {
                 } else if self.expanded.is_some()
                     && self.selected_scene.is_some()
                     && (!self.expanded_colors_opened
-                        || (self.expanded == Some(ExpandedSetupTarget::Applied)
+                        || (self.expanded.is_some_and(|target| target != ExpandedSetupTarget::Colors)
                             && !self.expanded_applied))
                 {
                     // Do not repeat idle mouse moves: the native common handler
@@ -1441,6 +1453,64 @@ impl SkirmishCapture {
                 }
             }
             (Phase::Starting, _)
+                if self.loading == Some(LoadingTarget::ExpandedGame)
+                    && state.frontend.screen == GameScreen::InGame =>
+            {
+                self.in_game_frames += 1;
+                if self.in_game_frames == QUIT_AFTER_FRAMES {
+                    let sim = &state
+                        .match_state
+                        .sim_runtime
+                        .as_ref()
+                        .context("expanded match runtime absent")?
+                        .simulation;
+                    let owner = sim
+                        .session()
+                        .current_house()
+                        .context("expanded match local House absent")?;
+                    let name = sim.interner().resolve(owner);
+                    let house = sim
+                        .houses()
+                        .get(&owner)
+                        .context("expanded local House missing")?;
+                    let color = state
+                        .match_state
+                        .match_presentation
+                        .house_color_map
+                        .get(name)
+                        .context("expanded local House render color missing")?;
+                    let scheme = state
+                        .rules()
+                        .context("expanded match rules missing")?
+                        .color_schemes
+                        .get(usize::from(color.0))
+                        .context("expanded render scheme missing")?;
+                    ensure!(
+                        house.tech_level() == 1 && sim.session().game_options().tech_level == 1,
+                        "page technology did not reach the actual House and scenario"
+                    );
+                    ensure!(
+                        sim.session().tick() > 0,
+                        "expanded match has not advanced simulation"
+                    );
+                    ensure!(
+                        scheme.name.eq_ignore_ascii_case("MPC16"),
+                        "selected last color did not reach the actual render scheme: {}",
+                        scheme.name
+                    );
+                    self.expanded_game = Some(json!({
+                        "local_house": name, "house_tech_level": house.tech_level(),
+                        "scenario_tech_level": sim.session().game_options().tech_level,
+                        "render_scheme_entry": color.0, "render_scheme_name": scheme.name,
+                        "simulation_tick": sim.session().tick(), "in_game_frames": self.in_game_frames,
+                    }));
+                    Self::set_pointer(state, self.rest_point());
+                    self.route.push(json!({"screen": "in game", "frame": frame,
+                            "action": "expanded settings observed in live House and render owners"}));
+                }
+            }
+
+            (Phase::Starting, _)
                 if self.loading == Some(LoadingTarget::AfterQuit)
                     && state.frontend.screen == GameScreen::InGame =>
             {
@@ -1712,6 +1782,11 @@ impl SkirmishCapture {
                 && self.last_presented == Some(PresentedShell::Skirmish)
                 && self.settled(state)?);
         }
+        if self.loading == Some(LoadingTarget::ExpandedGame) {
+            return Ok(self.phase == Phase::Starting
+                && state.frontend.screen == GameScreen::InGame
+                && self.expanded_game.is_some());
+        }
         if let Some(target) = self.loading {
             let next = match target {
                 LoadingTarget::Blank => crate::app::loading::pump::NextLoadingFrame::Blank,
@@ -1720,6 +1795,7 @@ impl SkirmishCapture {
                 | LoadingTarget::DefeatScore
                 | LoadingTarget::DefeatContinue
                 | LoadingTarget::Diplomacy => crate::app::loading::pump::NextLoadingFrame::First,
+                LoadingTarget::ExpandedGame => unreachable!("expanded live target handled above"),
             };
             return Ok(self.phase == Phase::Starting
                 && state.frontend.screen == GameScreen::Loading
@@ -1747,7 +1823,7 @@ impl SkirmishCapture {
         }
         if let Some(target) = self.expanded {
             if !self.expanded_colors_opened
-                || (target == ExpandedSetupTarget::Applied && !self.expanded_applied)
+                || (target != ExpandedSetupTarget::Colors && !self.expanded_applied)
             {
                 return Ok(false);
             }
@@ -1819,6 +1895,9 @@ impl SkirmishCapture {
         }
         if let Some(snapshot) = &self.expanded_snapshot {
             manifest["expanded_setup"] = snapshot.clone();
+        }
+        if let Some(snapshot) = &self.expanded_game {
+            manifest["expanded_game"] = snapshot.clone();
         }
         manifest
     }

@@ -2,11 +2,12 @@
 
 ## AYMOD Setup Observations
 
-The existing production shell capture also has two NPatch setup checkpoints:
+The existing production shell capture also has three NPatch setup checkpoints:
 
 ```text
 vera20k --shell-capture skirmish-expanded-colors --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
 vera20k --shell-capture skirmish-expanded-applied --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <another-new-absolute-output-directory>
+vera20k --shell-capture skirmish-expanded-in-game --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-in-game-output-directory>
 ```
 
 Build the current `fast` executable with `--no-default-features --features npatch`
@@ -16,12 +17,13 @@ On the current Windows adapter use `WGPU_BACKEND=dx12` for the BGRA8 surface and
 leave `RA2_DIR` unset. Keep the child process owned and wait for its exit (for
 example with `subprocess.run`, not a detached Windows GUI invocation).
 
-Both routes enter Single Player/Skirmish through existing App handlers. They
+All three routes enter Single Player/Skirmish through existing App handlers. They
 require the loaded 16-color catalog and enabled technology slider, open the local
 color combo, and use ordinary scrollbar down-arrow press/release edges to reach
 its end. The shell wheel remains deliberately inert. `colors` captures the open
 bottom list; `applied` selects color priority 15 and clicks the technology slider's
-minimum. Input sequences run once so repeated mouse moves cannot keep restarting
+minimum. `in-game` then uses normal Start Game/loading and captures after 30
+presented in-game frames. Input sequences run once so repeated mouse moves cannot keep restarting
 the native status-help reveal. No UI state, catalog, slider or renderer is copied.
 
 The additive `expanded_setup` manifest block is a read-only projection of the live
@@ -32,10 +34,17 @@ Keep decoded images outside capture directories. The ordinary checkpoint retains
 its original manifest shape and interaction guards; only these new checkpoints
 admit the local Color(0) popup.
 
+The `in-game` route additionally records `expanded_game` from the loaded local
+House, Scenario game options and presentation color map/rules scheme. It requires
+House and Scenario technology 1, a positive simulation tick and scheme `MPC16`;
+it does not assign these owners or bypass launch loading. The actual Windows
+AYMOD run reached tick 30 with scheme entry 15 and the full in-game frame.
+
 These are MOD production observations, not enrolled stock-shell certificates.
 The sealed-native comparison commands below do not certify these checkpoints.
-They do not exercise OS/winit event dispatch, Start Game's consumers, preferences
-reopening, network receive/reconnect or occupied-color policies.
+They do not exercise OS/winit event dispatch, preferences reopening, network
+receive/reconnect or occupied-color policies. The in-game check bounds offline
+Start Game consumers; it is not a network or all-configuration certification.
 
 ## Stock Certification
 

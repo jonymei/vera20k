@@ -218,6 +218,7 @@ pub enum ShellCaptureCheckpoint {
     Skirmish0x102Steady,
     SkirmishExpandedColors,
     SkirmishExpandedApplied,
+    SkirmishExpandedInGame,
     MoviesPage0x101Steady,
     /// Exit Game on `0xE2`: after the teardown slide, the confirmation over
     /// the empty shell backdrop (state 6).
@@ -556,6 +557,7 @@ impl ShellCaptureCheckpoint {
             CHECKPOINT_SKIRMISH_0X102_STEADY => Ok(Self::Skirmish0x102Steady),
             "skirmish-expanded-colors" => Ok(Self::SkirmishExpandedColors),
             "skirmish-expanded-applied" => Ok(Self::SkirmishExpandedApplied),
+            "skirmish-expanded-in-game" => Ok(Self::SkirmishExpandedInGame),
             CHECKPOINT_SKIRMISH_0X6B_STEADY => Ok(Self::Skirmish0x6BSteady),
             CHECKPOINT_SKIRMISH_0X105_STEADY => Ok(Self::Skirmish0x105Steady),
             CHECKPOINT_SKIRMISH_0X105_CANCEL_STEADY => Ok(Self::Skirmish0x105CancelSteady),
@@ -769,6 +771,7 @@ impl ShellCaptureCheckpoint {
             Self::Skirmish0x102Steady => CHECKPOINT_SKIRMISH_0X102_STEADY,
             Self::SkirmishExpandedColors => "skirmish-expanded-colors",
             Self::SkirmishExpandedApplied => "skirmish-expanded-applied",
+            Self::SkirmishExpandedInGame => "skirmish-expanded-in-game",
             Self::MoviesPage0x101Steady => CHECKPOINT_MOVIES_0X101_STEADY,
             Self::MainMenu0xE2ExitConfirm => CHECKPOINT_MAIN_MENU_0XE2_EXIT_CONFIRM,
             Self::MovieList0x129Steady => CHECKPOINT_MOVIE_LIST_0X129_STEADY,
@@ -2205,6 +2208,11 @@ impl ShellCaptureSession {
             ShellCaptureCheckpoint::SkirmishExpandedApplied => {
                 Some(skirmish::SkirmishCapture::expanded(
                     skirmish::ExpandedSetupTarget::Applied,
+                ))
+            }
+            ShellCaptureCheckpoint::SkirmishExpandedInGame => {
+                Some(skirmish::SkirmishCapture::expanded(
+                    skirmish::ExpandedSetupTarget::InGame,
                 ))
             }
             ShellCaptureCheckpoint::Skirmish0x102BackSlideOut(tick) => {
@@ -4209,7 +4217,11 @@ mod tests {
 
     #[test]
     fn expanded_skirmish_checkpoints_keep_the_production_capture_route() {
-        for name in ["skirmish-expanded-colors", "skirmish-expanded-applied"] {
+        for name in [
+            "skirmish-expanded-colors",
+            "skirmish-expanded-applied",
+            "skirmish-expanded-in-game",
+        ] {
             let output = new_output_path(name);
             let mut values = valid_args(&output);
             values[1] = OsString::from(name);

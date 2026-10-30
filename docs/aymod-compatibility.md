@@ -15,17 +15,17 @@
 | 设计/原生冲突待决 | V01三组无人单位独立供电 | 当前保留原生共享House计数；作者逐组失联瘫痪要求与部分Drive原生恢复下令行为不同。未选定兼容策略，不能靠新增分组计数或拦移动默默改变政策 |
 | 设计/有效数据/保留状态冲突 | F22精英YURI多控 | 作者5、有效精英武器10、原生有限组件及现Rust保留出生容量1。不能直接改成5或10，也不能用叶函数一致称作者功能已达成 |
 | 现有政策不等于逐项原生 | EMP、经验分配、英雄赏金等 | docs/npatch.md、npatch-emp.md列明默认/钳位/时点/算术边界；赏金原始killer坐标已修。是否有当前配置可见差异要先证明，不拿旧文字调数值 |
-| 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、选择/绘制owner及局部GPU/启动链已有覆盖；F14正式AY正常造两GAPILL、click+双短T经共享输入到完整App合成已实际捕获。F12实际遭遇战底部16色列表及选择第16色/科技1后的页面合成亦已捕获；外层OS/winit、实际启局及其他完整画面、真实网络接收/重连/同色策略仍开放，不冒称全界面验收 |
+| 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、选择/绘制owner及局部GPU/启动链已有覆盖；F14正式AY正常造两GAPILL、click+双短T经共享输入到完整App合成已实际捕获。F12实际遭遇战底部16色列表及选择第16色/科技1后的页面合成亦已捕获；实际正常启局亦观察到House/Scenario科技1及render MPC16；外层OS/winit、偏好重开及其他完整画面、真实网络接收/重连/同色策略仍开放，不冒称全界面验收 |
 | AI功能/长局验收未闭合 | A01–A10对应残余 | 自然多House发展/出击、经济恢复等有分批覆盖；A04持续需求下双工厂造齐4MGTK+4DEST/1AEGIS/4DLPH和存读已验，但自然触发/舰队集结远航/实战未验。Return Dubai弱攻势专项仍暂停，不借该项恢复调查 |
 | 作者明确要求的功能范围验收 | F01–F10/F13–F30、V02–V13各行 | 各自已实现链与真实使用例见表；仍有换主/特殊生命周期、混战、其他模式/地图和画面残余。F30三机重复投弹不等于所有飞机与全部架次通过；不以未验边界擅改已有行为 |
 | 扩展存在，遭遇战配置适用性已扩大复核 | 自然粒子、TrueConversion等 | 5个可选模式/144个不同具体地图的294个组合，正式规则处理后的全部571或583种ObjectType均无非空自然粒子系统、无TrueConversion/DeployToFire键；仅SMIN/YAREFN的DeployFacing=0已有普通转换owner。不是扩展已实现或整个游戏/战役不可达证明 |
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于3b3d2166b。沿唯一shell_capture/SkirmishCapture新增expanded-colors及expanded-applied两个诊断checkpoint，不复制页面、目录、滑块或renderer，不改真实UI/网络/游戏规则。隔离config/settings读AY，主菜单→单人→遭遇战均走既有App handlers；仅新checkpoint允许本地Color(0)弹出列表，其他modal/交互guard保持。
-- 最终fast/NPatch三个实际AppState/完整GPU捕获成功并查看：原稳态页与改动前BGRA逐字节一致；普通鼠标箭头滚至颜色列表底部，16个可用priority0..15、实际显示7..15；随后点击priority15/第16色并在科技滑条点最低值，popup关闭、selected_color=15/claimed=true、tech_level=1，均来自既有owner。帧长度/SHA与manifest核对通过，PNG放run外，不提交截图/运行收据。不是OS/winit事件泵或整套网络UI验收。
-- 首次扩展路由超时来自本任务驱动每帧重复mousemove，原生公共handler不断重启help reveal；已限制每个输入序列只执行一次，等待正常present完成，不改status/绘制政策，并保留有实际phase/route的超时错误上下文。最终shell_capture::tests47和skirmish guard1通过，共48项；fast NPatch app重建及上述3实际捕获通过，无全仓库/Clippy/Python套件。无新玩法状态/保存布局或模拟RNG/timer/Detach调用，无新玩法critic；本地提交，不发布。
-- 下一安全动作继续F12同链，从实际选第16色/科技1的页面正常Start Game接到加载后的本地House颜色与tech_level，再考虑偏好重开/网络边界。复用SkirmishCapture已有LoadingTarget/真实加载和match_presentation.house_color_map、Simulation House等owners，不把页面值当成启局已验，也不直接写入对局状态。F11组合/换图、F14 OS事件泵、其他GUI/玩法/AI长局仍开放。用户不手测、构建可调、原档/MOD保留；Return Dubai专项暂停、V01/F22已问未答、无推送/PR/合并/发布授权保持，完整目标未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于5f71e8a72。当前增量新增skirmish-expanded-in-game诊断checkpoint，复用原expanded输入及普通Start Game/loading，不写launch descriptor、House或render remap；只读观察实际Simulation/House/Scenario及match_presentation颜色owner。
+- 隔离config/settings的fast NPatch实际客户端捕获已退出0；页面选priority15/科技1后正常启局，第30个in-game frame观察simulation_tick=30、House/Scenario科技均1、scheme entry15/name MPC16。已查看完整800x600运行画面，帧长度/SHA按manifest核对；只证明此离线启局链，不是原生像素等价或所有颜色/模式证明。原用户设置、MOD和原档未改。
+- 交接记录中的最终验证为shell_capture::tests47及skirmish guard1通过、fast NPatch app构建通过；本次核diff/实际manifest/画面并清一处空白，未重复运行Cargo。新代码仅诊断投影及路由，无生产玩法/保存布局/RNG/timer/Detach变更，无需玩法critic。计划已按实际进度重整，整体目标未完成，无推送/PR/合并/发布。
+- 下一安全动作按新计划P1回到F11完整窗口热存读/换图/其他全局效果交接，复用生产quicksave/quickload及map_observation；随后推进F12偏好重开、其他GUI和AI持续作战。隔离VERA.INI存在不等于偏好重开通过，外层OS/winit、真实网络链仍开放。用户不手测、构建可调；Return Dubai专项暂停、V01/F22已问未答保持。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
