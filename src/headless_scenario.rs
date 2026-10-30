@@ -3485,6 +3485,22 @@ mod retail_construction_tests {
                 cells_nearest(aymod_anchor(sim, defeated)),
                 &["MTNK"],
             )[0];
+            let at = aymod_anchor(sim, defeated);
+            spawn_on_free_cells(
+                sim,
+                rules,
+                defeated,
+                cells_nearest((at.0 + 3, at.1)),
+                &["GATECH"; 12],
+            );
+            // Nearby follow-on targets isolate retargeting from long travel.
+            spawn_on_free_cells(
+                sim,
+                rules,
+                human,
+                cells_nearest((at.0 + 24, at.1)),
+                &["GATECH"; 12],
+            );
             (yards, aggressor)
         };
         assert!((0..900).any(|_| {
@@ -3534,31 +3550,6 @@ mod retail_construction_tests {
                 .iter()
                 .all(|owner| scene.sim().houses[owner].enemy_house() == Some(defeated))
         );
-        let pristine = scene.sim().resolved_terrain().unwrap().clone();
-        assert!(scene.runtime.simulation.flag_house_to_die(defeated));
-        let bytes = save_scene(
-            &scene,
-            "AY allied AI with a pending defeat of their current enemy",
-        );
-        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
-        assert!(scene.sim().houses[&defeated].is_to_die());
-        assert!(
-            (0..900).any(|_| {
-                tick_with_due_commands(&mut scene);
-                scene.sim().houses[&defeated].is_defeated()
-                    && allies
-                        .iter()
-                        .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
-            }),
-            "each AI must forget the defeated enemy and reselect the live hostile House, not its ally"
-        );
-        let bytes = save_scene(&scene, "AY allied AI after normal enemy replacement");
-        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
-        assert!(
-            allies
-                .iter()
-                .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
-        );
         let teams = {
             let runtime = &mut scene.runtime;
             let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
@@ -3578,12 +3569,12 @@ mod retail_construction_tests {
                 .collect::<Vec<_>>();
             assert_eq!(types, ["APOC", "APOC"]);
             let names = types.iter().map(String::as_str).collect::<Vec<_>>();
-            let at = aymod_anchor(sim, human);
+            let at = aymod_anchor(sim, defeated);
             allies
                 .iter()
                 .map(|&owner| {
-                    // Member supply near the enemy is explicit; this tests the
-                    // retarget/script consumer, not autonomous production or travel.
+                    // Members start near the old enemy before its defeat.
+                    // This tests existing teams, not fresh post-defeat teams.
                     let members = spawn_on_free_cells(
                         sim,
                         rules,
@@ -3596,11 +3587,85 @@ mod retail_construction_tests {
                 })
                 .collect::<Vec<_>>()
         };
+        let mut attacked_old_enemy = [false; 2];
+        assert!(
+            (0..6000).any(|_| {
+                let output = tick_with_due_commands(&mut scene);
+                for (index, (team_id, members)) in teams.iter().enumerate() {
+                    for event in &output.fire_events {
+                        if !members.contains(&event.attacker_id)
+                            || scene
+                                .sim()
+                                .team_script_vm
+                                .team_for_member(event.attacker_id)
+                                != Some((*team_id, false))
+                        {
+                            continue;
+                        }
+                        if let crate::sim::combat::TargetKind::Entity(target) = event.target {
+                            attacked_old_enemy[index] |= scene
+                                .sim()
+                                .entities()
+                                .get(target)
+                                .is_some_and(|entity| entity.owner() == defeated);
+                        }
+                    }
+                }
+                attacked_old_enemy.into_iter().all(|fired| fired)
+                    && teams.iter().all(|(id, _)| {
+                        scene.sim().team_script_vm.team(*id).is_some_and(|team| {
+                            team.formed()
+                                && team.members().any(|id| {
+                                    scene
+                                        .sim()
+                                        .entities()
+                                        .get(id)
+                                        .is_some_and(|e| e.is_ai_alive())
+                                })
+                        })
+                    })
+            }),
+            "both original teams must first fire at the old enemy before it is defeated: {attacked_old_enemy:?}"
+        );
+        assert!(allies.iter().all(|owner| {
+            scene.sim().houses[owner].enemy_house() == Some(defeated)
+        }));
+        let pristine = scene.sim().resolved_terrain().unwrap().clone();
+        assert!(scene.runtime.simulation.flag_house_to_die(defeated));
+        let bytes = save_scene(
+            &scene,
+            "AY allied AI with a pending defeat of their current enemy",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(scene.sim().houses[&defeated].is_to_die());
+        for (index, (id, members)) in teams.iter().enumerate() {
+            let team = scene.sim().team_script_vm.team(*id).unwrap();
+            assert_eq!(team.owner(), allies[index]);
+            assert!(team.formed());
+            assert!(team.members().all(|member| members.contains(&member)));
+        }
+        assert!(
+            (0..900).any(|_| {
+                tick_with_due_commands(&mut scene);
+                scene.sim().houses[&defeated].is_defeated()
+                    && allies
+                        .iter()
+                        .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
+            }),
+            "each AI must forget the defeated enemy and reselect the live hostile House, not its ally"
+        );
+        let bytes = save_scene(&scene, "AY allied AI after normal enemy replacement");
+        scene.runtime.simulation = restored_retail(&scene, &pristine, &bytes);
+        assert!(
+            allies
+                .iter()
+                .all(|owner| scene.sim().houses[owner].enemy_house() == Some(human))
+        );
         let before = scene
             .sim()
             .entities()
             .values()
-            .filter(|entity| entity.owner() == human)
+            .filter(|entity| entity.owner() == human && entity.is_ai_alive())
             .map(|entity| (entity.stable_id(), entity.health.current()))
             .collect::<std::collections::BTreeMap<_, _>>();
         let mut fired = [false; 2];
@@ -3608,12 +3673,20 @@ mod retail_construction_tests {
         assert!(
             (0..6000).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
-                for (index, (_, members)) in teams.iter().enumerate() {
+                for (index, (team_id, members)) in teams.iter().enumerate() {
                     for event in output
                         .fire_events
                         .iter()
                         .filter(|event| members.contains(&event.attacker_id))
                     {
+                        assert_eq!(
+                            scene
+                                .sim()
+                                .team_script_vm
+                                .team_for_member(event.attacker_id),
+                            Some((*team_id, false)),
+                            "the original team, not a free or re-recruited member, must retarget"
+                        );
                         if let crate::sim::combat::TargetKind::Entity(id) = event.target {
                             if let Some(target) = scene.sim().entities().get(id) {
                                 assert!(
@@ -3637,7 +3710,7 @@ mod retail_construction_tests {
                             .is_none_or(|entity| entity.health.current() < before[&id])
                     })
             }),
-            "both allied AI teams must actually fire at the remaining hostile House and cause damage"
+            "both original allied AI teams must retarget from the defeated House, fire at the remaining hostile House and cause new damage"
         );
         assert!(teams.iter().all(|(id, _)| {
             scene
