@@ -1,7 +1,7 @@
 # AYMOD 兼容性清单
 
 更新：2026-10-30。面向“人类玩家与多个电脑对战”的分批适配工作清单。
-完整执行顺序见 [全面适配 PLAN](aymod-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
+完整执行顺序见 [剩余适配工作计划](aymod-remaining-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
 不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
 ## 当前未完成入口
@@ -11,7 +11,7 @@
 
 | 类别 | 项目 | 当前缺什么 / 下一步边界 |
 | --- | --- | --- |
-| 确认缺生产接线，需原批准 | F11心灵终结器专属光照 | AY实际配置已读取，但运行时仍用地图Dominator profile；此前跨模拟/渲染接线未批准，不能自行实施。需明确批准后完成启用、渐变、结束/取消恢复、存读及实际GPU输出，而不是再测reader |
+| 确认缺生产接线，已获批准，下一实现链 | F11心灵终结器专属光照 | 2026-10-30用户批准继续跨模拟/渲染适配。AY配置已读取，但运行时仍用地图Dominator profile；按新计划完成来源绑定、优先级、渐变、结束/取消恢复、存读及实际GPU输出，不再等待旧批准或重复测reader |
 | 设计/原生冲突待决 | V01三组无人单位独立供电 | 当前保留原生共享House计数；作者逐组失联瘫痪要求与部分Drive原生恢复下令行为不同。未选定兼容策略，不能靠新增分组计数或拦移动默默改变政策 |
 | 设计/有效数据/保留状态冲突 | F22精英YURI多控 | 作者5、有效精英武器10、原生有限组件及现Rust保留出生容量1。不能直接改成5或10，也不能用叶函数一致称作者功能已达成 |
 | 现有政策不等于逐项原生 | EMP、经验分配、英雄赏金等 | docs/npatch.md、npatch-emp.md列明默认/钳位/时点/算术边界；赏金原始killer坐标已修。是否有当前配置可见差异要先证明，不拿旧文字调数值 |
@@ -22,6 +22,8 @@
 
 ## 当前检查点（2026-10-30）
 
+- 新接续计划：用户明确批准继续F11跨模块光照及剩余任务，本轮先制定[新计划](aymod-remaining-plan.md)，未实现或运行游戏。工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，计划前HEAD73b23e0b9且干净；本轮仅计划及台账修改。后续顺序为F11→剩余玩法/冲突→AI持续行为→完整客户端→全量审计。固定版/原档/MOD不动，不发布；Return Dubai弱攻势继续暂停，V01/F22可调查但未选冲突策略。下一安全动作是复核F11生产owner及原生链、恢复聚焦失败回归后实现；不再重复请求F11旧授权。
+- 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
 - 仅文档校正，无Cargo/游戏执行、生产玩法或MOD/原档/固定版改动；已核本地Markdown链接和git diff --check。上轮V14建筑先修复再受击至同1495导致断言误判的原因、两实际/3模块测试证据保留在对应行。下一步仍按作者/有效数据核必需缺口，不把全部验证债称未实现；V01/F22策略、F11接线未批准与弱攻势暂停保持，完整功能目标未关闭。
