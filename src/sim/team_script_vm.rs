@@ -121,6 +121,13 @@ pub struct TeamTypeDefinition {
     pub transport_crossing_required: bool,
 }
 
+/// Read-only definition inventory; no live TeamClass or mutable metadata escapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TeamTypeSummary {
+    pub definition: TeamTypeDefinition,
+    pub reinforce: bool,
+}
+
 /// The TeamType's other INI fields, beside the definition, and where it was
 /// defined.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -904,6 +911,17 @@ impl TeamScriptVm {
     /// Live teams in TeamClass::Array order (their construction order).
     pub fn teams_in_order(&self) -> impl Iterator<Item = &TeamScriptState> {
         self.teams.values()
+    }
+
+    /// Registered types in native registry order, using the same reinforcement
+    /// decision as recruitment and production demand, without constructing teams.
+    pub fn registered_team_types(&self) -> impl Iterator<Item = TeamTypeSummary> + '_ {
+        self.team_type_order.iter().filter_map(|id| {
+            self.team_types.get(id).map(|definition| TeamTypeSummary {
+                definition: *definition,
+                reinforce: self.reinforce(*id),
+            })
+        })
     }
 
     /// TeamType6F1F70: first live registry entry of this exact type, without

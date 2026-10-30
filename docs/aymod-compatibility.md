@@ -22,10 +22,10 @@
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于eb69b2530。新增A01正式双盟军自然队伍全灭/清理/同TeamType自然重建场景；复用唯一自然出击夹具，以命名loss枚举区分无损、实弹首射手损失、正常receiver全队终结，不另造AI生产或招募逻辑。本链无生产行为修复，F11和A03既有增量保持不动。
-- 全队例先自然付费成队离基地实射，再经Super致死receiver终结当时全部成员；必须正常销毁旧队，存读后旧队/成员关系不复活。记录损失边界的全部队伍和对象ID，要求后续同TeamType的新队ID及至少一个边界后出生的实付款射手再次出击；再存读后同一两支替代队各自新开火及玩家新伤害。不是整队实弹战损、所有替代成员均新造或原队精确补员证明；细节见A01节。
-- 最终fast/NPatch、零售要求环境下，新全队例1、原实弹局部战损1、原三阵营自然例3、ai_team_creation::tests4、ai_unit_choice::tests4、team_script_vm::tests18通过，共31项；两个模块既有ignored各1项未跑，Return Dubai专项保持暂停。一次内部重命名误改旧测试名导致过滤器0项，已恢复旧名，最终明确运行该1项，不把0项算通过。仅格式化所改测试函数，diff及本地Markdown链接检查通过；无生产状态/保存布局或新增RNG/timer/Detach调用，无新玩法critic。本地提交，不发布。
-- 下一安全动作核正式AY的Reinforce消费者，区分适用的原队补员与不要求补员的TeamType，避免继续无判别力的排列测试；随后按计划推进海军远航/自然超武、完整客户端及组合长局。构建可调整，用户不手测，自动化继续；原档/MOD保留。V01/F22策略已问未答，不擅改或反复追问；没有推送/PR/合并/发布授权，完整目标未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于276952806。扩展现有asset ini-type '*'的team_ai库存，经原TeamAiIniRegistry固定AI根+地图读取、Simulation::install_team_ai_registry和TeamScriptVm只读摘要报告最终Reinforce，不另写reader/默认值/触发选择器；私有元数据保持私有，无新权威状态或玩法行为。
+- 当前fast NPatch asset二进制实际运行可选模式1/2/9/10/11的294个组合/144个不同地图，全部成功、每组167个TeamType，均为相同6个Reinforce=true（3个IsBaseDefense=true），不是闲置键。相关6条原始触发引用均enabled/multiplayer/Hard启用，但尚非运行时资格或自然选择证明。5条既有非致命诊断对应C01/C03，不将其静默当成完整解析等价；详见A01消费者节。原始输出/一次性驱动在本机scratch，不提交报表。
+- 最终asset_tools::verb_ini::tests11通过，另1项既有YRO ignored未跑；fast NPatch asset构建和上述294组实际查询通过。初稿误用仅test-support可用Simulation::new，在正式asset构建失败，已改正式with_seed(0)并重建/重跑最终测试，未扩大test-support或生产可变接口。测试覆盖Reinforce默认、固定值及地图重读；没有RNG抽样、timer/Detach新增或保存布局变化，无新玩法critic。本地提交，不发布。
+- 下一安全动作沿正式Reinforce基地防守队验证自然付费原队补员：先自然成型，有限成员损失后同一队ID/TaskForce缺项补齐、存读保持，而非又验证新队重建。随后继续其他玩法、海军/自然超武、完整客户端和组合长局。用户不手测，构建可调整，原档/MOD保留；Return Dubai专项仍暂停，V01/F22已问未答，不擅改或反复追问。没有推送/PR/合并/发布授权，完整目标未完成。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
@@ -106,6 +106,14 @@
 - 后续正常AI必须自然选择同一TeamType，出现不在损失边界队伍集的新队ID，并有不在旧对象集、观测到真实付款的新成员离基地实射，玩家出现保存后新伤害；再完整存读核新队owner/Type/成员及付款证据，同一两支新队继续新开火并造成另一段新伤害。不接受损失前已存在的同型队、新队仅招募旧闲兵或旧伤害替代。只要求至少一个新付费射手，不称替代队每个成员全新付费。
 - 最终新全队例1、原实弹局部战损1、原三阵营自然例3、ai_team_creation::tests4、ai_unit_choice::tests4、team_script_vm::tests18通过，共31项；两个模块各1项既有ignored未运行。实弹例测试名误随内部变量重命名造成一次0项，已恢复原名并最终实际运行1项。仅测试夹具/台账；没有生产状态、保存布局或新增RNG/timer/Detach调用，既有死亡/Detach/队伍销毁/选择/生产/招募owners正常执行原副作用，无新玩法critic。全队损失是receiver seam，非玩家实弹全队覆灭或纯无干预长局；人类目标/观察基地fixture边界同前。
 - 仍开放：混合阵营/自由混战、适用Reinforce原队精确补员、实战全灭及其他阵营重建、持续长局/跨House压力隔离、每家独立命中归因和其他脚本/海军/超武；不以首次出击、局部战损和有限全队重建关闭整个A01。
+
+### A01原队补员的正式Reinforce消费者（2026-10-31）
+
+- 沿现有asset ini-type '*'库存入口，固定AI根及map由TeamAiIniRegistry::load_retail读取（AIMD不叠规则模式层），正式definition installer解析附件和元数据。TeamScriptVm::registered_team_types仅返回不可变定义副本及既有reinforce决定，不暴露可变元数据、不创建活队或推进tick，不把raw ReadBool重新内联成另一个默认值owner。
+- 可选模式1/2/9/10/11共294组/144个不同地图全部查询成功，每组167个TeamType，6个Reinforce=true集合完全一致。IsBaseDefense=true为06175EFC-G、08DA30EC-G、08BE3EFC-G；其余为0CB1CDEC-G、061183BC-G、FFFFFFFA-G。Script/TaskForce最终引用见工具结果；它们不是由只读根INI或某两张图推测出的消费者。
+- 注册表原始触发引用分别为0CDF8D8C-G→06175EFC-G、0CA6621C-G→08DA30EC-G、0612F46C-G→08BE3EFC-G；0C8C645C-G主0CB1CDEC-G/次FFFFFFFA-G；0611A33C-G次061183BC-G、0611A1EC-G主061183BC-G。各组这6条输入均enabled=true、multiplayer=true、Hard启用；仅证明配置允许继续调查，不证明运行时资格、权重选择、自然成队或补员通过，不能关闭A01原队补员。
+- 每组原安装器均保留5条非致命诊断：未知SHD成员及两条短AITrigger移读产生的未知TeamType/ObjectType，已由C01/C03记录。没有为库存猜名字/填空或启用这些战术。库存不包括战役、生成地图、旧存档或外部注入，294组不是整个游戏不可达或玩法等价证明。
+- 最终工具定向11项通过（既有YRO ignored1项未跑），fast NPatch asset正式构建及294组查询通过。只读工具/API增量，无新玩法critic；一次性驱动与大输出留scratch。下一条选正式基地防守队验证同一队ID下的自然付费精确补员，不复制造兵/招募owner。
 
 ### A03同盟双AI：旧敌败亡后的原队重定向及实际续攻（2026-10-31）
 

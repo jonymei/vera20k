@@ -325,6 +325,48 @@ fn assemble(
     }))
 }
 
+fn team_ai_inventory(
+    registry: &crate::rules::team_ai_ini::TeamAiIniRegistry,
+    rules: &RuleSet,
+) -> Result<Value, String> {
+    let mut sim = crate::sim::world::Simulation::with_seed(0);
+    let diagnostics = sim
+        .install_team_ai_registry(registry, rules)
+        .map_err(|diagnostics| format!("Team AI definition install refused: {diagnostics:?}"))?;
+    let types = sim
+        .team_script_vm()
+        .registered_team_types()
+        .map(|summary| {
+            let definition = summary.definition;
+            json!({
+                "id": sim.interner().resolve(definition.id),
+                "script": sim.interner().resolve(definition.script_id),
+                "task_force": sim.interner().resolve(definition.task_force_id),
+                "is_base_defense": definition.is_base_defense,
+                "reinforce": summary.reinforce,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "result_kind": "installed_team_type_inventory",
+        "team_types": types,
+        "trigger_inputs": registry.ai_triggers.iter().map(|trigger| json!({
+            "id": trigger.id,
+            "primary_team_type": trigger.primary_team_type,
+            "secondary_team_type": trigger.secondary_team_type,
+            "enabled": trigger.enabled,
+            "multiplayer": trigger.multiplayer,
+            "difficulty_enabled": trigger.difficulty_enabled,
+            "source": trigger.source,
+        })).collect::<Vec<_>>(),
+        "diagnostics": diagnostics.iter().map(|diagnostic| format!("{diagnostic:?}")).collect::<Vec<_>>(),
+        "limits": [
+            "TeamTypes use the production definition installer and recruitment owner's reinforcement decision. No live teams are created or ticks advanced.",
+            "Trigger inputs retain pre-resolution references, not eligibility, selection or a proof of live consumers. Rules layers do not overlay AIMD: fixed AI root plus the scenario own these definitions."
+        ],
+    }))
+}
+
 pub fn run(
     assets: &mut AssetManager,
     retail_dir: &Path,
@@ -470,6 +512,10 @@ fn run_inner(
         });
     }
     if matches!(query, IniQuery::Type { type_id: "*" }) {
+        report["team_ai"] =
+            crate::rules::team_ai_ini::TeamAiIniRegistry::load_retail(assets, &map.map.ini, true)
+                .and_then(|registry| team_ai_inventory(&registry, &rules))
+                .unwrap_or_else(|error| json!({"error": error, "team_types": null}));
         report["archive_registration_error"] = neutral_archives
             .as_ref()
             .err()
@@ -518,6 +564,32 @@ fn run_inner(
 mod tests {
     use super::*;
     use crate::rules::process_owner::NativeRulesProcessOwner;
+
+    #[test]
+    fn team_inventory_uses_installed_reinforce_defaults_and_map_rereads() {
+        use crate::rules::team_ai_ini::TeamAiIniRegistry;
+        let fixed = IniFile::from_str(
+            "[TeamTypes]\n0=R\n1=DEFAULT\n[R]\nScript=S\nTaskForce=F\nReinforce=yes\n\
+             [DEFAULT]\nScript=S\nTaskForce=F\n[ScriptTypes]\n0=S\n[S]\n0=2,0\n\
+             [TaskForces]\n0=F\n[F]\nGroup=-1\n",
+        );
+        let rules = RuleSet::from_ini(&IniFile::empty()).unwrap();
+        let registry = TeamAiIniRegistry::from_sources(&fixed, &IniFile::empty(), true);
+        let report = team_ai_inventory(&registry, &rules).unwrap();
+        assert_eq!(report["team_types"][0]["id"], "R");
+        assert_eq!(report["team_types"][0]["reinforce"], true);
+        assert_eq!(report["team_types"][1]["reinforce"], false);
+        let registry = TeamAiIniRegistry::from_sources(
+            &fixed,
+            &IniFile::from_str("[TeamTypes]\n0=R\n[R]\nReinforce=no\n"),
+            true,
+        );
+        let report = team_ai_inventory(&registry, &rules).unwrap();
+        assert_eq!(report["team_types"].as_array().unwrap().len(), 2);
+        assert_eq!(report["team_types"][0]["reinforce"], false);
+        assert_eq!(report["team_types"][0]["script"], "S");
+        assert_eq!(report["team_types"][0]["task_force"], "F");
+    }
 
     fn options(reader: &str, default: &str) -> IniOptions {
         IniOptions {
