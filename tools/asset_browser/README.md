@@ -119,6 +119,22 @@ result stays parseable.
 
 ## CLI equivalent
 
+`ini-type '*' --domain rules --map XMP03T4.MAP --mode-id 1` processes the
+selected scenario once and inventories its registered ObjectTypes. It reuses
+the individual type projection, including natural-particle inputs and the
+retained exact-case INI section. Retained text is not a final field or an active
+consumer: use `ini-get` with the native reader/default before interpreting it.
+The inventory also exposes the production mode catalog and mode-filtered
+concrete chooser records; discovery errors are explicit, not empty inventories.
+Campaign and generated random-map passes remain outside this tool's scope.
+For AYMOD, build the inspected binary with the NPatch capability explicitly:
+
+```powershell
+python -m tools.cargo_run -- build -p vera20k --bin asset --profile fast --no-default-features --features npatch
+$assetExe = python -m tools.cargo_run --resolve asset --profile fast
+& $assetExe ini-type '*' --domain rules --map XMP03T4.MAP --mode-id 1 --ra2-dir $env:VERA20K_AYMOD_DIR
+```
+
 Nothing here is MCP-only; the binary does the same work directly.
 
 ```powershell

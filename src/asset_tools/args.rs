@@ -83,7 +83,7 @@ USAGE
 
 VERBS
   ini-get <SECTION> <KEY>  Inspect exact authored values and a production INI accessor.
-  ini-type <TYPE>          Inspect final scenario ObjectType movement/flight fields.
+  ini-type <TYPE|*>        Inspect one final ObjectType, or inventory all registered types.
   ini-roots               Inspect the selected Rules/Art/AI roots and byte sources.
   ini-expand <FILE>        Probe production Include/Inherits expansion and sources.
   find <NAME>          Which archive wins, what shadows it, and what is
@@ -123,6 +123,8 @@ ini-type
   --mode-id <ID>     Required; selected skirmish MPModesMD row.
                       Reports source identities and complete Jumpjet type parameters,
                       including exact stored float/fixed bits. No runtime Link clamp.
+                       '*' also lists registered types, retained exact-case INI text,
+                       and production mode/chooser-map catalogs (not live consumers).
                       --reader/--default/--capacity/--all-mixes are rejected.
 
 ini-expand

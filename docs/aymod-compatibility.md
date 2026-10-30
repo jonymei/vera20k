@@ -1,6 +1,6 @@
 # AYMOD 兼容性清单
 
-更新：2026-10-30。面向“人类玩家与多个电脑对战”的分批适配工作清单。
+更新：2026-10-31。面向“人类玩家与多个电脑对战”的分批适配工作清单。
 完整执行顺序见 [剩余适配工作计划](aymod-remaining-plan.md)。这是当前唯一的兼容性台账；[Windows 交接](aymod-windows-handoff.md)记录此前交付历史，
 不是另一个待办列表。**没有把能启动、能读配置、能创建编队当作整个 MOD 已兼容。**
 
@@ -18,12 +18,13 @@
 | 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、对应选择/绘制owner及局部GPU/启动链已有覆盖；完整AppState事件泵、完整合成、真实网络接收/重连/同色策略和真人输入仍开放。未启动GUI，不冒称全界面验收 |
 | AI功能/长局验收未闭合 | A01–A10对应残余 | 自然多House发展/出击、经济恢复等有分批覆盖；A04持续需求下双工厂造齐4MGTK+4DEST/1AEGIS/4DLPH和存读已验，但自然触发/舰队集结远航/实战未验。Return Dubai弱攻势专项仍暂停，不借该项恢复调查 |
 | 作者明确要求的功能范围验收 | F01–F10/F13–F30、V02–V13各行 | 各自已实现链与真实使用例见表；仍有换主/特殊生命周期、混战、其他模式/地图和画面残余。F30三机重复投弹不等于所有飞机与全部架次通过；不以未验边界擅改已有行为 |
-| 扩展存在但当前消费者未证 | 自然粒子、TrueConversion等 | 已核两个Battle场景中若干键默认不启用；不把闲置声明当当前功能故障，也不扩大为所有模式都不可达，见对应节 |
+| 扩展存在，遭遇战配置适用性已扩大复核 | 自然粒子、TrueConversion等 | 5个可选模式/144个不同具体地图的294个组合，正式规则处理后的全部571或583种ObjectType均无非空自然粒子系统、无TrueConversion/DeployToFire键；仅SMIN/YAREFN的DeployFacing=0已有普通转换owner。不是扩展已实现或整个游戏/战役不可达证明 |
 
-## 当前检查点（2026-10-30）
+## 当前检查点（2026-10-31）
 
-- 当前链F11：任务工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于51a80a5e0。Launch准入前记来源回归先失败后通过；已沿ScenarioLightingState和light_sources接三种最近SW来源及三处不同优先级/disabled回落，地图profile不变。无新RNG调用/Detach/保存字段，计时器沿原ambient owner。NP超武154项、stock152项（各3既有ignored未跑）、客户端match_lighting7项通过；实际AY Battle/XMP03T4普通发射→逐帧→首次动画中完整资源存读→自然结束→第二次发射，经物理TMP/Vulkan GPU像素通过。授予/满充为fixture，不冒称自然科技充能或全窗口原生像素等价。新增源rate边界随NP超武154项通过。一次只读critic发现来源写入被客户端误当全局重照；新增生产核弹Launch回归先失败（高地保留标量改变）后通过，修ScenarioLightingState的fallback比较与MatchLighting元数据更新，不伪造Global。修后NP客户端回归1/光照消费者7/TMP GPU1、ScenarioSession15及stock客户端光照7通过；stock超武152项在该纯呈现比较修复前已过。未发布。
-- 本目标授权更新：构建可调整，旧固定版不再受保护；用户当前不手测，继续自动化生产/存读/GPU验收，不把等待手测当停工理由。原档/MOD保留，Return Dubai弱攻势仍暂停，V01/F22未选冲突策略。F11生产链及critic修复已落地，尚非全窗口原生像素等价。下一安全动作按[新计划](aymod-remaining-plan.md)阶段二核V01/F22策略差异和其他模式/地图实际消费者库存，优先真正缺口，再推进自然损耗补员；不追加无判别力微边界。完整目标未完成。
+- 当前链为阶段二适用性库存：工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于9ba901cf1。F11生产链和一次critic发现的误重照已修、保存/两次发射TMP GPU及NP/stock定向验证保留于3e901ca80/9ba901cf1；本轮不重做光照测试。扩展现有asset ini-type为'*'库存，沿既有RuleSet字段投影、NativeRulesProcessOwner和模式/地图发现owner报告，未另造解析器；原通配查询回归先因类型'*'不存在失败，修后定向10项及原零售YRO源选择1项通过。一次中断后的旧incremental链接出现2062个未解析符号，CARGO_INCREMENTAL=0关闭增量重新编译后得到真实红绿结果，未删他人缓存/保存构建。
+- 正式AY规则库存覆盖模式1/2/9/10/11各112/112/28/31/11个具体选择器记录，去重文件144，294个组合全成功；自然粒子/TrueConversion/DeployToFire及SMIN路径结论见唯一适用性节。原始大输出和一次性脚本留本机scratch，不提交报表/运行日志。无玩法状态、RNG、timer、Detach或保存布局变化，无新玩法critic；最终verb_ini定向10项、args12项及原零售YRO源选择1项通过；fast NPatch asset构建及当前二进制实际库存查询通过，Markdown链接和diff检查通过。本地提交，不发布。
+- 本目标授权更新：构建可调整；用户当前不手测，继续自动化验收。原档/MOD保留，Return Dubai弱攻势仍暂停。V01独立供电、F22作者5控或原生保留出生容量的策略已集中询问，尚未收到选择，不擅改。下一安全动作推进不依赖该选择的A01自然战斗损耗后付费补员/重建与持续续攻，沿已有双AI自然进攻夹具及生产owners，不再给已闲置的键追加微边界。完整目标未完成。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
@@ -679,6 +680,7 @@
 
 ### F02自然粒子残余的身份与当前适用性（2026-10-28）
 
+- 2026-10-31扩大适用性复核：`asset ini-type '*' --domain rules --map <file> --mode-id <id>`沿生产模式目录、ChooseMap过滤和最终NativeRulesProcessOwner运行。AY可选模式1/2/9/10/11分别112/112/28/31/11条具体记录，共294个组合、144个不同地图文件，全部成功；各最终ObjectType库存571种，Operation Lone Guardian II为583种，全部NaturalParticleSystem=None。不是只grep根INI，也不把这次配置库存当作运行时/旧档/随机地图/战役全链；带非空系统时+30C仍未实现。工具保留精确大小写INI文本仅供判断未支持键的适用性，不把文本当最终字段。
 - 原生+30C是NaturalParticleSystem（Type+764，713B9A），相对位置是NaturalParticleLocation（Type+768，713BF1..713C34）；原有字段reader已存在，不是火花/受损烟雾。构造时+30C为空，Birth440E99要求类型非空，完全隐形454E7F销毁，退隐454F3D先要求非空位置才构造62DC50。坐标空值依据43B0F0初始化指令与Type_ctor零写入确认，未读BSS零填充作证。
 - 新actual aymod_building_natural_particle_slot_is_dormant_in_battle_scenarios遍历普通Battle/XMP03T4及Return Dubai正式加载后的全部Building：NaturalParticleSystem=None且NaturalParticleLocation=0，两条创建入口均不工作。因此原生自然粒子缺口在这两个fresh配置没有实际使用者，不再以未核身份阻挡此范围箱子链；没有“实现了自然粒子系统”的结论。
 - NAWEAP的NaturalSmokeLocation是另一个物理键名，不把它自动映射到这里。原生名称字节、constructor和reader已核；未据字节检索扩大为所有其他读者/模块的全局不可达证明。
@@ -1903,6 +1905,9 @@ Arcing/SubjectToCliffs联合射程分支已接6F7404→C2D5ED，覆盖实体/map
 其他项目尚未逐条追#174补丁和实际运行，既不算已兼容，也不统一判缺失。
 V03 和 V05 已单列作者所述 burst/驻军经验，不再在 V10 重复开链。
 **V11 / P2 适用性调查**：NPAE的TechnoType `DeployFacing`（+5A4）部署转向门不同于已有BuildingType同名键。
+2026-10-31上述294个具体遭遇战组合的注册ObjectType保留文本均无TrueConversion/DeployToFire；
+DeployFacing仅SMIN/YAREFN为0，294组内SMIN均为非simple且DeploysInto=YAREFN，仍是已有普通转换owner的消费者。
+该库存不覆盖生成随机图、战役附加pass、外部运行时注入或旧档；未移植扩展不因此宣称实现。
 当前Return Dubai/Battle各实际物理层均未给SCHP配置该键、TrueConversion或DeployToFire；对应默认为-1/false/false。
 SMIN实际非simple、DeploysInto=YAREFN，实际转换消费YAREFN的建筑+EDC朝向，已有owner覆盖；见C06。
 `TrueConversion`是另外的部署变型开关，不能凭SCHP的`DeployFire`认成它。缺少独立扩展实现不等于当前场景必需缺失；

@@ -206,11 +206,77 @@ fn fixed_result(value: SimFixed) -> Value {
     })
 }
 
-fn assemble_type(rules: &RuleSet, type_id: &str, layers: Vec<Value>) -> Result<Value, String> {
+fn final_type_fields(object: &crate::rules::object_type::ObjectType, processed: &IniFile) -> Value {
+    let params = &object.jumpjet_params;
+    json!({
+        "id": object.id,
+        "name": object.name,
+        "ui_name": object.ui_name,
+        "image": object.image,
+        "category": object.category,
+        "no_shadow": object.no_shadow,
+        "considered_aircraft": object.considered_aircraft,
+        "voxel_shadow_index": object.voxel_shadow_index(),
+        "locomotor": object.locomotor,
+        "locomotor_clsid": object.locomotor.clsid(),
+        "speed_type": object.speed_type,
+        "movement_zone": object.movement_zone,
+        "balloon_hover": object.balloon_hover,
+        "is_simple_deployer": object.is_simple_deployer,
+        "deploy_to_land": object.deploy_to_land,
+        "hover_attack": object.hover_attack,
+        "jumpjet": object.jumpjet,
+        "crashable": object.crashable,
+        "tilt_crash_jumpjet": object.tilt_crash_jumpjet,
+        "natural_particle_system": object.natural_particle_system,
+        "natural_particle_location": object.natural_particle_location.to_array(),
+        "retained_ini": processed.section(&object.id).map(|section| {
+            section.raw_entries().collect::<std::collections::BTreeMap<_, _>>()
+        }),
+        "jumpjet_params": {
+            "turn_rate": params.turn_rate,
+            "speed": fixed_result(params.speed),
+            "climb": float32_result(params.climb),
+            "crash": float32_result(params.crash),
+            "height": params.height,
+            "accel": float32_result(params.accel),
+            "wobbles": float32_result(params.wobbles),
+            "no_wobbles": params.no_wobbles,
+            "deviation": params.deviation,
+        },
+    })
+}
+
+fn assemble_type(
+    rules: &RuleSet,
+    processed: &IniFile,
+    type_id: &str,
+    layers: Vec<Value>,
+) -> Result<Value, String> {
+    if type_id == "*" {
+        let mut types = rules
+            .all_objects()
+            .map(|object| final_type_fields(object, processed))
+            .collect::<Vec<_>>();
+        types.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+        return Ok(json!({
+            "schema_version": 1,
+            "domain": "rules",
+            "requested_type": "*",
+            "result_kind": "final_object_type_inventory",
+            "source_layers": layers,
+            "final_types": types,
+            "units": {"natural_particle_location": "relative leptons", "jumpjet_params.height": "leptons", "jumpjet_params.deviation": "leptons"},
+            "limits": [
+                "Registered ObjectTypes from the final production RuleSet, sorted by ID for reporting only; this is not a live or buildable object inventory.",
+                "retained_ini is exact-case processed text, not proof of final field values or active consumers. Use ini-get with the native reader/default when interpreting an unimplemented key.",
+                "The supported noncampaign skirmish path only; campaign, TMCJ4F and generated random-map passes are not included. No new native equivalence is established."
+            ]
+        }));
+    }
     let object = rules
         .object(type_id)
         .ok_or_else(|| format!("type {type_id:?} is absent from the final scenario RuleSet"))?;
-    let params = &object.jumpjet_params;
     Ok(json!({
         "schema_version": 1,
         "domain": "rules",
@@ -218,42 +284,12 @@ fn assemble_type(rules: &RuleSet, type_id: &str, layers: Vec<Value>) -> Result<V
         "lookup": "case_insensitive_type_identity",
         "result_kind": "final_object_type",
         "source_layers": layers,
-        "final_type": {
-            "id": object.id,
-            "name": object.name,
-            "ui_name": object.ui_name,
-            "image": object.image,
-            "category": object.category,
-            "no_shadow": object.no_shadow,
-            "considered_aircraft": object.considered_aircraft,
-            "voxel_shadow_index": object.voxel_shadow_index(),
-            "locomotor": object.locomotor,
-            "locomotor_clsid": object.locomotor.clsid(),
-            "speed_type": object.speed_type,
-            "movement_zone": object.movement_zone,
-            "balloon_hover": object.balloon_hover,
-            "is_simple_deployer": object.is_simple_deployer,
-            "deploy_to_land": object.deploy_to_land,
-            "hover_attack": object.hover_attack,
-            "jumpjet": object.jumpjet,
-            "crashable": object.crashable,
-            "tilt_crash_jumpjet": object.tilt_crash_jumpjet,
-            "jumpjet_params": {
-                "turn_rate": params.turn_rate,
-                "speed": fixed_result(params.speed),
-                "climb": float32_result(params.climb),
-                "crash": float32_result(params.crash),
-                "height": params.height,
-                "accel": float32_result(params.accel),
-                "wobbles": float32_result(params.wobbles),
-                "no_wobbles": params.no_wobbles,
-                "deviation": params.deviation,
-            },
-        },
-        "units": {"jumpjet_params.height": "leptons", "jumpjet_params.deviation": "leptons"},
+        "final_type": final_type_fields(object, processed),
+        "units": {"natural_particle_location": "relative leptons", "jumpjet_params.height": "leptons", "jumpjet_params.deviation": "leptons"},
         "limits": [
             "Fields come from the final Rust scenario RuleSet, including its constructors/readers/post-passes; this report alone establishes no new native equivalence.",
             "Jumpjet parameters are stored type values on every ObjectType, independent of JumpJet. Locomotor Link conversions/clamps and live flight state are not applied.",
+            "retained_ini contains exact-case text from the processed INI, not final fields or proof that a reader/consumer uses a key.",
             "Rules inspection executes the supported noncampaign skirmish path with the special TMCJ4F flag absent; campaign passes, LANGRULE Digest handling and that flagged extra pass are not modeled.",
             "Existing production parser/reader residuals remain; no replacement parser or type loader is used."
         ],
@@ -326,12 +362,14 @@ fn run_inner(
     // The app retains these registrations between cold Rules selection and
     // roster/map lookup. A shell-discovered YRO may supply either later input.
     // Preserve the app's tolerant failure policy and partially registered VFS.
-    if let Err(error) = assets.register_neutral_archives() {
+    let neutral_archives = assets.register_neutral_archives();
+    if let Err(error) = &neutral_archives {
         log::warn!("Could not register retail neutral shell archives: {error:#}");
     }
-    if let Err(error) = crate::map::scenario_sources::list_skirmish_scenario_records_with_assets(
+    let scenario_records = crate::map::scenario_sources::list_skirmish_scenario_records_with_assets(
         retail_dir, assets, None,
-    ) {
+    );
+    if let Err(error) = &scenario_records {
         log::warn!("Could not enumerate retail skirmish scenarios: {error:#}");
     }
     let roster = select_ini(assets, "MPModesMD.ini")?;
@@ -415,7 +453,7 @@ fn run_inner(
         .into_parts();
     let mut report = match query {
         IniQuery::Accessor { section, key } => assemble(&processed, section, key, options, layers)?,
-        IniQuery::Type { type_id } => assemble_type(&rules, type_id, layers)?,
+        IniQuery::Type { type_id } => assemble_type(&rules, &processed, type_id, layers)?,
     };
     report["mode_roster_source"] = json!(roster.source);
     report["ini_roots"] = json!(assets.ini_roots());
@@ -430,6 +468,48 @@ fn run_inner(
             "name": map.map.basic.name,
             "theater": map.map.header.theater,
         });
+    }
+    if matches!(query, IniQuery::Type { type_id: "*" }) {
+        report["archive_registration_error"] = neutral_archives
+            .as_ref()
+            .err()
+            .map(|error| error.to_string())
+            .into();
+        report["scenario_discovery_error"] = scenario_records
+            .as_ref()
+            .err()
+            .map(|error| error.to_string())
+            .into();
+        report["mode_catalog"] = modes
+            .iter()
+            .map(|mode| {
+                let records = scenario_records.as_ref().ok().map(|records| {
+                    let valid = records.iter().filter(|record| {
+                        record.kind
+                            == crate::map::skirmish_scenarios::SkirmishScenarioKind::ConcreteMap
+                            && crate::map::skirmish_scenarios::is_valid_map(record, mode, false)
+                    });
+                    valid
+                        .map(|record| {
+                            json!({
+                                "file_name": record.file_name,
+                                "source_ordinal": record.source_ordinal,
+                                "source": format!("{:?}", record.source),
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                });
+                json!({
+                    "id": mode.id,
+                    "class": format!("{:?}", mode.class),
+                    "lists_in_skirmish": mode.class.lists_in_skirmish(),
+                    "override_file": mode.override_file,
+                    "map_filter": mode.map_filter,
+                    "concrete_scenarios": records,
+                })
+            })
+            .collect::<Vec<_>>()
+            .into();
     }
     Ok(report)
 }
@@ -615,6 +695,7 @@ mod tests {
         let source = json!({"logical_name": "fixture.map", "source_sha256": "fixture identity"});
         let report = assemble_type(
             &rules,
+            &processed,
             "unit",
             vec![layer(
                 "scenario",
@@ -691,11 +772,11 @@ mod tests {
             "yes"
         );
         assert!(
-            assemble_type(&rules, "UNREGISTERED", vec![])
+            assemble_type(&rules, &processed, "UNREGISTERED", vec![])
                 .unwrap_err()
                 .contains("absent from the final scenario RuleSet")
         );
-        let report = assemble_type(&rules, "UNIT", vec![]).unwrap();
+        let report = assemble_type(&rules, &processed, "UNIT", vec![]).unwrap();
         assert_eq!(report["final_type"]["balloon_hover"], false);
         assert_eq!(report["final_type"]["jumpjet_params"]["turn_rate"], 4);
         assert_eq!(
@@ -714,6 +795,44 @@ mod tests {
         assert_eq!(result["value"], Value::Null);
         assert_eq!(result["binary32_bits"], "0x7fc01234");
         serde_json::from_str::<Value>(&serde_json::to_string(&result).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn final_type_inventory_uses_registered_types_and_retained_layered_inputs() {
+        let mut owner = NativeRulesProcessOwner::from_cold_start_sources(
+            IniFile::from_str(
+                "[BuildingTypes]\n0=PLANT\n[VehicleTypes]\n0=UNIT\n1=*\n[*]\nBalloonHover=yes\n\
+                 [PLANT]\nNaturalParticleLocation=1,2,3\n\
+                 [UNIT]\nTrueConversion=no\n[UNREGISTERED]\nTrueConversion=yes\n",
+            ),
+            None,
+            IniFile::empty(),
+            std::sync::Arc::default(),
+            Default::default(),
+        )
+        .unwrap();
+        let (rules, processed, _, _) = owner
+            .load_scenario(
+                crate::rules::process_owner::NativeScenarioRulesPrefix::NonCampaign(None),
+                &IniFile::from_str("[UNIT]\nTrueConversion=yes\ntrueconversion=no\n"),
+            )
+            .unwrap()
+            .into_parts();
+        let report = assemble_type(&rules, &processed, "*", vec![]).unwrap();
+        let types = report["final_types"].as_array().unwrap();
+        assert_eq!(types.len(), rules.all_objects().count());
+        assert!(types.iter().all(|object| object["id"] != "UNREGISTERED"));
+        assert!(
+            types
+                .iter()
+                .any(|object| object["id"] == "*" && object["balloon_hover"] == true)
+        );
+        let unit = types.iter().find(|object| object["id"] == "UNIT").unwrap();
+        assert_eq!(unit["retained_ini"]["TrueConversion"], "yes");
+        assert_eq!(unit["retained_ini"]["trueconversion"], "no");
+        let plant = types.iter().find(|object| object["id"] == "PLANT").unwrap();
+        assert_eq!(plant["natural_particle_location"], json!([1, 2, 3]));
+        assert_eq!(plant["natural_particle_system"], Value::Null);
     }
 
     #[test]
