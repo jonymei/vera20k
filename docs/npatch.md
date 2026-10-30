@@ -62,8 +62,11 @@ Per-type `AIBuildLimit=` limits AI production using the existing tracked and pro
 owners (`Factory_AI`, `0xC335A0..0xC33726`). Positive limits include limbo factory objects;
 non-positive limits compare the magnitude against both counters, and zero blocks the type.
 Reaching a cap clears the standing choice, without advancing the base plan. A capped building
-can therefore stall construction. VERA still has one vehicle choice slot; NPSE's separate
-naval AI choice remains a separate unimplemented mechanism.
+can therefore stall construction. NPatch builds retain independent land and naval
+vehicle choices through the existing House owner; stock builds keep one vehicle
+slot. The cap clears the fetched type's matching choice, not both slots. See
+[Independent AI land/naval choices](#independent-ai-landnaval-choices) for the
+NPAE174 consumer, native asymmetries and remaining selection-policy difference.
 
 The legacy `[General] EnableAIBuildLimitation=yes` switch applies the same comparison to
 `BuildLimit=` (NPExt ext173 reader `0xC2D132`, gate `0xC2CF67`). It defaults to no. This is
@@ -201,10 +204,20 @@ and actual AYMod sniper/Boris-sortie paths have production regressions.
 
 With `npatch`, `TrainPassengers=yes` gives an open-topped shooter's kill XP to
 the trainable passenger until it reaches elite; elite or untrainable passengers
-retain the carrier fallback. A `Spawned` child's kills instead train its living,
-trainable mother unit, even when the child is itself trainable. Live managed
-children mirror that award, and regenerated children inherit the parent's
-veterancy through the existing spawn owner.
+retain the carrier fallback. An Aircraft with a trainable SpawnOwner and no
+temporary controller keeps its ordinary award and additionally trains its parent
+(`RecordKill702FF0 -> C2C49F..C2C50F`); this is not a replacement for the child's
+own XP. The controller arm has a different continuation and does not add this
+parent bonus. Ordinary untrainable missile-to-launcher credit remains with its
+existing recipient selection.
+
+Live managed children do not mirror each kill award immediately. The parent's
+normal Techno AI rank-cache change samples the shared spawn-promotion owner
+(`6FA13E -> C2D825/C2D851`): non-Infantry parents with more than one spawn slot
+raise weaker trainable children, without lowering stronger ones. The literal
+zero/one-slot skip at C2D85F..C2D865 remains. Regenerated trainable children inherit
+the parent's veterancy through the existing spawn owner. These are distinct
+reward, promotion-sampling and spawn-construction paths, not another XP store.
 
 `[General] MindControllerGainExperienceRatio` shares the existing XP award with
 a valid, non-elite, positive-cost controller of the original killer

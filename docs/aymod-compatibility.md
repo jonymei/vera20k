@@ -22,9 +22,9 @@
 
 ## 当前检查点（2026-10-30）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于21d965a20。本轮继续V14之前未解释的NACNST目标，不用APOC通过替代建筑路径；两个test入口共用唯一混驻fixture，分别保留实际单位/建筑目标。仍不重做Alt飞机已完成链、巨炮既有修复或已覆盖光棱生命周期，Return Dubai弱攻势专项暂停不变。
-- 已解释原建筑“读档后无新掉血”失败：首次1500→1495，读档后有一次正常加血，后续又降至1495，最终最低值与保存时相同。旧断言health<保存时血量把先修满再受伤漏掉；改为逐帧health<前帧且仍要求两种实际OccupyWeapon发射/原名单保持。NACNST的SelfHealing无显式值；production_repair::update_repair_and_power4506B2/450813按保留AI IQ/repairable及资金处理修复，单改is_human不取消既有AI IQ输入，不为测试关闭其修复或改MOD数值。
-- 最终实际DESO/E1混驻对APOC/NACNST两例均在完整恢复后产生两槽新发射/真实逐帧掉血；combat_weapon3通过，共5项。初次诊断访问RepairByte私有on编译失败，改用既有is_on查询，没有扩大接口。仅回归/台账，无生产玩法/保存布局/RNG/timer/Detach修改，不需新critic；未启动GUI、改MOD/原档/固定版或发布。V14精英/最远边沿、其他功能和多AI长局仍开放；下一步回作者/有效数据清单查其他功能，不无限扩这组兵种变体。V01/F22策略与F11未批准门禁保持。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
+- 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
+- 仅文档校正，无Cargo/游戏执行、生产玩法或MOD/原档/固定版改动；已核本地Markdown链接和git diff --check。上轮V14建筑先修复再受击至同1495导致断言误判的原因、两实际/3模块测试证据保留在对应行。下一步仍按作者/有效数据核必需缺口，不把全部验证债称未实现；V01/F22策略、F11接线未批准与弱攻势暂停保持，完整功能目标未关闭。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
