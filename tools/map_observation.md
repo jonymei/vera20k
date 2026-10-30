@@ -1729,7 +1729,70 @@ The capture's top-level source identity describes the initial launch; use the
 actual load segment and destination baseline to interpret the restored epoch.
 Do not apply the original target-identity expectations across that epoch.
 
-The map's Ambient=1.0 matches this AY SuperType's Ambient=100, so this case
+### Dominator and storm lighting handoff
+
+The [overlap profile](map_observation.aymod-dominator-storm.example.json)
+adds a timed **map-trigger** storm to the ordinary AI Dominator scene, not a
+second AI-fired Super. Generate a scratch map from the existing authored input:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-dominator-storm.map")
+text = source.read_text(encoding="utf-8")
+assert "[Triggers]" not in text and "[Tags]" not in text
+text += """
+[Triggers]
+F11STORM=Neutral,<none>,F11 timed storm overlap,0,1,1,1,0
+[Events]
+F11STORM=1,13,0,541
+[Actions]
+F11STORM=1,102,0,0,0,0,0,0,A
+[Tags]
+F11STORMTAG=0,F11 timed storm overlap,F11STORM
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text)
+```
+
+Set a copy of the profile's map path to that absolute destination. Use the
+isolated AYMOD config/DX12 capture procedure above. The sole command deploys
+the observer's ordinary AMCV; neither charging nor launch readiness is edited.
+TEvent13 uses native logical seconds (15 frames each), and TAction102 calls the
+existing storm Start with the retail duration/deferment and incoming House.
+Sources: `trigger_runtime.rs`'s TAction102 (`6DD9EC..6DDAB8`, Start539EB0),
+`light_sources.rs`'s distinct Scenario53C280/Cell484473/LightConvert555E50
+selectors, and PsyDom Process53AF40. A trigger has no SWType lighting source;
+the storm here exercises its map/default Ion profile, not a custom storm SW.
+
+Run copies ending at 8100 (before), 8200 (Dominator), 8220 (overlap) and 9000
+(after). These are observed Rust checkpoints, not native timing goldens.
+The actual run entered Dominator RGB at 8154, switched to Ion RGB at 8215 and
+its ambient at 8216, and returned to normal RGB/ambient at 8632/8633. At 8220,
+the retained PDFXCLD/PDFXLOC animations were unfinished at frames 22/9. Retail
+PDFXLOC.SHP has 21 frames (production `asset info`); Process follows that
+second anim after the strike and has not reached its end/fade branch at 9.
+Thus the storm profile really takes over during the Dominator's lifecycle.
+Later snapshots have no such animations, while the storm profile remains.
+
+All four actual full-client captures passed bundle checks and were viewed.
+Compare the same `(40,58)` terrain sample as above: tile/A-buffer stay fixed,
+the pixel changes from normal to zero-green Dominator to nonzero-green/dimmer
+storm, then returns byte-for-byte to normal. Do not commit these pixels as
+goldens. This is one shared-lighting overlap and recovery, not all effect orders,
+disabled profiles, nuclear/chrono combinations, or native full-window parity.
+
+A two-facility AI scene also naturally produced a **sequential** Dominator to
+storm handoff; it did not prove overlap. Early manual launch receipts
+did not shift that observed timing and are not accepted-launch evidence.
+Current-player authored buildings in nonzero modes are rejected before their
+constructor (BuildingReadINI44F8CB..44F8DB), so do not bypass that policy to
+preplace player-controlled Supers. Full-length Super-instance observations also
+exceed the existing sample cap; inspect grants in a short probe and omit those
+rows from the lifecycle run rather than increasing its bound.
+
+The original map's Ambient=1.0 matches this AY SuperType's Ambient=100, so that case
 demonstrates RGB switching/restoration, not an ambient fade curve. It does not
 replace the existing saved/two-launch TMP tests or prove simultaneous effects,
 map-switch cleanup, all height cases, or native whole-window pixel equality.
