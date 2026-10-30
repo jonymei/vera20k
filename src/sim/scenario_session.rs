@@ -211,6 +211,19 @@ pub struct ScenarioLightingState {
 }
 
 impl ScenarioLightingState {
+    /// Compare the client's legacy fallback-refresh state without recent SW
+    /// source writes. Launch6CDA5B/6CCD33/6CCDB1 changes future readers only;
+    /// RecalcLighting53AD00 and ambient stepping publish their own refreshes.
+    pub fn same_refresh_state(&self, previous: &Self) -> bool {
+        let previous = *previous;
+        #[cfg(feature = "npatch")]
+        let previous = Self {
+            superweapon_lighting_sources: self.superweapon_lighting_sources,
+            ..previous
+        };
+        *self == previous
+    }
+
     pub const fn normal(&self) -> ScenarioLightProfileUnits {
         self.normal
     }

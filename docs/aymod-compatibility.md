@@ -22,8 +22,8 @@
 
 ## 当前检查点（2026-10-30）
 
-- 当前链F11：任务工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于51a80a5e0。Launch准入前记来源回归先失败后通过；已沿ScenarioLightingState和light_sources接三种最近SW来源及三处不同优先级/disabled回落，地图profile不变。无新RNG调用/Detach/保存字段，计时器沿原ambient owner。NP超武154项、stock152项（各3既有ignored未跑）、客户端match_lighting7项通过；实际AY Battle/XMP03T4普通发射→逐帧→首次动画中完整资源存读→自然结束→第二次发射，经物理TMP/Vulkan GPU像素通过。授予/满充为fixture，不冒称自然科技充能或全窗口原生像素等价。新增源rate边界已随NP超武154项通过；最终critic待收尾，未发布。
-- 本目标授权更新：构建可调整，旧固定版不再受保护；用户当前不手测，继续自动化生产/存读/GPU验收，不把等待手测当停工理由。原档/MOD保留，Return Dubai弱攻势仍暂停，V01/F22未选冲突策略。F11收尾后按[新计划](aymod-remaining-plan.md)核剩余高频生产缺口，不重复已有微边界；完整目标未完成。
+- 当前链F11：任务工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于51a80a5e0。Launch准入前记来源回归先失败后通过；已沿ScenarioLightingState和light_sources接三种最近SW来源及三处不同优先级/disabled回落，地图profile不变。无新RNG调用/Detach/保存字段，计时器沿原ambient owner。NP超武154项、stock152项（各3既有ignored未跑）、客户端match_lighting7项通过；实际AY Battle/XMP03T4普通发射→逐帧→首次动画中完整资源存读→自然结束→第二次发射，经物理TMP/Vulkan GPU像素通过。授予/满充为fixture，不冒称自然科技充能或全窗口原生像素等价。新增源rate边界随NP超武154项通过。一次只读critic发现来源写入被客户端误当全局重照；新增生产核弹Launch回归先失败（高地保留标量改变）后通过，修ScenarioLightingState的fallback比较与MatchLighting元数据更新，不伪造Global。修后NP客户端回归1/光照消费者7/TMP GPU1、ScenarioSession15及stock客户端光照7通过；stock超武152项在该纯呈现比较修复前已过。未发布。
+- 本目标授权更新：构建可调整，旧固定版不再受保护；用户当前不手测，继续自动化生产/存读/GPU验收，不把等待手测当停工理由。原档/MOD保留，Return Dubai弱攻势仍暂停，V01/F22未选冲突策略。F11生产链及critic修复已落地，尚非全窗口原生像素等价。下一安全动作按[新计划](aymod-remaining-plan.md)阶段二核V01/F22策略差异和其他模式/地图实际消费者库存，优先真正缺口，再推进自然损耗补员；不追加无判别力微边界。完整目标未完成。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。

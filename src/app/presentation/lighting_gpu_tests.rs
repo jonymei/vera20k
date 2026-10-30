@@ -165,6 +165,89 @@ struct TerrainLightingProbe {
 
 #[cfg(feature = "npatch")]
 #[test]
+fn source_only_nuke_launch_keeps_post_dominator_cell_scalars() {
+    use super::lighting::MatchLighting;
+    use crate::map::lighting::{CellLightGrid, LightingConfig};
+    use crate::rules::{ini_parser::IniFile, ruleset::RuleSet};
+    use crate::sim::house_state::HouseState;
+    use crate::sim::scenario_session::{ScenarioLightProfileUnits, ScenarioLightingState};
+    use crate::sim::superweapon::{SuperWeaponInstance, psychic_dominator::PsychicDominatorState};
+    use crate::sim::{command::Command, world::Simulation};
+
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[SuperWeaponTypes]\n0=N\n[N]\nType=MultiMissile\nIsPowered=no\n",
+    ))
+    .unwrap();
+    let mut sim = Simulation::new();
+    let owner = sim.intern("House");
+    let ty = sim.intern("N");
+    sim.register_house(HouseState::new(owner, 0, None, true, 1000, 10));
+    let mut instance = SuperWeaponInstance::new(ty, owner, 0);
+    instance.set_is_active_for_test(true);
+    instance.set_is_ready_for_test(true);
+    sim.super_weapons_mut_for_test()
+        .entry(owner)
+        .or_default()
+        .insert(ty, instance);
+    sim.session_mut_for_test()
+        .set_lighting_for_test(ScenarioLightingState::new(
+            ScenarioLightProfileUnits::normal_default(),
+            ScenarioLightProfileUnits::ion_default(),
+            ScenarioLightProfileUnits {
+                ground_units: 3,
+                level_units: 7,
+                ..ScenarioLightProfileUnits::dominator_default()
+            },
+            1,
+            1,
+        ));
+    let terrain = crate::map::resolved_terrain::test_grid(16, 16, |x, y| {
+        let mut cell = crate::map::resolved_terrain::test_loader_clear_cell(x, y);
+        cell.level = 2;
+        cell
+    });
+    *sim.psychic_dominator_mut_for_test() =
+        PsychicDominatorState::for_test(5, (0, 0), Some(owner), None);
+    let mut light = MatchLighting::default();
+    light.install(
+        CellLightGrid::new(),
+        LightingConfig::default(),
+        2,
+        Some((&terrain, &sim)),
+        None,
+    );
+    let scalars = |light: &MatchLighting| {
+        let cell = light.grid().cell_light_at((4, 5)).unwrap();
+        (cell.raw_top_scalar, cell.raw_bottom_scalar)
+    };
+    let retained = scalars(&light);
+    // PsyDom::Process53B03F only drops Active: cells retain their old scalars.
+    *sim.psychic_dominator_mut_for_test() = PsychicDominatorState::default();
+    sim.publish_relight_profile();
+    light.apply_events(&terrain, &sim.take_lighting_events());
+    assert!(sim.apply_command(
+        "House",
+        &Command::LaunchSuperWeapon {
+            sw_type_id: ty,
+            target_rx: 8,
+            target_ry: 8,
+        },
+        Some(&rules)
+    ));
+    assert!(
+        sim.lighting_sources().pending().is_empty(),
+        "no silo/impact relight"
+    );
+    light.refresh(&terrain, &sim, 2);
+    assert_eq!(
+        scalars(&light),
+        retained,
+        "remembering a source is not a global cell refresh"
+    );
+}
+
+#[cfg(feature = "npatch")]
+#[test]
 #[ignore = "requires AYMOD retail assets and GPU; real Dominator launch/frame/save/restore reaches physical TMP pixels"]
 fn aymod_dominator_lighting_reaches_terrain_gpu_after_load_and_restores() {
     use super::lighting::MatchLighting;
