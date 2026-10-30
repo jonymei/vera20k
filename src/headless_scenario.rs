@@ -2989,35 +2989,51 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied AI naturally produce attack teams and resume real attacks after a full save"]
     fn aymod_two_allied_ai_naturally_produce_attack_teams_and_resume_after_load() {
-        aymod_two_ai_natural_attack_lifecycle(0, false);
+        aymod_two_ai_natural_attack_lifecycle(0, NaturalAttackLoss::None);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet AI pay for attack teams, leave base and resume actual fire across saves"]
     fn aymod_two_soviet_ai_naturally_produce_attack_teams_and_resume_after_load() {
-        aymod_two_ai_natural_attack_lifecycle(1, false);
+        aymod_two_ai_natural_attack_lifecycle(1, NaturalAttackLoss::None);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Yuri AI pay for attack teams, leave base and resume actual fire across saves"]
     fn aymod_two_yuri_ai_naturally_produce_attack_teams_and_resume_after_load() {
-        aymod_two_ai_natural_attack_lifecycle(2, false);
+        aymod_two_ai_natural_attack_lifecycle(2, NaturalAttackLoss::None);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; real combat losses followed by fresh paid AI members and saved continued attacks"]
     fn aymod_two_allied_ai_pay_for_fresh_attackers_after_combat_losses_and_load() {
-        aymod_two_ai_natural_attack_lifecycle(0, true);
+        aymod_two_ai_natural_attack_lifecycle(0, NaturalAttackLoss::FirstShooter);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_two_ai_natural_attack_lifecycle(country: u32, combat_losses: bool) {
-        use crate::sim::combat::TargetKind;
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; destroyed natural teams release their slots and the same TeamTypes attack with fresh paid members"]
+    fn aymod_two_allied_ai_recreate_wiped_attack_team_types_after_load() {
+        aymod_two_ai_natural_attack_lifecycle(0, NaturalAttackLoss::WholeTeam);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum NaturalAttackLoss {
+        None,
+        FirstShooter,
+        WholeTeam,
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_two_ai_natural_attack_lifecycle(country: u32, loss: NaturalAttackLoss) {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, TargetKind};
         use crate::sim::production::ProductionCategory;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let has_losses = loss != NaturalAttackLoss::None;
         let (mut scene, computers) = aymod_two_ai_economies(country);
         let human = scene.sim().session.current_house().unwrap();
         let origins = computers
@@ -3041,7 +3057,7 @@ mod retail_construction_tests {
             // Yuri's first House can exhaust six targets and capture the MCV
             // before its peer arrives. Supply more ordinary human structures,
             // never extra AI members, money or targets immune to damage.
-            let target_count = if country == 2 || combat_losses { 24 } else { 6 };
+            let target_count = if country == 2 || has_losses { 24 } else { 6 };
             spawn_on_free_cells(
                 sim,
                 rules,
@@ -3074,18 +3090,22 @@ mod retail_construction_tests {
         let mut attacks = std::collections::BTreeMap::new();
         let mut damaged = false;
         let mut first_attackers = std::collections::BTreeMap::new();
+        let mut lost_members = std::collections::BTreeMap::<InternedId, Vec<u64>>::new();
+        let mut lost_types = std::collections::BTreeMap::new();
         let mut defenders = std::collections::BTreeSet::new();
         let mut defender_targets = std::collections::BTreeSet::new();
         let mut pre_loss_ids =
             std::collections::BTreeMap::<InternedId, std::collections::BTreeSet<u64>>::new();
+        let mut pre_loss_teams =
+            std::collections::BTreeMap::<InternedId, std::collections::BTreeSet<u64>>::new();
         let mut loss_saved = false;
         let mut loss_target_health = std::collections::BTreeMap::new();
         assert!(
-            (0..if combat_losses { 36000 } else { 18000 }).any(|_| {
+            (0..if has_losses { 36000 } else { 18000 }).any(|_| {
                 let output = tick_with_due_commands(&mut scene);
                 let sim = scene.sim();
                 assert!(output.tick.frame_committed && sim.session.outcome_request().is_none());
-                if combat_losses {
+                if has_losses {
                     for event in &output.fire_events {
                         if defenders.contains(&event.attacker_id)
                             && let TargetKind::Entity(target) = event.target
@@ -3093,13 +3113,32 @@ mod retail_construction_tests {
                             defender_targets.insert(target);
                         }
                     }
-                    for (&owner, &(_, actor)) in &first_attackers {
+                    for (&owner, &(team, actor)) in &first_attackers {
+                        let loss_observed = if loss == NaturalAttackLoss::WholeTeam {
+                            sim.team_script_vm.team(team).is_none()
+                                && lost_members[&owner].iter().all(|&id| {
+                                    sim.entities().get(id).is_none_or(|entity| {
+                                        entity.health.current() <= 0 || entity.death.is_dying()
+                                    })
+                                })
+                        } else {
+                            defender_targets.contains(&actor)
+                        };
                         if !pre_loss_ids.contains_key(&owner)
-                            && defender_targets.contains(&actor)
+                            && loss_observed
                             && sim.entities().get(actor).is_none_or(|entity| {
                                 entity.health.current() <= 0 || entity.death.is_dying()
                             })
                         {
+                            if loss == NaturalAttackLoss::WholeTeam {
+                                pre_loss_teams.insert(
+                                    owner,
+                                    sim.team_script_vm
+                                        .teams_in_order()
+                                        .map(|team| team.id())
+                                        .collect(),
+                                );
+                            }
                             pre_loss_ids.insert(
                                 owner,
                                 sim.entities()
@@ -3171,12 +3210,17 @@ mod retail_construction_tests {
                     {
                         continue;
                     }
-                    if combat_losses {
+                    if has_losses {
                         if let std::collections::btree_map::Entry::Vacant(entry) =
                             first_attackers.entry(team.owner())
                         {
                             entry.insert((id, event.attacker_id));
+                            if loss == NaturalAttackLoss::WholeTeam {
+                                lost_types.insert(team.owner(), team.team_type_id().unwrap());
+                                lost_members.insert(team.owner(), team.members().collect());
+                            }
                             counterattacks.push((
+                                team.owner(),
                                 event.attacker_id,
                                 (
                                     i32::from(actor.position.rx()),
@@ -3190,6 +3234,12 @@ mod retail_construction_tests {
                         {
                             continue;
                         }
+                    }
+                    if loss == NaturalAttackLoss::WholeTeam
+                        && (pre_loss_teams[&team.owner()].contains(&id)
+                            || team.team_type_id() != Some(lost_types[&team.owner()]))
+                    {
+                        continue;
                     }
                     attacks.insert(team.owner(), (id, event.attacker_id));
                 }
@@ -3207,19 +3257,39 @@ mod retail_construction_tests {
                                 .is_some_and(|entity| entity.is_ai_alive())
                     })
                 }) && damaged;
-                // Human counterattack units are an explicit battle fixture.
-                // No AI members, money, teams, orders or production choices
-                // are injected. Losses must come from ordinary projectiles.
-                for (actor, at) in counterattacks {
+                // FirstShooter uses real human fire; WholeTeam isolates death
+                // and team cleanup through the existing lethal receiver.
+                // Neither injects AI members, money, teams or orders.
+                for (owner, actor, at) in counterattacks {
                     let runtime = &mut scene.runtime;
-                    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
-                    let spawned = spawn_on_free_cells(
-                        sim,
-                        rules,
-                        human,
-                        cells_nearest(at),
-                        &["APOC", "APOC"],
-                    );
+                    let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+                    let rules = &resources.rules;
+                    if loss == NaturalAttackLoss::WholeTeam {
+                        let warhead = sim.interner.intern("Super");
+                        for &id in &lost_members[&owner] {
+                            let hp = sim.entities().get(id).unwrap().health.current();
+                            sim.commit_direct_damage_receiver(
+                                rules,
+                                Some(&resources.overlay_registry),
+                                EntityDamageEvent::direct_receiver(
+                                    id,
+                                    hp,
+                                    0,
+                                    RAD_NO_ATTACKER,
+                                    None,
+                                    warhead,
+                                    ReceiverCallFlags {
+                                        ignore_defenses: true,
+                                        arg6: true,
+                                    },
+                                ),
+                                Default::default(),
+                            );
+                        }
+                        continue;
+                    }
+                    let spawned =
+                        spawn_on_free_cells(sim, rules, human, cells_nearest(at), &["APOC", "APOC"]);
                     let name = sim.interner.resolve(human).to_owned();
                     for defender in spawned {
                         defenders.insert(defender);
@@ -3237,11 +3307,24 @@ mod retail_construction_tests {
                         ));
                     }
                 }
-                if combat_losses && pre_loss_ids.len() == 2 && !loss_saved {
+                if has_losses && pre_loss_ids.len() == 2 && !loss_saved {
                     let terrain = scene.sim().resolved_terrain().unwrap().clone();
-                    let bytes =
-                        save_scene(&scene, "AY both first paid attackers lost in real combat");
+                    let bytes = save_scene(
+                        &scene,
+                        "AY observed natural attack losses before replacements",
+                    );
                     scene.runtime.simulation = restored_retail(&scene, &terrain, &bytes);
+                    if loss == NaturalAttackLoss::WholeTeam {
+                        for &(team, _) in first_attackers.values() {
+                            assert!(scene.sim().team_script_vm.team(team).is_none());
+                        }
+                        for &member in lost_members.values().flatten() {
+                            assert!(scene.sim().team_script_vm.team_for_member(member).is_none());
+                            assert!(scene.sim().entities().get(member).is_none_or(|entity| {
+                                entity.health.current() <= 0 || entity.death.is_dying()
+                            }));
+                        }
+                    }
                     for &(_, actor) in first_attackers.values() {
                         assert!(scene.sim().entities().get(actor).is_none_or(|entity| {
                             entity.health.current() <= 0 || entity.death.is_dying()
@@ -3258,7 +3341,7 @@ mod retail_construction_tests {
                         .collect();
                     loss_saved = true;
                 }
-                done && (!combat_losses
+                done && (!has_losses
                     || (loss_saved
                         && loss_target_health.iter().any(|(&id, &hp)| {
                             scene
@@ -3268,7 +3351,7 @@ mod retail_construction_tests {
                                 .is_none_or(|entity| entity.health.current() < hp)
                         })))
             }),
-            "both natural country{country} economies must pay for members, form actual attack teams, leave base and fire at the human: attacks={attacks:?}, damaged={damaged}, combat_losses={combat_losses}, first={first_attackers:?}, losses={:?}, defenders={defenders:?}, fired_at={defender_targets:?}, surviving human targets={:?}, teams={:?}",
+            "both natural country{country} economies must pay for members, form actual attack teams, leave base and fire at the human: attacks={attacks:?}, damaged={damaged}, loss={loss:?}, first={first_attackers:?}, losses={:?}, defenders={defenders:?}, fired_at={defender_targets:?}, surviving human targets={:?}, teams={:?}",
             pre_loss_ids.keys().collect::<Vec<_>>(),
             targets
                 .keys()
@@ -3331,9 +3414,22 @@ mod retail_construction_tests {
                 Some((team, false))
             );
             assert_eq!(scene.sim().entities().get(actor).unwrap().owner(), owner);
-            if combat_losses {
+            if has_losses {
                 assert!(!pre_loss_ids[&owner].contains(&actor));
                 assert!(paid.contains(&actor));
+                if loss == NaturalAttackLoss::WholeTeam {
+                    assert_ne!(team, first_attackers[&owner].0);
+                    assert!(!pre_loss_teams[&owner].contains(&team));
+                    assert_eq!(
+                        scene
+                            .sim()
+                            .team_script_vm
+                            .team(team)
+                            .unwrap()
+                            .team_type_id(),
+                        Some(lost_types[&owner])
+                    );
+                }
             }
         }
         let resume_target_health = targets
@@ -3373,7 +3469,7 @@ mod retail_construction_tests {
                     }
                 }
                 resumed.len() == 2
-                    && (!combat_losses
+                    && (!has_losses
                         || resume_target_health.iter().any(|(&id, &hp)| {
                             sim.entities()
                                 .get(id)
