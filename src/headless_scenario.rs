@@ -2987,6 +2987,257 @@ mod retail_construction_tests {
 
     #[cfg(feature = "npatch")]
     #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; natural Reinforce base guards refill the same TaskForce with paid members across saves"]
+    fn aymod_two_allied_ai_refill_original_base_guards_after_loss_and_load() {
+        use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::production::ProductionCategory;
+        use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let (mut scene, computers) = aymod_two_ai_economies(0);
+        for &owner in &computers {
+            scene
+                .runtime
+                .simulation
+                .houses
+                .get_mut(&owner)
+                .unwrap()
+                .set_ai_triggers_active(true);
+        }
+        let kind = scene.sim().interner.get("08DA30EC-G").unwrap();
+        assert!(scene.sim().team_script_vm.reinforce(kind));
+        assert!(
+            scene
+                .sim()
+                .team_script_vm
+                .team_type_definition(kind)
+                .unwrap()
+                .is_base_defense
+        );
+        let force = scene.sim().team_script_vm.task_force_of(kind).unwrap();
+        let expected: [i32; 6] =
+            std::array::from_fn(|slot| force.entries.get(slot).map_or(0, |entry| entry.count));
+        let casualty_type = force.entries[0].member_type.id;
+        assert!(expected[0] > 0 && expected.iter().sum::<i32>() > 2);
+        let step = |scene: &mut HeadlessScenario| {
+            let output = tick_with_due_commands(scene);
+            assert!(output.tick.frame_committed && scene.sim().session.outcome_request().is_none());
+        };
+        let mut originals = std::collections::BTreeMap::new();
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                originals = computers
+                    .iter()
+                    .filter_map(|&owner| {
+                        scene
+                            .sim()
+                            .team_script_vm
+                            .teams_in_order()
+                            .find(|team| {
+                                team.owner() == owner
+                                    && team.team_type_id() == Some(kind)
+                                    && team.formed()
+                                    && team.taskforce_counts_for_test() == expected
+                                    && team.members().all(|id| {
+                                        scene
+                                            .sim()
+                                            .entities()
+                                            .get(id)
+                                            .is_some_and(|entity| entity.is_ai_alive())
+                                    })
+                            })
+                            .map(|team| (owner, team.id()))
+                    })
+                    .collect();
+                originals.len() == 2
+            }),
+            "both normal allied economies must naturally form the registered Reinforce guard"
+        );
+        let original_members = originals
+            .values()
+            .flat_map(|&id| scene.sim().team_script_vm.team(id).unwrap().members())
+            .collect::<std::collections::BTreeSet<_>>();
+        let losses = originals
+            .iter()
+            .map(|(&owner, &team)| {
+                let member = scene
+                    .sim()
+                    .team_script_vm
+                    .team(team)
+                    .unwrap()
+                    .members()
+                    .find(|&id| scene.sim().entities().get(id).unwrap().type_ref() == casualty_type)
+                    .unwrap();
+                (owner, (team, member))
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        {
+            let runtime = &mut scene.runtime;
+            let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
+            let warhead = sim.interner.intern("Super");
+            for &(_, member) in losses.values() {
+                let hp = sim.entities().get(member).unwrap().health.current();
+                // Isolate partial-loss/recruitment, not projectile accuracy.
+                // Team removal and demand still use the ordinary death owners.
+                sim.commit_direct_damage_receiver(
+                    &resources.rules,
+                    Some(&resources.overlay_registry),
+                    EntityDamageEvent::direct_receiver(
+                        member,
+                        hp,
+                        0,
+                        RAD_NO_ATTACKER,
+                        None,
+                        warhead,
+                        ReceiverCallFlags {
+                            ignore_defenses: true,
+                            arg6: true,
+                        },
+                    ),
+                    Default::default(),
+                );
+            }
+        }
+        let mut short = expected;
+        short[0] -= 1;
+        let casualties_remain_dead = |scene: &HeadlessScenario| {
+            losses.values().all(|&(_, member)| {
+                scene
+                    .sim()
+                    .entities()
+                    .get(member)
+                    .is_none_or(|entity| entity.health.current() <= 0 || entity.death.is_dying())
+            })
+        };
+        assert!(casualties_remain_dead(&scene));
+        assert!(
+            (0..120).any(|_| {
+                step(&mut scene);
+                losses.values().all(|&(team, member)| {
+                    scene
+                        .sim()
+                        .team_script_vm
+                        .team(team)
+                        .is_some_and(|guard| guard.taskforce_counts_for_test() == short)
+                        && scene.sim().team_script_vm.team_for_member(member).is_none()
+                })
+            }),
+            "normal death must detach each casualty without destroying its partial guard"
+        );
+        let terrain = scene.sim().resolved_terrain().unwrap().clone();
+        let bytes = save_scene(
+            &scene,
+            "AY original Reinforce guards after one ordinary death each",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &terrain, &bytes);
+        assert!(casualties_remain_dead(&scene));
+        for (&owner, &(team, member)) in &losses {
+            let guard = scene.sim().team_script_vm.team(team).unwrap();
+            assert_eq!(guard.owner(), owner);
+            assert_eq!(guard.team_type_id(), Some(kind));
+            assert_eq!(guard.taskforce_counts_for_test(), short);
+            assert_eq!(scene.sim().team_script_vm.team_for_member(member), None);
+        }
+        let mut balances = std::collections::BTreeMap::<u64, i32>::new();
+        let mut paid = std::collections::BTreeSet::new();
+        let mut replacements = std::collections::BTreeMap::new();
+        assert!(
+            (0..18000).any(|_| {
+                step(&mut scene);
+                let sim = scene.sim();
+                for factory in sim.production().factories().iter_insertion_ordered() {
+                    if !computers.contains(&factory.owner())
+                        || factory.category() != ProductionCategory::Infantry
+                    {
+                        continue;
+                    }
+                    let Some(id) = factory.object().and_then(|object| object.entity_id) else {
+                        continue;
+                    };
+                    let before = balances.entry(id).or_insert(factory.balance());
+                    if factory.balance() < *before {
+                        paid.insert(id);
+                    }
+                    *before = factory.balance();
+                }
+                for (&owner, &(team, dead)) in &losses {
+                    let guard = sim
+                        .team_script_vm
+                        .team(team)
+                        .expect("the original partial guard must survive");
+                    assert_eq!(guard.owner(), owner);
+                    assert_eq!(guard.team_type_id(), Some(kind));
+                    if guard.taskforce_counts_for_test() != expected {
+                        continue;
+                    }
+                    if let Some(member) = guard.members().find(|id| {
+                        *id != dead
+                            && !original_members.contains(id)
+                            && paid.contains(id)
+                            && sim
+                                .entities()
+                                .get(*id)
+                                .is_some_and(|e| e.is_ai_alive() && e.type_ref() == casualty_type)
+                    }) {
+                        replacements.insert(owner, member);
+                    }
+                }
+                replacements.len() == 2
+            }),
+            "both same original guard IDs must refill the missing TaskForce slot with paid products: replacements={replacements:?}, counts={:?}",
+            originals
+                .values()
+                .map(|&id| scene.sim().team_script_vm.team(id).map(|team| (
+                    id,
+                    team.taskforce_counts_for_test(),
+                    team.members().collect::<Vec<_>>()
+                )))
+                .collect::<Vec<_>>()
+        );
+        let bytes = save_scene(
+            &scene,
+            "AY same Reinforce guards full with paid replacement members",
+        );
+        scene.runtime.simulation = restored_retail(&scene, &terrain, &bytes);
+        assert!(casualties_remain_dead(&scene));
+        for (&owner, &member) in &replacements {
+            let team = originals[&owner];
+            assert_eq!(
+                scene.sim().team_script_vm.team_for_member(member),
+                Some((team, true))
+            );
+            assert_eq!(
+                scene
+                    .sim()
+                    .team_script_vm
+                    .team(team)
+                    .unwrap()
+                    .taskforce_counts_for_test(),
+                expected
+            );
+            assert_eq!(scene.sim().entities().get(member).unwrap().owner(), owner);
+            assert!(paid.contains(&member));
+            assert!(!original_members.contains(&member));
+        }
+        for _ in 0..180 {
+            step(&mut scene);
+        }
+        for (&owner, &member) in &replacements {
+            assert_eq!(
+                scene.sim().team_script_vm.team_for_member(member),
+                Some((originals[&owner], true))
+            );
+            assert!(
+                scene
+                    .sim()
+                    .entities()
+                    .get(member)
+                    .is_some_and(|e| e.is_ai_alive())
+            );
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; allied AI naturally produce attack teams and resume real attacks after a full save"]
     fn aymod_two_allied_ai_naturally_produce_attack_teams_and_resume_after_load() {
         aymod_two_ai_natural_attack_lifecycle(0, NaturalAttackLoss::None);

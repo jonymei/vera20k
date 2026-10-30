@@ -22,10 +22,10 @@
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于276952806。扩展现有asset ini-type '*'的team_ai库存，经原TeamAiIniRegistry固定AI根+地图读取、Simulation::install_team_ai_registry和TeamScriptVm只读摘要报告最终Reinforce，不另写reader/默认值/触发选择器；私有元数据保持私有，无新权威状态或玩法行为。
-- 当前fast NPatch asset二进制实际运行可选模式1/2/9/10/11的294个组合/144个不同地图，全部成功、每组167个TeamType，均为相同6个Reinforce=true（3个IsBaseDefense=true），不是闲置键。相关6条原始触发引用均enabled/multiplayer/Hard启用，但尚非运行时资格或自然选择证明。5条既有非致命诊断对应C01/C03，不将其静默当成完整解析等价；详见A01消费者节。原始输出/一次性驱动在本机scratch，不提交报表。
-- 最终asset_tools::verb_ini::tests11通过，另1项既有YRO ignored未跑；fast NPatch asset构建和上述294组实际查询通过。初稿误用仅test-support可用Simulation::new，在正式asset构建失败，已改正式with_seed(0)并重建/重跑最终测试，未扩大test-support或生产可变接口。测试覆盖Reinforce默认、固定值及地图重读；没有RNG抽样、timer/Detach新增或保存布局变化，无新玩法critic。本地提交，不发布。
-- 下一安全动作沿正式Reinforce基地防守队验证自然付费原队补员：先自然成型，有限成员损失后同一队ID/TaskForce缺项补齐、存读保持，而非又验证新队重建。随后继续其他玩法、海军/自然超武、完整客户端和组合长局。用户不手测，构建可调整，原档/MOD保留；Return Dubai专项仍暂停，V01/F22已问未答，不擅改或反复追问。没有推送/PR/合并/发布授权，完整目标未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于12fa58d3a。新增A01正式双盟军Reinforce原队付费补员场景，沿现有经济fixture在首帧前恢复正常AITrigger，先要求两家08DA30EC-G自然成型且TaskForce各slot恰等正式定义，再终结各首slot一名成员。不手建队、注入AI成员/资金/选择/队列或下订单；原队销毁重建不能代替补员。
+- 原Super致死receiver及正常帧令slot少1、伤亡Detach但原队存活；第一次完整存读保持原队ID/House/Type/缺项和原伤亡死亡。随后每家必须有不在原成员集合、真实工厂balance下降观察到的新付费同类型成员加入同一原队，全部slot恢复正式定义。第二次完整存读保持满额/原伤亡死亡/替补归属，再180帧替补活着且仍在原队。没有生产行为修复，细节及边界见A01节。
+- 最终fast/NPatch、VERA20K_REQUIRE_RETAIL_INI=1：新实际场景1、ai_unit_choice::tests4、production::factory_ai::tests13、recalc_matches_the_original1、recruit_matches_the_original1通过，共20项；chooser的既有Return Dubai ignored1项未跑。仅新测试函数格式化，无生产权威状态/保存布局或新增RNG/timer/Detach调用，正常死亡/招募/需求/付款owners执行既有副作用，无新玩法critic；本地提交，不发布。
+- 下一安全动作转阶段四完整客户端输入/合成，优先F14建筑短按TypeSelect；已查现有map_observation literal key/selection_scope路径，复用现有工具，并明确它与完整AppState事件泵的证据差异，不把直接owner注入冒称OS输入。A01其余Reinforce类型/严重减员/多AI长局、海军/自然超武及其他玩法仍开放，不在此继续排列相似守卫测试。用户不手测，构建可调整，原档/MOD保留；Return Dubai专项仍暂停，V01/F22策略已问未答，不擅改或反复追问。没有推送/PR/合并/发布授权，完整目标未完成。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
@@ -106,6 +106,14 @@
 - 后续正常AI必须自然选择同一TeamType，出现不在损失边界队伍集的新队ID，并有不在旧对象集、观测到真实付款的新成员离基地实射，玩家出现保存后新伤害；再完整存读核新队owner/Type/成员及付款证据，同一两支新队继续新开火并造成另一段新伤害。不接受损失前已存在的同型队、新队仅招募旧闲兵或旧伤害替代。只要求至少一个新付费射手，不称替代队每个成员全新付费。
 - 最终新全队例1、原实弹局部战损1、原三阵营自然例3、ai_team_creation::tests4、ai_unit_choice::tests4、team_script_vm::tests18通过，共31项；两个模块各1项既有ignored未运行。实弹例测试名误随内部变量重命名造成一次0项，已恢复原名并最终实际运行1项。仅测试夹具/台账；没有生产状态、保存布局或新增RNG/timer/Detach调用，既有死亡/Detach/队伍销毁/选择/生产/招募owners正常执行原副作用，无新玩法critic。全队损失是receiver seam，非玩家实弹全队覆灭或纯无干预长局；人类目标/观察基地fixture边界同前。
 - 仍开放：混合阵营/自由混战、适用Reinforce原队精确补员、实战全灭及其他阵营重建、持续长局/跨House压力隔离、每家独立命中归因和其他脚本/海军/超武；不以首次出击、局部战损和有限全队重建关闭整个A01。
+
+### A01双盟军Reinforce防守原队：自然付费精确补员及存读（2026-10-31）
+
+- 新aymod_two_allied_ai_refill_original_base_guards_after_loss_and_load，正式AY Battle/XMP03T4两家同盟困难美国，沿正常MCV/启动资金/经济fixture首帧前恢复AITrigger，不手放AI兵/设施/科技/钱、建队、选产品或下订单。两个人类IC观察基地为既有存活fixture，不称原图零干预或实战压力测试。
+- 从安装后的08DA30EC-G/TaskForce 05C60C4C-G取正式期望slot，核Reinforce=true及IsBaseDefense=true，等两家各自自然成型且所有成员活着、slot计数恰等正式TaskForce。各首slot一名成员经Super direct receiver按当前HP无attacker终结，不删除队伍或直接调用Remove_Member；正常帧须令原伤亡Detach、该slot少1，其余slot不变且原队仍在。
+- 损失边界第一次完整存读：两支原队ID/House/TeamType/缺项保留，伤亡仍死且无队伍关系。随后正常生产每家必须有不在原成员集合的同类型实际工厂产品、观测到balance下降，加入各自同一支原队；全部slot恢复正式TaskForce。实际付款观察起于第一次恢复后，不声明替补一定在损失后才创建，允许既有在产产品继续付款；不以旧闲兵免费招募或新队重建代替本例的付费原队补员。
+- 补齐后第二次完整存读：两原伤亡仍死，两原队slot满额且新付费成员的House/队伍关系保持；后续180普通帧新成员仍活着并属于原队。这里只验证本正式防守队有限减员，不声明参与进攻、玩家炮弹致死、严重减员撤退重组或所有Reinforce队伍通过。
+- 最终实际1、ai_unit_choice::tests4、production::factory_ai::tests13、既有recalc/recruit原生组件回归各1通过，共20项；chooser Return Dubai既有ignored1项未跑。只新增生产集成测试/台账，无生产权威状态/RNG抽样/timer/Detach调用或保存布局变化，原owners正常执行各自副作用，无新玩法critic。不启动GUI、改MOD/原档或发布。其余5个Reinforce类型、其他丢失slot、多次战损/严重减员、混战与长局仍开放，不关闭整个A01；下一条转完整客户端证据，不重复堆同类场景。
 
 ### A01原队补员的正式Reinforce消费者（2026-10-31）
 
@@ -1943,7 +1951,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 
 | ID / 优先级 / 状态 | 机制与代码入口 | 多电脑对战收口条件 |
 | --- | --- | --- |
-| A01 / P1 / 三阵营自然出击/盟军战损续攻及有限全队重建已验，其余待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 正式AY双同盟困难盟军正常开局、各自自然付费成员/正式非防御队成型/离初始基地8格外对原玩家目标实射、人类实伤、完整存读后同一两队再次开火已验；AI无成员/建队/命令注入，人类保护观察基地/目标为fixture。苏联/尤里各双同盟困难电脑亦已正常付费成队、出基地用正伤害非心控武器实射，完整存读后同一两队新射击；尤里24座可损伤人类目标为fixture，三例不是混合阵营同局。新增双盟军各首射手由人类fixture实弹击杀后，新ID付费成员成队续攻、两段完整存读及新伤害已验；另经致死receiver终结首队全部成员，旧队正常销毁/存读不复活，损失后新ID同TeamType队携新付费射手续攻及再存读已验；非整队实弹覆灭或所有成员新造。适用原队精确补员、混合阵营、其他阵营战损恢复及连续长局仍待验，不以一次出击关闭A01，不能被永久空队占满 Max |
+| A01 / P1 / 三阵营出击/盟军战损续攻、有限重建及防守原队补员已验，其余待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 正式AY双同盟困难盟军正常开局、各自自然付费成员/正式非防御队成型/离初始基地8格外对原玩家目标实射、人类实伤、完整存读后同一两队再次开火已验；AI无成员/建队/命令注入，人类保护观察基地/目标为fixture。苏联/尤里各双同盟困难电脑亦已正常付费成队、出基地用正伤害非心控武器实射，完整存读后同一两队新射击；尤里24座可损伤人类目标为fixture，三例不是混合阵营同局。新增双盟军各首射手由人类fixture实弹击杀后，新ID付费成员成队续攻、两段完整存读及新伤害已验；另经致死receiver终结首队全部成员，旧队正常销毁/存读不复活，损失后新ID同TeamType队携新付费射手续攻及再存读已验；非整队实弹覆灭或所有成员新造。另正式08DA30EC-G双家自然成型、各损失首slot一名后正常付费同类型新成员补回同一队ID/全slot恢复、两段存读及替补保持已验，非全部Reinforce/严重减员。其余Reinforce、混合阵营、其他阵营战损恢复及连续长局仍待验，不以一次出击关闭A01，不能被永久空队占满 Max |
 | A02 / P1 / 双苏联高级科技/失重工、矿车、矿场恢复与双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。新增两家苏联NATECH自然建成、第一方全失矿车后新HARV实际付款/生产中存读/出厂载矿/载矿存读卸矿且两家新收入续进已验，非实战灭矿且未改资金。另已验第一方全失NAREFN后接收点归零、新矿场实际付款/生产中存读/同对象施工完成、落地存读后原HARV向新矿场交矿且双方新收入续进。盟军高级科技、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
 | A03 / P1 / 同盟双AI旧敌败亡后原队重定向及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，各自正式APOC队先对第三方实射；第三方正常旗标败亡/待处理存读后均重选人类，再存读后同一原队新射击及新的人类实伤已验。成员/建队/附近后续目标为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、长距离在途重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
 | A04 / P1 / 持续指定需求下陆海付款/完整补员/成队存读已验，战术仍待核验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
