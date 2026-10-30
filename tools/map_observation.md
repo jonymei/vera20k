@@ -731,8 +731,11 @@ global tactical clip and the existing MOUSEPAL material.
 Literal `key` gestures may optionally include a unique `modifiers` list containing
 `Ctrl`, `Shift`, `Alt`, and/or `Super`. These use the shared modifier-key owner and
 ordinary key edges, and release every modifier before rendering. Bare historical
-gestures keep their existing receipts. The release game's Ctrl+Shift+M/N shortcuts
-exercise the production quicksave/quickload owner. A quickload gesture requires
+gestures keep their existing receipts. With the `dev-overlays` feature enabled,
+Ctrl+Shift+M/N exercise the production quicksave/quickload owner. This feature is
+required even for a `fast` or `release` capture: `--no-default-features --features
+npatch` alone excludes these shortcuts and cannot run a quickload profile.
+A quickload gesture requires
 `allow_load_segments: true` and must actually restore an earlier clock. Up to 16
 `load_segments` retain the triggering gesture ordinal and before/after tick,
 binary frame and simulation milliseconds. Capture-step numbering remains
@@ -741,6 +744,14 @@ rewind. This is VERA same-content snapshot loading, not original SAV compatibili
 Run these profiles with a fresh scratch working directory/config: the production
 save repository uses that working directory's `saves/` folder. There is no
 diagnostic save backend or bypass of preparation/commit.
+
+The [AY Dominator hot-load profile](map_observation.aymod-dominator-hotload.example.json)
+extends the natural-charge lighting scene with save at step 8199 and load at
+8500. Use AYMOD, `npatch,dev-overlays`, an isolated configuration/save directory,
+and an absolute authored-map path as for the original lighting profile. The
+facilities are preplaced; charging and AI launch are not injected. Check the
+actual load segment's clock rewind before interpreting the final image; the
+profile is not a native save-format or whole-frame parity certificate.
 
 The [planning mode profile](map_observation.planning-mode.example.json) selects
 the opening AMCV through the ordinary production command, holds literal Z across
@@ -1645,6 +1656,19 @@ This is a relationship check against AY's enabled RGB profile, not a committed
 pixel golden. View the complete frames too; scalar/CPU evidence alone is not a
 rendered-output witness. Decode PNGs **outside** sealed run directories so later
 integrity inspection continues to accept their exact artifact inventory.
+
+The hot-load variant saves during the tint at 8199, waits until it has ended,
+then restores at completed step 8500. With `npatch,dev-overlays`, the checked
+load transition rewinds tick 8500 to 8199; completed step 8501 renders tick 8200
+with the saved tint again. The full 9101-step profile ends at tick 8800 with
+normal lighting. To reproduce the active endpoint, stop a profile copy at 8501;
+compare it with a fresh 8170-step baseline (omit gestures/load permission) and
+the full hot-load endpoint using the same terrain/pixel relationship above.
+All three actual DX12 captures passed bundle validation and were viewed. The
+sample tile/A-buffer remained unchanged; tint returned after load and the ground
+RGB returned byte-for-byte after the restored effect ended. This bounds one
+full-client same-content save/load lifecycle, not other simultaneous effects or
+map replacement. Keep saves, captures and decoded images in scratch only.
 
 The map's Ambient=1.0 matches this AY SuperType's Ambient=100, so this case
 demonstrates RGB switching/restoration, not an ambient fade curve. It does not
