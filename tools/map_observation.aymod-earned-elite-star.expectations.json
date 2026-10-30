@@ -1,0 +1,229 @@
+{
+  "schema_version": "vera20k.map-observation-expectations.v1",
+  "assertions": [
+    {
+      "name": "tank starts with no experience",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 0,
+      "field": "veterancy_raw_bits",
+      "op": "eq",
+      "value": 0
+    },
+    {
+      "name": "AI samples rookie rank",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 1,
+      "field": "veterancy_rank_cache",
+      "op": "eq",
+      "value": 2
+    },
+    {
+      "name": "kill-earned veteran sampled before elite",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "eventually": {
+        "from_step": 1,
+        "through_step": 600
+      },
+      "field": "veterancy_rank_cache",
+      "op": "eq",
+      "value": 1
+    },
+    {
+      "name": "elite promotion starts real flash timer",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "eventually": {
+        "from_step": 1,
+        "through_step": 600
+      },
+      "field": "elite_flash_frames",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "name": "elite rank sampled before save",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "veterancy_rank_cache",
+      "op": "eq",
+      "value": 0
+    },
+    {
+      "name": "ordinary weapon actually fired",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "fire.last_fire_frame",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "name": "original target retired [47, 54]",
+      "subject": {
+        "actor": {
+          "type_id": "APOC",
+          "owner": "Computer1",
+          "cell": [
+            47,
+            54
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "present",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "original target retired [47, 56]",
+      "subject": {
+        "actor": {
+          "type_id": "APOC",
+          "owner": "Computer1",
+          "cell": [
+            47,
+            56
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "present",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "original target retired [44, 57]",
+      "subject": {
+        "actor": {
+          "type_id": "APOC",
+          "owner": "Computer1",
+          "cell": [
+            44,
+            57
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "present",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "restored tank remains elite",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 700
+        }
+      },
+      "at_step": 700,
+      "field": "veterancy_rank_cache",
+      "op": "eq",
+      "value": 0
+    },
+    {
+      "name": "restored tank still alive",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 700
+        }
+      },
+      "at_step": 700,
+      "field": "object_alive",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "restored tank retains positive health",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 700
+        }
+      },
+      "at_step": 700,
+      "field": "health",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "name": "selection click restored neutral input",
+      "subject": {
+        "gesture": 0
+      },
+      "at_step": 20,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "earned raw experience reaches native elite threshold",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 600,
+      "field": "veterancy_raw_bits",
+      "op": "ge",
+      "value": 1073741824
+    },
+    {
+      "name": "restored raw experience reaches native elite threshold",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 700
+        }
+      },
+      "at_step": 700,
+      "field": "veterancy_raw_bits",
+      "op": "ge",
+      "value": 1073741824
+    }
+  ]
+}

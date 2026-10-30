@@ -519,6 +519,78 @@ This bounds four real class-color consumers and their save/exit lifecycle.
 Transport pips, elite stars/natural promotion, other families/maps and OS event
 dispatch remain separate; no veterancy prior was set in this scene.
 
+## AYMOD Earned-Elite Star
+
+The [earned-star profile](map_observation.aymod-earned-elite-star.example.json)
+continues F25 through actual weapon kills, rather than an authored elite rank or
+a direct XP write. Use the same isolated AYMOD `fast`/`npatch,dev-overlays`/DX12
+procedure as the garrison scene. Materialize its scratch map:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-earned-elite-star.map")
+text = source.read_text(encoding="utf-8")
+start = text.index("[Structures]")
+end = text.index("[OverlayPack]", start)
+placements = """[Structures]
+
+[Units]
+0=<human player>,MTNK,256,44,54,0,Guard,None,0,-1,0,-1,0,0
+1=Computer,APOC,1,47,54,0,Sleep,None,0,-1,0,-1,0,0
+2=Computer,APOC,1,47,56,0,Sleep,None,0,-1,0,-1,0,0
+3=Computer,APOC,1,44,57,0,Sleep,None,0,-1,0,-1,0,0
+
+[Infantry]
+
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text[:start] + placements + text[end:])
+```
+
+Resolve a profile copy's map path to that absolute destination. The APOCs'
+authored health fraction `1/256` and Sleep mission are explicit pressure inputs,
+not ordinary full-health combat or runtime damage injection. Their real AI may
+retask them and they still self-heal. Production rules on this input read MTNK
+Cost 700, APOC Cost 2000/Strength 900 and VeteranRatio 3; no rule/cost/weapon or
+experience values are overridden. MTNK begins with zero experience.
+
+The first ordinary Attack is issued at 0, a screen click selects MTNK at 20,
+and the second ordinary Attack at 80 binds the **sole remaining living** APOC
+by type/owner, not its initial cell. In the first probe a single order killed
+only two targets; a later fixed-cell selector correctly failed because the AI
+had moved the third away. The final input follows that live target instead of
+freezing its controller or teleporting it back. The tank fires real `105mm`
+projectiles, retires all three targets, crosses rookie/veteran/elite and starts
+its normal elite-flash timer. This is kill-earned promotion in a wounded-target
+fixture, not evidence for autonomous battles or economy.
+
+Save at 600 and load at 660 restore the real clock to 600; the 700-step endpoint
+is tick 640. The [expectations](map_observation.aymod-earned-elite-star.expectations.json)
+check zero initial XP, sampled rookie/veteran/elite, actual fire, retired original
+targets, the promotion timer and live restored elite state. The raw positive
+experience threshold `0x40000000` is native 2.0f (IsElite750010), not a captured
+pixel/arithmetic golden. Rebind at 700 for the restored epoch. All 15 assertions
+passed in the actual full capture. Separately resolve the actual tank ID in each
+endpoint and require it alone selected, with `selection_pending=false`.
+
+The rank draw reads the **raw accumulator**, not its AI cache, through the
+existing `techno_extras_for_parent` (`70A9B2..70A9D2`) and emits original PIPS
+frame 15 (`70AA20..70AA4F`). The earlier isolated material test established
+that AY's actual frame is a star; this scene adds the complete tactical frame,
+body, health strip, terrain, sidebar and real earned promotion. No rank sprite,
+palette or simulated state is synthesized by the observer.
+
+For the pre-save image, shorten a copy to 600 and omit the later gestures
+(`issue_after_step >= ticks`). Both actual endpoints passed bundle checks and
+frame SHA/length checks and were viewed. The star region `[349,364) x [329,344)`
+was byte-identical before/after load at this camera and stopped tank pose. This
+is only a relationship check; no output pixels/actor IDs are committed. Radar's
+post-load animation is not full-frame equality. Other unit families, normal
+full-health battles, promotion while embarked/controlled and native whole-window
+parity remain separate, as do elite-weapon firing and other F/V/A work.
+
 Optional v2 `observe_audio` records device-mixer queue pulls from requested ordinary
 SFX Players. For example:
 
