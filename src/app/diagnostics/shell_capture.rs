@@ -219,6 +219,7 @@ pub enum ShellCaptureCheckpoint {
     SkirmishExpandedColors,
     SkirmishExpandedApplied,
     SkirmishExpandedInGame,
+    SkirmishExpandedReopened,
     SkirmishLightingRestartInGame,
     MoviesPage0x101Steady,
     /// Exit Game on `0xE2`: after the teardown slide, the confirmation over
@@ -559,6 +560,7 @@ impl ShellCaptureCheckpoint {
             "skirmish-expanded-colors" => Ok(Self::SkirmishExpandedColors),
             "skirmish-expanded-applied" => Ok(Self::SkirmishExpandedApplied),
             "skirmish-expanded-in-game" => Ok(Self::SkirmishExpandedInGame),
+            "skirmish-expanded-reopened" => Ok(Self::SkirmishExpandedReopened),
             "skirmish-lighting-restart-in-game" => Ok(Self::SkirmishLightingRestartInGame),
             CHECKPOINT_SKIRMISH_0X6B_STEADY => Ok(Self::Skirmish0x6BSteady),
             CHECKPOINT_SKIRMISH_0X105_STEADY => Ok(Self::Skirmish0x105Steady),
@@ -774,6 +776,7 @@ impl ShellCaptureCheckpoint {
             Self::SkirmishExpandedColors => "skirmish-expanded-colors",
             Self::SkirmishExpandedApplied => "skirmish-expanded-applied",
             Self::SkirmishExpandedInGame => "skirmish-expanded-in-game",
+            Self::SkirmishExpandedReopened => "skirmish-expanded-reopened",
             Self::SkirmishLightingRestartInGame => "skirmish-lighting-restart-in-game",
             Self::MoviesPage0x101Steady => CHECKPOINT_MOVIES_0X101_STEADY,
             Self::MainMenu0xE2ExitConfirm => CHECKPOINT_MAIN_MENU_0XE2_EXIT_CONFIRM,
@@ -2211,6 +2214,9 @@ impl ShellCaptureSession {
             ),
             ShellCaptureCheckpoint::SkirmishExpandedInGame => Some(
                 skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::InGame),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedReopened => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Reopened),
             ),
             ShellCaptureCheckpoint::SkirmishLightingRestartInGame => Some(
                 skirmish::SkirmishCapture::loading(skirmish::LoadingTarget::LightingRestart),
@@ -4221,6 +4227,7 @@ mod tests {
             "skirmish-expanded-colors",
             "skirmish-expanded-applied",
             "skirmish-expanded-in-game",
+            "skirmish-expanded-reopened",
             "skirmish-lighting-restart-in-game",
         ] {
             let output = new_output_path(name);

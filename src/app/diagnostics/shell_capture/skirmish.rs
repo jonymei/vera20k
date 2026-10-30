@@ -164,6 +164,8 @@ pub(super) enum ExpandedSetupTarget {
     Colors,
     Applied,
     InGame,
+    /// Observe persistent setup on process restart without editing any control.
+    Reopened,
 }
 
 #[derive(Default)]
@@ -526,6 +528,27 @@ impl SkirmishCapture {
 
     fn expanded_step(&mut self, state: &mut AppState, frame: u32) -> Result<()> {
         use crate::ui::skirmish_shell::{self as ui, SkirmishComboId, SkirmishComboItem};
+        if self.expanded == Some(ExpandedSetupTarget::Reopened) {
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.color_count == 16
+                    && shell.show_tech_level_slider
+                    && shell.open_combo_dropdown.is_none()
+                    && shell.player_color_index == 15
+                    && shell.player_color_claimed
+                    && shell.launch_options_base.tech_level == 1,
+                "persisted expanded setup was not hydrated: color={}, claimed={}, tech={}",
+                shell.player_color_index,
+                shell.player_color_claimed,
+                shell.launch_options_base.tech_level
+            );
+            self.expanded_snapshot = Some(Self::expanded_snapshot(state));
+            self.expanded_colors_opened = true;
+            self.expanded_applied = true;
+            self.route.push(json!({"dialog": 0x102, "frame": frame,
+                "action": "persisted expanded setup observed without edits"}));
+            return Ok(());
+        }
         let id = SkirmishComboId::Color(0);
         let layout = ui::compute_layout(state.render_width(), state.render_height());
         let click = |state: &mut AppState, point| {

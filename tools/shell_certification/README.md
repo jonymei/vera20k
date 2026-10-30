@@ -2,12 +2,13 @@
 
 ## AYMOD Setup Observations
 
-The existing production shell capture also has three NPatch setup checkpoints:
+The existing production shell capture also has four NPatch setup checkpoints:
 
 ```text
 vera20k --shell-capture skirmish-expanded-colors --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
 vera20k --shell-capture skirmish-expanded-applied --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <another-new-absolute-output-directory>
 vera20k --shell-capture skirmish-expanded-in-game --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-in-game-output-directory>
+vera20k --shell-capture skirmish-expanded-reopened --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-reopened-output-directory>
 ```
 
 Build the current `fast` executable with `--no-default-features --features npatch`
@@ -17,9 +18,9 @@ On the current Windows adapter use `WGPU_BACKEND=dx12` for the BGRA8 surface and
 leave `RA2_DIR` unset. Keep the child process owned and wait for its exit (for
 example with `subprocess.run`, not a detached Windows GUI invocation).
 
-All three routes enter Single Player/Skirmish through existing App handlers. They
-require the loaded 16-color catalog and enabled technology slider, open the local
-color combo, and use ordinary scrollbar down-arrow press/release edges to reach
+All four routes enter Single Player/Skirmish through existing App handlers. The
+first three require the loaded 16-color catalog and enabled technology slider,
+open the local color combo, and use ordinary scrollbar down-arrow edges to reach
 its end. The shell wheel remains deliberately inert. `colors` captures the open
 bottom list; `applied` selects color priority 15 and clicks the technology slider's
 minimum. `in-game` then uses normal Start Game/loading and captures after 30
@@ -40,9 +41,27 @@ House and Scenario technology 1, a positive simulation tick and scheme `MPC16`;
 it does not assign these owners or bypass launch loading. The actual Windows
 AYMOD run reached tick 30 with scheme entry 15 and the full in-game frame.
 
+For a persistence round trip, run `in-game` in a fresh isolated settings directory,
+wait for process exit, then run `reopened` as a **new process with the same config**.
+The normal Start Game transaction writes the preferences; the reopened checkpoint
+does not open a combo, click a slider, launch a game, or assign selected values.
+It only checks the hydrated 16-color/technology page and records `expanded_setup`.
+Require selected/claimed priority 15 and technology 1, check frame bytes/SHA, and
+view the actual page. Require the isolated `VERA.INI` to remain byte-identical
+during the second run. Do not hand-author those keys as the positive fixture.
+
+Startup's capture-only audio/video defaults do **not** bypass these settings:
+`MultiplayerShellRuntime::initialize` independently reads `MultiPlayer` and
+`Skirmish` through the production INI reader, then `hydrate_shell` fills the UI.
+The actual two-process AY run passed and left the 417-byte settings file unchanged.
+As a negative control, `reopened` in another empty settings directory must fail
+with `persisted expanded setup was not hydrated`; the actual empty-directory run
+reported color 0/technology 10 and created no `VERA.INI`. This checks that the
+observer cannot silently set the expected values itself.
+
 These are MOD production observations, not enrolled stock-shell certificates.
 The sealed-native comparison commands below do not certify these checkpoints.
-They do not exercise OS/winit event dispatch, preferences reopening, network
+They do not exercise OS/winit event dispatch, general audio/video preferences, network
 receive/reconnect or occupied-color policies. The in-game check bounds offline
 Start Game consumers; it is not a network or all-configuration certification.
 
