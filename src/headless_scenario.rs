@@ -20452,6 +20452,18 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; DESO and GI mixed garrison must keep cycling weapons across restore"]
     fn aymod_deso_mixed_garrison_keeps_firing_after_load() {
+        aymod_deso_mixed_garrison_target("APOC");
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; mixed radiation garrison must damage a repairing building after restore"]
+    fn aymod_deso_mixed_garrison_hits_building_after_load() {
+        aymod_deso_mixed_garrison_target("NACNST");
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_deso_mixed_garrison_target(target_kind: &str) {
         use crate::sim::combat::{TargetKind, combat_weapon};
         use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::{MissionId, MissionType};
@@ -20479,7 +20491,7 @@ mod retail_construction_tests {
                 })
                 .collect::<Vec<_>>();
             let gi = spawn_on_free_cells(sim, rules, owner, sites.clone(), &["E1"])[0];
-            let target = spawn_on_free_cells(sim, rules, enemy, sites, &["APOC"])[0];
+            let target = spawn_on_free_cells(sim, rules, enemy, sites, &[target_kind])[0];
             sim.mission_queue_exact(
                 target,
                 MissionId::from_known(MissionType::Sleep),
@@ -20543,6 +20555,10 @@ mod retail_construction_tests {
                 },
             ));
             let mut fired = std::collections::BTreeSet::new();
+            let mut previous_health = before;
+            let mut damaged = false;
+            let mut healing_steps = 0;
+            let mut minimum_health = before;
             assert!(
                 (0..600).any(|_| {
                     let output = tick_with_due_commands(&mut scene);
@@ -20551,14 +20567,19 @@ mod retail_construction_tests {
                             fired.insert(scene.sim().interner.resolve(event.weapon_id).to_string());
                         }
                     }
-                    weapons.iter().all(|weapon| fired.contains(weapon))
-                        && scene
-                            .sim()
-                            .entities()
-                            .get(target)
-                            .is_some_and(|entity| entity.health.current() < before)
+                    let entity = scene.sim().entities().get(target).unwrap();
+                    let health = entity.health.current();
+                    damaged |= health < previous_health;
+                    healing_steps += usize::from(health > previous_health);
+                    minimum_health = minimum_health.min(health);
+                    previous_health = health;
+                    weapons.iter().all(|weapon| fired.contains(weapon)) && damaged
                 }),
-                "DESO must not silence the mixed building, restored={restored}, fired={fired:?}"
+                "DESO must not silence the mixed building, target={target_kind}, restored={restored}, fired={fired:?}, before={before}, last={previous_health}, min={minimum_health}, healed={healing_steps}"
+            );
+            eprintln!(
+                "AY mixed garrison target={target_kind}, restored={restored}, before={before}, last={previous_health}, min={minimum_health}, healed={healing_steps}, repairing={}",
+                scene.sim().entities().get(target).unwrap().repairing.is_on()
             );
             assert!(
                 scene

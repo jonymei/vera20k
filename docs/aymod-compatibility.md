@@ -22,9 +22,9 @@
 
 ## 当前检查点（2026-10-30）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于651cde88e。本轮按作者170601原文回查，发现“辐射工兵驻军射程错乱/碉堡哑火”未单列，新增V14而非默认为F04清驻军或V07施气已覆盖。原光棱EMP/缺电/已排束与生命周期已有专项，未重复添加。巨炮修复b5a046558保留，固定版cfb479750不含且旧计划不追溯删除；弱攻势专项继续暂停。
-- 新实际aymod_deso_mixed_garrison_keeps_firing_after_load用正式Battle/XMP03T4、CAHSE01及DESO/E1普通CaptureBuilding步行混驻，对实际APOC正常Attack；两种原OccupyWeapon均真实发射且目标实际掉血，活游标完整保存恢复后再次两种发射及新掉血，名单仍为原两人。实际1及combat_weapon3通过。最初NACNST目标在恢复后两种均发射却未满足新掉血门，不能据此诊断哑火或宣称建筑伤害通过；最终改用APOC隔离单位目标，不改任何HP/武器/MOD值。
-- 仅新增回归及台账，无生产玩法/保存布局/RNG/timer/Detach修改，无新critic；未启动GUI、改MOD/原档/固定版或发布。V14短程混驻续射已验，最远射程/精英与其他驻军建筑/旧建筑目标未闭合；不能把一例通过称作者全部修复或全MOD兼容。继续核作者清单的实际消费者和剩余功能；V01/F22策略、F11未批准接线门禁不变，不从自动续接推断批准。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于21d965a20。本轮继续V14之前未解释的NACNST目标，不用APOC通过替代建筑路径；两个test入口共用唯一混驻fixture，分别保留实际单位/建筑目标。仍不重做Alt飞机已完成链、巨炮既有修复或已覆盖光棱生命周期，Return Dubai弱攻势专项暂停不变。
+- 已解释原建筑“读档后无新掉血”失败：首次1500→1495，读档后有一次正常加血，后续又降至1495，最终最低值与保存时相同。旧断言health<保存时血量把先修满再受伤漏掉；改为逐帧health<前帧且仍要求两种实际OccupyWeapon发射/原名单保持。NACNST的SelfHealing无显式值；production_repair::update_repair_and_power4506B2/450813按保留AI IQ/repairable及资金处理修复，单改is_human不取消既有AI IQ输入，不为测试关闭其修复或改MOD数值。
+- 最终实际DESO/E1混驻对APOC/NACNST两例均在完整恢复后产生两槽新发射/真实逐帧掉血；combat_weapon3通过，共5项。初次诊断访问RepairByte私有on编译失败，改用既有is_on查询，没有扩大接口。仅回归/台账，无生产玩法/保存布局/RNG/timer/Detach修改，不需新critic；未启动GUI、改MOD/原档/固定版或发布。V14精英/最远边沿、其他功能和多AI长局仍开放；下一步回作者/有效数据清单查其他功能，不无限扩这组兵种变体。V01/F22策略与F11未批准门禁保持。
 - F22实际AY类型的原生构造/放置、直接471D40两次捕获及原晋升钩子已完成有限组件对照，普通武器1/精英武器10/保留出生管理器1，当前Rust本例一致；非普通Attack/自然XP/原SAV或外部注入穷尽。作者5/有效配置10/出生1仍为设计冲突，不强改容量，也不无限追加同一微边界。V01/F11门禁及Return Dubai弱攻势暂停保持；原版Engineer原生joined对照此前在音频4041D0→40ACxx超时，未算通过。
 - A05新增实际AY铁幕编队链：正式困难苏联脚本53→55→0正常集结，低电满充时等待，等待中完整存读90帧仍不越过；恢复电力后真实发射、自身成员获得保护，再完整存读后按原脚本实射并伤害所射敌人。实际场景1、super_actions11、iron_curtain8通过，共20项；无生产修复，不冒称自然科技/生产/充能或整局AI完成。设施、成员、建队、满充和电力边沿为fixture；不重开Return Dubai弱攻势线，固定构建不动。
 - A05新增实际双AI基因突变器：正式Battle人类美国对两家同盟困难尤里，正常中心/电源施工与House授予真实Super实例；仅预置各次满充，正常House策略自行选人类步兵并发射，实际生成各发射方狂兽人，不选六名盟军步兵、不重置另一House充能起点/时长。两轮满充前和效果后均完整存读，已消耗实例仍active且重新充能。新场景1及AI fire10/GeneticConverter9通过，无生产修复；自然完整充能、其他超武/编队联动与长局仍开放，不能据此关闭A05。Return Dubai弱攻势仍暂停，固定版未动。
@@ -1879,7 +1879,7 @@ F06–F09已按各行接入对应扩展生产链，仍保留各自场景边界�
 | V12 / P1 / 已接基础链，特殊回调仍待验 | NP建筑换主的临时online/完整旧主AI/新主采样，及必要驻军重入门 | 448BD9/448BED→C2ECB9/C2ECD6与C2ED1D/C2ED3B已沿共享owners接通；实际EMP/Off换主存读续射、普通进驻/离楼归属、AY三组中心工程师夺取/三次存读/新主支持及运动恢复通过。稀有退休/多manager/Temporal与多AI仍待验，详见当前V12节 |
 
 | V13 / P1 / 本同格取消有限原生链一致，存读后恢复已验 | BFRT/HTK同格不同子位置的Enter取消与原生相同；普通Move离开再Enter成功 | 已有两条原生输出由实际AY测试消费，接受对象/失败停步/Guard一致；取消及登车后完整存读正常。旧原生Enter残留来自夹具mega-mission默认错误，已纠正。非空contact/Archive、完整原InfantryAI/占格生产及其他上下车边界仍未对照，不强装Cargo或改变容量，见V13节 |
-| V14 / P1 / 实际DESO/E1混驻续射及存读已验，射程边沿仍开放 | 作者170601另列辐射工兵驻军射程错乱/碉堡哑火，不能由V07辐射救船或F04清驻军代替 | 正式Battle的DESO OccupyWeapon=OCRadBeamWeapon、EliteOccupyWeapon=OCRadBeamWeaponE；已有Building4526F0/共享occupant_weapon读取当前射手专槽。正常CaptureBuilding步行混驻CAHSE01，再普通Attack实际APOC，DESO与E1两槽均实射且目标掉血；完整存读后原名单再次两槽实射及新掉血通过。仅短程普通等级/单位目标，不证明精英、最远边沿、所有建筑或GUI；初版NACNST恢复后两槽发射但无新掉血，原因/建筑目标另留待核，不作为生产缺陷结论 |
+| V14 / P1 / 实际DESO/E1混驻续射及存读已验，射程边沿仍开放 | 作者170601另列辐射工兵驻军射程错乱/碉堡哑火，不能由V07辐射救船或F04清驻军代替 | 正式Battle的DESO OccupyWeapon=OCRadBeamWeapon、EliteOccupyWeapon=OCRadBeamWeaponE；已有Building4526F0/共享occupant_weapon读取当前射手专槽。正常CaptureBuilding步行混驻CAHSE01，再普通Attack实际APOC，DESO与E1两槽均实射且目标掉血；完整存读后原名单再次两槽实射及新掉血通过。短程普通等级的单位/建筑目标，不证明精英、最远边沿、所有建筑或GUI；后续NACNST实际两槽续射及新掉血亦已验：先修复后掉回相同1495令原最终血量比较误判，现按逐帧下降验证；不是建筑免伤/哑火，不更改repair owner |
 
 作者170507的无新键修复另外保留为 **V10 / P2 部分已适配，其他待核**：精英后射程反降、光棱联击、
 秘密实验室单位选择概率、火箭飞行兵坠落时被地面单位攻击。后者已按实际51BC67跳过Health复活接入，
