@@ -1615,6 +1615,42 @@ with gamemd is claimed.
 
 ## Computer Psychic Dominator observation
 
+The separate [AYMOD lighting profile](map_observation.aymod-dominator-lighting.example.json)
+uses the same authored map with AY's Yuri Country index 2, rather than stock 9.
+Point an isolated config/settings directory at AYMOD and resolve the profile's
+map path to the tracked map's absolute path, as for the stock example below.
+Use the current NPatch `fast` executable; on the current Windows adapter the
+existing capture requires `WGPU_BACKEND=dx12` for BGRA8 readback. Keep `RA2_DIR`
+absent. The two GAPOWR and YAPPET are explicit pre-placed facilities, not proof
+of natural technology or paid construction. There are no supplied commands or
+readiness/charge edits: the computer waits for its real charge and selects a target.
+
+For this input/seed, make profile copies ending at 8170 (before), 8200 (tint) and
+8800 (restored). These are production capture checkpoints, not native timing
+goldens. The 8800-step profile retains the whole cell-light/ownership trajectory;
+the [expectations](map_observation.aymod-dominator-lighting.expectations.json)
+check the same authored target's eventual capture, not lighting or pixel parity.
+The full run omits Super rows to stay within the retained-sample budget. A short
+100-step copy with only `Computer1` observed and `observe_super_weapons=true`
+can inspect its granted, unheld, not-ready PsychicDominatorSpecial and actual
+8100-frame charge duration without modifying it.
+
+For lighting, compare the observed `(40,58)` cell's `render.palette_light`,
+`atlas_key` and `a_center` across the three runs. Require the tile and A-buffer
+to stay the same, lighting to change during the effect and return afterward.
+Derive the cell-center screen point from retained `cell_center_world` minus
+`camera_top_left` and inspect that pixel in each checked `frame.bgra`: it must
+change to nonzero red/blue with zero green and return byte-for-byte afterward.
+This is a relationship check against AY's enabled RGB profile, not a committed
+pixel golden. View the complete frames too; scalar/CPU evidence alone is not a
+rendered-output witness. Decode PNGs **outside** sealed run directories so later
+integrity inspection continues to accept their exact artifact inventory.
+
+The map's Ambient=1.0 matches this AY SuperType's Ambient=100, so this case
+demonstrates RGB switching/restoration, not an ambient fade curve. It does not
+replace the existing saved/two-launch TMP tests or prove simultaneous effects,
+map-switch cleanup, all height cases, or native whole-window pixel equality.
+
 [`map_observation.ai-psychic-dominator.example.json`](map_observation.ai-psychic-dominator.example.json)
 starts America/Battle against a Yuri computer opponent (`Computer1`, Easy) with stock
 rules and assets on an [authored map](map_observation/examples/ai_psychic_dominator.map):

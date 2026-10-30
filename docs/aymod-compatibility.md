@@ -11,7 +11,7 @@
 
 | 类别 | 项目 | 当前缺什么 / 下一步边界 |
 | --- | --- | --- |
-| 已接生产光照，实际AY存读/两次发射及TMP GPU已验 | F11心灵终结器专属光照 | 已绑定最近SWType和共享光照选择，disabled回落/status5有聚焦回归；实际地图普通发射、完整资源恢复、结束复原和再次发射已到物理TMP像素。全窗口合成/其他同时超武和地图切换仍属扩展验收，不再等待旧批准 |
+| 已接生产光照，AY存读/两发TMP及自然充能完整窗口样例已验 | F11心灵终结器专属光照 | 已绑定最近SWType和共享光照选择，disabled回落/status5有聚焦回归；实际地图普通发射、完整资源恢复、结束复原和再次发射已到物理TMP像素。新增预置设施自然充能/AI发射的全窗口RGB切换与自然恢复样例已捕获；其他同时超武、换地图及全窗口热存读仍开放，不再等待旧批准 |
 | 设计/原生冲突待决 | V01三组无人单位独立供电 | 当前保留原生共享House计数；作者逐组失联瘫痪要求与部分Drive原生恢复下令行为不同。未选定兼容策略，不能靠新增分组计数或拦移动默默改变政策 |
 | 设计/有效数据/保留状态冲突 | F22精英YURI多控 | 作者5、有效精英武器10、原生有限组件及现Rust保留出生容量1。不能直接改成5或10，也不能用叶函数一致称作者功能已达成 |
 | 现有政策不等于逐项原生 | EMP、经验分配、英雄赏金等 | docs/npatch.md、npatch-emp.md列明默认/钳位/时点/算术边界；赏金原始killer坐标已修。是否有当前配置可见差异要先证明，不拿旧文字调数值 |
@@ -22,10 +22,11 @@
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于478e1ea1a。转阶段四F14实际客户端，新增可复用map_observation AY建筑TypeSelect配置及17项expectations，未改Rust/Python工具或玩法。当前fast NPatch vera20k已重建；隔离config/settings读取AYMOD，VERA.INI只配置TypeSelect=84，不动用户设置、MOD或原档。
-- 最终配置正式Battle/XMP03T4正常部署MCV、付费造电厂/兵营/两GAPILL，普通屏幕点击选第一座，两个短T键进入同一AppState的共享鼠标/键盘owner，走既有选择receiver、HUD与实际compositor/GPU读回。两key及最终已提交selected_ids恰等由类型/owner/cell观测绑定的两GAPILL，无硬编码实体ID；初始点击只选第一座。17项声明检查全部PASS，补充动态集合断言通过，实际800x600 BGRA画面已查看，含两座选择血条、范围圈及屏幕/全图HUD。
-- 首次默认backend因现有BGRA8 COPY_SRC前置要求失败，不算玩法失败；现有WGPU_BACKEND=dx12在本机RX6600/Bgra8UnormSrgb成功，无渲染代码拟合。早期直接Select命令种子已移除，最终是click+短T+短T。原始run/像素/PNG/临时驱动留本机scratch，不提交截图/日志；只提交可重跑输入和检查声明，详见F14及工具文档。无新状态、RNG/timer/Detach或保存布局，无新玩法critic；本地提交，不发布。
-- 本例仍未注入OS输入或经过外层winit事件泵，不冒称整套GUI/原生像素等价；跨阵营生产分组、额外屏外对象、重绑、存读/换地图等仍开放。下一安全动作复用现有Dominator map_observation配置核F11完整客户端光照/合成，先检查其场景fixture与AY实际SuperType覆盖，不能用孤立TMP GPU再充数。其他玩法、海军/自然超武和组合长局保留。用户不手测，构建可调整；Return Dubai专项暂停、V01/F22已问未答、未授权推送/PR/合并/发布均保持，完整目标未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，本链基于3be5b7c84。补F11真实完整客户端合成，复用原ai_psychic_dominator authored map与现有map_observation owner；新增AY profile/效果expectations及重跑说明，无Rust/Python实现修改。现有fast NPatch app沿478e1ea1a源码构建后未再改Rust，无需重复编译。
+- 隔离config/settings读正式AY，stock Country9先被规则复位准入拒绝，按AY正式Yuri索引2运行后成功；不为配置错误改生产。YAPPET与两GAPOWR是明确预置fixture，无命令、满充或计时注入。100步短捕获看到真实PsychicDominatorSpecial已授予/未挂起/未ready、8100帧charge；8800普通步长捕获中原人类MTNK在8219步正常被Computer1捕获，两项效果检查PASS，不声称自然科技/付费造超武全链。
+- 8170/8200/8800三份实际完整AppState/GPU捕获与完整性检查成功：同(40,58)物理地面样本tile/variant、A-buffer不变，专属RGB期间绿为0且红蓝非0，结束后palette及真实BGRA像素逐字节回原值；一个非零UI样本三阶段不变。全窗口PNG已查看。该map Ambient=1.0与AY LightAmbient=100相同，本例不证明渐暗曲线、全部高度或原生整屏像素等价。原存读/两次发射TMP证据仍在3e901ca80/9ba901cf1，不重复叶测试替代完整窗口。
+- 初次PNG解码误放密封run目录导致额外文件被检查拒绝，已将本任务PNG以单文件Move-Item移到run外，未改任何原始字节/收据；F11前/中inspect及最终两项expectations、原F14最终17项expectations均重新通过。原始run/像素/PNG和一次性驱动在scratch，不提交日志/截图/收据；只提交可复用输入/效果检查声明，见F11与工具文档。无新生产状态、RNG/timer/Detach或存档布局，无新玩法critic；本地提交，不发布。
+- 下一安全动作转F12实际遭遇战页面/16色及科技设置的完整客户端合成，先复用现有shell_capture checkpoint，不复制UI状态或绘制器。F11同时效果/换地图/完整窗口热存读，F14外层OS/winit事件泵等仍开放。用户不手测、构建可调、原档/MOD保留；Return Dubai专项暂停、V01/F22策略已问未答、无推送/PR/合并/发布授权保持，完整目标未完成。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
@@ -1676,26 +1677,15 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
   实际AY逐帧事件/GPU与完整链critic。没有新玩家构建/PR/推送，无运行中Cargo，F11和整体目标保持开放。
 - 海军地形来源/FNPC、无人单位供电设计政策和其余PLAN项照旧保留；不因本次前置或授权门禁缩小目标。
 
-### 已完成前置：F11光照规则读取，完整效果未完成（2026-10-26）
+### F11专属光照：规则、生产接线及完整客户端样例（2026-10-31）
 
-- 工作树`D:/Workshop/vera20k-aymod-audit`、`feature/aymod-integration-resume`，本批基于`62e3cd133`；
-  无PR/推送，无运行中Cargo。整体PLAN不变，海军地形类别/FNPC、V01供电政策与其余F/V/A项仍开放。
-- 完成NpatchSuperWeaponLighting的逐物理层七整数/末尾Lighting读取、共享首次初始化门、
-  注册表保存恢复、RuleSet投影和配置hash。默认值来源与Scenario现有三组默认函数共用；
-  不从最终地图取seed、不因Lighting=no跳过读取、不把Type3先初始化后改Type7误当首次Domi。
-  Type4的反常门保留。新增保留字段会改变保存layout，仍按原门禁拒绝旧布局，不伪造兼容。
-- 2项生产回归覆盖root/mode/map与迟注册、坏Type保留、exact-case/原生整数、disabled读取、
-  Type3/4→7、保存/hash；NP NativeProcessing98、SuperWeaponType4、ScenarioLighting2通过；
-  无NP新增2与SuperWeaponType4通过。无NP新字段保持constructor零且不消费扩展键。
-- 原生复读纠正两个容易误写的细节：Storm第七值实际跨读核爆Ambient，默认200；
-  55B3D6的rate分支没有Storm，包含两个核爆阶段与TAction127屏幕效果（不是Chronosphere SW）。
-  规则实现/必要运行时边界见[npatch.md](npatch.md#superweapon-lighting-reader-and-runtime)。
-- 此批没有把profile接到launch/ambient/cell/palette，所以F11仍不兼容完成，不构建新玩家版。
-  下一步在既有ScenarioLightingState/light_sources owners接三份最近SW身份及其immutable配置快照，
-  不改写map profile；分别处理global/constructor/cell优先级、Lighting=false回落、status5、rate与保存恢复，
-  再用真实AY普通发射/逐帧lighting_events及既有TMP GPU探针验收、做完整链只读critic。
-- 本轮未修改Python工具；上一检查点记录的Windows symlink权限和hashbrown特性测试异常仍未解决，
-  不将Rust局部通过称为Python全套或整个MOD通过。已有保留玩家构建和原始存档均未改。
+- NpatchSuperWeaponLighting读取逐物理层七整数/末尾Lighting、共享首次初始化门、迟注册保留状态与RuleSet/hash；默认来源复用Scenario三组默认函数，不从最终地图取seed，不因Lighting=no跳过读取，Type4异常门保留。Storm第七值跨读核爆Ambient默认200；55B3D6 rate没有Storm，包含两个核爆阶段及TAction127，而非Chronosphere SW。原reader批次曾新增存档字段，仍拒绝旧布局，不强读原档；规则细节与聚焦NP/stock证据见[npatch.md](npatch.md#superweapon-lighting-reader-and-runtime)。
+- 3e901ca80/9ba901cf1已沿既有ScenarioLightingState、light_sources、MatchLighting绑定最近SWType及immutable配置快照，Launch6CDA5B/6CCD33/6CCDB1在原ready门之前保留来源；Scenario53C280/LightConvert555E50/Cell484473各自优先级、disabled回落/status5及rate不合并成一个任意策略，不覆写地图profile。原完整链critic指出source-only元数据更新不应触发全局重照，已由same_refresh_state/metadata-only更新修正，聚焦回归先失败后通过；不新建F11状态/缓存owner。
+- 正式AY Battle普通发射→逐帧效果→完整资源存读→自然结束→再次发射已到真实TMP GPU像素，NP/stock定向和直接消费者覆盖已执行；不是只有reader或CPU颜色值。本轮完整App捕获补下述合成证据，不把旧测试重跑计作新证据，也不把局部通过称全部光照原生像素一致。
+- tools/map_observation.aymod-dominator-lighting.example.json复用已有authored fixture，以AY正式Yuri索引2/实际规则加载YAPPET、两GAPOWR和人类四MTNK。设施/目标为显式预置，不声称自然科技或付费施工；没有注入命令、ready或charge。100步短配置通过实际Super观察确认已grant、未挂起/未ready及8100帧充能；普通完整8800步由AI自然发射/生效，同一原人类MTNK正常转为Computer1，两项身份效果检查PASS。原stock索引9在AY复位时被正确拒绝，不是F11缺陷。
+- 对同一输入/seed分别在8170、8200、8800停留读回完整800x600 BGRA帧并查看：实际地图、单位、建筑受专属紫红RGB，侧栏/命令条正常合成，结束恢复。观测(40,58)物理地面的TileKey/variant及A-buffer值在三阶段相同，palette_light进入专属值后恢复；由保留world center/camera推导同一屏幕像素，效果中R/B非零且G=0，结束与前态逐字节相等，另一个非零UI样本三阶段不变。没有提交Rust输出像素金值、截图或收据，不冒称所有UI像素都逐一比较。
+- 轨迹中专属palette于8182进入、8280退出，单位8219转主，均为本Rust输入的观测而非native timing goldens；此map Ambient=1.0与AY LightAmbient=100相同，故本例验RGB切换/恢复，不虚称展示渐暗。用既有WGPU_BACKEND=dx12满足本机BGRA8 readback，未改renderer/拟合颜色。三捕获最终完整性及效果检查通过，说明/可重跑输入在工具文档；无Rust/Python修改或新增玩法critic。
+- 仍开放：同时其他全局效果、换地图/新局清理、完整窗口热存读、更多高度/地形及原生全窗口对照。既有保存/结束/再次发射的TMP生产证据不再纯待验，但不推广成全部组合通过。没有RNG抽样、timer/Detach新增或保存布局变化；原档/MOD保留，不发布。完整目标还含其他F/V/A与GUI/长局残余，F11样例不关闭整个目标。
 
 ### 已定位批次：A04原生连通复算排除算法分区差异（2026-10-26）
 
@@ -1856,7 +1846,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 | F08 / P2 / 普通及实杀精英命中/两次存读已验，边缘与画面待验 | IsFlatExplosion与CausesDelayKill顺序别名，接既有建筑PostMortem；共享AoE空中门补链见F20 | C2EF94/75D443共同写WH+130，701E92消费；逐层保留/保存/hash及3项回归通过。实际AY ZEP primary→BlimpHE直接命中CAMISC02后引爆，debug/fast均通过；critic无具体缺陷 | 普通ZEP完整飞行/放弹→原下落弹存读命中→PostMortem引信再次存读→自然销毁通过。实杀精英KTSTLEXP普通Move飞近后的真实落弹/热存读命中/引信存读销毁亦已验，训练目标为预先受损/休眠fixture；8格外首发即Stop的垂直弹在半径外落空已记录、同场景不停投时实际后续命中/引信存读、新目标首次放弹存读后再发精英弹并实伤已验，不调射程/半径；首发即Stop完整原生调用、其他别名弹头、更长连投/多机、GUI及全部既有引爆算术仍未逐项认证 |
 | F09 / P2 / 已接入，当前两Battle武器闭包无消费者 | `DoesntAffectEnemies` 不只是伤害过滤，还会拒绝对敌Techno开火；有攻击者时才按其House拒伤 | 实际Battle/Return Dubai生产accessor确认TankSnapshot=yes。NP75D3F1→C2E853→C2E90D按当前bool读WH+129；ctor75CED0/75CF25清零。FireError6FC3FE→C2E94E/C2EA23拒非盟友Techno返回5；ReceiveDamage701CD7→C2D62A在攻击者存在且非盟友时清伤害并返回0 | 已接逐层registry/保存/hash、FireError及伤害late-gates；敌我/单向盟友/攻击者与SourceHouse冲突/无攻击者回归通过，不与Phobos AffectsEnemies混用。普通Battle/XMP03T4及Return Dubai全已分配武器族无此标志消费者，TankMakeupKit/CRMakeupKit均未分配；其他模式/地图及直接Warhead路径不据此全局排除，不能据此解释原局弱攻势 |
 | F10 / P2 / 已实现、玩家待验 | 自定义电弧已从保留reader经出生参数接入GPU绘制 | 实际TankBolt/TankBoltE生产开火及RGB565 GPU读回通过；默认/禁用/逐层开启、存读/hash与无NP隔离通过。TeslaFragmentT保留颜色但不强开IsElectricBolt | 玩家新局观察普通/精英磁暴坦克电弧；不把EMP逻辑正常代替配色验收 |
-| F11 / P2 / 已接运行时，实际AY TMP GPU/存读及重复发射已验 | 超武section读取→最近SW来源→共享光照事件→生产TMP绘制 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`psychic_dominator.rs`及`light_sources.rs`复用既有owner；Launch6CCDB1/Scenario53C280/LightConvert555E50/Cell484473 | 准入前来源、disabled回落/status5聚焦回归；实际普通发射/完整存读/自然结束及第二次发射TMP GPU通过。stock保持；全窗口、同时多效果/换图未逐项验，不冒称全部光照原生像素等价 |
+| F11 / P2 / AY TMP存读/两发及完整客户端RGB切换恢复样例已验 | 超武section读取→最近SW来源→共享光照事件→生产TMP绘制 | `[PsychicDominatorSpecial] Lighting / LightRed / LightGreen / LightBlue / LightAmbient / LightGround / LightLevel`；`psychic_dominator.rs`及`light_sources.rs`复用既有owner；Launch6CCDB1/Scenario53C280/LightConvert555E50/Cell484473 | 准入前来源、disabled回落/status5聚焦回归；实际普通发射/完整存读/自然结束及第二次发射TMP GPU通过。另预置YAPPET/供电、自然完整充能和AI发射到完整AppState实际BGRA像素切换/恢复、同一地面样本返回原值及目标真实换主已验；Ambient相同不称渐暗曲线。stock保持；同时多效果/换图/全窗口热存读未逐项验，不冒称全部光照原生像素等价 |
 | F12 / P2 / 遭遇战16色及科技设置链已接，网络边界开放 | 扩展遭遇战UI：原8色错配、科技设置及完整MPC连续目录已接，普通滚动点击、启动准入/随机/偏好重开/House传递和无窗口GPU通过 | `[UISettings] ShowTechLevelSlider / UseDropDownColors`、`[Colors] MPC01..MPC16`；目录由启动root唯一helper派生，UI/runtime缓存共用；stock仍8，原生network human随机仍8，local/AI随机按扩展范围 | 完整遭遇战链见F12对应节；BC/BD与WOL My Information已共用扩展目录、偏好恢复和palette；完整AppState/compositor、旧MenuColors及真实网络接收/重连/同色策略、全部popup GPU与玩家GUI仍开放，不把单屏通过称所有UI已兼容 |
 | F13 / P2 / 已实现，移动转向/实际发射存读已验，画面待验 | NPatch超五乘员开火端口循环：已修第六名原先错误回退零偏移的问题 | NPAE174 GetFLH `0x6F3AFB → 0xC2E196`按`(k-1)%5`循环，ART reader `0x715FA4..0x716005`仍只读0..4；固定ART5/6是本链不消费的数据。`ArtEntry::alternate_fire_flh`为唯一共享owner | 六人普通Enter、正常移动/转向及运动中完整存读，到达后六人真实fire_event坐标逐人核对应端口，第六复用第一/第五独立，开火后再次存读已验；到达后carrier和敌方BFRT置Sleep隔离自身转向/开火与反击，非同步齐射/行进间开火验收。不扩大数组；下车重上/移动转身的实际画面仍待验，不把坐标测试称GPU输出认证 |
 | F14 / P1 / 建筑同类选择已修，两GAPILL实际客户端输入/合成已验，外层事件泵开放 | 作者新增建筑TypeSelect：同型防御、跨阵营生产类、复制中心视兵营；旧实现普通建筑被dynamic拒绝 | TypeSelect732C7A→C2CABA/C2CBC3；`src/app/input/entity_pick.rs::type_select_candidates`复用原seed/范围/owner/最终准入与Select receiver，比较原始Factory，不混Naval；stock不变 | 红测后NP/stock定向及真实AY根分组通过；正式AY正常付费两GAPILL、click+两个短T、scope/HUD及实际完整App合成已捕获，17项声明检查和按观测ID解析的选中集合断言通过。不是OS/winit事件泵验证；跨阵营完整画面、额外屏外对象、重绑/地图覆盖/存读及全GUI仍开放，不改held鼠标或建筑拖框 |
@@ -1959,7 +1949,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A02 / P1 / 双苏联高级科技/失重工、矿车、矿场恢复与双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。新增两家苏联NATECH自然建成、第一方全失矿车后新HARV实际付款/生产中存读/出厂载矿/载矿存读卸矿且两家新收入续进已验，非实战灭矿且未改资金。另已验第一方全失NAREFN后接收点归零、新矿场实际付款/生产中存读/同对象施工完成、落地存读后原HARV向新矿场交矿且双方新收入续进。盟军高级科技、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
 | A03 / P1 / 同盟双AI旧敌败亡后原队重定向及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，各自正式APOC队先对第三方实射；第三方正常旗标败亡/待处理存读后均重选人类，再存读后同一原队新射击及新的人类实伤已验。成员/建队/附近后续目标为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、长距离在途重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
 | A04 / P1 / 持续指定需求下陆海付款/完整补员/成队存读已验，战术仍待核验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
-| A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；自然经济/全程充能、其他超武/多AI竞争及长局仍待验；光照另见F11 |
+| A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；另F11预置设施的Dominator完整自然充能、AI发射/真实换主及全窗口光照已捕获，非自然科技/施工。自然经济全链、其他超武全程充能/多AI竞争及长局仍待验；光照另见F11 |
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 同阵营双AI失重工/普通矿车矿场/尤里奴隶矿恢复已验，长期压力待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | A02的苏联失首重工与尤里全部在图奴隶矿设施损失后，正常生产/采矿恢复且同盟同阵营另一House继续发展、完整存读已验；失矿为无攻击者终结receiver，非实战夺奴隶/长期抗压。双苏联另已验全失HARV后的同对象付费补产/载矿存读卸矿、全失NAREFN后的同对象付费重建/存读后原HARV向新矿场交矿，双方新收入持续。新增双苏联零现金/全失矿场后普通策略自动非基地Selling、出售中存读、付费重建/原车交矿及双House新收入续进已验，零现金为fixture而非自然耗资；新增实际仅余兵营/零现金/退款不足条件下原HARV普通Hunt、完整存读后自行找敌开火实伤且另一家继续收入已验，关闭short_game为明确fixture；另已验当前矿层耗尽后真实再生、一方NoOre/Guard与另一方继续收入共存、两次完整存读和后续2400帧NoOre补车门禁；不是永久无再生耗尽。永久矿枯/停车后重新起步、其他阵营/幸存兵种、快速游戏败亡竞态和长期资金/生产/团队隔离仍开放 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
