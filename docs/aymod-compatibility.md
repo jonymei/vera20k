@@ -15,18 +15,18 @@
 | 设计/原生冲突待决 | V01三组无人单位独立供电 | 当前保留原生共享House计数；作者逐组失联瘫痪要求与部分Drive原生恢复下令行为不同。未选定兼容策略，不能靠新增分组计数或拦移动默默改变政策 |
 | 设计/有效数据/保留状态冲突 | F22精英YURI多控 | 作者5、有效精英武器10、原生有限组件及现Rust保留出生容量1。不能直接改成5或10，也不能用叶函数一致称作者功能已达成 |
 | 现有政策不等于逐项原生 | EMP、经验分配、英雄赏金等 | docs/npatch.md、npatch-emp.md列明默认/钳位/时点/算术边界；赏金原始killer坐标已修。是否有当前配置可见差异要先证明，不拿旧文字调数值 |
-| 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、选择/绘制owner及局部GPU/启动链已有覆盖；F14正式AY正常造两GAPILL、click+双短T经共享输入到完整App合成已实际捕获。F12实际遭遇战底部16色列表及选择第16色/科技1后的页面合成亦已捕获；实际正常启局亦观察到House/Scenario科技1及render MPC16；正常写入后独立进程无编辑读回第16色/科技1亦已验（文件不变、空目录负对照拒绝）；外层OS/winit及其他完整画面、真实网络接收/重连/同色策略仍开放，不冒称全界面验收 |
+| 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、选择/绘制owner及局部GPU/启动链已有覆盖；F14正式AY正常造两GAPILL、click+双短T经共享输入到完整App合成已实际捕获。F12实际遭遇战底部16色列表及选择第16色/科技1后的页面合成亦已捕获；实际正常启局亦观察到House/Scenario科技1及render MPC16；正常写入后独立进程无编辑读回第16色/科技1亦已验（文件不变、空目录负对照拒绝）；F25四类步兵正常进驻/点击选择/存读/正常出驻到完整画面已补样例；外层OS/winit及其他完整画面、真实网络接收/重连/同色策略仍开放，不冒称全界面验收 |
 | AI功能/长局验收未闭合 | A01–A10对应残余 | 自然多House发展/出击、经济恢复等有分批覆盖；A04持续需求下双工厂造齐4MGTK+4DEST/1AEGIS/4DLPH和存读已验，但自然触发/舰队集结远航/实战未验。Return Dubai弱攻势专项仍暂停，不借该项恢复调查 |
 | 作者明确要求的功能范围验收 | F01–F10/F13–F30、V02–V13各行 | 各自已实现链与真实使用例见表；仍有换主/特殊生命周期、混战、其他模式/地图和画面残余。F30三机重复投弹不等于所有飞机与全部架次通过；不以未验边界擅改已有行为 |
 | 扩展存在，遭遇战配置适用性已扩大复核 | 自然粒子、TrueConversion等 | 5个可选模式/144个不同具体地图的294个组合，正式规则处理后的全部571或583种ObjectType均无非空自然粒子系统、无TrueConversion/DeployToFire键；仅SMIN/YAREFN的DeployFacing=0已有普通转换owner。不是扩展已实现或整个游戏/战役不可达证明 |
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于073a4c7ad；本轮增加skirmish-expanded-reopened诊断checkpoint和原parser route回归用例，不点击/修改颜色或科技、不启动重开对局。既有expanded_snapshot只读owner投影复用，没有第二套设置reader/UI/renderer或玩法改动，不需玩法critic。
-- 已核初始化链：capture_dimensions只让RetailOptionsLoad的音视频profile取固定默认，MultiplayerShellRuntime::initialize仍从隔离settings_dir/VERA.INI经生产IniFile读取MultiPlayer及NP Skirmish.TechLevel，再hydrate_shell；未为测试绕过固定capture策略或手写持久化文件。
-- 当前fast npatch,dev-overlays同一候选可执行先在新隔离目录走expanded-in-game，普通点击priority15/科技1、正常Start Game写417字节VERA.INI，真实House/Scenario科技1、scheme MPC16/tick30。退出后新进程在同config运行reopened，页面无编辑读回selected_color15/claimed=true/tech1/16色目录，popup关闭；VERA.INI前后逐字节相同。另空设置目录负对照按预期拒绝（color0、tech10），没有写出VERA.INI，不把失败当已成功捕获。
-- 最终shell_capture定向59测试及fast app构建通过，带VERA20K_REQUIRE_RETAIL_INI=1；两个正捕获实际exit0、长度/SHA核对并查看完整800x600画面，负对照exit1及具体错误核对。无全仓库/Clippy/Python脚本变更；自动缓存清理因不支持PE debug闭包停止、删除0字节，未人工绕过。没有模拟RNG/timer/Detach或保存布局变化，MOD/用户设置/原档未动，截图/收据不提交。
-- 下一安全动作继续P2的F15/F25完整客户端输入/画面链，随后真实网络接收/重连与持续AI/剩余玩法；不再排列同一离线颜色/科技偏好。仅证明这两项遭遇战偏好跨进程重开，不推广为音视频/其他页面/OS事件泵/网络全部通过。F11及其他具体残余仍保留，整体目标未完成；Return Dubai专项暂停、V01/F22待原答复、无推送/PR/合并/发布授权保持，无运行中Cargo/游戏子进程。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于213ed0fc9；本轮只有可重跑F25 JSON profile/expectations及文档，无Rust/Python工具/玩法改动。复用上轮已验证fast npatch,dev-overlays app、map_observation和正常存读，未重编译/重跑Cargo，无新玩法critic。
+- 从既有authored平地只替换物体段，Neutral CAHSE01和四名普通E1/GGI/SNIPE/BORIS为明确地图输入；正式分层reader核capacity5/CanBeOccupied=yes和四种OccupyPip，不写驻军名单或XP。四个普通CaptureBuilding命令使步兵实际行走入驻、建筑换为本方；500普通屏幕click(300,280)实际只选建筑。最初(316,245)未选中，不算成功或改拾取逻辑。
+- 520正常quicksave、580正常quickload实际回退至tick520，620仍四人驻军；650普通Unload后800/tick740四人活在地图/inside_transport=null，原建筑回Neutral。22项expectations全PASS，绑定在恢复后620重建epoch而非假定ID跨载入不变；另动态核两个epoch内同一实际building ID恰为唯一selected_ids、selection_pending=false，四个inside links均指向该ID，不提交运行ID金值。
+- selected520/restored620/evacuated800三个实际完整App/GPU捕获均VALID、长度/SHA核对并查看完整800x600画面。彩色pip区域[258,282)x[290,317)在存读前后逐字节一致；出驻后四彩色人形恢复为五空格。不是全窗口像素等价，radar有独立存读动画；精英星标/自然晋升、运输Pip、其他模式/地图及OS事件泵未由本例证明。
+- 可重跑输入为tools/map_observation.aymod-garrison-pips.example.json及expectations，scratch地图生成/端点裁剪/比较步骤见tools/map_observation.md。地图/截图/save/运行收据留scratch，不修改MOD/用户设置/原档，无模拟RNG/timer/Detach或保存布局新增。下一安全动作F25自然晋升到实际星标完整画面，随后转F15/真实网络和AI持续作战，不排列同色兵种；整体目标未完成。Return Dubai专项暂停、V01/F22待原答复、不推送/PR/合并/发布边界保持，无运行中Cargo/游戏子进程。
 - 以下为此前工作记录，其中F11“未批准/门禁保持”等文字只记录历史，已被本次明确授权取代；其余未验范围与暂停边界仍有效。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于106211cd0。本轮核剩余清单与生产owner，修正docs/npatch.md两处过时说明，未重复实现现有陆海槽或经验状态。HouseAiUnitChoices的NP naval字段确为私有/serde/hash；chooser分流、FactoryAI选槽/上限清同槽、既有actual双工厂付费/完整编队存读证据一致。原“只有单车辆槽/海军未实现”文字已删除，stock单槽与真实择兵tie残余保留；不恢复Return Dubai弱攻势调查。
 - 奖励说明原称Spawned击杀“instead”训练母体、活子机立即镜像award，与当前record_kill::award_kill_experience及spawn_manager::synchronize_spawn_promotion不符。更正为Aircraft无controller时普通奖励之外的母体bonus、原controller分支无bonus，以及Techno AI rank-cache变化时采样/大于1槽/仅较弱trainable子机/再生继承三个不同路径，原生地址沿原代码引用。未添加新状态或改经验/赏金政策。
@@ -1880,7 +1880,7 @@ AI 交叉引用是 section/注册项结构清点，不冒称完整 native-exact 
 
 | F24 / P1 / 三阵营陆海工厂切换实际付款/出厂/存读已验，其余待验 | 作者170507要求运输艇默认从船厂造，无船厂时可从战车工厂造；不是同一类型动态改Naval | LCRF的GAWEAP前置/NegativePrerequisite=GAYARD，LCRF2的GAYARD前置/Naval；既有CanBuild4F7870及NP负前置、Factory/PLACE owners | 正式Battle/Return Dubai，GAWEAP付款出LCRF→GAYARD建成后禁LCRF/Ship队列付款出LCRF2→退休船厂/存读后重新付款出不同ID的LCRF，五次完整存读及三次费用已验。设施/电源生成、正常施工、直接UnInit退休是fixture，非科技树/设施付费/实弹摧毁。苏联NAWEAP/NAYARD的SAPC/SAPC2、尤里YAWEAP/YAYARD的YHVR/YHVR2亦已走同一实际付费/三件产品/五次存读链。船厂Off/EMP/换主/在途队列和自主AI仍待验；普通AI的原生CanBuild提前成功分支不因作者文字擅加人类负前置门 |
 
-| F25 / P2 / 正式Battle基础颜色/精英星标两格式GPU已验，完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。其他类型/全部模式地图、存读/换主/出驻后的完整界面与GUI仍待验，无新增绘制逻辑 |
+| F25 / P2 / 四类驻军进出/存读完整客户端样例已验，精英完整界面待验 | 作者170507规定驻军格子按兵种分绿/蓝/红/金/白，精英标志改星形 | 既有InfantryPips的Pip/OccupyPip reader、ui_overlays::scale_pip_draws、原生rank PIPS绘制与MOD素材；不能把运输Pip当驻军OccupyPip或硬编码兵种颜色 | 正式Battle/XMP03T4分层规则，flat arena普通Enter/CaptureBuilding后核LCRF六人/楼内四人的两种帧族，E1绿/GGI蓝/SNIPE红/BORIS金/ENGINEER运输白，TANY运输金且Occupier=false、不把其缺省OccupyPip白当可达故障；MTNK精英raw为明示绘制fixture，PIPS15正常素材确为星。既有生产状态绘制/Display lowering/回放，两种sRGB格式逐像素对应物理SHP/原palette且Z不变已验；单sprite平移隔离材质，不宣称完整构图/自然晋升/实际地图行走。新增正式规则authored平地Neutral CAHSE01，四普通兵实际行走CaptureBuilding、屏幕click选楼、完整存读后驻军链接/选择/pip ROI保持；普通Unload后四人出楼、楼回Neutral、彩格恢复空格。三实际完整App/GPU端点已查看/摘要校验、22项expectations PASS，无XP/名单注入；复跑输入见aymod-garrison-pips profile及工具文档。仅四类/此地图的生命周期样例，精英自然晋升星标、运输完整画面、其他类型/全部模式地图及OS仍开放，无新增绘制逻辑 |
 
 | F26 / P1 / 实际机械/Organic分流及逐源退休存读已验 | 工业工厂赋予本House车辆自愈，非维修厂入场 | NAINDP UnitsGainSelfHeal=1；Techno AI6FA7D2..6FA857非Organic Unit，Organic Unit走F18步兵通道 | 正式Return Dubai DEST/DLPH/E1、NAINDP与NACLON独立计数/实际额外治疗、逐源退休及四次完整存读已验；固有SelfHealing保留，来源/伤势为fixture。双NAINDP叠加、第二座Off仍保留双份周期治疗、退休后恢复单份及两次额外完整存读已验；其他家族/EMP/战斗死亡及自主多AI仍待验 |
 

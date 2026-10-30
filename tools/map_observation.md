@@ -450,6 +450,75 @@ fills a slot while it is still Reloading, and ReadyDocked does not add another
 filled pip. The example's ending step bounds a production witness, not a native
 timing golden. A parent-removal witness needs a separate ordinary damage case.
 
+## AYMOD Garrison Pip Lifecycle
+
+The [garrison profile](map_observation.aymod-garrison-pips.example.json) uses
+ordinary infantry entry, a screen click, quicksave/quickload and Unload to cover
+the full client, not a translated single-sprite probe. Use AYMOD and the current
+`fast` executable with `npatch,dev-overlays`, an isolated config/settings/saves
+directory and DX12 on the current Windows adapter. Generate the map in scratch
+from the existing flat authored terrain; do not edit the MOD or tracked map:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-garrison-pips.map")
+text = source.read_text(encoding="utf-8")
+start = text.index("[Structures]")
+end = text.index("[OverlayPack]", start)
+placements = """[Structures]
+0=Neutral,CAHSE01,256,44,54,0,None,0,0,1,0,0,None,None,None,0,0
+
+[Units]
+
+[Infantry]
+0=<human player>,E1,256,42,54,0,Guard,0,None,0,-1,0,0,0
+1=<human player>,GGI,256,43,56,0,Guard,0,None,0,-1,0,0,0
+2=<human player>,SNIPE,256,45,56,0,Guard,0,None,0,-1,0,0,0
+3=<human player>,BORIS,256,45,52,0,Guard,0,None,0,-1,0,0,0
+
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text[:start] + placements + text[end:])
+```
+
+Set a profile copy's map path to that absolute destination. The four normal
+`CaptureBuilding` orders bind the initial Neutral CAHSE01 and each specific
+human infantry, then their movement/admission owners fill it. Facilities and
+infantry are explicit placements, not paid production or injected occupants.
+Production layered `asset ini-get` on this map reads capacity 5/CanBeOccupied yes
+and E1/GGI/SNIPE/BORIS OccupyPip green/blue/red/yellow. The shared display owner
+uses OccupyPip, not transport Pip (`Techno Display709C27..709D17`,
+`ui_overlays::scale_pip_draws`); empty slots use frame 6. Unload delegates to
+the existing garrison ejection/ownership owners, not diagnostic cleanup.
+
+At step 500 a literal click at `(300,280)` selects the occupied building body.
+The initial `(316,245)` probe missed that body and selected nothing; it is not
+the successful input. Save is at 520, load at 580 (actually rewinding to tick
+520), and Unload at 650. The full 800-step run ends at tick 740. Run with the
+[expectations](map_observation.aymod-garrison-pips.expectations.json), which
+rebind actors at 620 after the load epoch instead of assuming an ID survived it.
+All 22 checks passed in the actual full run.
+
+For selected/restored frame endpoints, copy this profile with ticks 520 and 620
+respectively, **filtering commands and gestures to `issue_after_step < ticks`**.
+The actual three endpoints passed bundle checks, their frame length/SHA matched,
+and complete 800x600 images were viewed. Dynamically read the building's ID in
+each epoch: it must be the sole selected object with selection settled, and all
+four infantry's `temporal.inside_transport.transport` links must equal that ID.
+After Unload all four links are null and the infantry are out of limbo; the
+building is Neutral again. Do not commit observed actor IDs as fixtures.
+
+The selected and restored colored pip region `[258,282) x [290,317)` was
+byte-identical in this camera/viewport. After ordinary Unload the four colored
+figures became five empty outlines, with no injected list or UI reset. This is
+a relationship check, not a committed pixel golden or native coordinate proof.
+Radar has its own post-load animation; no whole-frame equality is claimed.
+This bounds four real class-color consumers and their save/exit lifecycle.
+Transport pips, elite stars/natural promotion, other families/maps and OS event
+dispatch remain separate; no veterancy prior was set in this scene.
+
 Optional v2 `observe_audio` records device-mixer queue pulls from requested ordinary
 SFX Players. For example:
 
