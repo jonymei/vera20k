@@ -1221,6 +1221,37 @@ native equivalence.
 
 ## Literal keyboard gestures
 
+The [AYMOD building TypeSelect profile](map_observation.aymod-building-type-select.example.json)
+loads Battle/XMP03T4, deploys the starting MCV and uses ordinary paid production
+and placement for power, barracks and two GAPILL. At step 2200 a screen click
+selects the first pillbox; short literal `T` gestures at 2230 and 2240 select the
+screen group and then map scope. There is no supplied Select command or spawned
+building. Run a current NPatch `fast` executable with an isolated `config.toml`
+pointing at AYMOD and a fresh `settings_dir` whose `VERA.INI` contains:
+
+```ini
+[Hotkey]
+TypeSelect=84
+```
+
+The [expectations](map_observation.aymod-building-type-select.expectations.json)
+check the actual binding/release, scope/HUD keys, placed named actors and spending.
+They do not hard-code runtime entity IDs. To check exact selection membership,
+resolve the two own GAPILL at cells `(32,88)` and `(33,88)` from the final actor
+rows, compare their IDs as a set with both key receipts' `after.selected_ids`
+and final `input.selected_ids`, and require final `selection_pending=false`.
+The click receipt must select only the first named actor. These are outcome
+assertions, not a second implementation of selection or a native pixel golden.
+
+This is an actual AppState/production-input/compositor observation, but the
+gesture driver enters the shared keyboard/mouse owners directly: it does not
+inject OS events or exercise the outer winit event pump. It does not cover
+cross-factory groups, offscreen additional objects, held keys, all maps or saves.
+On the current Windows adapter, use `WGPU_BACKEND=dx12` to obtain the BGRA8 surface
+the existing capture contract requires; an incompatible surface is a failed
+preflight, not evidence of a TypeSelect gameplay failure. Keep `RA2_DIR` absent
+and use the isolated config as required by the capture contract.
+
 A v2 profile can send a literal key press and release through the same in-game
 keyboard edge owner used by `WindowEvent::KeyboardInput`:
 
