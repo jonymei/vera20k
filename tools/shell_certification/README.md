@@ -1,5 +1,44 @@
 # Shell certification tooling
 
+## AYMOD Setup Observations
+
+The existing production shell capture also has two NPatch setup checkpoints:
+
+```text
+vera20k --shell-capture skirmish-expanded-colors --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
+vera20k --shell-capture skirmish-expanded-applied --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <another-new-absolute-output-directory>
+```
+
+Build the current `fast` executable with `--no-default-features --features npatch`
+through `tools.cargo_run`. Run it from an isolated directory whose `config.toml`
+points at AYMOD and a separate, fresh `settings_dir`; do not reuse personal settings.
+On the current Windows adapter use `WGPU_BACKEND=dx12` for the BGRA8 surface and
+leave `RA2_DIR` unset. Keep the child process owned and wait for its exit (for
+example with `subprocess.run`, not a detached Windows GUI invocation).
+
+Both routes enter Single Player/Skirmish through existing App handlers. They
+require the loaded 16-color catalog and enabled technology slider, open the local
+color combo, and use ordinary scrollbar down-arrow press/release edges to reach
+its end. The shell wheel remains deliberately inert. `colors` captures the open
+bottom list; `applied` selects color priority 15 and clicks the technology slider's
+minimum. Input sequences run once so repeated mouse moves cannot keep restarting
+the native status-help reveal. No UI state, catalog, slider or renderer is copied.
+
+The additive `expanded_setup` manifest block is a read-only projection of the live
+owners: available/visible color priorities, dropdown top index, selected/claimed
+color, visible technology slider and level. Check these fields and the existing
+frame byte length/SHA, then view `frame.bgra` through an external PNG decode.
+Keep decoded images outside capture directories. The ordinary checkpoint retains
+its original manifest shape and interaction guards; only these new checkpoints
+admit the local Color(0) popup.
+
+These are MOD production observations, not enrolled stock-shell certificates.
+The sealed-native comparison commands below do not certify these checkpoints.
+They do not exercise OS/winit event dispatch, Start Game's consumers, preferences
+reopening, network receive/reconnect or occupied-color policies.
+
+## Stock Certification
+
 This package validates the one-shot production `main-menu-0xe2-steady` capture
 bundle and compares four physical presentation crops with the sealed native
 guard. It never writes to the guard and never performs desktop input or native

@@ -153,6 +153,12 @@ pub(super) const RANDOM_MAP_GENERATE_POINT: (i32, i32) = (432, 430);
 const RANDOM_MAP_TERRAIN_ARROW_POINT: (i32, i32) = (484, 79);
 const RANDOM_MAP_MAP_SIZE_FACE_POINT: (i32, i32) = (350, 196);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ExpandedSetupTarget {
+    Colors,
+    Applied,
+}
+
 #[derive(Default)]
 pub(super) struct SkirmishCapture {
     phase: Phase,
@@ -197,6 +203,10 @@ pub(super) struct SkirmishCapture {
     diplomacy_frames: u32,
     deploy_sent: bool,
     sell_sent: bool,
+    expanded: Option<ExpandedSetupTarget>,
+    expanded_colors_opened: bool,
+    expanded_applied: bool,
+    expanded_snapshot: Option<Value>,
 }
 
 #[derive(Clone, Copy)]
@@ -237,6 +247,7 @@ fn guard(
     chooser: Option<ChooserTarget>,
     loading: bool,
     expected_cursor: (f32, f32),
+    allow_local_color_popup: bool,
 ) -> Result<()> {
     let shell = &state.frontend.skirmish_shell_state;
     CaptureGuard {
@@ -291,7 +302,10 @@ fn guard(
                             | RandomMapTarget::EjectBox
                     ))
                 ))
-            || shell.open_combo_dropdown.is_some()
+            || shell.open_combo_dropdown.is_some_and(|open| {
+                !allow_local_color_popup
+                    || open.id != crate::ui::skirmish_shell::SkirmishComboId::Color(0)
+            })
             || shell.trackbar_hold.is_some()
             || shell.dropdown_scroll_drag.is_some()
             || shell.dropdown_scroll_press.is_some()
@@ -360,6 +374,25 @@ fn entry_wave_tick(state: &AppState, kind: ShellSlideKind) -> Option<u32> {
 }
 
 impl SkirmishCapture {
+    pub(super) fn progress(&self) -> String {
+        format!(
+            "phase={:?}, presented={:?}, selected={}, expanded_open={}, expanded_applied={}, route={:?}",
+            self.phase,
+            self.last_presented,
+            self.selected_scene.is_some(),
+            self.expanded_colors_opened,
+            self.expanded_applied,
+            self.route
+        )
+    }
+
+    pub(super) fn expanded(target: ExpandedSetupTarget) -> Self {
+        Self {
+            expanded: Some(target),
+            ..Self::default()
+        }
+    }
+
     pub(super) fn slide_out(tick: u32) -> Self {
         Self {
             slide_out_tick: Some(tick),
@@ -434,6 +467,7 @@ impl SkirmishCapture {
                     | Phase::Diplomacy
             ),
             (rest.0 as f32, rest.1 as f32),
+            self.expanded.is_some(),
         )
     }
 
@@ -444,6 +478,125 @@ impl SkirmishCapture {
         state.match_state.input.cursor_y = point.1 as f32;
         App::handle_choose_map_modal_mouse_down(state);
         App::handle_choose_map_modal_mouse_up(state);
+    }
+
+    fn expanded_snapshot(state: &AppState) -> Value {
+        use crate::ui::skirmish_shell::{self as ui, SkirmishComboId, SkirmishComboItem};
+        let shell = &state.frontend.skirmish_shell_state;
+        let maps = state.frontend.scenario_catalog.shell_maps();
+        let items = ui::combo_items(shell, maps, SkirmishComboId::Color(0));
+        let open = shell.open_combo_dropdown;
+        let top = open.map_or(0, |open| open.top_index);
+        let visible = ui::combo_dropdown_visible_row_count(shell, maps, SkirmishComboId::Color(0));
+        let colors = |items: &[SkirmishComboItem]| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    if let SkirmishComboItem::Color(index) = item {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        json!({
+            "color_count": shell.color_count,
+            "available_colors": colors(&items),
+            "visible_colors": open.map(|_| colors(&items[top..top + visible])),
+            "dropdown_top_index": open.map(|open| open.top_index),
+            "selected_color": shell.player_color_index,
+            "color_claimed": shell.player_color_claimed,
+            "tech_slider_visible": shell.trackbar_ids().any(|id| id == ui::SkirmishTrackbarId::TechLevel0x512),
+            "tech_level": shell.launch_options_base.tech_level,
+        })
+    }
+
+    fn expanded_step(&mut self, state: &mut AppState, frame: u32) -> Result<()> {
+        use crate::ui::skirmish_shell::{self as ui, SkirmishComboId, SkirmishComboItem};
+        let id = SkirmishComboId::Color(0);
+        let layout = ui::compute_layout(state.render_width(), state.render_height());
+        let click = |state: &mut AppState, point| {
+            Self::set_pointer(state, point);
+            App::handle_skirmish_shell_mouse_move(state);
+            App::handle_skirmish_shell_mouse_down(state);
+            App::handle_skirmish_shell_mouse_up(state);
+        };
+        if !self.expanded_colors_opened {
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.color_count == 16 && shell.show_tech_level_slider,
+                "expanded checkpoint requires the loaded 16-color/tech-slider rules"
+            );
+            let face = ui::combo_face_rect(
+                ui::combo_rect(&layout, id).context("local color face absent")?,
+                layout.scale,
+            );
+            click(state, (face.x + face.w - 10, face.y + face.h / 2));
+            let shell = &state.frontend.skirmish_shell_state;
+            let maps = state.frontend.scenario_catalog.shell_maps();
+            ensure!(
+                shell.open_combo_dropdown.is_some_and(|open| open.id == id),
+                "color popup did not open"
+            );
+            let bar = ui::combo_dropdown_scrollbar_rect(shell, &layout, maps, id)
+                .context("expanded color popup has no scrollbar")?;
+            let items = ui::combo_items(shell, maps, id);
+            ensure!(
+                items.last() == Some(&SkirmishComboItem::Color(15)),
+                "last expanded color is not available"
+            );
+            // The shell wheel is deliberately inert. Use normal down-arrow
+            // press/release edges to reach the retained list's end.
+            let metrics = ui::DropdownMetrics::scaled(layout.scale);
+            for _ in 0..items.len() {
+                click(
+                    state,
+                    (bar.x + bar.w / 2, bar.y + bar.h - metrics.button_h / 2),
+                );
+            }
+            self.expanded_colors_opened = true;
+            self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "expanded color popup scrolled to end"}));
+        } else if self.expanded == Some(ExpandedSetupTarget::Applied) && !self.expanded_applied {
+            let shell = &state.frontend.skirmish_shell_state;
+            let maps = state.frontend.scenario_catalog.shell_maps();
+            let open = shell
+                .open_combo_dropdown
+                .context("expanded color popup closed early")?;
+            let items = ui::combo_items(shell, maps, id);
+            let item = items
+                .iter()
+                .position(|item| *item == SkirmishComboItem::Color(15))
+                .context("expanded color disappeared")?;
+            let content = ui::combo_dropdown_content_rect(shell, &layout, maps, id)
+                .context("expanded popup content absent")?;
+            let row = ui::combo_dropdown_row_rect(content, layout.scale, item - open.top_index);
+            click(state, (row.x + row.w / 2, row.y + row.h / 2));
+            ensure!(
+                state
+                    .frontend
+                    .skirmish_shell_state
+                    .open_combo_dropdown
+                    .is_none(),
+                "color selection did not close popup"
+            );
+            let rect = layout.trackbars.tech_level;
+            click(state, (rect.x + 7, rect.y + rect.h / 2));
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.player_color_index == 15
+                    && shell.player_color_claimed
+                    && shell.launch_options_base.tech_level == 1,
+                "expanded settings did not apply through input"
+            );
+            self.expanded_applied = true;
+            self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "last color selected; technology clicked to minimum"}));
+        }
+        Self::set_pointer(state, self.rest_point());
+        App::handle_skirmish_shell_mouse_move(state);
+        self.selected_scene = Some(selected_scene(state)?);
+        self.expanded_snapshot = Some(Self::expanded_snapshot(state));
+        Ok(())
     }
 
     /// Track press above the map list's thumb (scrolls to the top), a press
@@ -992,6 +1145,15 @@ impl SkirmishCapture {
             (Phase::Skirmish, PresentedShell::Skirmish) => {
                 if self.settled(state)? && self.selected_scene.is_none() {
                     self.selected_scene = Some(selected_scene(state)?);
+                } else if self.expanded.is_some()
+                    && self.selected_scene.is_some()
+                    && (!self.expanded_colors_opened
+                        || (self.expanded == Some(ExpandedSetupTarget::Applied)
+                            && !self.expanded_applied))
+                {
+                    // Do not repeat idle mouse moves: the native common handler
+                    // restarts status help on every move, preventing settlement.
+                    self.expanded_step(state, frame)?;
                 } else if let Some(point) = self
                     .hover
                     .filter(|_| self.selected_scene.is_some() && !self.hovered)
@@ -1583,6 +1745,17 @@ impl SkirmishCapture {
         if !self.settled(state)? {
             return Ok(false);
         }
+        if let Some(target) = self.expanded {
+            if !self.expanded_colors_opened
+                || (target == ExpandedSetupTarget::Applied && !self.expanded_applied)
+            {
+                return Ok(false);
+            }
+            ensure!(
+                self.expanded_snapshot.as_ref() == Some(&Self::expanded_snapshot(state)),
+                "expanded settings changed before capture"
+            );
+        }
         ensure!(
             self.selected_scene.as_ref() == Some(&selected_scene(state)?),
             "selected skirmish state changed during capture"
@@ -1643,6 +1816,9 @@ impl SkirmishCapture {
         // (`tools/shell_certification/skirmish.py`) pins the others' key set.
         if let Some(target) = self.loading {
             manifest["loading_frame"] = json!(format!("{target:?}"));
+        }
+        if let Some(snapshot) = &self.expanded_snapshot {
+            manifest["expanded_setup"] = snapshot.clone();
         }
         manifest
     }

@@ -216,6 +216,8 @@ pub enum ShellCaptureCheckpoint {
     MainMenu0xE2Steady,
     MainMenu0xE2EntrySequence,
     Skirmish0x102Steady,
+    SkirmishExpandedColors,
+    SkirmishExpandedApplied,
     MoviesPage0x101Steady,
     /// Exit Game on `0xE2`: after the teardown slide, the confirmation over
     /// the empty shell backdrop (state 6).
@@ -552,6 +554,8 @@ impl ShellCaptureCheckpoint {
             CHECKPOINT_MAIN_MENU_0XE2_STEADY => Ok(Self::MainMenu0xE2Steady),
             CHECKPOINT_MAIN_MENU_0XE2_ENTRY_SEQUENCE => Ok(Self::MainMenu0xE2EntrySequence),
             CHECKPOINT_SKIRMISH_0X102_STEADY => Ok(Self::Skirmish0x102Steady),
+            "skirmish-expanded-colors" => Ok(Self::SkirmishExpandedColors),
+            "skirmish-expanded-applied" => Ok(Self::SkirmishExpandedApplied),
             CHECKPOINT_SKIRMISH_0X6B_STEADY => Ok(Self::Skirmish0x6BSteady),
             CHECKPOINT_SKIRMISH_0X105_STEADY => Ok(Self::Skirmish0x105Steady),
             CHECKPOINT_SKIRMISH_0X105_CANCEL_STEADY => Ok(Self::Skirmish0x105CancelSteady),
@@ -763,6 +767,8 @@ impl ShellCaptureCheckpoint {
             Self::MainMenu0xE2Steady => CHECKPOINT_MAIN_MENU_0XE2_STEADY,
             Self::MainMenu0xE2EntrySequence => CHECKPOINT_MAIN_MENU_0XE2_ENTRY_SEQUENCE,
             Self::Skirmish0x102Steady => CHECKPOINT_SKIRMISH_0X102_STEADY,
+            Self::SkirmishExpandedColors => "skirmish-expanded-colors",
+            Self::SkirmishExpandedApplied => "skirmish-expanded-applied",
             Self::MoviesPage0x101Steady => CHECKPOINT_MOVIES_0X101_STEADY,
             Self::MainMenu0xE2ExitConfirm => CHECKPOINT_MAIN_MENU_0XE2_EXIT_CONFIRM,
             Self::MovieList0x129Steady => CHECKPOINT_MOVIE_LIST_0X129_STEADY,
@@ -2191,6 +2197,16 @@ impl ShellCaptureSession {
             ShellCaptureCheckpoint::Skirmish0x102Steady => {
                 Some(skirmish::SkirmishCapture::default())
             }
+            ShellCaptureCheckpoint::SkirmishExpandedColors => {
+                Some(skirmish::SkirmishCapture::expanded(
+                    skirmish::ExpandedSetupTarget::Colors,
+                ))
+            }
+            ShellCaptureCheckpoint::SkirmishExpandedApplied => {
+                Some(skirmish::SkirmishCapture::expanded(
+                    skirmish::ExpandedSetupTarget::Applied,
+                ))
+            }
             ShellCaptureCheckpoint::Skirmish0x102BackSlideOut(tick) => {
                 Some(skirmish::SkirmishCapture::slide_out(tick))
             }
@@ -2441,8 +2457,12 @@ impl ShellCaptureSession {
         );
         ensure!(
             started_at.elapsed() <= self.timeout(),
-            "shell capture timed out after {} seconds",
-            self.timeout().as_secs()
+            "shell capture timed out after {} seconds; {}",
+            self.timeout().as_secs(),
+            self.skirmish
+                .as_ref()
+                .map(|capture| capture.progress())
+                .unwrap_or_default()
         );
 
         if self.is_entry_sequence() {
@@ -4185,6 +4205,22 @@ mod tests {
             ShellSlideKind::MainMenu.column(rows).total_ticks(),
             u32::from(ENTRY_SEQUENCE_FRAMES)
         );
+    }
+
+    #[test]
+    fn expanded_skirmish_checkpoints_keep_the_production_capture_route() {
+        for name in ["skirmish-expanded-colors", "skirmish-expanded-applied"] {
+            let output = new_output_path(name);
+            let mut values = valid_args(&output);
+            values[1] = OsString::from(name);
+            let AppLaunchMode::ShellCapture(request) = parse_launch_args(values).unwrap() else {
+                panic!("expected capture");
+            };
+            assert_eq!(request.checkpoint().as_str(), name);
+            let session = ShellCaptureSession::new(request);
+            assert!(session.skirmish.is_some());
+            assert!(session.movies.is_none());
+        }
     }
 
     #[test]
