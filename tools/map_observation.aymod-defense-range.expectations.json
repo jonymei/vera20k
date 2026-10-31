@@ -1,0 +1,171 @@
+{
+  "schema_version": "vera20k.map-observation-expectations.v1",
+  "assertions": [
+    {
+      "name": "paid tower before save: object_alive",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4800
+        }
+      },
+      "at_step": 4800,
+      "field": "object_alive",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "paid tower before save: in_limbo",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4800
+        }
+      },
+      "at_step": 4800,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "paid tower before save: building.actually_placed",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4800
+        }
+      },
+      "at_step": 4800,
+      "field": "building.actually_placed",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "restored tower: object_alive",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4880
+        }
+      },
+      "at_step": 4880,
+      "field": "object_alive",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "restored tower: in_limbo",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4880
+        }
+      },
+      "at_step": 4880,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "restored tower: building.actually_placed",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4880
+        }
+      },
+      "at_step": 4880,
+      "field": "building.actually_placed",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "deselected tower: object_alive",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4900
+        }
+      },
+      "at_step": 4900,
+      "field": "object_alive",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "deselected tower: in_limbo",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4900
+        }
+      },
+      "at_step": 4900,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "deselected tower: building.actually_placed",
+      "subject": {
+        "actor": {
+          "type_id": "TESLA",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 4900
+        }
+      },
+      "at_step": 4900,
+      "field": "building.actually_placed",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "gesture 0 leaves neutral input",
+      "subject": {
+        "gesture": 0
+      },
+      "at_step": 4770,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "gesture 1 leaves neutral input",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 4800,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "gesture 2 leaves neutral input",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 4860,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "gesture 3 leaves neutral input",
+      "subject": {
+        "gesture": 3
+      },
+      "at_step": 4880,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    }
+  ]
+}

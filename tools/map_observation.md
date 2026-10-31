@@ -1371,6 +1371,55 @@ commit. The final planning path should retain two nodes with editing disabled.
 These are Rust production-input observations; they do not establish whole-run
 native equivalence.
 
+## Paid AYMOD defense range lifecycle
+
+The [defense-range profile](map_observation.aymod-defense-range.example.json)
+uses Soviet Battle/XMP03T4, tech 10 and 10000 starting credits. Ordinary MCV
+deployment, paid production and placement build power, refinery, radar, a second
+power plant and TESLA. No ready product, selection, range or power is injected.
+The formal layered TESLA prerequisites are POWER,RADAR,NACNST; its primary
+CoilBolt retains Range=8.5. The existing Building GetSensorRange4566B0 and
+Game DrawRadialIndicator456980 owners perform their normal integer-range
+consumption and drawing; the profile does not compute or fit a screen radius.
+
+Use an isolated config/settings directory pointing at AYMOD, the NPatch
+`fast` app with `dev-overlays`, and on the current Windows adapter
+`WGPU_BACKEND=dx12`. Keep `RA2_DIR` absent. At step 4770 the literal click
+at (447,260) selects the normally placed TESLA at (30,85). Ctrl+Shift+M at
+4800 saves, Ctrl+Shift+N at 4860 restores, and an ordinary **right** click
+at (580,500) at 4880 deselects. A left click there is a ground-order gesture,
+not a deselect. The final completed step 4900 is simulation/binary frame 4840.
+Check the load-segment receipt for the real 4860-to-4800 rewind.
+
+The [expectations](map_observation.aymod-defense-range.expectations.json)
+check the live placed tower before/after restore and the neutral input edges.
+Also resolve the unique local TESLA ID from each epoch's actor rows: at 4800
+and 4880 its ID must be the exact final `input.selected_ids` member, and at
+4900 the selection must be empty, with `selection_pending=false` throughout
+those settled boundaries. Do not commit observed actor IDs as goldens.
+
+For actual image comparison, make scratch copies of the profile:
+
+- Selected: end at 4800; retain only gesture 0 and omit `allow_load_segments`.
+- Unselected control: end at 4800; remove all gestures and `allow_load_segments`.
+- Restored selected: end at 4900; retain gestures 0..2 (no right click).
+- Restored deselected: run the committed profile unchanged.
+
+Compare selected/control and restored-selected/deselected at their matching
+clocks, first requiring identical actor rows. Decode BGRA outside the sealed
+run directories and view the full frames. In this fixture the top ground
+rectangle [250,600)x[80,160) and bottom ground [220,610)x[420,465) show the
+ring contribution away from the tower brackets/health bar. Require actual
+changed pixels, not a hand-calculated radius or a hard-coded screenshot hash.
+The ring is clipped at the tactical viewport and its rays/fade vary with the
+binary frame; do not demand equality between frame 4800 and 4840. Radar's
+post-load animation is also not a full-frame equality failure.
+
+This covers one common normally built defense through the shared input,
+save/load and complete App compositor. It is not an OS/winit input test,
+native frame certification, every defense type/map, power/EMP/ownership
+transition or long-game coverage. Captures and saves remain scratch artifacts.
+
 ## Literal keyboard gestures
 
 The [AYMOD building TypeSelect profile](map_observation.aymod-building-type-select.example.json)
