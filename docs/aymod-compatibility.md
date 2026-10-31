@@ -16,16 +16,16 @@
 | 设计/有效数据/保留状态冲突 | F22精英YURI多控 | 作者5、有效精英武器10、原生有限组件及现Rust保留出生容量1。不能直接改成5或10，也不能用叶函数一致称作者功能已达成 |
 | 现有政策不等于逐项原生 | EMP、经验分配、英雄赏金等 | docs/npatch.md、npatch-emp.md列明默认/钳位/时点/算术边界；赏金原始killer坐标已修。是否有当前配置可见差异要先证明，不拿旧文字调数值 |
 | 已有实现，完整集成未验 | F12/F14/F15/F25与其他GUI | 扩展目录、选择/绘制owner及局部GPU/启动链已有覆盖；F14正式AY正常造两GAPILL、click+双短T经共享输入到完整App合成已实际捕获。F12实际遭遇战底部16色列表及选择第16色/科技1后的页面合成亦已捕获；实际正常启局亦观察到House/Scenario科技1及render MPC16；正常写入后独立进程无编辑读回第16色/科技1亦已验（文件不变、空目录负对照拒绝）；F25四类步兵正常进驻/点击选择/存读/正常出驻、MTNK实际击杀晋升星标及存读均已补完整画面样例；F15正常付费TESLA选择/存读/右击取消范围圈亦已验；真实双进程LAN已补15/14对端接收、占用色排除、kick重入及两局实际House配色，尚非断网重连/恶意同色包；外层OS/winit、其他页面及多人实际像素仍开放，不冒称全界面验收 |
-| AI功能/长局验收未闭合 | A01–A10对应残余 | 自然多House发展/出击、经济恢复等有分批覆盖；A04持续需求下双工厂造齐4MGTK+4DEST/1AEGIS/4DLPH和存读已验，但自然触发/舰队集结远航/实战未验。Return Dubai弱攻势专项仍暂停，不借该项恢复调查 |
+| AI功能/长局验收未闭合 | A01–A10对应残余 | 自然多House发展/出击、经济恢复等有分批覆盖；A04持续需求下双工厂造齐4MGTK+4DEST/1AEGIS/4DLPH和存读已验；另XMP02T2自然盟军Naval Hunters已付费形成、离港移动/接敌及两段存读续战，实际DLPH实射与靶船厂新伤害已核。全舰逐一远航、海战战损补员/其他阵营和长局仍未闭合。Return Dubai弱攻势专项仍暂停，不借该项恢复调查 |
 | 作者明确要求的功能范围验收 | F01–F10/F13–F30、V02–V13各行 | 各自已实现链与真实使用例见表；仍有换主/特殊生命周期、混战、其他模式/地图和画面残余。F30三机重复投弹不等于所有飞机与全部架次通过；不以未验边界擅改已有行为 |
 | 扩展存在，遭遇战配置适用性已扩大复核 | 自然粒子、TrueConversion等 | 5个可选模式/144个不同具体地图的294个组合，正式规则处理后的全部571或583种ObjectType均无非空自然粒子系统、无TrueConversion/DeployToFire键；仅SMIN/YAREFN的DeployFacing=0已有普通转换owner。不是扩展已实现或整个游戏/战役不可达证明 |
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于b80b63bc3。新增显式--lan-expanded-colors，只作用于普通lan-live-host/guest；通过现有本地combo action选15/14，观察真实对端options、占用项排除及实际加载House配色。没有写入接收包、Ready、launch或render状态，没有玩法/网络生产逻辑改动；无需玩法critic。
-- 两份独立可写AY根副本及独立设置位于scratch，原MOD/用户设置/原档未改。两个实际App进程在127.0.0.1独立主/备用UDP端口上运行，均exit0；两端均在kick前后观察到15/14及对端占用色不再可选。Ready后真实踢出/重入，两次正常开局均在两端实际House render map得到LiveHost=MPC16、LiveGuest=MPC15；每局300个native CRC及20个模拟hash逐项相同，Move/Stop及结果/重赛/主菜单返回正常。原始收据、根副本、日志和最终主菜单帧均留scratch，不提交运行产物。
-- 48项shell_capture::tests及7项live直接消费者测试通过，含新增opt-in/错误入口/重复参数检查；NP fast,dev-overlays构建通过。实运行覆盖新增诊断到真实传输/加载/运行消费者；最终帧长度和SHA已核，不把主菜单帧称为多人颜色像素证明。共享combo action不是popup鼠标/OS事件；本例是踢出重入，不是断网重连，不证明恶意同色包、跨机器或全页面。重跑方法见docs/Networking.md。
-- 当前无本任务运行中Cargo或游戏子进程；无推送/PR/合并/发布。下一安全动作转A04正式海军集结/离港/远航实战链，不再重复颜色排列。Return Dubai专项暂停、V01/F22及A09策略边界保持，整体目标未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于8962ebcde。本轮只增加headless_scenario::naval_retail_tests一项自然海军生命周期回归及模块声明；无玩法、AI/路径/生产owner或MOD数据修改，无玩法critic需求。
+- 正式AY Battle/XMP02T2.MAP，一家困难盟军从初始MCV/正常钱包自行发展、科技/船厂施工、付费造船并自然组成0CA1E67C-G Naval Hunters；没有注入AI设施、钱、产品、队员、队请求或命令。显式输入仅关闭短局、起始战斗单位0，以及合法水面放置一座无武器的人类NAYARD靶；不是人类自然建造或对抗长局。
+- 逐帧观察真实Factory欠款下降及产品ID。实际已成型队的付费舰只从自身首次非limbo位置移出超过6格、仍运动且离靶超过12格时完整存读，保持该队ID及成员顺序；同一队随后真实DLPH实射、船厂HP下降。首次交战前无非海军对该靶开火；再次完整存读后原队新实射并产生新伤害，后段同样排除非海军火力，非注入伤害。最终自然场景测试通过；FactoryAI/择兵/Team AI定向覆盖亦通过；一次错误team_ai过滤器选中0项不计覆盖，已用实际team_script_vm::team_ai::tests跑到1项通过。现有无关编译warnings未改。
+- 本例证明至少一条自然盟军海军队的付费形成/离港移动/接敌及两段存读续战，不证明全舰逐一出港、实战损失后补员、其他阵营、多AI海战、全部脚本或完整客户端画面。无新模拟RNG/timer/Detach/保存布局；原MOD/存档/用户设置未动，无运行中Cargo。下一入口A05自然经济→科技/施工→完整充能→实际超武效果，不在同一DLPH链排列更多边界。Return Dubai专项暂停，V01/F22及A09策略待决，无推送/PR/合并/发布，整体目标未完成。
 
 ## 已有分链记录（历史授权不作当前门禁）
 
@@ -1969,7 +1969,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A01 / P1 / 三阵营出击/盟军战损续攻、有限重建及防守原队补员已验，其余待验 | 注册→触发→组队→补员→脚本：`src/rules/team_ai_ini.rs:478`、`src/sim/team_script_vm/registry_install.rs:201`、`src/sim/ai_team_creation.rs:350`、`src/sim/ai_unit_choice.rs:152` | 正式AY双同盟困难盟军正常开局、各自自然付费成员/正式非防御队成型/离初始基地8格外对原玩家目标实射、人类实伤、完整存读后同一两队再次开火已验；AI无成员/建队/命令注入，人类保护观察基地/目标为fixture。苏联/尤里各双同盟困难电脑亦已正常付费成队、出基地用正伤害非心控武器实射，完整存读后同一两队新射击；尤里24座可损伤人类目标为fixture，三例不是混合阵营同局。新增双盟军各首射手由人类fixture实弹击杀后，新ID付费成员成队续攻、两段完整存读及新伤害已验；另经致死receiver终结首队全部成员，旧队正常销毁/存读不复活，损失后新ID同TeamType队携新付费射手续攻及再存读已验；非整队实弹覆灭或所有成员新造。另正式08DA30EC-G双家自然成型、各损失首slot一名后正常付费同类型新成员补回同一队ID/全slot恢复、两段存读及替补保持已验，非全部Reinforce/严重减员。其余Reinforce、混合阵营、其他阵营战损恢复及连续长局仍待验，不以一次出击关闭A01，不能被永久空队占满 Max |
 | A02 / P1 / 双苏联高级科技/失重工、矿车、矿场恢复与双尤里高级科技/奴隶矿恢复存读已验，其余待验 | 基地与独立经济：`src/sim/ai_base_building.rs:335`、`src/sim/ai_build_need.rs`；MOD `[AI] BuildPower/BuildRefinery/BuildTech/BuildWeapons` | 两家困难苏联正常MCV开局、采矿/首计划重工付款建成，一方失厂后同节点/保存产品重建，另一方原厂存活/完成新建筑及继续收入支出，三次存读已验。新增两家同盟困难尤里正常MCV开局，各自真实奴隶载矿/收入、建成YATECH，一方全部在图奴隶矿设施死亡后，新ID设施Working/新设施所属奴隶载矿/双House收入支出续进，死亡边界及恢复后两次完整存读，随后双方再次实际赚取新收入已验。共用fixture关闭进攻触发并保护人类观察方，直接receiver失厂/失矿；不向AI注入钱/设施/单位/选择。新增两家苏联NATECH自然建成、第一方全失矿车后新HARV实际付款/生产中存读/出厂载矿/载矿存读卸矿且两家新收入续进已验，非实战灭矿且未改资金。另已验第一方全失NAREFN后接收点归零、新矿场实际付款/生产中存读/同对象施工完成、落地存读后原HARV向新矿场交矿且双方新收入续进。盟军高级科技、缺钱/矿枯、自然战斗及长局仍开放，不据此关闭A02/A07 |
 | A03 / P1 / 同盟双AI旧敌败亡后原队重定向及续攻存读已验，其余待验 | 多方目标、联盟、目标击败后的转移：`src/sim/house_strategy.rs:396`、`src/sim/house_diplomacy.rs:165` | 实际两家同盟困难AI受第三方伤害后选其为敌，各自正式APOC队先对第三方实射；第三方正常旗标败亡/待处理存读后均重选人类，再存读后同一原队新射击及新的人类实伤已验。成员/建队/附近后续目标为fixture，非自然灭国/出兵。自由混战/多个人类/后续外交、长距离在途重定向、范围友伤、视野及长局仍待验，不借retail注释断言补丁行为 |
-| A04 / P1 / 持续指定需求下陆海付款/完整补员/成队存读已验，战术仍待核验 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269` | Allied Naval Hunters、Soviet Navy Bombard、Yuri Naval Hunters、Boomer Bombard 在水陆图成型出海；同时有陆海需求时不长期饿死一路，无法放船厂不锁死陆军 |
+| A04 / P1 / 已补自然盟军Naval Hunters离港接敌与存读续战，其他海战链开放 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269`；自然场景`src/headless_scenario/naval_retail_tests.rs` | XMP02T2普通AI发展/科技/船厂/付费产品与自然0CA1E67C-G；已成型队中付费舰只从出厂位置移出超过6格且仍远离靶时完整存读、同队实际DLPH接敌射击及船厂伤害、战斗存读后原队新射击/新伤害通过，无非海军对该靶火力。输入是人类靶船厂/短局关闭/起始战斗单位0，未给AI设施/钱/成员/队/订单；全舰逐一远航、自然战损补员、苏/尤海战、多AI/长局仍开放，不恢复Return Dubai专项 |
 | A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；另F11预置设施的Dominator完整自然充能、AI发射/真实换主及全窗口光照已捕获，非自然科技/施工。自然经济全链、其他超武全程充能/多AI竞争及长局仍待验；光照另见F11 |
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
 | A07 / P1 / 同阵营双AI失重工/普通矿车矿场/尤里奴隶矿恢复已验，长期压力待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | A02的苏联失首重工与尤里全部在图奴隶矿设施损失后，正常生产/采矿恢复且同盟同阵营另一House继续发展、完整存读已验；失矿为无攻击者终结receiver，非实战夺奴隶/长期抗压。双苏联另已验全失HARV后的同对象付费补产/载矿存读卸矿、全失NAREFN后的同对象付费重建/存读后原HARV向新矿场交矿，双方新收入持续。新增双苏联零现金/全失矿场后普通策略自动非基地Selling、出售中存读、付费重建/原车交矿及双House新收入续进已验，零现金为fixture而非自然耗资；新增实际仅余兵营/零现金/退款不足条件下原HARV普通Hunt、完整存读后自行找敌开火实伤且另一家继续收入已验，关闭short_game为明确fixture；另已验当前矿层耗尽后真实再生、一方NoOre/Guard与另一方继续收入共存、两次完整存读和后续2400帧NoOre补车门禁；不是永久无再生耗尽。永久矿枯/停车后重新起步、其他阵营/幸存兵种、快速游戏败亡竞态和长期资金/生产/团队隔离仍开放 |
@@ -2025,6 +2025,13 @@ A04 双队列已按实际NPAE174指令适配，见本轮定位与 [npatch.md](np
 - 新aymod_boris_migs_repeat_releases_and_retire_after_load正式AY Battle/XMP03T4，普通BORIS正常Attack原CAEAST01，原Airstrike manager真实召唤3个BPLN，原Ammo3/Primary Maverick3/Burst2保持。目标原型强度3000、敌House human与单位spawn为隔离fixture，没有手改HP/弹药、召唤飞机/投射物、经理状态或退休。普通帧按attacker ID记录Maverick3真实fire事件的逻辑帧集合，三个原机各至少两个不同帧发射，不把同帧两发算多轮。
 - 等首轮真正扣成部分弹药后第一次完整存读，原三机ID/airstrike链接与当前弹药保持；普通帧继续重复实射，原建筑实际掉血。原翼弹药全0后第二次完整存读，之后正常Stop BORIS仅隔离后续架次；原飞机无新fire，正常离图/UnInit退休，第三次完整存读保持原ID不存在。此例未逐机断言恰好三轮或六弹：既有Airstrike Clear41DB40在队伍任一机空弹时可清同翼弹药，不从集体ammo0倒推出每机独立打完三个release。
 - 初稿误将首次fire等同本帧raw Ammo已减，断言先失败；既有Ammo::begin_release/consume_release及AircraftRelease418403..4184BD表明pending与后续消费分离，已等实际部分弹药端点，而非改ammo实现。最终新实际1、旧清驻军实际1、airstrike普通2、attack_mission5通过，共9；airstrike另12 ignored未跑，初次错误攻击模块0项不计。测试/台账-only，无新增玩法状态/RNG/timer/Detach/保存布局或critic；原生完整架次/自然晋升精英六机、实战对空拦截/目标中途死亡、所有飞机家族和GPU画面仍开放。
+
+### A04自然盟军海军：离港接敌及两段存读（2026-10-31）
+
+- 入口为`headless_scenario::naval_retail_tests::aymod_natural_navy_leaves_port_and_damages_shipyard`。正式Battle/XMP02T2，正常启动钱包/MCV，困难盟军自行发展、施工船厂和科技、付款造船，自然0CA1E67C-G Naval Hunters成型；不调用create_team/AI开火命令或补产注入。人类NAYARD是合法spawn靶，起始战斗单位0、short_game=false为显式夹具。
+- 在真实Factory原产品ID的欠款下降后记录付费身份。成员首次非limbo位置作为各自出口参照，已成型队中至少一艘实际运动超过6格、离目标超过12格时完整存读，恢复同队ID/有序名单；后续实射DLPH也要求离其自身出口超过6格。目标开火记录排除非海军来源，实际HP下降；第二次完整存读后同队新开火及新伤害成立，后段同样排除非海军来源。
+- 这是自然付费/成队/离港/接敌/续战的新证据，不把此前持续create_team夹具改称自然。没有新生产缺陷或玩法修改；不推断逐舰全部远航、队伍战损后的补员、其他阵营/海军脚本、满局或渲染画面。Return Dubai专项不在本例内。
+- 重跑：设置VERA20K_AYMOD_DIR到实际AY根及VERA20K_REQUIRE_RETAIL_INI=1，在本checkout执行`python -m tools.cargo_run -- test -p vera20k-core --lib --profile fast --no-default-features --features npatch headless_scenario::naval_retail_tests::aymod_natural_navy_leaves_port_and_damages_shipyard -- --ignored --nocapture`。无地图写入、原档改写或外部native执行；测试通过，相关FactoryAI/择兵/Team AI定向覆盖通过。
 
 ### A04完整补员：持续指定需求夹具（2026-10-30）
 

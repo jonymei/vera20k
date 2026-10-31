@@ -23,6 +23,9 @@ pub mod radiation_test_evidence;
 #[cfg(any(test, feature = "test-support"))]
 pub mod battle_test_evidence;
 
+#[cfg(all(test, feature = "npatch"))]
+mod naval_retail_tests;
+
 use std::path::Path;
 
 use crate::assets::asset_manager::{AssetManager, MediaArchiveMode};
