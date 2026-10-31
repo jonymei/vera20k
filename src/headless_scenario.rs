@@ -2020,21 +2020,38 @@ mod retail_construction_tests {
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; two Soviet economies recover lost refineries and original miners deliver to the paid replacement"]
     fn aymod_two_soviet_ai_rebuild_refineries_and_resume_original_miners_after_load() {
-        aymod_soviet_refinery_recovery(false);
+        aymod_soviet_refinery_recovery(RefineryPressure::Receiver);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual prism attacks destroy AI refineries and original miners deliver to paid replacements across saves"]
+    fn aymod_soviet_ai_recovers_combat_refinery_losses_without_stopping_peer() {
+        aymod_soviet_refinery_recovery(RefineryPressure::Combat);
     }
 
     #[cfg(feature = "npatch")]
     #[test]
     #[ignore = "requires VERA20K_AYMOD_DIR; a cashless Soviet AI sells its own buildings and resumes mining while its ally keeps earning"]
     fn aymod_cashless_soviet_ai_sells_to_rebuild_refinery_across_load() {
-        aymod_soviet_refinery_recovery(true);
+        aymod_soviet_refinery_recovery(RefineryPressure::Cashless);
     }
 
     #[cfg(feature = "npatch")]
-    fn aymod_soviet_refinery_recovery(cashless: bool) {
+    enum RefineryPressure {
+        Receiver,
+        Cashless,
+        Combat,
+    }
+
+    #[cfg(feature = "npatch")]
+    fn aymod_soviet_refinery_recovery(pressure: RefineryPressure) {
         use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+        use crate::sim::command::{Command, CommandEnvelope};
         use crate::sim::mission::MissionType;
         use crate::sim::world::bridge_test_evidence::{restored_retail, save_scene};
+        let cashless = matches!(pressure, RefineryPressure::Cashless);
+        let combat = matches!(pressure, RefineryPressure::Combat);
         let (mut scene, computers) = aymod_two_ai_economies(1);
         let step = |scene: &mut HeadlessScenario| {
             let output = tick_with_due_commands(scene);
@@ -2090,8 +2107,99 @@ mod retail_construction_tests {
         let peer = computers[1];
         let lost = live_type(&scene, owner, "NAREFN");
         let original_miners = live_type(&scene, owner, "HARV");
-        let peer_wallet = scene.sim().houses[&peer].economy().clone();
-        {
+        let peer_before = scene.sim().houses[&peer].economy().clone();
+        if combat {
+            let human = scene.sim().session.current_house().unwrap();
+            let human_at = aymod_anchor(scene.sim(), human);
+            let mut attackers = Vec::new();
+            let initial_hp = lost
+                .iter()
+                .map(|&id| (id, scene.sim().entities().get(id).unwrap().health.current()))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            {
+                let runtime = &mut scene.runtime;
+                let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+                for &id in &lost {
+                    let target = sim.entities().get(id).unwrap().position;
+                    let at = (i32::from(target.rx()), i32::from(target.ry()));
+                    let sites = cells_nearest(at)
+                        .into_iter()
+                        .filter(|&(x, y)| (x - at.0).abs().max((y - at.1).abs()) >= 8);
+                    // The attackers are explicit human raid inputs. All AI
+                    // production, money, original miners and damage stay live.
+                    for actor in spawn_on_free_cells(sim, rules, human, sites, &["SREF", "SREF"]) {
+                        sim.queue_command(CommandEnvelope::new(
+                            human,
+                            sim.session.tick() + 1,
+                            Command::Attack {
+                                attacker_id: actor,
+                                target_id: id,
+                            },
+                        ));
+                        attackers.push(actor);
+                    }
+                }
+            }
+            let terrain = scene.sim().resolved_terrain().unwrap().clone();
+            let mut saved = false;
+            let mut fired_at = std::collections::BTreeSet::new();
+            assert!(
+                (0..3600).any(|_| {
+                    let output = tick_with_due_commands(&mut scene);
+                    assert!(
+                        output.tick.frame_committed && scene.sim().session.outcome_request().is_none()
+                    );
+                    for event in output.fire_events {
+                        if attackers.contains(&event.attacker_id)
+                            && let crate::sim::combat::TargetKind::Entity(id) = event.target
+                            && lost.contains(&id)
+                        {
+                            fired_at.insert(id);
+                        }
+                    }
+                    if !saved
+                        && lost.iter().any(|id| {
+                            scene.sim().entities().get(*id).is_some_and(|entity| {
+                                entity.is_ai_alive() && entity.health.current() < initial_hp[id]
+                            })
+                        })
+                    {
+                        let bytes = save_scene(
+                            &scene,
+                            "AY prism raid damaged an original AI refinery before its destruction",
+                        );
+                        scene.runtime.simulation = restored_retail(&scene, &terrain, &bytes);
+                        saved = true;
+                    }
+                    live_type(&scene, owner, "NAREFN").is_empty()
+                }),
+                "ordinary prism raid must destroy all original receiving refineries"
+            );
+            assert!(
+                saved && lost.iter().all(|id| fired_at.contains(id)),
+                "each lost refinery needs actual raid fire and a partially damaged save boundary"
+            );
+            // Withdraw by ordinary movement rather than delete the raiders or
+            // let their idle acquisition keep destroying replacement buildings.
+            let sim = &mut scene.runtime.simulation;
+            for actor in attackers {
+                if sim
+                    .entities()
+                    .get(actor)
+                    .is_some_and(|entity| entity.is_ai_alive())
+                {
+                    sim.queue_command(CommandEnvelope::new(
+                        human,
+                        sim.session.tick() + 1,
+                        Command::Move {
+                            entity_id: actor,
+                            target_rx: human_at.0 as u16,
+                            target_ry: human_at.1 as u16,
+                        },
+                    ));
+                }
+            }
+        } else {
             let runtime = &mut scene.runtime;
             let (sim, resources) = (&mut runtime.simulation, &runtime.resources);
             let warhead = sim.interner.intern("Super");
@@ -2123,7 +2231,10 @@ mod retail_construction_tests {
                 .resource_destinations(),
             0
         );
-        assert_eq!(scene.sim().houses[&peer].economy(), &peer_wallet);
+        if !combat {
+            assert_eq!(scene.sim().houses[&peer].economy(), &peer_before);
+        }
+        let peer_wallet = scene.sim().houses[&peer].economy().clone();
         assert!(original_miners.iter().any(|&id| {
             scene
                 .sim()

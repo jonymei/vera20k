@@ -22,10 +22,10 @@
 
 ## 当前检查点（2026-10-31）
 
-- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于4b4d776ce。本轮只增加natural_superweapon_retail_tests及test模块声明；不改AI、生产、超武、捕获、光照或存档owner，无玩法critic需求。
-- 新AY Battle/XMP03T4自然困难尤里链通过：初始MCV/正常钱包/AI策略自行发展、科技/供电、付费YAPPET原对象落地施工、授予实际SW实例、完整自然充能及AI选点发射。无AI设施/钱/产品/队员/队请求/满充/超武指令注入。显式夹具是开启超武/关闭短局/起始战斗单位0、人类远离两基地的一组Sleep MTNK，以及仅保护闲置人类GACNST以免观察局提前结束；不当作自然人类建造或完整对抗长局。
-- 真实Factory欠款下降/同一provider ID及Construction阶段已观察。首次自然充能中途完整存读保持原计时器且非ready；真实发射事件还要求Dominator活动/owner一致，不能把尝试收据当接受。原人类目标有9辆实际换主并具永久标记/无单位controller；热存读保持专属tint/永久标记，随后自然结束、原地图profile未改、ambient/alternate恢复正常且SW重新充能。初候选错误地要求trigger专用house_controller，已按perma_capture既有owner修正观察，不修改生产语义。
-- 新场景1、AI选点10、Dominator13、native charge6，共30项定向测试通过，均core --lib/fast NP、实际AY和必需零售INI环境。没有重建客户端或在本新场景做GPU capture；已有F11完整窗口证据仍保留原边界。未改生产RNG抽样/计时器/Detach序列或保存布局；人类观察楼调用既有IronCurtain的90000帧夹具，Sleep经mission_queue_exact，未写AI充能计时器。无运行中Cargo，原MOD/设置/原档未改，无推送/PR/合并/发布；下一入口A07真实经济压力/永久矿枯与重新采矿，不重复同一Dominator例。Return Dubai暂停、V01/F22及A09策略边界保持，整体未完成。
+- 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于273491300。本轮复用aymod_soviet_refinery_recovery唯一场景owner，以Receiver/Cashless/Combat显式枚举压力源，新增实际光棱突袭入口；只改测试/文档，无玩法/状态authority/保存布局修改，无玩法critic需求。
+- 正式AY Battle/XMP03T4双同盟困难苏联先普通发展/收入/载矿HARV。人类每个原NAREFN配两辆合法spawn SREF，正常Attack实射造成部分损伤时完整存读，随后原接收矿场全部正常战损、资源接收点归零；不向本Combat路径调用direct_receiver。幸存突袭者用普通Move撤回人类原起点，不删除或冻结。AI不获注入钱/矿场/矿车/生产选择；同一新NAREFN对象真实付款、生产中存读、落地完工、落地存读后原幸存HARV经radio向它交矿，两家均有存读后的新收入。基础经济夹具仍关闭新AI进攻触发，并保护闲置人类观察建筑；不是持续自然对抗或所有损失组合。
+- 新实战1、共用helper原Receiver1/Cashless1以及NoOre停车3，共6项定向core --lib/fast NP测试通过，实际AY/必需零售INI；无全仓库测试/客户端重建。本次native_inspect实读UnitClass::Mission_Guard740922..740934：House+242非零跳过Harvest；Mission_Harvest73E911置1。既有Guard覆盖也证再生矿物不会自己清该门，不擅加清位/自动重启；这不是本次证明所有别名writer均不存在。
+- 计划保留永久无再生地图/停车后的合法再入Harvest、多AI长期资金/生产隔离与持续战损残余。下一安全动作先查正式地图/模式的资源再生消费者，再选择有判别力的矿枯链；不关闭实际地图增长来造更易通过的样例，也不反复排列同一矿场损失。生产RNG/计时器/Detach调用序列未改；夹具和正常战斗/撤离仍经过既有任务/生命周期owner。MOD/设置/原档未改，无运行中Cargo，无推送/PR/合并/发布；Return Dubai暂停及V01/F22/A09策略边界保持，整体未完成。
 
 ## 已有分链记录（历史授权不作当前门禁）
 
@@ -59,6 +59,13 @@
 - 下一安全动作：继续其他高频功能残余；F20已补真实死亡施气与空中门，其他飞行家族/混战仍待验；医院control1原生序列留存未证为引擎差异，不擅加清尸；V06地面/对空YAGGUN建筑调度三等级及双计时已验，其他倍率/特殊回调仍开放，或其他功能清单残余；普通/老兵/精英YTNK地面全三档与中档不同双计时热存读已有实际样例，不重复同一微边界。V05更多换主/强子机和多AI、医院control1留尸、F12完整compositor/AppState事件泵与peer/重连仍开放。V01/F11批准门禁、Return Dubai弱攻势暂停不变，Alt飞机入口与实际GADEPT/GAYARD已验不重复。
 - V05已有cursor0的单剩GGI续火/存读、ScenarioInit内非尾移除后的顺序通过；count1/cursor1具体GetWeapon→Cant→drop与180帧存读/补员恢复本轮已核；实际普通SNIPE发射产生同一cursor1越界、两次尾序删除/保存已验；其他名单删除来源/原生循环或多AI仍未关闭，不要求正等级随机删非尾。母子机DEST/DRED连续晋升及DRED发射出池/再生/重发已验；其他家族、ASW实际防空击杀/保存再生/再出击实伤已验，原始击杀者控制者选择已修，其他在途控制生命周期仍开放；DEST/CDEST实际反潜实射及receiver死亡后的再生已验。V08解散后的重新招募/六人重新装载存读实射通过；两图BFRT无带队卸载脚本；其他进攻脚本/竞争补员/多AI长局仍保留。Alt飞机入口修复及其实际GADEPT/GAYARD验证保留，不重写已完成链。
 - V04其他伪装族/联盟边界、V07多AI/原鱿鱼-海豚崩溃完整回放、V06完整ROF倍率/V12特殊回调、ForceShield混合保护特殊边界/自主多AI边界、铁幕反击/其他脚本边界、V03空武器reload fallback及真人验收仍开放。此前缓存清理因Unsupported PE debug closure安全停止、移除0字节，本轮未手工清理固定构建。旧Python936项历史结果不覆盖本轮；本轮937项失败/错误及独立原因见当前首条和V13节。
+
+### A07实际矿场战损：光棱突袭到原矿车恢复交矿（2026-10-31）
+
+- 新`aymod_soviet_ai_recovers_combat_refinery_losses_without_stopping_peer`调用同一`aymod_soviet_refinery_recovery`，不复制经济恢复/付款/交矿实现。保留原Receiver与Cashless控制，Combat只改变压力入口：每个原矿场附近合法放两人类SREF，普通Attack实射，在实际部分损伤边界完整存读，随后原矿场全部正常退休且接收点归零。没有直接伤害receiver/HP写入；用普通Move让幸存突袭者撤回，而非删除/冻结或继续摧毁替代矿场。
+- 两AI仍从正常钱包/基地发展并已采矿获收入，沿现有经济夹具关闭新进攻触发、保护人类观察建筑。原HARV与钱包不注入；真实生产新NAREFN时观察同对象欠款下降、生产中存读，再同对象落地/完工和存读，原幸存HARV经radio向该新矿场卸矿并带来新收入，另一House也继续收入。不是零现金夹具、自然生成的人类突袭军或持续多AI对抗。
+- native_inspect本次读到UnitClass::Mission_Guard740922读House+242，74092A非零分支绕过74092C..740934的Queue_Mission(Harvest)；Mission_Harvest73E911置该byte为1。不能把资源再生等同于清位，更不能默加自动重启；完整别名writer不存在不由本局部读取证明。NoOre/停车相关未知边界仍保留。
+- 重跑：设置VERA20K_AYMOD_DIR、VERA20K_REQUIRE_RETAIL_INI=1，执行`python -m tools.cargo_run -- test -p vera20k-core --lib --profile fast --no-default-features --features npatch headless_scenario::retail_construction_tests::aymod_soviet_ai_recovers_combat_refinery_losses_without_stopping_peer -- --ignored --nocapture`。新1、旧Receiver1/Cashless1、miner::no_ore_park_tests3通过，无生产缺陷或新增玩法critic；不提交native静态包、运行收据或save。
 
 ### A07实际资源再生：无矿标记与另一House采矿并存（2026-10-29）
 
@@ -1972,7 +1979,7 @@ TrueConversion714C02..714C1D Bool，7113A7=false；DeployToFire Unit747127=false
 | A04 / P1 / 已补自然盟军Naval Hunters离港接敌与存读续战，其他海战链开放 | 海军/陆海竞争：`src/sim/ai_team_creation.rs:577`、`:624`，`src/sim/production/factory_ai.rs:269`；自然场景`src/headless_scenario/naval_retail_tests.rs` | XMP02T2普通AI发展/科技/船厂/付费产品与自然0CA1E67C-G；已成型队中付费舰只从出厂位置移出超过6格且仍远离靶时完整存读、同队实际DLPH接敌射击及船厂伤害、战斗存读后原队新射击/新伤害通过，无非海军对该靶火力。输入是人类靶船厂/短局关闭/起始战斗单位0，未给AI设施/钱/成员/队/订单；全舰逐一远航、自然战损补员、苏/尤海战、多AI/长局仍开放，不恢复Return Dubai专项 |
 | A05 / P1 / 基因突变、铁幕及超时空编队实发/续攻存读已验，其余待验 | 超武充能、选点、编队联动：`src/sim/superweapon/ai_fire.rs`、`src/sim/team_script_vm/super_actions.rs`；实际脚本用55/57 | 正式两家同盟困难尤里的正常House选敌/基因突变/各自产物和充能隔离、四段存读已验，满充为fixture而非自然等待；铁幕正式53→55→0编队断电等待/恢复发射/保护及两次存读后实伤已验，设施/成员/建队/满充/断电为fixture；正式54→57超时空双阶段发射、warp中完整存读及实际传送成员落地实伤也已验，成员/建队/满充为fixture；另F11预置设施的Dominator完整自然充能、AI发射/真实换主及全窗口光照已捕获，非自然科技/施工。另headless XMP03T4普通困难尤里自行发展/科技供电/付费YAPPET施工、完整充能、实际发射及9目标永久捕获、充能/热效果两段存读和自然恢复/重新充能已验；不是同场景GPU画面。其他超武自然经济全链/多AI竞争及长局仍待验；光照另见F11 |
 | A06 / P1 / 普通Drive重叠已修，整体待验 | 供电/EMP/捕获/队伍/工厂既有owners；NP Drive重叠保存、恢复/不恢复、无Hunt通过，已付款队列政策保留 | 多House/长局、特殊运动器/建筑/管理器及作者设计供电策略仍开放；队员归属与重新组建不能仅由一次到期通过推断 |
-| A07 / P1 / 同阵营双AI失重工/普通矿车矿场/尤里奴隶矿恢复已验，长期压力待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | A02的苏联失首重工与尤里全部在图奴隶矿设施损失后，正常生产/采矿恢复且同盟同阵营另一House继续发展、完整存读已验；失矿为无攻击者终结receiver，非实战夺奴隶/长期抗压。双苏联另已验全失HARV后的同对象付费补产/载矿存读卸矿、全失NAREFN后的同对象付费重建/存读后原HARV向新矿场交矿，双方新收入持续。新增双苏联零现金/全失矿场后普通策略自动非基地Selling、出售中存读、付费重建/原车交矿及双House新收入续进已验，零现金为fixture而非自然耗资；新增实际仅余兵营/零现金/退款不足条件下原HARV普通Hunt、完整存读后自行找敌开火实伤且另一家继续收入已验，关闭short_game为明确fixture；另已验当前矿层耗尽后真实再生、一方NoOre/Guard与另一方继续收入共存、两次完整存读和后续2400帧NoOre补车门禁；不是永久无再生耗尽。永久矿枯/停车后重新起步、其他阵营/幸存兵种、快速游戏败亡竞态和长期资金/生产/团队隔离仍开放 |
+| A07 / P1 / 同阵营双AI失重工/普通矿车矿场/尤里奴隶矿恢复已验，长期压力待验 | 长期经济恢复：`src/sim/ai_build_need.rs` 已含卖建筑、矿场/矿车重建和绝境 Hunt | A02的苏联失首重工与尤里全部在图奴隶矿设施损失后，正常生产/采矿恢复且同盟同阵营另一House继续发展、完整存读已验；失矿为无攻击者终结receiver，非实战夺奴隶/长期抗压。双苏联另已验全失HARV后的同对象付费补产/载矿存读卸矿、全失NAREFN后的同对象付费重建/存读后原HARV向新矿场交矿，双方新收入持续。新增双苏联零现金/全失矿场后普通策略自动非基地Selling、出售中存读、付费重建/原车交矿及双House新收入续进已验，零现金为fixture而非自然耗资；新增实际仅余兵营/零现金/退款不足条件下原HARV普通Hunt、完整存读后自行找敌开火实伤且另一家继续收入已验，关闭short_game为明确fixture；另已验当前矿层耗尽后真实再生、一方NoOre/Guard与另一方继续收入共存、两次完整存读和后续2400帧NoOre补车门禁；不是永久无再生耗尽。另新增实际人类SREF普通Attack摧毁原接收矿场、受损中存读/普通Move撤离、同一付费新矿场/原HARV交矿与双House新收入，沿旧经济夹具关闭新进攻触发，非持续对抗；永久矿枯/停车后原生合法再入Harvest、其他阵营/幸存兵种、快速游戏败亡竞态和长期资金/生产/团队隔离仍开放 |
 | A08 / P2 / 已修配置、待验 | 两个光棱 TaskForce `0CE4DCDC-G` / `0A6E3F1C-G` 已改为 SREF | 根 AIMD不再列 SERF 为现存问题；实际相关编队补齐、出击和光棱作战才关闭行为验收 |
 | A09 / P1 / 实际#174同样保留集结停滞，兼容策略未决 | 攻城直升机 Script `07C3188C-G` / `07C48DBC-G` 的 Guard 已为 `5,0`；Team `07C460CC-G` / `07C3092C-G`；活跃触发 `07C30A5C-G` / `07C4853C-G` | 当前诊断再次从476帧起两机精确到达仍moving/NavCom，1500帧cursor0；seek只作组件诊断，Unload被Attack接续且未部署。独立调查和owner实读实际AY #174：54BE28保留Hold/54BE2F调用705D60但不清moving；705D60→6385C0经705D20取planning+514，空则6386C9退出，无额外清除回调；6EBDA2的Is_Moving为真绕过6EBDC3清NavCom，6EBED5..6EBF13仅Aircraft/BalloonHover例外，SCHP均非。不是已证明的VERA漏移植，不能强清状态或改悬停数值；若要越过这处原生停滞须明确兼容策略。三项未设置NP键不重查，正常移动→部署→开火→再移动仍未实现验收；静态文件读取不排除外部运行时注入 |
 | A10 / P1 / 巨炮/裂缝实际建造及裂缝大范围存读已验，边界开放 | 作者170601称电脑已修巨炮/裂缝建造并会用超级裂缝；已有基地选择、部署/Gap owner | 非盟军错误强制计划已修；实际AY三困难AI正常基地发展中，仅盟军选择/付款/落地并结束巨炮施工，非盟军无巨炮计划/选择/生产。裂缝同样实际付款/落地/建成，其电脑GAGAP普通/超级均15格，实际敌方fog超过10格/完整存读/后续120帧保持；不据此擅造超级切换。玩家GAGAP2普通Unload展开/收回、实际10→15→10格/额外耗电150、两次存读及持续保持另已验；隔离进攻组件不等于完整战斗验收，占领科技/GUI、AY停电/EMP组合及AI自动超级切换的完整原生条件仍开放，不把旧作者bug当当前引擎必然存在 |
