@@ -22,6 +22,7 @@
 
 ## 当前检查点（2026-10-31）
 
+- 新计划已按当前`ebab3b9ff`基线重整，后续入口为[执行队列](aymod-remaining-plan.md#9-新执行队列2026-10-31)：F15范围圈生命周期→真实网络/UI边界→A04海军实战→A05/A07自然超武与经济压力→剩余玩法/策略→组合长局审计。本轮仅修订计划/检查点，无新玩法改动。此前启动的F15 selected/unselected两捕获均已返回VALID，但尚未核选中关系/查看画面及完成存读/取消选择，不能记为F15通过。无运行中Cargo/游戏进程，scratch证据待下一步审计；以下F25记录为此前已提交基线。
 - 工作区D:/Workshop/vera20k-aymod-audit、分支feature/aymod-integration-resume，基于5499ff05b；本轮继续F25精英星标，用可重跑JSON profile/expectations及文档补完整客户端证据，无Rust/Python工具/玩法修改。复用已验证fast npatch,dev-overlays app与map_observation，不重编译/重跑Cargo，无需玩法critic。
 - 正式AY规则的authored平地，普通MTNK零XP、三辆APOC为显式1/256健康/初始Sleep靶场输入；实际分层reader核MTNK Cost700、APOC Cost2000/Strength900、VeteranRatio3。仅两条普通Attack及一次屏幕click；没有写XP/等级/动态伤害、改规则成本或冻结AI。初样只杀两靶，后续固定坐标匹配失败是第三靶已被AI调走且正常自愈；最终80步按唯一活APOC正常重下Attack，不把靶子搬回或改拾取/索敌逻辑。
 - 最终只观察到三发真实105mm/Cannon弹体，source均为实际MTNK；三原靶正常退休，XP从0经老兵到精英、AI cache=0及正常elite_flash启动。完整600/700端点分别tick600/640；600正常quicksave、660正常quickload确实回退到600。恢复后重绑epoch，仍同类活体精英、原生raw达到2.0阈值、恰为唯一选中对象且selection_pending=false。15项expectations全PASS；动态ID/弹体身份检查不提交运行ID金值。
