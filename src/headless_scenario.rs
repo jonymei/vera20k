@@ -26,6 +26,9 @@ pub mod battle_test_evidence;
 #[cfg(all(test, feature = "npatch"))]
 mod naval_retail_tests;
 
+#[cfg(all(test, feature = "npatch"))]
+mod natural_superweapon_retail_tests;
+
 use std::path::Path;
 
 use crate::assets::asset_manager::{AssetManager, MediaArchiveMode};
