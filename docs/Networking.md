@@ -140,6 +140,37 @@ This loopback example alone does not establish separate-machine or scale coverag
 Normal players do not need these diagnostic flags. Validation results belong in
 the task's validation records, not the tree.
 
+For AYMOD's expanded colors, add `--lan-expanded-colors` to **both** normal
+`lan-live-host`/`lan-live-guest` commands. It is rejected for other checkpoints,
+profile checks and setup faults. Use two independent mutable copies of the AYMOD
+root files (and `Taunts/`), the marker above, and separate `settings_dir` paths;
+never mark the real MOD directory as a capture fixture. On the current Windows
+adapter, select `WGPU_BACKEND=dx12` for the required BGRA8 capture surface.
+Use a current NPatch `fast` app; `--shell-capture-timeout-seconds 240` provides
+room for both clients and two ordinary rounds. Reserve distinct primary and
+alternate (`bind+2`) UDP endpoints and own/await both child processes.
+
+This opt-in driver selects priority15 for LiveHost and14 for LiveGuest through
+the ordinary local combo action owner. It does not inject received packets,
+rosters, ready bits or launch mappings. It waits for the actual peer choice,
+requires that occupied color to be absent from the local combo, and preserves
+the existing real kick/rejoin, Ready/Start, Move/Stop, results and rematch route.
+The first kick waits for the guest's real Ready acknowledgment after that
+options exchange. These are shared setup-action inputs, not OS/winit events
+or literal popup pointer clicks.
+
+Inspect each manifest's `lan.expanded_colors` before/after-kick observations.
+For each of the two `lan.rounds`, `runtime.startup.sources` records the actual
+received launch slots, and `runtime.expanded_colors` reads the loaded House
+render mapping and requires MPC16/MPC15 by participant name. Source indexes are
+local to each client; compare by participant/House name, not equal source index.
+Require distinct process IDs, real kick/rejoin, return to menu, and equal
+`native_checksums` and `simulation_hashes` between peers for each matched round.
+The final screenshot is the main menu, not proof of a multiplayer color pixel.
+This establishes a bounded loopback options/occupied-choice/rejoin and launch
+consumer chain, not cable-loss reconnect, hostile same-color packets,
+separate-machine operation, every multiplayer page or native frame parity.
+
 The `lan-battle-host` and `lan-battle-guest` targets use the same isolated setup
 and endpoints. Both select Americans through setup, deploy their AMCV (host D
 key, guest self-click), and produce a GAPOWR. The input driver holds, resumes,
