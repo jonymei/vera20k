@@ -2,6 +2,8 @@
 //! command scheduling, camera, cursor, entity picking, sidebar gadget input,
 //! in-game options input, tooltips, and messages.
 
+#[cfg(feature = "verax")]
+pub(crate) mod autoload;
 pub(crate) mod camera;
 pub(crate) mod chat;
 pub(crate) mod commands;
@@ -41,3 +43,4 @@ pub(crate) mod keyboard;
 pub(crate) mod network_options;
 pub(crate) mod multiplayer_setup;
 pub(crate) mod campaign_input;
+pub(crate) mod touch;

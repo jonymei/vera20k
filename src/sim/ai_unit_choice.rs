@@ -62,11 +62,10 @@ use crate::util::native_x87::{NativeF64Bits, X87Chop53};
 /// `0.01` (`[0x007E3808]`).
 const PERCENT_SCALE: NativeF64Bits = NativeF64Bits::from_bits(0x3F84_7AE1_47AE_147B);
 
-/// One retained production choice (NPAE174 adds the naval Unit slot).
+/// One of the house's mobile production choices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnitChoiceKind {
     Unit,
-    #[cfg(feature = "npatch")]
     NavalUnit,
     Infantry,
     Aircraft,
@@ -76,42 +75,18 @@ impl UnitChoiceKind {
     /// The class array the choice indexes.
     pub(crate) const fn category(self) -> ObjectCategory {
         match self {
-            Self::Unit => ObjectCategory::Vehicle,
-            #[cfg(feature = "npatch")]
-            Self::NavalUnit => ObjectCategory::Vehicle,
+            Self::Unit | Self::NavalUnit => ObjectCategory::Vehicle,
             Self::Infantry => ObjectCategory::Infantry,
             Self::Aircraft => ObjectCategory::Aircraft,
         }
     }
 
-    /// NPAE174 Suggest_New_Object4FBDAF -> C2CE9F uses producer Naval.
-    pub(crate) const fn unit(naval: bool) -> Self {
-        #[cfg(feature = "npatch")]
-        if naval {
-            return Self::NavalUnit;
-        }
-        let _ = naval;
-        Self::Unit
-    }
-
-    const fn naval(self) -> bool {
-        match self {
-            #[cfg(feature = "npatch")]
-            Self::NavalUnit => true,
-            _ => false,
-        }
-    }
-
-    pub(crate) fn for_object(object: &crate::rules::object_type::ObjectType) -> Option<Self> {
-        match object.category {
-            ObjectCategory::Vehicle => Some(Self::unit(object.naval)),
-            category => Self::of(category),
-        }
-    }
-
     /// The choice a produced object of `category` fills; none for a building.
-    pub(crate) const fn of(category: ObjectCategory) -> Option<Self> {
+    pub(crate) const fn of(category: ObjectCategory, naval: bool) -> Option<Self> {
         match category {
+            ObjectCategory::Vehicle if crate::rules::NPATCH_ENABLED && naval => {
+                Some(Self::NavalUnit)
+            }
             ObjectCategory::Vehicle => Some(Self::Unit),
             ObjectCategory::Infantry => Some(Self::Infantry),
             ObjectCategory::Aircraft => Some(Self::Aircraft),
@@ -122,24 +97,36 @@ impl UnitChoiceKind {
 
 /// `HouseClass+0x5650`, `+0x5654` and `+0x5658`: a type index in its class
 /// array, -1 for none.
+///
+/// NPSE adds a second vehicle slot at `House+0x16130` (initialised to -1 at
+/// `0xC31275`) for naval yards, so a shipyard and a war factory stop sharing
+/// one choice: `Suggest_New_Object`'s hook (`0x4FBDAF -> 0xC2F130`) reads the
+/// producer's `Naval=` (`Type+0xCCE`) and takes `+0x16130` for a naval
+/// producer, `+0x5650` otherwise. An ordinary build keeps the vanilla single
+/// slot and never reads the naval choice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HouseAiUnitChoices {
     unit: i32,
-    /// NPAE174 House+160F8; constructor4F5BD2 -> C2CDA9 sets -1.
-    #[cfg(feature = "npatch")]
-    naval: i32,
     infantry: i32,
     aircraft: i32,
+    /// `House+0x16130` (NPSE): the naval yard's vehicle choice, -1 for none.
+    #[serde(default = "no_choice")]
+    naval_unit: i32,
+}
+
+/// The constructor's `-1` for a choice slot, also the value a saved state
+/// without the NPSE field loads as.
+fn no_choice() -> i32 {
+    -1
 }
 
 impl Default for HouseAiUnitChoices {
     fn default() -> Self {
         Self {
             unit: -1,
-            #[cfg(feature = "npatch")]
-            naval: -1,
             infantry: -1,
             aircraft: -1,
+            naval_unit: -1,
         }
     }
 }
@@ -148,8 +135,7 @@ impl HouseAiUnitChoices {
     pub(crate) const fn get(&self, kind: UnitChoiceKind) -> i32 {
         match kind {
             UnitChoiceKind::Unit => self.unit,
-            #[cfg(feature = "npatch")]
-            UnitChoiceKind::NavalUnit => self.naval,
+            UnitChoiceKind::NavalUnit => self.naval_unit,
             UnitChoiceKind::Infantry => self.infantry,
             UnitChoiceKind::Aircraft => self.aircraft,
         }
@@ -158,16 +144,16 @@ impl HouseAiUnitChoices {
     fn slot_mut(&mut self, kind: UnitChoiceKind) -> &mut i32 {
         match kind {
             UnitChoiceKind::Unit => &mut self.unit,
-            #[cfg(feature = "npatch")]
-            UnitChoiceKind::NavalUnit => &mut self.naval,
+            UnitChoiceKind::NavalUnit => &mut self.naval_unit,
             UnitChoiceKind::Infantry => &mut self.infantry,
             UnitChoiceKind::Aircraft => &mut self.aircraft,
         }
     }
 
-    /// `AI_Manage_Build_Queue`'s restart clears the three unit choices.
+    /// `AI_Manage_Build_Queue` 4FE09A..4FE0B5 clears the original three
+    /// choices. NPSE 2.0 preserves an unconsumed naval choice here; held
+    /// objects clear their own channel through AbandonProduction first.
     pub(crate) fn clear_all(&mut self) {
-        // NPAE174 retains stock reset4FE0A3..4FE0B5: no naval write.
         self.unit = -1;
         self.infantry = -1;
         self.aircraft = -1;
@@ -211,11 +197,17 @@ pub(crate) fn choose(
     }
     let fill_earliest_percent =
         house.difficulty_value(&rules.general.fill_earliest_team_probability);
-    let choice = match (kind.category() == ObjectCategory::Vehicle)
+    let choice = match matches!(kind, UnitChoiceKind::Unit | UnitChoiceKind::NavalUnit)
         .then(|| harvester_choice(sim, rules, owner))
         .flatten()
     {
-        Some(index) => Some(index),
+        // NPSE 2.0 C339D0..C33A34 returns from the harvester branch even
+        // for the other channel's type: no team fallback or chooser RNG.
+        Some(index) => (!crate::rules::NPATCH_ENABLED
+            || rules
+                .type_array_at(ObjectCategory::Vehicle, index)
+                .is_some_and(|ty| ty.naval == (kind == UnitChoiceKind::NavalUnit)))
+        .then_some(index),
         None => {
             let candidates = candidates(sim, rules, owner, kind);
             pick(&candidates, fill_earliest_percent, |low, high| {
@@ -223,16 +215,6 @@ pub(crate) fn choose(
             })
         }
     };
-    // Both NPAE174 calls still take the harvester arm. Its tail
-    // 4FEB08/4FEBC6 -> C2F028 refuses a Naval mismatch without falling
-    // through to teams; C2CF25 does the same for a team candidate.
-    let choice = choice.filter(|&index| {
-        !crate::rules::NPATCH_ENABLED
-            || kind.category() != ObjectCategory::Vehicle
-            || rules
-                .type_array_at(ObjectCategory::Vehicle, index)
-                .is_some_and(|object| object.naval == kind.naval())
-    });
     if let Some(index) = choice
         && let Some(house) = sim.houses.get_mut(&owner)
     {
@@ -356,6 +338,15 @@ fn candidates(
     let type_index = |id: InternedId| {
         rules
             .type_array_index(category, sim.interner.resolve(id))
+            // NPSE 2.0 C33B30 filters needed vehicle types before their
+            // recruitment, CanBuild, cost and random-choice consumers.
+            .filter(|&index| {
+                !crate::rules::NPATCH_ENABLED
+                    || category != ObjectCategory::Vehicle
+                    || rules
+                        .type_array_at(category, index)
+                        .is_some_and(|ty| ty.naval == (kind == UnitChoiceKind::NavalUnit))
+            })
             .and_then(|index| usize::try_from(index).ok())
             .filter(|&index| index < type_count)
     };
@@ -378,14 +369,6 @@ fn candidates(
                 })
                 .into_iter()
                 .filter(|member_type| member_type.category == category)
-                // NPAE174 C2B348 -> C2CF04 filters before tallying need.
-                .filter(|member_type| {
-                    !crate::rules::NPATCH_ENABLED
-                        || category != ObjectCategory::Vehicle
-                        || rules
-                            .object_in_category(category, sim.interner.resolve(member_type.id))
-                            .is_some_and(|object| object.naval == kind.naval())
-                })
                 .filter_map(|member_type| type_index(member_type.id))
                 .collect();
             (team.created_frame(), needed)

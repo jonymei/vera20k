@@ -38,6 +38,10 @@
 //! executed by `tools/ai_base_building_oracle.py`.
 //!
 //! RESIDUALS:
+//! - A placed object plays the building type's `CreateUnitSound=`
+//!   (`+0xE74`, read at `0x004607C8..0x004607F8`) at the building
+//!   (`0x00450198`); among retail types only the Cloning Vats set it, which
+//!   have no `Factory=`.
 //! - The try-later branch also copies an uninitialised stack word into the
 //!   timer's middle field (`+0x554`, `0x004501F1`), which no reader uses.
 //! - Mobile products leave through [`exit_produced_object`], the same
@@ -159,9 +163,6 @@ fn exit_finished_object(
     }
     match exit {
         BuildingExit::Placed => {
-            // Factory_AI45016D..450198 uses the producer's own cue, with
-            // no class/global fallback (unlike the NP clone exit).
-            super::production_queue::emit_building_creation_sound(sim, rules, building, None);
             //4501A4 reads after exit. A consumed wall is still retained at
             //its constructor Location until the frame's shared725C70 drain.
             let object = BuiltObject::capture(sim, product);
@@ -250,6 +251,8 @@ fn start_factory(
     if crate::sim::credit_income::available_money(&sim.houses, owner) <= 10 {
         return;
     }
+    // The producing building's `Naval=` decides which vehicle choice
+    // `Suggest_New_Object` reads (NPSE `0xC2F130`), so resolve it first.
     let factory_naval = sim
         .substrate
         .entities
@@ -271,6 +274,19 @@ fn start_factory(
                 && ai_build_limit_blocks(sim, rules, owner, object, object.build_limit))
     {
         clear_aibuild_limit_choice(sim, owner, object);
+        return;
+    }
+    // NPSE 2.0 Factory_AI C2F07C..C2F11F reserves the fetched type's
+    // class before naval admission, allocation and construction. The House
+    // owner retains failed-start/expired reservations until a native release.
+    #[cfg(feature = "npatch")]
+    if rules.general.disable_parallel_ai_queues
+        && !sim.houses.get_mut(&owner).is_some_and(|house| {
+            house
+                .ai_production_mut()
+                .reserve_parallel(object.category, object.naval)
+        })
+    {
         return;
     }
     if object.category == ObjectCategory::Vehicle && object.naval != factory_naval {
@@ -356,8 +372,7 @@ fn ai_build_limit_blocks(
 /// production choice slot before the start skips — `+0x564C` building
 /// (`0xC3371C`), `+0x5654` infantry (`0xC3360C`), `+0x5658` aircraft, and for
 /// a unit `+0x5650` or the naval queue's `+0x16130` by `UnitType+0xCCE`
-/// (`0xC33570`; AYMod NPAE174 C2D039 uses +160F8 for naval). The
-/// retained choice owner selects that same land/naval slot.
+/// (`0xC33570..0xC33592`, NPSE 2.0; legacy ext173 C2D039 uses +160F8).
 /// A capped building is cleared too, and
 /// its plan node stays unsatisfied, so `choose_building` returns the same
 /// type: that is the manual's warning (`AI克隆生产`) that a building at its
@@ -366,7 +381,7 @@ fn clear_aibuild_limit_choice(sim: &mut Simulation, owner: InternedId, object: &
     let Some(house) = sim.houses.get_mut(&owner) else {
         return;
     };
-    match UnitChoiceKind::for_object(object) {
+    match UnitChoiceKind::of(object.category, object.naval) {
         Some(kind) => house.ai_unit_choices_mut().clear(kind),
         None => house.ai_production_mut().clear_building_choice(),
     }

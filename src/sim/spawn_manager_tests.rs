@@ -2940,37 +2940,44 @@ fn every_hornet_of_a_carrier_wing_flies_a_whole_strafe_pass() {
 
 /// After its pass a Hornet is recalled with the Carrier itself as its NavCom
 /// (`Assign_Destination(owner, 1)`, `0x006B766D`), and Mission_Move flies it
-/// home. SpawnManagerClass::AI (`0x006B77B4..0x006B780F`) takes it into
-/// Limbo and Reloading in the carrier's cell once its signed Z difference
-/// is below 20 leptons; it does not snap the aircraft to the deck's Z.
+/// home. SpawnManagerClass::AI (0x006B7230, intake at 6B7793..6B780F) takes
+/// it in to reload over the Carrier's cell below 20 leptons above its owner, before
+/// Fly necessarily reaches the exact deck height. Limbo's Stop_Driver can
+/// replace the recalled object destination with the current cell.
 #[test]
-fn a_recalled_hornet_flies_home_and_lands_on_the_carrier() {
+fn a_recalled_hornet_returns_to_the_carrier_reload_slot() {
+    use crate::sim::spawn_manager::SpawnSlotState;
     let sortie = strafing_carrier_sortie("Landable=yes\nROT=3\n", true);
     let carrier = sortie.sim.substrate.entities.get(sortie.carrier).unwrap();
     let deck = crate::sim::movement::ground_pose::position_world_coord(&carrier.position);
     for hornet in &sortie.wing {
         let navs = &sortie.navs[hornet];
-        // Recall assigns the carrier object; the landing mission may later
-        // replace NavCom with its deck cell. Check the recall transition,
-        // then independently require the docking window, Limbo and Reloading.
         assert!(
             navs.iter().any(|&(_, nav)| nav
                 == Some(crate::sim::components::NavTargetRef::Object { id: sortie.carrier })),
             "Hornet {hornet} is sent home to the Carrier: {navs:?}"
         );
-        let &(x, y, z) = sortie
-            .returned
-            .get(hornet)
-            .expect("the returning Hornet must enter Limbo and Reloading");
+        let h = sortie.sim.substrate.entities.get(*hornet).unwrap();
+        let landed = crate::sim::movement::ground_pose::position_world_coord(&h.position);
         assert_eq!(
-            (x / 256, y / 256),
+            (landed.x / 256, landed.y / 256),
             (deck.x / 256, deck.y / 256),
-            "Hornet {hornet} docks in the carrier's cell"
+            "Hornet {hornet} returns over the Carrier"
         );
         assert!(
-            z.wrapping_sub(deck.z) < 0x14,
-            "Hornet {hornet} enters the native docking height window"
+            (0..20).contains(&landed.z.wrapping_sub(deck.z)),
+            "Hornet {hornet} is within the native intake height"
         );
+        assert!(h.lifecycle.in_limbo(), "Hornet {hornet} is taken in");
+        let slot = carrier
+            .spawn_manager
+            .as_ref()
+            .unwrap()
+            .slots
+            .iter()
+            .find(|slot| slot.spawn == Some(*hornet))
+            .unwrap();
+        assert_eq!(slot.state, SpawnSlotState::Reloading, "Hornet {hornet}");
     }
 }
 

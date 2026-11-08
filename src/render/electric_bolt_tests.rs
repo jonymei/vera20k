@@ -487,7 +487,7 @@ fn npatch_custom_bolt_strands_override_alternate_and_reach_gpu() {
         bolts.create(birth);
         let main: MainRng = SimRng::new(0xB96A50).into();
         bolts
-            .composite(viewport, Some(palette()), &mut main.draws())
+            .composite(viewport, Some(palette()), &mut main.draws(), |_| true)
             .to_vec()
     };
     let lines = composite(birth);

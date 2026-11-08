@@ -274,11 +274,6 @@ pub(in crate::sim) fn exit_produced_object(
             effects,
         );
     }
-    // NPAE174 Unit Exit_Object444119 -> C2BE2A clears the type's Naval
-    // slot without invalidating the other factory's standing choice.
-    let Some(kind) = UnitChoiceKind::for_object(product_type) else {
-        return BuildingExit::Failed;
-    };
     let Some((owner_id, producer_type)) =
         sim.substrate
             .entities
@@ -288,6 +283,11 @@ pub(in crate::sim) fn exit_produced_object(
                     .map(|object| (producer.owner(), object))
             })
     else {
+        return BuildingExit::Failed;
+    };
+    // NPAE174 Unit Exit_Object444119 -> C2BE2A clears the product type's
+    // Naval slot without invalidating the other factory's standing choice.
+    let Some(kind) = UnitChoiceKind::of(product_type.category, product_type.naval) else {
         return BuildingExit::Failed;
     };
     //444096..4440D7 skips FreeRadio65ADC0 for Hospital, Armory and WeaponsFactory.
@@ -322,6 +322,13 @@ pub(in crate::sim) fn exit_produced_object(
         );
         if let Some(house) = sim.houses.get_mut(&owner_id) {
             house.ai_unit_choices_mut().clear(kind);
+            // NPSE 2.0 C2EF95 (aircraft), C3395E/C3397F (vehicle),
+            // C2F184 (infantry): release at this prefix, before later
+            // placement/FreeRadio retries can leave the object held.
+            #[cfg(feature = "npatch")]
+            house
+                .ai_production_mut()
+                .release_parallel(product_type.category, producer_type.naval);
         }
     }
     if kind == UnitChoiceKind::Aircraft {
