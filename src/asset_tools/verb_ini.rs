@@ -325,6 +325,57 @@ fn assemble(
     }))
 }
 
+fn resource_inputs_inventory(
+    rules: &RuleSet,
+    basic: &crate::map::basic::BasicSection,
+    flags: &crate::map::basic::SpecialFlagsSection,
+    terrain: &[crate::map::overlay::TerrainObject],
+    actions: &crate::map::actions::ActionMap,
+) -> Value {
+    let mut spawners = std::collections::BTreeMap::new();
+    for object in terrain {
+        if let Some(kind) = rules
+            .terrain_object_type_case_insensitive(&object.name)
+            .filter(|kind| kind.spawns_tiberium)
+        {
+            let count = spawners
+                .entry(kind.name.clone())
+                .or_insert((0usize, kind.is_animated));
+            count.0 += 1;
+        }
+    }
+    let toggles = actions
+        .iter()
+        .filter_map(|(id, record)| {
+            let entries = record
+                .entries()
+                .iter()
+                .filter(|entry| entry.kind == 86)
+                .collect::<Vec<_>>();
+            (!entries.is_empty()).then_some((id, entries))
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    json!({
+        "basic_tiberium_growth_enabled": basic.tiberium_growth_enabled,
+        "special_flags": {"tiberium_grows": flags.tiberium_grows, "tiberium_spreads": flags.tiberium_spreads},
+        "tiberium_types": rules.tiberium_types.types().iter().map(|kind| json!({
+            "id": kind.id.0, "section": kind.section, "image": kind.image,
+            "growth": kind.growth, "growth_percentage": float_result(f64::from_bits(kind.growth_percentage_bits)),
+            "spread": kind.spread, "spread_percentage": float_result(f64::from_bits(kind.spread_percentage_bits)),
+        })).collect::<Vec<_>>(),
+        "authored_terrain_spawners": spawners.into_iter().map(|(name,(count,animated))| json!({
+            "type_id":name,"authored_instance_count":count,"is_animated":animated,
+        })).collect::<Vec<_>>(),
+        "declared_growth_actions": toggles,
+        "limits": [
+            "Map Basic/SpecialFlags use MapFile's production readers, not the layered Rules Basic section. Null means unset, not false.",
+            "OreGrowthConfig::resolve owns defaults and live gates: fresh Basic growth defaults true; noncampaign session flags override map SpecialFlags. This report does not create a session or resolve live flags.",
+            "Tiberium fields come from the final layered RuleSet; spawners count authored map instances of registered SpawnsTiberium types before placement/asset binding. Actions86 are declarations, not trigger reachability or executed effects.",
+            "No resources are consumed or generated. Initial usable ore, dynamic spawners, growth queues, admission, timers and permanent exhaustion require the actual runtime owners."
+        ],
+    })
+}
+
 fn team_ai_inventory(
     registry: &crate::rules::team_ai_ini::TeamAiIniRegistry,
     rules: &RuleSet,
@@ -512,6 +563,13 @@ fn run_inner(
         });
     }
     if matches!(query, IniQuery::Type { type_id: "*" }) {
+        report["map_resources"] = resource_inputs_inventory(
+            &rules,
+            &map.map.basic,
+            &map.map.special_flags,
+            &map.map.terrain_objects,
+            &map.map.actions,
+        );
         report["team_ai"] =
             crate::rules::team_ai_ini::TeamAiIniRegistry::load_retail(assets, &map.map.ini, true)
                 .and_then(|registry| team_ai_inventory(&registry, &rules))
@@ -564,6 +622,69 @@ fn run_inner(
 mod tests {
     use super::*;
     use crate::rules::process_owner::NativeRulesProcessOwner;
+
+    #[test]
+    fn resource_inventory_keeps_map_flags_separate_and_counts_only_authored_spawners() {
+        let mut owner = NativeRulesProcessOwner::from_cold_start_sources(
+            IniFile::from_str(
+                "[TerrainTypes]\n0=USED\n1=UNUSED\n2=TREE\n\
+                [USED]\nSpawnsTiberium=yes\nIsAnimated=yes\n\
+                [UNUSED]\nSpawnsTiberium=yes\n[TREE]\nSpawnsTiberium=no\n\
+                [Tiberiums]\n0=Ore\n[Ore]\nGrowth=3\nGrowthPercentage=0.5\n\
+                [Basic]\nTiberiumGrowthEnabled=yes\n",
+            ),
+            None,
+            IniFile::empty(),
+            std::sync::Arc::default(),
+            Default::default(),
+        )
+        .unwrap();
+        let map = IniFile::from_str(
+            "[Basic]\nTiberiumGrowthEnabled=no\n\
+            [SpecialFlags]\nTiberiumGrows=no\n\
+            [Tiberiums]\n0=Ore\n\
+            [Ore]\nGrowthPercentage=0\n\
+            [Terrain]\n1001=used\n1002=USED\n1003=TREE\n1004=UNREGISTERED\n\
+            [Actions]\nA=1,86,0,0,0,0,0,0,A\nB=1,7,0,0,0,0,0,0,A\n",
+        );
+        let (rules, _, _, _) = owner
+            .load_scenario(
+                crate::rules::process_owner::NativeScenarioRulesPrefix::NonCampaign(None),
+                &map,
+            )
+            .unwrap()
+            .into_parts();
+        let report = resource_inputs_inventory(
+            &rules,
+            &crate::map::basic::parse_basic_section(&map),
+            &crate::map::basic::parse_special_flags_section(&map),
+            &crate::map::overlay::parse_terrain_objects(&map, 0),
+            &crate::map::actions::parse_actions(&map),
+        );
+        assert_eq!(report["basic_tiberium_growth_enabled"], false);
+        assert_eq!(report["special_flags"]["tiberium_grows"], false);
+        assert_eq!(
+            report["tiberium_types"][0]["growth_percentage"]["value"],
+            0.0
+        );
+        assert_eq!(
+            report["authored_terrain_spawners"],
+            json!([
+                {"type_id":"USED","authored_instance_count":2,"is_animated":true}
+            ])
+        );
+        assert!(report["declared_growth_actions"]["A"].is_array());
+        assert!(report["declared_growth_actions"].get("B").is_none());
+        let unset = resource_inputs_inventory(
+            &rules,
+            &Default::default(),
+            &Default::default(),
+            &[],
+            &Default::default(),
+        );
+        assert!(unset["basic_tiberium_growth_enabled"].is_null());
+        assert_eq!(unset["authored_terrain_spawners"], json!([]));
+    }
 
     #[test]
     fn team_inventory_uses_installed_reinforce_defaults_and_map_rereads() {

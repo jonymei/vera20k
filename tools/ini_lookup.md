@@ -54,6 +54,46 @@ specially flagged extra TMCJ4F pass remain outside the supported path. Malformed
 ReadDouble/coord recovery and extreme ReadRange conversion retain the production
 readers' documented differences.
 
+## Map Resource Inputs
+
+The existing wildcard type inventory also exposes `map_resources`:
+
+```sh
+"$asset_bin" ini-type '*' --domain rules --map XMP03T4.MAP --mode-id 1 --ra2-dir /path/to/AYMOD
+```
+
+This reads the selected map's parsed `Basic.TiberiumGrowthEnabled` and
+`SpecialFlags` directly from `MapFile`, not from the layered Rules projection.
+`null` means absent; it is not `false`. The actual `OreGrowthConfig::resolve`
+owner supplies the fresh Basic default and uses the noncampaign session flags
+instead of map SpecialFlags. The report does not construct a session or
+duplicate that resolution.
+
+`tiberium_types` projects final stored growth/spread timers and percentages,
+including binary64 identities and nonfinite representations. It does not assume
+that a raw type section in a map was reached: the production Rules process owns
+each pass's Tiberiums registry and retained numeric slots. For example, a map
+type-body override without the required registry read need not replace a stored
+value. A grep or a separately merged INI cannot establish that result.
+
+`authored_terrain_spawners` counts only map terrain instances whose registered
+final type has `SpawnsTiberium`; it also exposes `IsAnimated`. Unused definitions
+do not create emitters. These counts precede placement/asset binding and do not
+prove that a spawner can emit at runtime. `declared_growth_actions` retains
+parsed action86 entries, sorted by their action-record key; it is not a claim
+that their triggers execute.
+
+To inspect the installed skirmish scope, take `concrete_scenarios` only from
+`mode_catalog` entries whose `class` is `Battle` or `FreeForAll`; the catalog
+also lists ManBattle and Cooperative rows that the rules command correctly
+rejects. Query each remaining map/mode pair through this command. Keep failures
+explicit, distinguish map counts from context counts, and retain generated
+reports in scratch. Static inputs alone do not prove initial usable ore, growth
+queue progress, complete depletion, dynamic terrain/trigger state, NoOre
+clearing or miners restarting. Follow any applicable candidate through the
+production simulation rather than switching off its growth to manufacture a
+permanent-exhaustion fixture.
+
 Focused checks run as library tests:
 
 ```sh
