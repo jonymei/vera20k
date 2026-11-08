@@ -219,6 +219,7 @@ impl<'a> FireSubject<'a> {
                 temporal: warhead.temporal,
                 is_locomotor: warhead.is_locomotor,
                 psychedelic: warhead.psychedelic,
+                doesnt_affect_enemies: warhead.doesnt_affect_enemies,
                 bomb_disarm: warhead.bomb_disarm,
                 armor_rejects_fire: armor.is_some_and(|armor| {
                     // Ares 3.0 hook100542A0 admits ForceFire OR nonzero
@@ -294,11 +295,18 @@ impl<'a> FireSubject<'a> {
             wave_live: self.world.active_wave_id(firer.stable_id()).is_some(),
             // FireError6FC6D5/6FC9C7 reads the actual Techno+308 pointer.
             spark_particles_live: firer.spark_particle_system.system().is_some(),
+            burst_index: firer.weapon_burst.index(),
             // T45: the object's own rearm countdown (`+0x2EC`).
             rearming: firer
                 .rearm_timer
                 .remaining(self.world.session.binary_frame() as i32)
-                != 0,
+                != 0
+                // C2C649/C2C14E: only a continuing burst may use +2F8.
+                // T45 still applies this fact after its FiringSyncFrame bypass.
+                && (!crate::rules::NPATCH_ENABLED
+                    || obj.use_rof_as_burst_delays()
+                    || firer.weapon_burst.index() == 0
+                    || firer.burst_rearm_remaining(self.world.session.binary_frame() as i32) != 0),
             ammo: firer.ammo().map_or(-1, |ammo| ammo.current()),
             firing_frame: firer.unit_firing_counter.get(),
             cloak_state: firer.cloak.as_ref().map_or(0, |cloak| cloak.state()),
@@ -812,6 +820,18 @@ impl FireQuery for WorldQuery<'_, '_> {
         self.target
             .entity
             .is_some_and(|target| self.house_allied(target.owner(), subject.firer.owner()))
+    }
+
+    fn firer_allied_with_target(&mut self) -> bool {
+        let subject = self.subject;
+        self.target.entity.is_some_and(|target| {
+            combat_weapon::is_ally_by_object(
+                Some(subject.world.house_alliances.as_map()),
+                &subject.world.interner,
+                subject.firer.owner(),
+                target.owner(),
+            )
+        })
     }
 
     fn bridge_for_firing(&mut self) -> bool {

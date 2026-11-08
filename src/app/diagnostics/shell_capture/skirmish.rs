@@ -57,6 +57,8 @@ enum Phase {
     /// The game's Leave was confirmed: the abort exit runs and the shell
     /// resumes.
     Quitting,
+    /// Back out through Single Player to the root before the next match.
+    LightingRestartBack,
     /// In the game: the MCV deploys, then the Construction Yard is sold.
     Defeating,
     /// The score page `0x108` is up after the defeat.
@@ -85,6 +87,10 @@ pub(super) enum LoadingTarget {
     /// The game runs [`QUIT_AFTER_FRAMES`] frames, then Tab opens the
     /// Diplomacy dialog `0x73` through the production key path; it settled.
     Diplomacy,
+    /// Expanded color/technology inputs, then ordinary loading and live play.
+    ExpandedGame,
+    /// Load an active lighting save, Leave, then start a fresh ordinary match.
+    LightingRestart,
 }
 
 /// In-game frames before the quit route presses Leave.
@@ -153,6 +159,15 @@ pub(super) const RANDOM_MAP_GENERATE_POINT: (i32, i32) = (432, 430);
 const RANDOM_MAP_TERRAIN_ARROW_POINT: (i32, i32) = (484, 79);
 const RANDOM_MAP_MAP_SIZE_FACE_POINT: (i32, i32) = (350, 196);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ExpandedSetupTarget {
+    Colors,
+    Applied,
+    InGame,
+    /// Observe persistent setup on process restart without editing any control.
+    Reopened,
+}
+
 #[derive(Default)]
 pub(super) struct SkirmishCapture {
     phase: Phase,
@@ -197,6 +212,15 @@ pub(super) struct SkirmishCapture {
     diplomacy_frames: u32,
     deploy_sent: bool,
     sell_sent: bool,
+    expanded: Option<ExpandedSetupTarget>,
+    expanded_colors_opened: bool,
+    expanded_applied: bool,
+    expanded_snapshot: Option<Value>,
+    expanded_game: Option<Value>,
+    lighting_restart_loaded: bool,
+    lighting_restart_normal_rgb: Option<[i32; 3]>,
+    lighting_restarted: bool,
+    lighting_restart: Option<Value>,
 }
 
 #[derive(Clone, Copy)]
@@ -237,6 +261,7 @@ fn guard(
     chooser: Option<ChooserTarget>,
     loading: bool,
     expected_cursor: (f32, f32),
+    allow_local_color_popup: bool,
 ) -> Result<()> {
     let shell = &state.frontend.skirmish_shell_state;
     CaptureGuard {
@@ -291,7 +316,10 @@ fn guard(
                             | RandomMapTarget::EjectBox
                     ))
                 ))
-            || shell.open_combo_dropdown.is_some()
+            || shell.open_combo_dropdown.is_some_and(|open| {
+                !allow_local_color_popup
+                    || open.id != crate::ui::skirmish_shell::SkirmishComboId::Color(0)
+            })
             || shell.trackbar_hold.is_some()
             || shell.dropdown_scroll_drag.is_some()
             || shell.dropdown_scroll_press.is_some()
@@ -360,6 +388,25 @@ fn entry_wave_tick(state: &AppState, kind: ShellSlideKind) -> Option<u32> {
 }
 
 impl SkirmishCapture {
+    pub(super) fn progress(&self) -> String {
+        format!(
+            "phase={:?}, presented={:?}, selected={}, expanded_open={}, expanded_applied={}, route={:?}",
+            self.phase,
+            self.last_presented,
+            self.selected_scene.is_some(),
+            self.expanded_colors_opened,
+            self.expanded_applied,
+            self.route
+        )
+    }
+
+    pub(super) fn expanded(target: ExpandedSetupTarget) -> Self {
+        Self {
+            expanded: Some(target),
+            ..Self::default()
+        }
+    }
+
     pub(super) fn slide_out(tick: u32) -> Self {
         Self {
             slide_out_tick: Some(tick),
@@ -434,6 +481,7 @@ impl SkirmishCapture {
                     | Phase::Diplomacy
             ),
             (rest.0 as f32, rest.1 as f32),
+            self.expanded.is_some(),
         )
     }
 
@@ -444,6 +492,153 @@ impl SkirmishCapture {
         state.match_state.input.cursor_y = point.1 as f32;
         App::handle_choose_map_modal_mouse_down(state);
         App::handle_choose_map_modal_mouse_up(state);
+    }
+
+    fn expanded_snapshot(state: &AppState) -> Value {
+        use crate::ui::skirmish_shell::{self as ui, SkirmishComboId, SkirmishComboItem};
+        let shell = &state.frontend.skirmish_shell_state;
+        let maps = state.frontend.scenario_catalog.shell_maps();
+        let items = ui::combo_items(shell, maps, SkirmishComboId::Color(0));
+        let open = shell.open_combo_dropdown;
+        let top = open.map_or(0, |open| open.top_index);
+        let visible = ui::combo_dropdown_visible_row_count(shell, maps, SkirmishComboId::Color(0));
+        let colors = |items: &[SkirmishComboItem]| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    if let SkirmishComboItem::Color(index) = item {
+                        Some(*index)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        json!({
+            "color_count": shell.color_count,
+            "available_colors": colors(&items),
+            "visible_colors": open.map(|_| colors(&items[top..top + visible])),
+            "dropdown_top_index": open.map(|open| open.top_index),
+            "selected_color": shell.player_color_index,
+            "color_claimed": shell.player_color_claimed,
+            "tech_slider_visible": shell.trackbar_ids().any(|id| id == ui::SkirmishTrackbarId::TechLevel0x512),
+            "tech_level": shell.launch_options_base.tech_level,
+        })
+    }
+
+    fn expanded_step(&mut self, state: &mut AppState, frame: u32) -> Result<()> {
+        use crate::ui::skirmish_shell::{self as ui, SkirmishComboId, SkirmishComboItem};
+        if self.expanded == Some(ExpandedSetupTarget::Reopened) {
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.color_count == 16
+                    && shell.show_tech_level_slider
+                    && shell.open_combo_dropdown.is_none()
+                    && shell.player_color_index == 15
+                    && shell.player_color_claimed
+                    && shell.launch_options_base.tech_level == 1,
+                "persisted expanded setup was not hydrated: color={}, claimed={}, tech={}",
+                shell.player_color_index,
+                shell.player_color_claimed,
+                shell.launch_options_base.tech_level
+            );
+            self.expanded_snapshot = Some(Self::expanded_snapshot(state));
+            self.expanded_colors_opened = true;
+            self.expanded_applied = true;
+            self.route.push(json!({"dialog": 0x102, "frame": frame,
+                "action": "persisted expanded setup observed without edits"}));
+            return Ok(());
+        }
+        let id = SkirmishComboId::Color(0);
+        let layout = ui::compute_layout(state.render_width(), state.render_height());
+        let click = |state: &mut AppState, point| {
+            Self::set_pointer(state, point);
+            App::handle_skirmish_shell_mouse_move(state);
+            App::handle_skirmish_shell_mouse_down(state);
+            App::handle_skirmish_shell_mouse_up(state);
+        };
+        if !self.expanded_colors_opened {
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.color_count == 16 && shell.show_tech_level_slider,
+                "expanded checkpoint requires the loaded 16-color/tech-slider rules"
+            );
+            let face = ui::combo_face_rect(
+                ui::combo_rect(&layout, id).context("local color face absent")?,
+                layout.scale,
+            );
+            click(state, (face.x + face.w - 10, face.y + face.h / 2));
+            let shell = &state.frontend.skirmish_shell_state;
+            let maps = state.frontend.scenario_catalog.shell_maps();
+            ensure!(
+                shell.open_combo_dropdown.is_some_and(|open| open.id == id),
+                "color popup did not open"
+            );
+            let bar = ui::combo_dropdown_scrollbar_rect(shell, &layout, maps, id)
+                .context("expanded color popup has no scrollbar")?;
+            let items = ui::combo_items(shell, maps, id);
+            ensure!(
+                items.last() == Some(&SkirmishComboItem::Color(15)),
+                "last expanded color is not available"
+            );
+            // The shell wheel is deliberately inert. Use normal down-arrow
+            // press/release edges to reach the retained list's end.
+            let metrics = ui::DropdownMetrics::scaled(layout.scale);
+            for _ in 0..items.len() {
+                click(
+                    state,
+                    (bar.x + bar.w / 2, bar.y + bar.h - metrics.button_h / 2),
+                );
+            }
+            self.expanded_colors_opened = true;
+            self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "expanded color popup scrolled to end"}));
+        } else if self
+            .expanded
+            .is_some_and(|target| target != ExpandedSetupTarget::Colors)
+            && !self.expanded_applied
+        {
+            let shell = &state.frontend.skirmish_shell_state;
+            let maps = state.frontend.scenario_catalog.shell_maps();
+            let open = shell
+                .open_combo_dropdown
+                .context("expanded color popup closed early")?;
+            let items = ui::combo_items(shell, maps, id);
+            let item = items
+                .iter()
+                .position(|item| *item == SkirmishComboItem::Color(15))
+                .context("expanded color disappeared")?;
+            let content = ui::combo_dropdown_content_rect(shell, &layout, maps, id)
+                .context("expanded popup content absent")?;
+            let row = ui::combo_dropdown_row_rect(content, layout.scale, item - open.top_index);
+            click(state, (row.x + row.w / 2, row.y + row.h / 2));
+            ensure!(
+                state
+                    .frontend
+                    .skirmish_shell_state
+                    .open_combo_dropdown
+                    .is_none(),
+                "color selection did not close popup"
+            );
+            let rect = layout.trackbars.tech_level;
+            click(state, (rect.x + 7, rect.y + rect.h / 2));
+            let shell = &state.frontend.skirmish_shell_state;
+            ensure!(
+                shell.player_color_index == 15
+                    && shell.player_color_claimed
+                    && shell.launch_options_base.tech_level == 1,
+                "expanded settings did not apply through input"
+            );
+            self.expanded_applied = true;
+            if self.expanded == Some(ExpandedSetupTarget::InGame) {
+                self.loading = Some(LoadingTarget::ExpandedGame);
+            }
+            self.route.push(json!({"dialog": 0x102, "frame": frame, "action": "last color selected; technology clicked to minimum"}));
+        }
+        Self::set_pointer(state, self.rest_point());
+        App::handle_skirmish_shell_mouse_move(state);
+        self.selected_scene = Some(selected_scene(state)?);
+        self.expanded_snapshot = Some(Self::expanded_snapshot(state));
+        Ok(())
     }
 
     /// Track press above the map list's thumb (scrolls to the top), a press
@@ -592,6 +787,8 @@ impl SkirmishCapture {
             self.loading,
             Some(
                 LoadingTarget::AfterQuit
+                    | LoadingTarget::ExpandedGame
+                    | LoadingTarget::LightingRestart
                     | LoadingTarget::DefeatScore
                     | LoadingTarget::DefeatContinue
                     | LoadingTarget::Diplomacy
@@ -992,6 +1189,17 @@ impl SkirmishCapture {
             (Phase::Skirmish, PresentedShell::Skirmish) => {
                 if self.settled(state)? && self.selected_scene.is_none() {
                     self.selected_scene = Some(selected_scene(state)?);
+                } else if self.expanded.is_some()
+                    && self.selected_scene.is_some()
+                    && (!self.expanded_colors_opened
+                        || (self
+                            .expanded
+                            .is_some_and(|target| target != ExpandedSetupTarget::Colors)
+                            && !self.expanded_applied))
+                {
+                    // Do not repeat idle mouse moves: the native common handler
+                    // restarts status help on every move, preventing settlement.
+                    self.expanded_step(state, frame)?;
                 } else if let Some(point) = self
                     .hover
                     .filter(|_| self.selected_scene.is_some() && !self.hovered)
@@ -1278,6 +1486,99 @@ impl SkirmishCapture {
                             state.match_state.input.cursor_y]}));
                 }
             }
+            (Phase::Quitting, PresentedShell::Skirmish)
+                if self.loading == Some(LoadingTarget::LightingRestart)
+                    && self.settled(state)? =>
+            {
+                self.route.push(json!({"dialog": 0x102, "frame": frame,
+                    "action": "lighting match returned to settled Skirmish; Back"}));
+                App::handle_skirmish_back(state);
+                self.phase = Phase::LightingRestartBack;
+            }
+            (Phase::LightingRestartBack, PresentedShell::SinglePlayer)
+                if state.frontend.shell_first_paint_slide.is_none()
+                    && state.frontend.shell_exit.is_none() =>
+            {
+                self.route.push(json!({"dialog": 0x100, "frame": frame,
+                    "action": "MainMenu"}));
+                App::handle_single_player_shell_action(
+                    state,
+                    crate::ui::single_player_shell::SinglePlayerShellAction::MainMenu,
+                );
+            }
+            (Phase::LightingRestartBack, PresentedShell::MainMenu)
+                if steady_main_menu_capture_ready(MainMenuCaptureSnapshot::from_state(state))? =>
+            {
+                self.route.push(json!({"dialog": 0xe2, "frame": frame,
+                    "action": "lighting match returned to root MainMenu"}));
+                self.lighting_restarted = true;
+                self.in_game_frames = 0;
+                self.phase = Phase::MainMenu;
+            }
+            (Phase::Starting, _)
+                if self.loading == Some(LoadingTarget::LightingRestart)
+                    && state.frontend.screen == GameScreen::InGame =>
+            {
+                self.advance_lighting_restart(state, frame)?;
+            }
+            (Phase::Starting, _)
+                if self.loading == Some(LoadingTarget::ExpandedGame)
+                    && state.frontend.screen == GameScreen::InGame =>
+            {
+                self.in_game_frames += 1;
+                if self.in_game_frames == QUIT_AFTER_FRAMES {
+                    let sim = &state
+                        .match_state
+                        .sim_runtime
+                        .as_ref()
+                        .context("expanded match runtime absent")?
+                        .simulation;
+                    let owner = sim
+                        .session()
+                        .current_house()
+                        .context("expanded match local House absent")?;
+                    let name = sim.interner().resolve(owner);
+                    let house = sim
+                        .houses()
+                        .get(&owner)
+                        .context("expanded local House missing")?;
+                    let color = state
+                        .match_state
+                        .match_presentation
+                        .house_color_map
+                        .get(name)
+                        .context("expanded local House render color missing")?;
+                    let scheme = state
+                        .rules()
+                        .context("expanded match rules missing")?
+                        .color_schemes
+                        .get(usize::from(color.0))
+                        .context("expanded render scheme missing")?;
+                    ensure!(
+                        house.tech_level() == 1 && sim.session().game_options().tech_level == 1,
+                        "page technology did not reach the actual House and scenario"
+                    );
+                    ensure!(
+                        sim.session().tick() > 0,
+                        "expanded match has not advanced simulation"
+                    );
+                    ensure!(
+                        scheme.name.eq_ignore_ascii_case("MPC16"),
+                        "selected last color did not reach the actual render scheme: {}",
+                        scheme.name
+                    );
+                    self.expanded_game = Some(json!({
+                        "local_house": name, "house_tech_level": house.tech_level(),
+                        "scenario_tech_level": sim.session().game_options().tech_level,
+                        "render_scheme_entry": color.0, "render_scheme_name": scheme.name,
+                        "simulation_tick": sim.session().tick(), "in_game_frames": self.in_game_frames,
+                    }));
+                    Self::set_pointer(state, self.rest_point());
+                    self.route.push(json!({"screen": "in game", "frame": frame,
+                            "action": "expanded settings observed in live House and render owners"}));
+                }
+            }
+
             (Phase::Starting, _)
                 if self.loading == Some(LoadingTarget::AfterQuit)
                     && state.frontend.screen == GameScreen::InGame =>
@@ -1550,6 +1851,20 @@ impl SkirmishCapture {
                 && self.last_presented == Some(PresentedShell::Skirmish)
                 && self.settled(state)?);
         }
+        if self.loading == Some(LoadingTarget::ExpandedGame) {
+            return Ok(self.phase == Phase::Starting
+                && state.frontend.screen == GameScreen::InGame
+                && self.expanded_game.is_some());
+        }
+        if self.loading == Some(LoadingTarget::LightingRestart) {
+            return Ok(self.phase == Phase::Starting
+                && state.frontend.screen == GameScreen::InGame
+                && self.lighting_restarted
+                && self
+                    .lighting_restart
+                    .as_ref()
+                    .is_some_and(|value| value.get("fresh_match").is_some()));
+        }
         if let Some(target) = self.loading {
             let next = match target {
                 LoadingTarget::Blank => crate::app::loading::pump::NextLoadingFrame::Blank,
@@ -1558,6 +1873,8 @@ impl SkirmishCapture {
                 | LoadingTarget::DefeatScore
                 | LoadingTarget::DefeatContinue
                 | LoadingTarget::Diplomacy => crate::app::loading::pump::NextLoadingFrame::First,
+                LoadingTarget::ExpandedGame => unreachable!("expanded live target handled above"),
+                LoadingTarget::LightingRestart => unreachable!("lighting restart handled above"),
             };
             return Ok(self.phase == Phase::Starting
                 && state.frontend.screen == GameScreen::Loading
@@ -1582,6 +1899,17 @@ impl SkirmishCapture {
         }
         if !self.settled(state)? {
             return Ok(false);
+        }
+        if let Some(target) = self.expanded {
+            if !self.expanded_colors_opened
+                || (target != ExpandedSetupTarget::Colors && !self.expanded_applied)
+            {
+                return Ok(false);
+            }
+            ensure!(
+                self.expanded_snapshot.as_ref() == Some(&Self::expanded_snapshot(state)),
+                "expanded settings changed before capture"
+            );
         }
         ensure!(
             self.selected_scene.as_ref() == Some(&selected_scene(state)?),
@@ -1644,7 +1972,101 @@ impl SkirmishCapture {
         if let Some(target) = self.loading {
             manifest["loading_frame"] = json!(format!("{target:?}"));
         }
+        if let Some(snapshot) = &self.expanded_snapshot {
+            manifest["expanded_setup"] = snapshot.clone();
+        }
+        if let Some(snapshot) = &self.expanded_game {
+            manifest["expanded_game"] = snapshot.clone();
+        }
+        if let Some(snapshot) = &self.lighting_restart {
+            manifest["lighting_restart"] = snapshot.clone();
+        }
         manifest
+    }
+
+    fn advance_lighting_restart(&mut self, state: &mut AppState, frame: u32) -> Result<()> {
+        use crate::sim::scenario_session::ScenarioLightingProfile;
+        self.in_game_frames += 1;
+        if !self.lighting_restart_loaded && self.in_game_frames == QUIT_AFTER_FRAMES {
+            let grid = state.match_state.match_presentation.lighting.grid();
+            self.lighting_restart_normal_rgb = Some(grid.color_scheme_rgb());
+            ensure!(
+                grid.color_scheme_rgb() == grid.color_scheme_normal_rgb(),
+                "initial fresh match already has alternate scheme lighting"
+            );
+            #[cfg(feature = "dev-overlays")]
+            crate::app::persistence::commands::quickload(state);
+            #[cfg(not(feature = "dev-overlays"))]
+            anyhow::bail!("lighting restart capture requires dev-overlays");
+            self.lighting_restart_loaded = true;
+            self.route
+                .push(json!({"frame": frame, "action": "ordinary quickload requested"}));
+            return Ok(());
+        }
+        let observing_old = !self.lighting_restarted
+            && self.lighting_restart_loaded
+            && self.in_game_frames == QUIT_AFTER_FRAMES + 1;
+        let observing_new = self.lighting_restarted && self.in_game_frames == QUIT_AFTER_FRAMES;
+        if !observing_old && !observing_new {
+            return Ok(());
+        }
+        let sim = &state
+            .match_state
+            .sim_runtime
+            .as_ref()
+            .context("lighting restart lost runtime")?
+            .simulation;
+        let lighting = sim.session().lighting();
+        let selected = lighting.selected_profile();
+        let dominator_rgb = lighting.profile_rgb(ScenarioLightingProfile::Dominator);
+        let map_dominator_rgb = lighting.dominator().alternate_rgb();
+        let grid_rgb = state
+            .match_state
+            .match_presentation
+            .lighting
+            .grid()
+            .color_scheme_rgb();
+        // House Convert normal RGB is independent of the map's ground RGB;
+        // compare it with the initial fresh-match owner, not Scenario.normal.
+        if observing_old {
+            ensure!(
+                selected == ScenarioLightingProfile::Dominator
+                    && dominator_rgb[1] == 0
+                    && dominator_rgb != map_dominator_rgb
+                    && grid_rgb == dominator_rgb,
+                "save did not present active custom Dominator lighting"
+            );
+        } else {
+            ensure!(
+                selected == ScenarioLightingProfile::Normal
+                    && dominator_rgb == map_dominator_rgb
+                    && Some(grid_rgb) == self.lighting_restart_normal_rgb,
+                "fresh match retained outgoing lighting or its SW source: selected={selected:?}, dominator={dominator_rgb:?}, map_dominator={map_dominator_rgb:?}, render={grid_rgb:?}, baseline={:?}",
+                self.lighting_restart_normal_rgb
+            );
+            ensure!(
+                sim.session().tick() > 0 && sim.session().tick() < 100,
+                "fresh match did not restart its simulation clock"
+            );
+        }
+        let snapshot = json!({"simulation_tick": sim.session().tick(),
+            "selected_profile": format!("{selected:?}"), "dominator_rgb": dominator_rgb,
+            "map_dominator_rgb": map_dominator_rgb, "render_scheme_rgb": grid_rgb,
+            "initial_fresh_scheme_rgb": self.lighting_restart_normal_rgb});
+        self.lighting_restart.get_or_insert_with(|| json!({}))[if observing_old {
+            "outgoing_match"
+        } else {
+            "fresh_match"
+        }] = snapshot;
+        self.route
+            .push(json!({"frame": frame, "action": if observing_old {
+            "active Dominator presented; Leave" } else { "fresh match lighting observed" }}));
+        Self::set_pointer(state, self.rest_point());
+        if observing_old {
+            crate::app::input::abort::activate(state, crate::ui::shell::abort::AbortButton::Leave);
+            self.phase = Phase::Quitting;
+        }
+        Ok(())
     }
 }
 

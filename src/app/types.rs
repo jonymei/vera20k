@@ -368,6 +368,7 @@ pub(crate) enum CursorFeedbackKind {
     /// Sell cursor mode active (sidebar dollar). `true` = an own building is
     /// under the cursor (sell), `false` = no eligible target (no-sell).
     SellMode(bool),
+    PowerMode(bool),
     /// Superweapon targeting reticle — shown while a charged SW is armed
     /// and the cursor is over the tactical map. Payload is the per-SW
     /// CursorId resolved from the `Action=` INI string.

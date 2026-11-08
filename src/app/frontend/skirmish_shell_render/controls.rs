@@ -344,12 +344,8 @@ pub(super) fn scrollbar_arrow_entry(
     }
 }
 
-/// Resolve a normal Skirmish lobby color slot to its fixed owner-draw swatch.
-///
-/// The active native initializer copies these eight packed RGB values from
-/// `0x008316A8`; gameplay `[Colors]` schemes do not feed this UI table. The
-/// existing parameter remains part of the renderer seam but deliberately has no
-/// authority here.
+/// Stock owner-draw swatches from `0x008316A8`, retained when the NPAE
+/// dropdown-color extension is disabled.
 const SKIRMISH_SWATCH_RGB: [[u8; 3]; 8] = [
     [221, 226, 13],
     [255, 25, 25],
@@ -361,7 +357,23 @@ const SKIRMISH_SWATCH_RGB: [[u8; 3]; 8] = [
     [255, 154, 235],
 ];
 
-pub(super) fn house_color_tint(_color_schemes: &[ColorSchemeEntry], index: usize) -> [f32; 3] {
+pub(super) fn house_color_tint(
+    color_schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
+    index: usize,
+) -> [f32; 3] {
+    // NPAE174 C2AE00..C2AE52 builds these swatches from MPC01..16 HSV,
+    // unlike the fixed stock8316A8 table. Share the Session resolver with House.
+    if crate::rules::NPATCH_ENABLED && dropdown_colors && index < 16 {
+        let entry = crate::rules::color_scheme::multiplayer_scheme_entry_for_priority(
+            color_schemes,
+            dropdown_colors,
+            index as i32,
+        );
+        if let Some(hsv) = crate::rules::color_scheme::scheme_hsv_by_entry(color_schemes, entry) {
+            return crate::rules::color_scheme::hsv_to_rgb(hsv).map(|byte| f32::from(byte) / 255.0);
+        }
+    }
     let [r, g, b] = SKIRMISH_SWATCH_RGB
         .get(index)
         .copied()
@@ -431,6 +443,7 @@ pub(super) fn trackbar_rect_for_id(layout: &SkirmishShellLayout, id: SkirmishTra
         SkirmishTrackbarId::GameSpeed0x529 => layout.trackbars.game_speed,
         SkirmishTrackbarId::Credits0x511 => layout.trackbars.credits,
         SkirmishTrackbarId::UnitCount0x50c => layout.trackbars.unit_count,
+        SkirmishTrackbarId::TechLevel0x512 => layout.trackbars.tech_level,
     }
 }
 
@@ -676,11 +689,7 @@ pub(super) fn push_trackbar_instances(
     shell: &SkirmishShellState,
 ) {
     let chrome = atlas.control_chrome();
-    for id in [
-        SkirmishTrackbarId::GameSpeed0x529,
-        SkirmishTrackbarId::Credits0x511,
-        SkirmishTrackbarId::UnitCount0x50c,
-    ] {
+    for id in shell.trackbar_ids() {
         let rect = trackbar_rect_for_id(layout, id);
         let value = trackbar_visual_value(shell, id);
         let thumb_left = shell
@@ -704,6 +713,7 @@ pub(super) fn push_combo_instances(
     out: &mut Vec<SpriteInstance>,
     atlas: &SkirmishShellChromeAtlas,
     color_schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
     layout: &SkirmishShellLayout,
     shell: &SkirmishShellState,
     maps: &[MapMenuEntry],
@@ -717,8 +727,9 @@ pub(super) fn push_combo_instances(
     // popup + shared scrollbar stay on `atlas` (4D).
     let chrome = atlas.control_chrome();
     let open = shell.open_combo_dropdown.map(|dropdown| dropdown.id);
-    let swatch_for =
-        |color_index: Option<usize>| color_index.map(|ci| house_color_tint(color_schemes, ci));
+    let swatch_for = |color_index: Option<usize>| {
+        color_index.map(|ci| house_color_tint(color_schemes, dropdown_colors, ci))
+    };
     paint_control(
         out,
         &chrome,
@@ -848,6 +859,7 @@ pub(super) fn push_dropdown_instances(
     out: &mut Vec<SpriteInstance>,
     atlas: &SkirmishShellChromeAtlas,
     color_schemes: &[ColorSchemeEntry],
+    dropdown_colors: bool,
     layout: &SkirmishShellLayout,
     shell: &SkirmishShellState,
     maps: &[MapMenuEntry],
@@ -880,7 +892,7 @@ pub(super) fn push_dropdown_instances(
                 layout
                     .scale
                     .derive_rect(row, |row| RectPx::new(row.x + 2, row.y + 2, row.w - 4, 19)),
-                house_color_tint(color_schemes, color),
+                house_color_tint(color_schemes, dropdown_colors, color),
             ))
         });
     let scrollbar = needs_scrollbar
@@ -1011,8 +1023,32 @@ mod tests {
                 rgb[1] as f32 / 255.0,
                 rgb[2] as f32 / 255.0,
             ];
-            assert_eq!(house_color_tint(&[], slot), expected, "slot {slot}");
+            assert_eq!(house_color_tint(&[], false, slot), expected, "slot {slot}");
         }
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; real AY lobby swatch colors"]
+    fn aymod_dropdown_swatches_show_authored_white_and_blue() {
+        let root =
+            std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").expect("AYMod install"));
+        let ini = crate::rules::ini_parser::IniFile::from_bytes(
+            &std::fs::read(root.join("rulesmd.ini")).unwrap(),
+        )
+        .unwrap();
+        let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
+        let swatch =
+            |slot| house_color_tint(&rules.color_schemes, rules.npatch_dropdown_colors, slot);
+        assert!(ini.section("MenuColors").is_none());
+        assert_eq!(rules.multiplayer_color_count, 16);
+        assert_eq!(swatch(2), [1.0; 3]);
+        let expected = crate::rules::color_scheme::hsv_to_rgb([153, 214, 255])
+            .map(|channel| f32::from(channel) / 255.0);
+        assert_eq!(swatch(4), expected);
+        assert_eq!(swatch(15), crate::rules::color_scheme::hsv_to_rgb([20, 255, 144])
+            .map(|channel| f32::from(channel) / 255.0));
+        assert_ne!(swatch(2), house_color_tint(&rules.color_schemes, false, 2));
     }
 
     #[test]
@@ -1022,15 +1058,15 @@ mod tests {
             hsv: [0, 0, 0],
         }];
         assert_eq!(
-            house_color_tint(&deliberately_different, 2),
-            house_color_tint(&[], 2)
+            house_color_tint(&deliberately_different, false, 2),
+            house_color_tint(&[], false, 2)
         );
     }
 
     #[test]
     fn out_of_range_swatch_uses_native_observer_grey() {
         assert_eq!(
-            house_color_tint(&[], 8),
+            house_color_tint(&[], false, 8),
             [96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0]
         );
     }

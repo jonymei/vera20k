@@ -1617,7 +1617,13 @@ fn a_factory_product_reconnects_to_its_ordered_transport_after_clearance() {
         destination: Some(TargetKind::Entity(transport)),
     };
     assert_eq!(
-        sim.entry_click_action(product, transport, EntryBaseAction::Select, &rules),
+        sim.entry_click_action(
+            product,
+            transport,
+            EntryBaseAction::Select,
+            &rules,
+            Default::default()
+        ),
         Some(EntryClickAction::Enter)
     );
     let head = bay_head(&sim, product).unwrap();

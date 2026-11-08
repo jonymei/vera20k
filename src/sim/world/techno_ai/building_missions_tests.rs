@@ -1789,6 +1789,10 @@ fn retail_dustbowl_prism_towers_forward_their_charge() {
                 modifier: 150,
                 max: 8,
                 delay: 45,
+                #[cfg(feature = "npatch")]
+                veteran_delay: 69,
+                #[cfg(feature = "npatch")]
+                elite_delay: 69,
                 duration: 15,
             }
         );

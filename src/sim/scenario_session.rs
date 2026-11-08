@@ -21,7 +21,7 @@ pub(crate) use countdown::ScenarioTimerAction;
 
 /// NukeLevel (`ScenarioClass+0x3574`): Set_Defaults stores 100 (`0x00683920`,
 /// the binary's only store to it) and no INI key reads it.
-pub const NUKE_LEVEL_UNITS: i32 = 100;
+pub const NUKE_LEVEL_UNITS: i32 = crate::rules::superweapon_type::NATIVE_NUKE_LIGHT_PROFILE[5];
 
 /// ScenarioClass Set_Defaults68375F..68378E anchors both map-regrowth
 /// timers at the current frame, zero on a fresh start, with zero duration.
@@ -56,27 +56,13 @@ impl ScenarioLightProfileUnits {
     }
 
     pub const fn ion_default() -> Self {
-        Self {
-            ambient_percent: 87,
-            red_percent: 30,
-            green_percent: 40,
-            blue_percent: 75,
-            ground_units: 0,
-            level_units: 0,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_ION_LIGHT_PROFILE)
     }
 
     /// `ScenarioClass::Set_Defaults @ 0x00683610` (`0x00683991..
     /// 0x006839B7`).
     pub const fn dominator_default() -> Self {
-        Self {
-            ambient_percent: 150,
-            red_percent: 85,
-            green_percent: 20,
-            blue_percent: 30,
-            ground_units: 0,
-            level_units: 0,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_DOMINATOR_LIGHT_PROFILE)
     }
 
     /// The nuke flash's profile (`ScenarioClass+0x3560..+0x3574`): only
@@ -84,16 +70,20 @@ impl ScenarioLightProfileUnits {
     /// `0x0068396D..0x00683987`, Ground and Level 100 at `0x0068391A`/
     /// `0x00683920`), and no INI key reads it.
     pub const fn nuke() -> Self {
-        Self {
-            ambient_percent: 200,
-            red_percent: 175,
-            green_percent: 150,
-            blue_percent: 125,
-            ground_units: 100,
-            level_units: NUKE_LEVEL_UNITS,
-        }
+        Self::from_native_default(crate::rules::superweapon_type::NATIVE_NUKE_LIGHT_PROFILE)
     }
 
+    /// Scenario reset and the NPatch first-read seed share these six values.
+    const fn from_native_default(values: [i32; 6]) -> Self {
+        Self {
+            ambient_percent: values[0],
+            red_percent: values[1],
+            green_percent: values[2],
+            blue_percent: values[3],
+            ground_units: values[4],
+            level_units: values[5],
+        }
+    }
     /// The RGB `ScenarioClass::UpdateLighting @ 0x0053C280` hands
     /// RecalcLighting for an alternate profile: each percentage times 10.
     pub fn alternate_rgb(&self) -> [i32; 3] {
@@ -179,6 +169,14 @@ impl NukeFlash {
     }
 }
 
+/// NPAE174 recent SWType pointer and its immutable, same-rules lighting input.
+#[cfg(feature = "npatch")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+struct SuperWeaponLightingSource {
+    type_id: InternedId,
+    settings: crate::rules::superweapon_type::NpatchSuperWeaponLighting,
+}
+
 /// Persistent ScenarioClass-style authority for global lighting transitions.
 ///
 /// The per-cell grid remains an app-derived cache. Only the profile inputs,
@@ -207,9 +205,25 @@ pub struct ScenarioLightingState {
     /// supplies untouched inputs; retirement returns writes to the process
     /// Rules owner before its next prefix/read/reset sequence.
     ambient_change_overrides: [Option<NativeF64Bits>; 2],
+    /// BA91E0/BA91E4/BA91EC, resetC28E20; retained beyond the active effect.
+    #[cfg(feature = "npatch")]
+    superweapon_lighting_sources: [Option<SuperWeaponLightingSource>; 3],
 }
 
 impl ScenarioLightingState {
+    /// Compare the client's legacy fallback-refresh state without recent SW
+    /// source writes. Launch6CDA5B/6CCD33/6CCDB1 changes future readers only;
+    /// RecalcLighting53AD00 and ambient stepping publish their own refreshes.
+    pub fn same_refresh_state(&self, previous: &Self) -> bool {
+        let previous = *previous;
+        #[cfg(feature = "npatch")]
+        let previous = Self {
+            superweapon_lighting_sources: self.superweapon_lighting_sources,
+            ..previous
+        };
+        *self == previous
+    }
+
     pub const fn normal(&self) -> ScenarioLightProfileUnits {
         self.normal
     }
@@ -222,7 +236,11 @@ impl ScenarioLightingState {
         self.dominator
     }
 
-    pub const fn dominator_change_rate(&self) -> i32 {
+    pub fn dominator_change_rate(&self) -> i32 {
+        #[cfg(feature = "npatch")]
+        if let Some(source) = self.superweapon_lighting_source(ScenarioLightingProfile::Dominator) {
+            return source.settings.profile()[6];
+        }
         self.dominator_change_rate
     }
 
@@ -299,6 +317,8 @@ impl ScenarioLightingState {
             nuke_change_rate,
             nuke_flash: NukeFlash::OFF,
             ambient_change_overrides: [None; 2],
+            #[cfg(feature = "npatch")]
+            superweapon_lighting_sources: [None; 3],
         }
     }
 
@@ -329,7 +349,92 @@ impl ScenarioLightingState {
         self.normal.level_units = value.level_units;
     }
 
+    /// Super::Launch6CDA5B/6CCD33/6CCDB1 writes the recent type before
+    /// admission. Store its immutable rules snapshot, never the map profile.
+    pub(crate) fn remember_superweapon_lighting(
+        &mut self,
+        profile: ScenarioLightingProfile,
+        type_id: InternedId,
+        settings: crate::rules::superweapon_type::NpatchSuperWeaponLighting,
+    ) {
+        #[cfg(feature = "npatch")]
+        if let Some(index) = Self::superweapon_lighting_index(profile) {
+            self.superweapon_lighting_sources[index] =
+                Some(SuperWeaponLightingSource { type_id, settings });
+        }
+        #[cfg(not(feature = "npatch"))]
+        let _ = (profile, type_id, settings);
+    }
+
+    #[cfg(feature = "npatch")]
+    fn superweapon_lighting_index(profile: ScenarioLightingProfile) -> Option<usize> {
+        match profile {
+            ScenarioLightingProfile::Nuke => Some(0),
+            ScenarioLightingProfile::Ion => Some(1),
+            ScenarioLightingProfile::Dominator => Some(2),
+            ScenarioLightingProfile::Normal => None,
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    fn superweapon_lighting_source(
+        &self,
+        profile: ScenarioLightingProfile,
+    ) -> Option<SuperWeaponLightingSource> {
+        Self::superweapon_lighting_index(profile)
+            .and_then(|index| self.superweapon_lighting_sources[index])
+    }
+
+    pub(crate) fn has_superweapon_lighting(&self, profile: ScenarioLightingProfile) -> bool {
+        #[cfg(feature = "npatch")]
+        {
+            return self.superweapon_lighting_source(profile).is_some();
+        }
+        #[cfg(not(feature = "npatch"))]
+        {
+            let _ = profile;
+            false
+        }
+    }
+
+    /// NPAE Lighting gates at53C280/555E50/484473. Missing identity keeps
+    /// direct-native fixtures safe; unproven native null domains are not emulated.
+    pub fn profile_lighting_enabled(&self, profile: ScenarioLightingProfile) -> bool {
+        #[cfg(feature = "npatch")]
+        if let Some(source) = self.superweapon_lighting_source(profile) {
+            return source.settings.enabled();
+        }
+        let _ = profile;
+        true
+    }
+
+    /// NPAE RecalcLighting53C3A4: signed division follows the wrapping
+    /// multiplication by1000, not multiplication by10 for overflowing inputs.
+    pub fn profile_rgb(&self, profile: ScenarioLightingProfile) -> [i32; 3] {
+        #[cfg(feature = "npatch")]
+        if let Some(source) = self.superweapon_lighting_source(profile) {
+            let values = source.settings.profile();
+            return [values[1], values[2], values[3]].map(|v| v.wrapping_mul(1000) / 100);
+        }
+        self.map_profile(profile).alternate_rgb()
+    }
+
     pub fn profile(&self, profile: ScenarioLightingProfile) -> ScenarioLightProfileUnits {
+        #[cfg(feature = "npatch")]
+        if let Some(source) = self.superweapon_lighting_source(profile) {
+            let values = source.settings.profile();
+            return ScenarioLightProfileUnits::from_native_default([
+                values[0], values[1], values[2], values[3], values[4], values[5],
+            ]);
+        }
+        self.map_profile(profile)
+    }
+
+    /// Original map/constructor profile, needed by TAction127's palette arm.
+    pub(crate) fn map_profile(
+        &self,
+        profile: ScenarioLightingProfile,
+    ) -> ScenarioLightProfileUnits {
         match profile {
             ScenarioLightingProfile::Normal => self.normal,
             ScenarioLightingProfile::Ion => self.ion,
@@ -339,6 +444,10 @@ impl ScenarioLightingState {
     }
 
     pub fn nuke_change_rate(&self) -> i32 {
+        #[cfg(feature = "npatch")]
+        if let Some(source) = self.superweapon_lighting_source(ScenarioLightingProfile::Nuke) {
+            return source.settings.profile()[6];
+        }
         self.nuke_change_rate
     }
 
@@ -428,6 +537,10 @@ impl ScenarioLightingState {
     /// 0x00484180`): the profile's own, but [`NUKE_LEVEL_UNITS`] in the
     /// Dominator arm (`0x004844DB`), whose bottom reads `DominatorLevel=`.
     pub fn relight_top_level(&self, profile: ScenarioLightingProfile) -> i32 {
+        // NPAE4844D4 jumps straight to484573, bypassing stock Domi's top override.
+        if self.has_superweapon_lighting(profile) {
+            return self.profile(profile).level_units;
+        }
         match profile {
             ScenarioLightingProfile::Dominator => NUKE_LEVEL_UNITS,
             other => self.profile(other).level_units,
@@ -517,7 +630,7 @@ impl ScenarioLightingState {
     /// (`-1, -1, -1`).
     pub fn alternate_rgb(&self) -> Option<[i32; 3]> {
         (self.selected_profile != ScenarioLightingProfile::Normal)
-            .then(|| self.profile(self.selected_profile).alternate_rgb())
+            .then(|| self.profile_rgb(self.selected_profile))
     }
 
     /// Restart the ambient fade timer (`ScenarioClass+0x1248`), as
@@ -1775,6 +1888,11 @@ impl ScenarioSession {
             0x1668u16.hash(hasher);
             lighting.ambient_change_overrides.hash(hasher);
         }
+        #[cfg(feature = "npatch")]
+        if lighting.superweapon_lighting_sources != [None; 3] {
+            b"npatch-superweapon-lighting-sources-v1".hash(hasher);
+            lighting.superweapon_lighting_sources.hash(hasher);
+        }
     }
 
     /// Hash per-match game options for lockstep verification.
@@ -1908,6 +2026,116 @@ impl ScenarioSession {
 mod tests {
     use super::*;
     use crate::sim::world::Simulation;
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_superweapon_sources_keep_map_profiles_and_independent_snapshots() {
+        use crate::rules::{ini_parser::IniFile, ruleset::RuleSet};
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[SuperWeaponTypes]\n0=D\n1=N\n2=S\n\
+             [D]\nType=PsychicDominator\nLightRed=70\nLightGreen=0\nLightBlue=70\nLightLevel=3\n\
+             [N]\nType=MultiMissile\nLightAmbientChangeRate=5\n\
+             [S]\nType=LightningStorm\nLightRed=12\n",
+        ))
+        .unwrap();
+        let mut lighting = ScenarioLightingState::default();
+        let map = [lighting.normal(), lighting.ion(), lighting.dominator()];
+        for (profile, name, id) in [
+            (ScenarioLightingProfile::Dominator, "D", 1),
+            (ScenarioLightingProfile::Nuke, "N", 2),
+            (ScenarioLightingProfile::Ion, "S", 3),
+        ] {
+            lighting.remember_superweapon_lighting(
+                profile,
+                InternedId::from_index(id),
+                rules.super_weapon(name).unwrap().npatch_lighting,
+            );
+        }
+        assert_eq!(
+            [lighting.normal(), lighting.ion(), lighting.dominator()],
+            map
+        );
+        assert_eq!(
+            lighting.map_profile(ScenarioLightingProfile::Dominator),
+            map[2]
+        );
+        assert_eq!(
+            lighting.profile_rgb(ScenarioLightingProfile::Dominator),
+            [700, 0, 700]
+        );
+        assert_eq!(
+            lighting.profile_rgb(ScenarioLightingProfile::Ion),
+            [120, 400, 750]
+        );
+        assert_eq!(
+            lighting.relight_top_level(ScenarioLightingProfile::Dominator),
+            3
+        );
+        assert_eq!(lighting.nuke_change_rate(), 5);
+        lighting.select(ScenarioLightingProfile::Dominator);
+        assert_eq!(lighting.alternate_rgb(), Some([700, 0, 700]));
+        lighting.select(ScenarioLightingProfile::Normal);
+        assert_eq!(lighting.alternate_rgb(), None);
+        assert!(lighting.has_superweapon_lighting(ScenarioLightingProfile::Dominator));
+        assert_eq!(
+            lighting
+                .profile(ScenarioLightingProfile::Dominator)
+                .level_units,
+            3
+        );
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_disabled_source_keeps_rate_identity_save_and_session_hash() {
+        use crate::rules::{ini_parser::IniFile, ruleset::RuleSet};
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[SuperWeaponTypes]\n0=D\n[D]\nType=PsychicDominator\nLighting=no\n\
+             LightRed=70\nLightGreen=0\nLightBlue=70\nLightAmbientChangeRate=-2\n",
+        ))
+        .unwrap();
+        let settings = rules.super_weapon("D").unwrap().npatch_lighting;
+        let mut sim = Simulation::from_descriptor(&ScenarioDescriptor::default());
+        let first = sim.interner.intern("D");
+        let second = sim.interner.intern("D-SECOND-IDENTITY");
+        let baseline = sim.state_hash();
+        sim.session.lighting_mut().remember_superweapon_lighting(
+            ScenarioLightingProfile::Dominator,
+            first,
+            settings,
+        );
+        let remembered = sim.state_hash();
+        assert_ne!(baseline, remembered);
+        let lighting = sim.session.lighting();
+        assert!(!lighting.profile_lighting_enabled(ScenarioLightingProfile::Dominator));
+        assert_eq!(lighting.dominator_change_rate(), -2);
+        assert_eq!(
+            lighting.profile_rgb(ScenarioLightingProfile::Dominator),
+            [700, 0, 700]
+        );
+        let bytes = crate::util::save_codec::serialize(&sim.session).unwrap();
+        sim.session = crate::util::save_codec::deserialize(&bytes).unwrap();
+        assert_eq!(sim.state_hash(), remembered);
+        sim.session.lighting_mut().remember_superweapon_lighting(
+            ScenarioLightingProfile::Dominator,
+            second,
+            settings,
+        );
+        assert_ne!(
+            sim.state_hash(),
+            remembered,
+            "type identity is not just its settings"
+        );
+        sim.session.lighting_mut().remember_superweapon_lighting(
+            ScenarioLightingProfile::Dominator,
+            first,
+            settings,
+        );
+        assert_eq!(sim.state_hash(), remembered);
+        let cold = ScenarioLightingState::default();
+        assert!(cold.profile_lighting_enabled(ScenarioLightingProfile::Dominator));
+        assert!(!cold.has_superweapon_lighting(ScenarioLightingProfile::Dominator));
+    }
 
     #[test]
     fn campaign_startup_retains_literal_rows_counter_and_identity() {

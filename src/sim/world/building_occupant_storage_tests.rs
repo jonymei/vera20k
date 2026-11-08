@@ -15,6 +15,440 @@ use crate::sim::snapshot::GameSnapshot;
 
 struct Scene(SimRuntime);
 
+#[test]
+fn placement_expiry_shifts_non_tail_occupants_without_restarting_the_saved_fire_cursor() {
+    let Some(mut scene) = Scene::new("") else {
+        return;
+    };
+    let building = scene.spawn("CAHSE01", "Americans", (16, 14));
+    let first = scene.enter("E1", "Americans", building, true);
+    let middle = scene.enter("E2", "Americans", building, true);
+    let last = scene.enter("E1", "Americans", building, true);
+    let gi_weapon = scene
+        .0
+        .resources
+        .rules
+        .object("E1")
+        .unwrap()
+        .occupy_weapon
+        .clone()
+        .unwrap();
+    let conscript_weapon = scene
+        .0
+        .resources
+        .rules
+        .object("E2")
+        .unwrap()
+        .occupy_weapon
+        .clone()
+        .unwrap();
+    assert_ne!(gi_weapon, conscript_weapon);
+    let target = scene.spawn("SMCV", "Russians", (21, 14));
+    scene.command(
+        "Americans",
+        Command::Attack {
+            attacker_id: building,
+            target_id: target,
+        },
+    );
+    scene.shot(building, target, &gi_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    {
+        let runtime = &mut scene.0;
+        let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+        // BuildingPointerExpired44EAB8 gates vector deletion on ScenarioInit;
+        // this is a supplied placement-scope UnInit, not a claimed combat kill.
+        sim.with_object_placement_scope(|sim| sim.uninit_with_rules(first, rules));
+    }
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[middle, last]
+    );
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    scene.frame();
+    assert!(scene.0.simulation.entities().get(first).is_none());
+    scene.save_and_restore();
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[middle, last]
+    );
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+    // GetWeapon452742 uses the unchanged live index: the next shot is the
+    // shifted last GI, then FireAt6FF065 wraps to the remaining Conscript.
+    scene.shot(building, target, &gi_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        0
+    );
+    scene.shot(building, target, &conscript_weapon);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        1
+    );
+}
+
+#[test]
+fn destroyed_garrison_stays_hidden_until_its_death_weapon_returns() {
+    use crate::sim::combat::{EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags};
+    let Some(mut scene) = Scene::new(
+        "[CAHSE01]\nExplodes=yes\nDeathWeapon=GarrisonDeath\n\
+         [GarrisonDeath]\nDamage=1000\nROF=1\nRange=4\nProjectile=Invisible\nSpeed=100\nWarhead=GarrisonBlast\n\
+         [Warheads]\n990=GarrisonBlast\n\
+         [GarrisonBlast]\nCellSpread=4\nPercentAtMax=1\nAffectsAllies=yes\n\
+         Verses=100%,100%,100%,100%,100%,100%,100%,100%,100%,100%,100%\n",
+    ) else {
+        return;
+    };
+    let building = scene.spawn("CAHSE01", "Russians", (16, 14));
+    let rider = scene.enter("E2", "Russians", building, true);
+    let witness = scene.spawn("E2", "Russians", (19, 14));
+    let health = scene.actor(rider).health.current();
+    let damage = scene.actor(building).health.current() + 1;
+    let warhead = scene.0.simulation.interner.intern("Super");
+    scene.0.simulation.commit_direct_damage_receiver(
+        &scene.0.resources.rules,
+        Some(&scene.0.resources.overlay_registry),
+        EntityDamageEvent::direct_receiver(
+            building,
+            damage,
+            0,
+            RAD_NO_ATTACKER,
+            None,
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        FrameEffects::default(),
+    );
+    assert!(
+        !scene.actor(witness).is_object_alive(),
+        "the exposed witness must actually receive the death blast"
+    );
+    // Building ReceiveDamage442425 returns from Techno's nested death
+    // weapon before SellBuilding44263B reveals occupants; DestructionEffects
+    // follows at442665. The hidden occupant is not a blast candidate.
+    assert!(
+        scene.actor(rider).is_object_alive(),
+        "garrison must not be exposed to its own building's death weapon"
+    );
+    assert_eq!(scene.actor(rider).health.current(), health);
+    assert!(!scene.actor(rider).lifecycle.in_limbo());
+    assert_eq!(
+        scene.actor(rider).passenger_role.inside_transport_id(),
+        None
+    );
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_penetration_removes_last_garrison_without_damaging_immune_building() {
+    use crate::sim::combat::{EntityDamageEvent, ReceiverCallFlags};
+    use crate::sim::world::frame_effects::SoundBoundary;
+    use std::cell::{Cell, RefCell};
+    let Some(mut scene) = Scene::new(
+        "[NABNKR]\nImmune=yes\nDamageSelf=no\nBunkerProtectionLevel=1\n\
+         [YAPOWR]\nImmune=yes\nBunkerProtectionLevel=1\n\
+         [E2]\nDieSound=ConscriptDie,GIDie\n\
+         [SNIPE]\nCanPassiveAquire=no\nCanRetaliate=no\n\
+         [SA]\nBunkerPenetrationLevel=2\n\
+         [AWPWH]\nBunkerPenetrationLevel=1\n\
+         [MIGWH]\nBunkerPenetrationLevel=-2\n\
+         [RadBeamWarhead]\nBunkerPenetrationLevel=-128\n",
+    ) else {
+        return;
+    };
+    let building = scene.spawn("NABNKR", "Russians", (16, 14));
+    let first = scene.enter("E2", "Russians", building, true);
+    let middle = scene.enter("E2", "Russians", building, true);
+    let last = scene.enter("E2", "Russians", building, true);
+    let attacker = scene.spawn("SNIPE", "Americans", (8, 14));
+    let health = scene.actor(building).health.current();
+    let last_health = scene.actor(last).health.current();
+    scene
+        .0
+        .simulation
+        .substrate
+        .entities
+        .get_mut(building)
+        .unwrap()
+        .passenger_role
+        .occupants_mut()
+        .set_fire_index_for_test(2);
+    let receive = |scene: &mut Scene, target, source, name: &str, damage, effects| {
+        let warhead = scene.0.simulation.interner.intern(name);
+        scene.0.simulation.commit_direct_damage_receiver(
+            &scene.0.resources.rules,
+            Some(&scene.0.resources.overlay_registry),
+            EntityDamageEvent::direct_receiver(
+                target,
+                damage,
+                0,
+                source,
+                None,
+                warhead,
+                ReceiverCallFlags {
+                    ignore_defenses: false,
+                    arg6: false,
+                },
+            ),
+            effects,
+        );
+    };
+    receive(
+        &mut scene,
+        building,
+        attacker,
+        "AWPWH",
+        75,
+        FrameEffects::default(),
+    );
+    receive(
+        &mut scene,
+        building,
+        attacker,
+        "RadBeamWarhead",
+        75,
+        FrameEffects::default(),
+    );
+    receive(
+        &mut scene,
+        building,
+        building,
+        "MIGWH",
+        75,
+        FrameEffects::default(),
+    );
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[first, middle, last],
+        "equal protection, NEG AL overflow, and disallowed self damage must not penetrate"
+    );
+    struct Heard {
+        building: u64,
+        delivered: Cell<usize>,
+        victims: RefCell<Vec<u64>>,
+    }
+    impl SoundBoundary for Heard {
+        fn delivered(&self) -> usize {
+            self.delivered.get()
+        }
+        fn consume(&self, sim: &Simulation, _: &RuleSet, events: &[SimSoundEvent]) {
+            for event in &events[self.delivered.get()..] {
+                if let SimSoundEvent::VocAt {
+                    sound_id,
+                    audible_to,
+                    rx,
+                    ry,
+                    sub_x,
+                    sub_y,
+                    world_z_leptons,
+                } = event
+                {
+                    assert_ne!(
+                        sound_id, "GIDie",
+                        "penetration selects the first DieSound, not a random entry"
+                    );
+                    if sound_id == "ConscriptDie" {
+                        let building = sim.entities().get(self.building).unwrap();
+                        let victim = *building.passenger_role.occupants().ids().last().unwrap();
+                        assert!(sim.entities().get(victim).unwrap().is_object_alive());
+                        assert!(sim.entities().get(victim).unwrap().health.current() > 0);
+                        assert_eq!(
+                            (*rx, *ry, *sub_x, *sub_y, *world_z_leptons),
+                            (
+                                building.position.rx(),
+                                building.position.ry(),
+                                building.position.sub_x(),
+                                building.position.sub_y(),
+                                0
+                            )
+                        );
+                        assert!(audible_to.is_none());
+                        self.victims.borrow_mut().push(victim);
+                    }
+                }
+            }
+            self.delivered.set(events.len());
+        }
+    }
+    let heard = Heard {
+        building,
+        delivered: Cell::new(0),
+        victims: RefCell::new(Vec::new()),
+    };
+    let owner = scene.actor(attacker).owner();
+    let kills = scene
+        .0
+        .simulation
+        .houses
+        .get(&owner)
+        .unwrap()
+        .stats()
+        .kills();
+    receive(
+        &mut scene,
+        building,
+        attacker,
+        "SA",
+        0,
+        FrameEffects::for_sound(&heard),
+    );
+    assert_eq!(
+        scene.actor(building).passenger_role.occupants().ids(),
+        &[first, middle]
+    );
+    assert!(!scene.actor(last).is_object_alive());
+    assert_eq!(
+        scene.actor(last).health.current(),
+        last_health,
+        "UnInit is not an InfDeath/HP write"
+    );
+    assert_eq!(scene.actor(building).health.current(), health);
+    assert_eq!(
+        scene
+            .actor(building)
+            .passenger_role
+            .occupants()
+            .fire_index(),
+        2
+    );
+    receive(
+        &mut scene,
+        building,
+        attacker,
+        "MIGWH",
+        -1,
+        FrameEffects::for_sound(&heard),
+    );
+    assert!(scene.actor(building).passenger_role.occupants().is_empty());
+    assert_eq!(*heard.victims.borrow(), vec![last, middle, first]);
+    assert_eq!(
+        scene
+            .0
+            .simulation
+            .houses
+            .get(&owner)
+            .unwrap()
+            .stats()
+            .kills(),
+        kills + 3
+    );
+    receive(
+        &mut scene,
+        building,
+        attacker,
+        "MIGWH",
+        75,
+        FrameEffects::default(),
+    );
+    assert_eq!(
+        scene
+            .0
+            .simulation
+            .houses
+            .get(&owner)
+            .unwrap()
+            .stats()
+            .kills(),
+        kills + 3
+    );
+    scene.frame();
+    assert!(
+        scene.0.simulation.entities().get(last).is_none(),
+        "ordinary deferred removal retires the victim"
+    );
+    let reactor = scene.spawn("YAPOWR", "Russians", (24, 14));
+    let cargo = scene.enter("INIT", "Russians", reactor, false);
+    scene.until(|scene| scene.output("Russians") == 400);
+    receive(
+        &mut scene,
+        reactor,
+        attacker,
+        "MIGWH",
+        75,
+        FrameEffects::default(),
+    );
+    assert_eq!(
+        scene.cargo(reactor),
+        &[cargo],
+        "absorber Cargo is not the garrison vector"
+    );
+    assert!(scene.actor(cargo).is_object_alive());
+    scene.save_and_restore();
+    assert_eq!(scene.cargo(reactor), &[cargo]);
+
+    let city = scene.spawn("CAHSE01", "Russians", (20, 22));
+    let survivor = scene.enter("E2", "Russians", city, true);
+    let pierced = scene.enter("E2", "Russians", city, true);
+    let damage = scene.actor(city).health.current() - 1;
+    let warhead = scene.0.simulation.interner.intern("SA");
+    scene.0.simulation.commit_direct_damage_receiver(
+        &scene.0.resources.rules,
+        Some(&scene.0.resources.overlay_registry),
+        EntityDamageEvent::direct_receiver(
+            city,
+            damage,
+            0,
+            attacker,
+            None,
+            warhead,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        FrameEffects::default(),
+    );
+    assert_eq!(scene.actor(city).health.current(), 1);
+    assert!(!scene.actor(pierced).is_object_alive());
+    assert_eq!(
+        scene.actor(city).passenger_role.occupants().ids(),
+        &[survivor],
+        "penetration removes its victim before the later red-health ejection"
+    );
+    scene.until(|scene| {
+        scene
+            .actor(survivor)
+            .passenger_role
+            .inside_transport_id()
+            .is_none()
+    });
+    assert!(scene.actor(survivor).is_object_alive());
+    assert!(!scene.actor(survivor).lifecycle.in_limbo());
+    assert!(scene.actor(city).passenger_role.occupants().is_empty());
+}
+
 impl Scene {
     fn new(patch: &str) -> Option<Self> {
         let mut retail = crate::rules::retail_ini_fixture::retail_battle_rules_for_map_with_patch(
@@ -23,6 +457,14 @@ impl Scene {
         )?;
         let (_, mut assets) = crate::rules::retail_ini_fixture::retail_assets()?;
         let theater = crate::map::theater::load_theater(&mut assets, "TEMPERATE").unwrap();
+        let registry =
+            OverlayTypeRegistry::from_ini(&retail.processed_rules, Some(&retail.fixed_art));
+        let scheduler_roots =
+            crate::map::resolved_terrain::scheduler_anim_roots(&retail.rules, &registry, &[]);
+        retail
+            .rules
+            .bind_scheduler_anim_assets(&scheduler_roots, &assets, theater.extension, "TEMPERATE")
+            .expect("ordinary building damage-fire assets");
         let roots = crate::rules::effect_asset_catalog::tolerant_anim_class_roots(&retail.rules);
         retail
             .rules
@@ -30,8 +472,6 @@ impl Scene {
         retail
             .rules
             .bind_effect_assets(&assets, theater.extension, "TEMPERATE");
-        let registry =
-            OverlayTypeRegistry::from_ini(&retail.processed_rules, Some(&retail.fixed_art));
         let rules = retail.rules;
         let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0x522970);
         sim.install_overlay_grid_for_load(crate::sim::overlay_grid::OverlayGrid::new(32, 32));

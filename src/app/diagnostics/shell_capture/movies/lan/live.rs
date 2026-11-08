@@ -42,6 +42,7 @@ use crate::ui::multiplayer_setup::{SetupAction, SetupColumn};
 use std::collections::{BTreeMap, BTreeSet};
 
 mod battle;
+mod expanded_colors;
 mod failure;
 mod mass;
 mod online;
@@ -258,6 +259,7 @@ pub(super) struct LiveLanCapture {
     kick_observed: bool,
     entered_setup: bool,
     country_selected: bool,
+    color_observations: Vec<Value>,
     battle: Option<battle::BattleOpening>,
     mass: Option<mass::MassInput>,
     ai: Option<AiActivity>,
@@ -340,6 +342,7 @@ impl LiveLanCapture {
             kick_observed: false,
             entered_setup: false,
             country_selected: false,
+            color_observations: Vec::new(),
             battle: matches!(
                 target,
                 LanTarget::BattleHost
@@ -563,6 +566,13 @@ impl LiveLanCapture {
         }
         if rendered == PresentedShell::NetworkSetup {
             self.observe_map_admission(state)?;
+            if self.config.as_ref().is_some_and(|config| config.expanded_colors)
+                && self.start_selection_admitted(state)
+                && setup_settled(state, self.host())
+                && !self.expanded_color_step(state, frame)?
+            {
+                return Ok(());
+            }
         }
         if let Some(mut rounds) = self.rounds.take() {
             let controls = rounds.controls(self);
@@ -773,6 +783,15 @@ impl LiveLanCapture {
                             .and_then(|human| human.raw_slot_index)
                     })
                 {
+                    if self.config.as_ref().is_some_and(|config| config.expanded_colors)
+                        && session.network_setup().is_some_and(|launch| {
+                            launch.humans.iter().enumerate().any(|(index, human)| {
+                                human.name == GUEST_NAME && !session.network_player_ready(index)
+                            })
+                        })
+                    {
+                        return Ok(());
+                    }
                     let control =
                         setup_control_at_row(state, SetupColumn::Player, usize::from(row))?
                             .context("visible guest row")?;
@@ -1390,7 +1409,12 @@ impl LiveLanCapture {
             return crash.receipt();
         }
         if let Some(online) = &self.rounds {
-            return online.receipt(state);
+            let mut receipt = online.receipt(state)?;
+            if self.config.as_ref().is_some_and(|config| config.expanded_colors) {
+                ensure!(!self.color_observations.is_empty(), "no received expanded color observations");
+                receipt["expanded_colors"] = json!(self.color_observations);
+            }
+            return Ok(receipt);
         }
         self.round_receipt(state)
     }
@@ -1428,6 +1452,9 @@ impl LiveLanCapture {
             .context("simulation")?
             .simulation;
         let live = state.match_state.live_network.as_ref();
+        let expanded_colors = self.config.as_ref()
+            .filter(|config| config.expanded_colors)
+            .map(|_| expanded_colors::runtime_colors(state)).transpose()?;
         ensure!(
             live.is_some()
                 || self
@@ -1449,6 +1476,7 @@ impl LiveLanCapture {
             "ai_activity":self.ai.as_ref().map(AiActivity::receipt).transpose()?,
             "solo_ai_input_bound_native_frames":self.ai.as_ref().map(|_| SOLO_AI_INPUT_BOUND_FRAMES),
             "kick_observed":self.kick_observed,
+            "expanded_colors":expanded_colors,
             "production_broadcast":self.config.as_ref().map(|config|matches!(config.transport,LiveLanTransport::ProductionBroadcast)),
             "bind":self.config.as_ref().and_then(|config|config.transport.explicit_endpoints()).map(|(bind,_)|bind.to_string()),"peer":self.config.as_ref().and_then(|config|config.transport.explicit_endpoints()).map(|(_,peer)|peer.to_string()),"startup":self.startup,"map_admission":self.map_admission,
             "native_checksums":checksums,"simulation_hashes":hashes,

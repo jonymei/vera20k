@@ -183,3 +183,103 @@ npm run build
 Commit the TypeScript and generated JavaScript together. The manual Dashboard
 workflow checks they agree. Vendored Three.js r180 is unchanged upstream code;
 its license is in `vendor/THREE-LICENSE.txt`.
+
+## Inspect a retained save without playing it
+
+The existing `telemetry-serve` tool also has a local, read-only inspection mode:
+
+```sh
+python -m tools.cargo_run -- build --profile fast -p vera20k --bin telemetry-serve --no-default-features --features telemetry-dashboard,npatch
+```
+
+Resolve `telemetry-serve` with `tools.cargo_run --resolve telemetry-serve --profile fast`,
+then run that executable with `--inspect-save <path>`. It prints JSON to stdout and
+exits without a server, asset loading, simulation steps or save writes. Use the
+save's actual gameplay capability (omit `npatch` for a stock save). The production
+`GameSnapshot::load_with_resources` gate must accept the exact saved layout and
+capability; never replace a header or bypass this check to inspect an old save.
+Use a source checkout matching the writing build when layouts differ.
+
+The report contains all retained houses, factories, team definitions and teams,
+entities and the ID-to-string table, not the dashboard's capped lists. Normal
+player-load planning cleanup still applies; resources and derived caches are not
+rebound. It is a point-in-time observation, not proof of progress or strength, and
+does not recompute provider availability. Reports can contain player names and
+all match positions: keep them local (for example under ignored `target/`) unless
+the player explicitly authorizes sharing. Do not commit user saves or reports.
+
+## Trace selected saved objects locally
+
+`--trace-save` is a separate, explicit continuation mode, not read-only inspection.
+Using the same `telemetry-serve` build, set the following variables to the resolved
+executable, a compatible save, its game-data root and IDs from the inspection
+report. For example, in PowerShell:
+
+```powershell
+& $tool --trace-save $save --ra2-dir $assets --ticks 300 --observe-entity $entity_id --observe-team $team_id
+```
+
+Repeat the ID observer flags for additional IDs (at most 32 entities and 32 teams).
+`--observe-cell x,y` adds a requested cell (at most 32 cells, unsigned 16-bit
+coordinates). A cell-only trace is allowed. It reports retained terrain fields,
+occupancy, the existing derived Normal/Water/WaterBeach connectivity labels
+on ground and bridge layers, and native non-bridge raw IDs through the existing
+GetZoneID owner. A raw native ID of 1 is distinct from derived invalid label 0.
+These observations are **not** a full Map56D100 admission result, dynamic
+cell-entry answer, or path search; missing terrain or a missing graph is `null`,
+and an invalid derived zone label is zero. Native IDs are omitted for absent
+terrain cells; no bridge walk or shared Dummy mutation is performed.
+At least one observer is required; missing/retired objects produce `null`, not
+invented state. Trace is limited to 300 ordinary frames and samples frame 0, 1,
+10, 120, 300 and the requested final frame. It prepares and commits saved resources
+through the same owner as the interactive loader, enables normal batched paths,
+consumes due saved commands and issues no new player orders. It opens no window
+or server and never writes the input save.
+
+The continuation uses normal cold-load Main RNG seed zero and Scenario RNG reset,
+not the original running process's streams. It is a short diagnostic continuation,
+not an exact original-session replay, native comparison or whole-match AI verdict.
+The JSON labels this scope and records the admitted envelope/layout and content
+hashes. Keep reports local under ignored `target/`; selected object states can
+reveal private match positions. Layout and resource checks are not optional.
+
+## Inspect initial map cells locally
+
+```powershell
+& $tool --inspect-map $map --ra2-dir $assets --observe-cell $cell_xy
+```
+
+This uses the production headless initial Battle local-only loader and the same
+cell observation owner, then exits without advancing frames, starting a server,
+or writing saves. It is not the player's 1v1 roster, native execution or a match
+replay. Only cell observers are allowed (at most 32); entity/team observers,
+nonzero ticks, missing cells, and combinations with save modes are refused.
+The JSON records the selected map, normal parsed-INI map content hash, effective
+rules hash, seed, dimensions and tick0. When comparing with a save, first check
+map/rules identity and compare whether endpoints share a zone within each run;
+zone numbers alone need not stay identical across sessions or graph changes.
+
+
+## Trace a fresh AI skirmish
+
+Use the same fast `telemetry-dashboard,npatch` build and resolved executable:
+
+```text
+telemetry-serve --trace-skirmish <map> --ra2-dir <root> --ai-country 0 --ai-country 1 --ai-country 2 --ai-country 1 --ticks 12000 --seed 0x00C0FFEE
+```
+
+Country indices are zero-based; one to seven explicit opponents are required.
+This uses the normal Battle launch and effective defaults with Hard opponents,
+including repeated countries, and an idle human who issues no orders. Reports
+include the actual options, seed, map/rules hashes, complete retained Houses,
+factories and teams every 1500 calls, and complete entities at the final sample.
+The default is 12000 calls, capped at 24000. A pending or ready human outcome
+stops the trace immediately; inspect `stop_reason` and actual sample `tick`, not
+just requested frames. It neither acknowledges an outcome nor continues past it.
+
+Fire counters observe the source House, target and formed-team membership after
+the frame. Missing or changed entities can undercount or reattribute shots; these
+are not authoritative fire-tick identities or proof of an offensive team. A passive
+human can be defeated early, so this is not long-game recovery acceptance or a
+player replay. No server, GUI, save writes, balance overrides or outcome resets
+are involved. Save inspection/tracing and map inspection remain separate modes.

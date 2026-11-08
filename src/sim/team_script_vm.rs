@@ -121,6 +121,13 @@ pub struct TeamTypeDefinition {
     pub transport_crossing_required: bool,
 }
 
+/// Read-only definition inventory; no live TeamClass or mutable metadata escapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TeamTypeSummary {
+    pub definition: TeamTypeDefinition,
+    pub reinforce: bool,
+}
+
 /// The TeamType's other INI fields, beside the definition, and where it was
 /// defined.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -472,7 +479,18 @@ impl TeamAiInstallDiagnostic {
     }
 
     pub(crate) fn is_fixed_source_refusal(&self) -> bool {
+        // TaskForceClass::Read_INI @ 0x006E8420 omits null members.
+        // AITriggerTypeClass::Read_INI @ 0x0041F580 stores null for unknown
+        // TeamTypes (0x0041F665/0x0041F9DF), owners (0x0041F6F2) and
+        // object types (0x0041F783..0x0041F7E4), without refusing the load.
         self.source() == TeamAiDefinitionSource::FixedAimd
+            && !matches!(
+                self,
+                Self::UnknownTaskForceMember { .. }
+                    | Self::MissingAiTriggerTeamType { .. }
+                    | Self::UnknownAiTriggerOwner { .. }
+                    | Self::UnknownAiTriggerObject { .. }
+            )
     }
 }
 
@@ -894,6 +912,17 @@ impl TeamScriptVm {
     /// Live teams in TeamClass::Array order (their construction order).
     pub fn teams_in_order(&self) -> impl Iterator<Item = &TeamScriptState> {
         self.teams.values()
+    }
+
+    /// Registered types in native registry order, using the same reinforcement
+    /// decision as recruitment and production demand, without constructing teams.
+    pub fn registered_team_types(&self) -> impl Iterator<Item = TeamTypeSummary> + '_ {
+        self.team_type_order.iter().filter_map(|id| {
+            self.team_types.get(id).map(|definition| TeamTypeSummary {
+                definition: *definition,
+                reinforce: self.reinforce(*id),
+            })
+        })
     }
 
     /// TeamType6F1F70: first live registry entry of this exact type, without
@@ -2344,19 +2373,27 @@ mod tests {
             "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
         ))
         .expect("minimal rules");
-        let fixed =
-            IniFile::from_str("[TaskForces]\n0=PARTIAL_TF\n[PARTIAL_TF]\n0=1,E1\n1=2,GHOST\n");
+        let fixed = IniFile::from_str(
+            "[TaskForces]\n0=PARTIAL_TF\n[PARTIAL_TF]\n0=1,E1\n1=2,GHOST\n2=1,<none>\n",
+        );
         let registry = TeamAiIniRegistry::from_sources(&fixed, &IniFile::from_str(""), true);
         let mut interner = StringInterner::new();
         let (vm, diagnostics) = TeamScriptVm::from_ini_registry(&registry, &mut interner, &rules);
 
         assert_eq!(
             diagnostics,
-            [TeamAiInstallDiagnostic::UnknownTaskForceMember {
-                task_force_id: "PARTIAL_TF".to_string(),
-                member_type: "GHOST".to_string(),
-                source: TeamAiDefinitionSource::FixedAimd,
-            }]
+            [
+                TeamAiInstallDiagnostic::UnknownTaskForceMember {
+                    task_force_id: "PARTIAL_TF".to_string(),
+                    member_type: "GHOST".to_string(),
+                    source: TeamAiDefinitionSource::FixedAimd,
+                },
+                TeamAiInstallDiagnostic::UnknownTaskForceMember {
+                    task_force_id: "PARTIAL_TF".to_string(),
+                    member_type: "<none>".to_string(),
+                    source: TeamAiDefinitionSource::FixedAimd,
+                },
+            ]
         );
         assert_eq!(
             vm.task_forces[&interner.get("PARTIAL_TF").unwrap()]
@@ -2365,6 +2402,76 @@ mod tests {
             1,
             "unresolved TechnoTypes do not increment the native TaskForce entry count"
         );
+    }
+
+    #[test]
+    fn gsi_04_05_missing_task_force_sections_preserve_factory_order() {
+        use crate::rules::ini_parser::IniFile;
+
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[InfantryTypes]\n0=E1\n[E1]\nStrength=100\n",
+        ))
+        .unwrap();
+        let fixed = IniFile::from_str(
+            "[TeamTypes]\n0=TT\n[TT]\nScript=S\nTaskForce=REFERENCED\n\
+             [ScriptTypes]\n0=S\n[S]\n0=2,0\n\
+             [TaskForces]\n0=LIST_ONLY\n1=FILLED\n2=REFERENCED\n\
+             [FILLED]\n0=2,E1\nGroup=7\n",
+        );
+        let scenario = IniFile::from_str("[TaskForces]\n0=FILLED\n1=MAP_ONLY\n");
+        let registry = TeamAiIniRegistry::from_sources(&fixed, &scenario, true);
+        let mut interner = StringInterner::new();
+        let (vm, diagnostics) = TeamScriptVm::from_ini_registry(&registry, &mut interner, &rules);
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(
+            vm.task_force_order()
+                .iter()
+                .map(|id| interner.resolve(*id))
+                .collect::<Vec<_>>(),
+            ["REFERENCED", "LIST_ONLY", "FILLED", "MAP_ONLY"]
+        );
+        let filled = &vm.task_forces[&interner.get("FILLED").unwrap()];
+        assert_eq!(filled.group, 7);
+        assert_eq!(filled.entries[0].count, 2);
+        assert!(
+            vm.task_forces[&interner.get("LIST_ONLY").unwrap()]
+                .entries
+                .is_empty()
+        );
+        assert!(
+            vm.task_forces[&interner.get("MAP_ONLY").unwrap()]
+                .entries
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn partial_ai_trigger_reread_preserves_or_resets_the_stored_tech_threshold() {
+        use crate::rules::ini_parser::IniFile;
+
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[InfantryTypes]\n0=E1\n1=E2\n[E1]\nTechLevel=2\n[E2]\nTechLevel=7\n",
+        ))
+        .unwrap();
+        let fixed = IniFile::from_str(&format!(
+            "[TeamTypes]\n0=OLD\n1=NEW\n\
+             [OLD]\nScript=S\nTaskForce=F1\n[NEW]\nName=New Team\nScript=S\nTaskForce=F2\n\
+             [ScriptTypes]\n0=S\n[S]\n0=2,0\n\
+             [TaskForces]\n0=F1\n1=F2\n[F1]\n0=1,E1\n[F2]\n0=1,E2\n\
+             [AITriggerTypes]\nT=Fixed,OLD,<all>,2,4,<none>,{},40,10,40,1,0,1,0,<none>,1,1,1\n",
+            "00".repeat(32)
+        ));
+        for (row, expected_threshold) in [("Map,New Team", 2), ("Map,NEW,<all>,2,4", 0)] {
+            let scenario = IniFile::from_str(&format!("[AITriggerTypes]\nT={row}\n"));
+            let registry = TeamAiIniRegistry::from_sources(&fixed, &scenario, true);
+            let mut interner = StringInterner::new();
+            let (vm, _) = TeamScriptVm::from_ini_registry(&registry, &mut interner, &rules);
+            let trigger = vm.ai_trigger(interner.get("T").unwrap()).unwrap();
+
+            assert_eq!(trigger.primary_team_type, interner.get("NEW"), "{row}");
+            assert_eq!(trigger.threshold, expected_threshold, "{row}");
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 //! Speed ([`super::speed`]): the radius multipliers (Armor `0x00482D56`,
 //! Firepower `0x00483125`), Veteran `0x00482972`, HealBase `0x00482B8F`,
 //! Money `0x00482463`, Reveal `0x00481F9D`, Darkness `0x00481F6D` and the
-//! free Unit `0x00482041`. [`super::pickup`] selects the arm and plays the
+//! free Unit `0x00482041` and Explosion `0x00482565`. [`super::pickup`] selects the arm and plays the
 //! arm's sound; each arm here reproduces the gameplay writes.
 //!
 //! The radius arms walk the Ground display layer (`0x008A0394`, the vector
@@ -117,10 +117,13 @@ impl CrateMultipliers {
 
 /// Ground-layer objects within `radius` of `center`, in layer order, with the
 /// native `Sqrt_Approx`/`ftol` distance and strict `<` (`0x00482E38..0x00482E51`).
+// CellPickup482887 (Cloak) and4829B9 (Veteran) require Object+74;
+// Armor482D9A and Firepower48316B test only Techno+14 before distance.
 fn ground_members_in_radius(
     substrate: &ObjectSubstrate,
     center: DriveCoord,
     radius: i32,
+    require_cell_mark: bool,
 ) -> Vec<u64> {
     substrate
         .display
@@ -129,6 +132,9 @@ fn ground_members_in_radius(
         .copied()
         .filter(|&id| {
             substrate.entities.get(id).is_some_and(|entity| {
+                if require_cell_mark && !entity.lifecycle.cell_marked() {
+                    return false;
+                }
                 let position = position_world_coord(&entity.position);
                 distance_3d_leptons(
                     [center.x, center.y, center.z],
@@ -137,6 +143,105 @@ fn ground_members_in_radius(
             })
         })
         .collect()
+}
+
+/// CellPickup482565..482719: direct C4, then five radius/angle scatters.
+/// Each area receiver completes before its anim/light and the next RNG draw.
+/// The mutable direct packet never replaces the saved integer magnitude;
+/// picker death does not stop the loop or the caller's generic anim tail.
+pub(super) fn apply_explosion_crate(
+    sim: &mut Simulation,
+    rules: &RuleSet,
+    registry: &crate::rules::overlay_types::OverlayTypeRegistry,
+    actor: u64,
+    cell: (i16, i16),
+    receiver: Option<crate::map::cell_index::NativeCellIdentity>,
+    magnitude: NativeF64Bits,
+    frame_effects: FrameEffects<'_>,
+) {
+    use crate::sim::combat::{
+        CombatLightRequest, EntityDamageEvent, RAD_NO_ATTACKER, ReceiverCallFlags, detonation_anim,
+        inviso_scatter, world_receiver,
+    };
+    let amount =
+        crate::util::native_x87::X87Chop53::ftol_f64_low_masked(f64::from_bits(magnitude.bits()));
+    let name = &rules.bridge_warheads.c4_name;
+    let warhead_id = sim.interner.intern(name);
+    let Some(warhead) = rules.warhead(name) else {
+        return;
+    };
+    sim.commit_direct_damage_receiver(
+        rules,
+        Some(registry),
+        EntityDamageEvent::direct_receiver(
+            actor,
+            amount,
+            0,
+            RAD_NO_ATTACKER,
+            None,
+            warhead_id,
+            ReceiverCallFlags {
+                ignore_defenses: true,
+                arg6: false,
+            },
+        ),
+        frame_effects,
+    );
+    for _ in 0..5 {
+        let radius = sim.scenario_rng.next_range_i32_inclusive(0, 0x200);
+        // 4825D7 rereads retained ESI after the draw, on every iteration.
+        // Earlier synchronous effects may have restamped the shared Dummy.
+        let center = super::pickup::crate_center(sim, cell, receiver);
+        let (x, y) = inviso_scatter::random_direction_coord(
+            &mut sim.scenario_rng,
+            center.x,
+            center.y,
+            radius,
+            inviso_scatter::RandomDirectionSnap::Preserve,
+        );
+        let impact = crate::sim::projectile::ProjectileCoord::new(x, y, center.z);
+        world_receiver::apply_area_damage(
+            sim,
+            rules,
+            Some(registry),
+            impact,
+            amount,
+            warhead,
+            (RAD_NO_ATTACKER, None, warhead_id),
+            frame_effects,
+        );
+        // 482672 passes literal land0, not the sampled cell's land type.
+        if let Some(effect) =
+            detonation_anim::effect(sim, rules, warhead, amount, 0, impact, impact)
+        {
+            crate::sim::world::damage_consequences::admit_explosion_effect(sim, rules, effect);
+        }
+        // CombatLight48A620 runs even when animation construction failed.
+        sim.combat_light_requests.emit(CombatLightRequest::Impact {
+            target_id: None,
+            damage: amount,
+            warhead_ref: warhead_id,
+            coord: impact,
+            force_create: false,
+            flags: 0,
+        });
+    }
+}
+
+/// CellPickup482840..48296D: marked ground Technos, any house, strictly
+/// inside CrateRadius receive +3D2=1. The shared collector owns radius/order.
+/// No RNG, timers, cloak transition or detach is performed by this arm.
+pub(crate) fn apply_cloak_crate(
+    substrate: &mut ObjectSubstrate,
+    center: DriveCoord,
+    radius: i32,
+    frame: i32,
+) {
+    for id in ground_members_in_radius(substrate, center, radius, true) {
+        if let Some(entity) = substrate.entities.get_mut(id) {
+            crate::sim::cloak_disguise::CloakRuntime::grant_from_crate(&mut entity.cloak, frame);
+        }
+    }
 }
 
 /// The Armor and Firepower arms: every Techno within the radius whose
@@ -156,7 +261,7 @@ pub(crate) fn apply_multiplier_crate(
     #[cfg(not(feature = "ares"))]
     let _ = (rules, interner);
     let mut changed_owners = Vec::new();
-    for id in ground_members_in_radius(substrate, center, radius) {
+    for id in ground_members_in_radius(substrate, center, radius, false) {
         let Some(entity) = substrate.entities.get_mut(id) else {
             continue;
         };
@@ -211,16 +316,10 @@ pub(super) fn apply_veteran_crate(
     if !ordered_less(0.0, magnitude) {
         return;
     }
-    for id in ground_members_in_radius(&*substrate, center, radius) {
+    for id in ground_members_in_radius(&*substrate, center, radius, true) {
         let Some(entity) = substrate.entities.get(id) else {
             continue;
         };
-        // `Object+0x74`: ObjectClass::Mark sets it on PUT and clears it on
-        // REMOVE (`0x005F58F7`, `jumpjet_cruise` `0x0054D0FF..0x0054D12C`),
-        // which is the cell-membership byte `lifecycle.cell_marked` owns.
-        if !entity.lifecycle.cell_marked() {
-            continue;
-        }
         if !interner
             .object_type(entity.type_ref(), rules)
             .is_some_and(|object| object.trainable)

@@ -959,7 +959,7 @@ mod map_wall_owner_candidate_tests {
         );
         sim.lighting_sources_mut_for_test().discard_pending();
 
-        // Actual BeforeDeathEffects callback must publish disable before a
+        // Actual BeforeBuildingDestruction callback must publish disable before a
         // later global operation; the frame transaction must retain both.
         fatal_lamp_stage(&mut sim, &rules, 41);
         sim.session_mut_for_test()
@@ -1214,7 +1214,7 @@ mod map_wall_owner_candidate_tests {
     fn fatal_lamp_stage(sim: &mut Simulation, rules: &RuleSet, id: u64) {
         sim.apply_fatal_lifecycle_stage(
             rules,
-            crate::sim::combat::FatalLifecycleStage::BeforeDeathEffects { attacker: None },
+            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction,
             id,
             EntityCategory::Structure,
             crate::sim::world::UninitContext::with_rules(rules),
@@ -3181,7 +3181,12 @@ pub(crate) fn load_map_from_initial(
     // the multiplayer map has no [Houses] section.
     let house_color_map: HouseColorMap = skirmish_launch_session
         .map(|launch| {
-            house_color_map_for_launch_session(launch, &house_roster, &rules.color_schemes)
+            house_color_map_for_launch_session(
+                launch,
+                &house_roster,
+                &rules.color_schemes,
+                rules.npatch_dropdown_colors,
+            )
         })
         .unwrap_or_else(|| house_roster.color_map());
     let bridge_destroyability_mode = skirmish_launch_session

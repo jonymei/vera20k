@@ -369,6 +369,29 @@ fn native_ifv_bridge_impact_orders_live_selection_debris_ids_and_rng() {
             main_before,
             "{name} Main unchanged"
         );
+        // Synchronous effects also happen inside movement (explosion crates).
+        // Their receipt may be ignored by the native AL caller, but atlas
+        // invalidation must still reach the next frame exactly once.
+        let notified = world.absorb_noncombat_damage_effects(
+            &rules,
+            Some(&overlays),
+            receipt.effects,
+            receipt.under_attack_events,
+            Vec::new(),
+            Default::default(),
+        );
+        assert_eq!(notified.bridge_state_changed, name == "collapsed");
+        let tick = world.advance_tick(&[], Some(&rules), None, Some(&overlays), 33);
+        assert_eq!(
+            tick.bridge_state_changed,
+            name == "collapsed",
+            "immediate bridge consequences must publish even without a caller forwarding the receipt"
+        );
+        let next = world.advance_tick(&[], Some(&rules), None, Some(&overlays), 33);
+        assert!(
+            !next.bridge_state_changed,
+            "consumed immediate notifications must not repeat next frame"
+        );
         // Quaternion bits are not represented by the SHP Bouncer owner. The
         // selected zero-spin SHP does not consume orientation. Later flight,
         // child AI and physical Bullet drain have separate comparisons.

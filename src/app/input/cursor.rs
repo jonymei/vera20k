@@ -223,6 +223,11 @@ pub(crate) fn current_cursor_feedback_kind(state: &AppState) -> Option<CursorFee
             CursorFeedbackKind::SellMode(valid)
         });
     }
+    if matches!(pointer_mode, super::state::TacticalPointerMode::Power) {
+        return Some(CursorFeedbackKind::PowerMode(
+            super::power::command_at_cursor(state).is_some(),
+        ));
+    }
     // No early return for an empty selection here. `242c79ad0` carried
     // `if selected.is_empty() { return None; }` (no comment, no native
     // backing), which made the no-selection arm below unreachable and showed
@@ -894,7 +899,7 @@ pub(super) fn capability_cursor_for_hover(
 
         // 5. Entry: a Unit's Select over a friendly building it may enter
         //    (refinery, Service Depot, Tank Bunker, Grinder), an Infantryman's
-        //    over a Grinding= building, either's over a friendly passenger
+        //    over Hospital=/Grinding= buildings, either's over a friendly passenger
         //    carrier, Alt's Move included, and an Aircraft's NoEnter over a
         //    UnitRepair= building (`context_order::entry_action`).
         if let Some(action) = rules
@@ -969,7 +974,8 @@ pub(super) fn capability_cursor_for_hover(
         }
 
         // Native garrison precedes C4, which precedes the late infiltration
-        // arm. C4 can terminate with ordinary Attack, not just Sabotage.
+        // arm. Infantry51E9F1/51EE62 require admitted base Attack5; C4 can
+        // terminate with ordinary Attack, not just Sabotage.
         let c4_action = rules.and_then(|rules| {
             super::context_order::infantry_c4_action(sim, rules, best_id, hover, false)
         });
@@ -982,7 +988,15 @@ pub(super) fn capability_cursor_for_hover(
                 HoverTargetKind::FriendlyStructure | HoverTargetKind::EnemyStructure
             )
             && rules.is_some_and(|rules| {
-                sim.infiltrator_building_action(best_id, hover.stable_id, rules)
+                super::context_order::attack_action(
+                    sim,
+                    rules,
+                    best_id,
+                    &combat::TargetKind::Entity(hover.stable_id),
+                    false,
+                    overlay_registry,
+                ) == super::context_order::AttackAction::Attack
+                    && sim.infiltrator_building_action(best_id, hover.stable_id, rules)
             })
         {
             return CursorFeedbackKind::Enter;
@@ -1581,6 +1595,11 @@ pub(crate) fn cursor_id_for_feedback(kind: CursorFeedbackKind) -> Option<CursorI
             CursorId::Sell
         } else {
             CursorId::NoSell
+        }),
+        CursorFeedbackKind::PowerMode(valid) => Some(if valid {
+            CursorId::TogglePower
+        } else {
+            CursorId::NoTogglePower
         }),
         CursorFeedbackKind::SuperWeaponTarget(id) => Some(id),
         // Row 0x4E: mouse.sha frames 435..449 at rate 4.

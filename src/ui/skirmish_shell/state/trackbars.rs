@@ -43,6 +43,7 @@ pub struct SkirmishTrackbarBounds {
     pub credits_step: i32,
     pub unit_count_min: i32,
     pub unit_count_max: i32,
+    pub tech_level_max: i32,
 }
 
 impl Default for SkirmishTrackbarBounds {
@@ -53,6 +54,7 @@ impl Default for SkirmishTrackbarBounds {
             credits_step: CREDITS_STEP,
             unit_count_min: UNIT_COUNT_MIN,
             unit_count_max: UNIT_COUNT_MAX,
+            tech_level_max: crate::sim::game_options::GameOptions::default().tech_level,
         }
     }
 }
@@ -73,6 +75,9 @@ impl SkirmishTrackbarBounds {
             SkirmishTrackbarId::UnitCount0x50c => {
                 TrackbarRange::new(self.unit_count_min, self.unit_count_max, UNIT_COUNT_STEP)
             }
+            // OnSetup6AECFF -> BA1391..BA13B5 packs minimum1 and
+            // Rules+149C into TBM_SETRANGE, then supplies the saved position.
+            SkirmishTrackbarId::TechLevel0x512 => TrackbarRange::new(1, self.tech_level_max, 1),
         }
     }
 
@@ -88,6 +93,9 @@ impl SkirmishTrackbarBounds {
         bounds.credits_step = section.read_int("MoneyIncrement", bounds.credits_step);
         bounds.unit_count_min = section.read_int("MinUnitCount", bounds.unit_count_min);
         bounds.unit_count_max = section.read_int("MaxUnitCount", bounds.unit_count_max);
+        bounds.tech_level_max =
+            crate::sim::game_options::GameOptions::from_multiplayer_dialog_settings(ini).tech_level
+                as i16 as i32;
         bounds
     }
 }
@@ -127,6 +135,7 @@ pub(super) fn trackbar_rect(layout: &SkirmishShellLayout, id: SkirmishTrackbarId
         SkirmishTrackbarId::GameSpeed0x529 => layout.trackbars.game_speed,
         SkirmishTrackbarId::Credits0x511 => layout.trackbars.credits,
         SkirmishTrackbarId::UnitCount0x50c => layout.trackbars.unit_count,
+        SkirmishTrackbarId::TechLevel0x512 => layout.trackbars.tech_level,
     }
 }
 
@@ -135,6 +144,7 @@ pub fn trackbar_visual_value(state: &SkirmishShellState, id: SkirmishTrackbarId)
         SkirmishTrackbarId::GameSpeed0x529 => game_speed_visual_position(state.game_speed),
         SkirmishTrackbarId::Credits0x511 => state.starting_credits,
         SkirmishTrackbarId::UnitCount0x50c => state.unit_count,
+        SkirmishTrackbarId::TechLevel0x512 => state.launch_options_base.tech_level,
     }
 }
 
@@ -153,6 +163,9 @@ fn set_trackbar_visual_value(
         SkirmishTrackbarId::UnitCount0x50c => {
             state.unit_count = visual_value;
         }
+        SkirmishTrackbarId::TechLevel0x512 => {
+            state.launch_options_base.tech_level = visual_value;
+        }
     }
 }
 
@@ -168,12 +181,29 @@ fn set_trackbar_visual_value_if_changed(
     true
 }
 
-pub(super) fn trackbar_ids() -> [SkirmishTrackbarId; 3] {
-    [
-        SkirmishTrackbarId::GameSpeed0x529,
-        SkirmishTrackbarId::Credits0x511,
-        SkirmishTrackbarId::UnitCount0x50c,
-    ]
+impl SkirmishShellState {
+    /// One visibility decision for input, hover and both rendering passes.
+    pub fn trackbar_ids(&self) -> impl Iterator<Item = SkirmishTrackbarId> + use<> {
+        [
+            Some(SkirmishTrackbarId::GameSpeed0x529),
+            Some(SkirmishTrackbarId::Credits0x511),
+            Some(SkirmishTrackbarId::UnitCount0x50c),
+            (crate::rules::NPATCH_ENABLED && self.show_tech_level_slider)
+                .then_some(SkirmishTrackbarId::TechLevel0x512),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
+    /// NPAE174 ReadUISettings C28204..C2821B: current-byte default,
+    /// initially0 at BA8FFF. Consume the selected startup Rules projection.
+    pub fn apply_ui_settings(&mut self, ini: &IniFile) {
+        if crate::rules::NPATCH_ENABLED {
+            self.show_tech_level_slider = ini
+                .section_or_empty("UISettings")
+                .read_bool("ShowTechLevelSlider", self.show_tech_level_slider);
+        }
+    }
 }
 
 pub fn handle_option_mouse_down(
@@ -198,7 +228,7 @@ pub fn handle_option_mouse_down(
         }
     }
 
-    for id in trackbar_ids() {
+    for id in state.trackbar_ids() {
         let rect = trackbar_rect(layout, id);
         let range = state.trackbar_bounds.range(id);
         let visual_value = trackbar_visual_value(state, id);
@@ -240,6 +270,10 @@ pub fn handle_option_mouse_move(
     let Some(hold) = state.trackbar_hold.filter(|hold| hold.dragging) else {
         return SkirmishShellAction::None;
     };
+    if !state.trackbar_ids().any(|id| id == hold.id) {
+        state.trackbar_hold = None;
+        return SkirmishShellAction::None;
+    }
     let rect = trackbar_rect(layout, hold.id);
     let value = state
         .trackbar_bounds

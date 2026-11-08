@@ -152,16 +152,20 @@ pub(crate) fn recalc_base_plan(
     while remaining > 0 {
         let pass_start_len = priority.len();
         let mut progressed = false;
-        let mut last_unselected = None;
+        let mut deferred_plug = None;
         for index in 0..eligible.len() {
             if selected[index] {
                 continue;
             }
-            last_unselected = Some(index);
             let candidate = eligible[index];
-            if !candidate.id.eq_ignore_ascii_case("GAPLUG")
-                && prerequisites_satisfied(candidate, &priority[..pass_start_len], rules)
-            {
+            // AI_RecalcBuildOptions5058B5..5058CF records only the literal
+            // GAPLUG in EBP. The no-progress tail50594D..5059AD may force
+            // that deferred plug, never an arbitrary unmet prerequisite.
+            if candidate.id.eq_ignore_ascii_case("GAPLUG") {
+                deferred_plug = Some(index);
+                continue;
+            }
+            if prerequisites_satisfied(candidate, &priority[..pass_start_len], rules) {
                 priority.push(candidate);
                 selected[index] = true;
                 remaining = remaining.wrapping_sub(1);
@@ -175,7 +179,7 @@ pub(crate) fn recalc_base_plan(
             break;
         }
         if !progressed {
-            let Some(index) = last_unselected else {
+            let Some(index) = deferred_plug else {
                 break;
             };
             priority.push(eligible[index]);
@@ -244,12 +248,14 @@ pub(crate) fn recalc_base_plan(
     plan.rebuild(final_values);
 }
 
-/// The NPSE per-type `[BuildingTypes] AIPlanningCount=` count of collection
+/// The NPatch per-type count of collection
 /// nodes the candidate contributes, `1` for the stock single node. The
 /// extension constructor zeroes the field (`0xC3039B`) and the reader stores
 /// the `ReadInt` result through `al` (`0xC2E223..0xC2E237`). The loop's
 /// byte CMP/JL (`0xC2C35A..0xC2C361`) is signed, so 0 and high-bit counts
 /// keep one entry. Source: author-linked NPSE 2.0 #359 release.
+/// NPAE174 AIBasePlanningCount shares this loop: 5056C1 -> C2D8C1,
+/// reading TechnoType+5A2 with the same signed byte CMP/JL.
 fn planning_repeats(candidate: &ObjectType) -> usize {
     if crate::rules::NPATCH_ENABLED {
         (candidate.ai_planning_count as i8).max(1) as usize
@@ -445,6 +451,24 @@ mod tests {
     }
 
     #[test]
+    fn npatch_legacy_planning_count_repeats_the_actual_candidate() {
+        let rules = basic_rules(
+            "7=TEST\n",
+            "[TEST]\nOwner=Americans\nAIBuildThis=yes\nTechLevel=1\n\
+             AIPlanningCount=3\nAIBasePlanningCount=2\n",
+        );
+        let (plan, _) = generated_values(&rules, "Americans", 0, HouseDifficulty::Normal, 17);
+        let index = rules.object("TEST").unwrap().base_plan_type_index;
+        assert_eq!(
+            values(&plan)
+                .iter()
+                .filter(|value| **value == index)
+                .count(),
+            if crate::rules::NPATCH_ENABLED { 2 } else { 1 }
+        );
+    }
+
+    #[test]
     fn ai_planning_count_respects_the_build_capability() {
         let rules = basic_rules(
             "7=TEST\n\
@@ -632,7 +656,7 @@ mod tests {
     }
 
     #[test]
-    fn recalc_withholds_gaplug_and_breaks_cycle_with_last_unselected() {
+    fn recalc_only_forces_gaplug_not_an_unsatisfied_prerequisite() {
         // BLOCK waits on a BuildingType the planner never selects; a name no
         // BuildingType has would be dropped by the parser and block nothing.
         let rules = basic_rules(
@@ -642,7 +666,42 @@ mod tests {
              [NEVER]\nOwner=Americans\nTechLevel=1\nFoundation=1x1\n",
         );
         let (plan, _) = generated_values(&rules, "Americans", 0, HouseDifficulty::Hard, 11);
-        assert_eq!(&values(&plan)[6..], [8, 7]);
+        assert_eq!(&values(&plan)[6..], [8]);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Return Dubai AI base plans"]
+    fn aymod_grand_cannon_requires_its_allied_planned_prerequisites() {
+        use crate::headless_scenario::{battle_session, load_session};
+        use crate::skirmish_launch::{AiDifficulty, LaunchCountry};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let scene = load_session(
+            &root,
+            map,
+            0x00C0_FFEE,
+            battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            ),
+        )
+        .unwrap();
+        let rules = &scene.runtime.resources.rules;
+        let cannon = rules.object("GTGCAN").unwrap();
+        assert!(cannon.ai_build_this);
+        assert_eq!(cannon.tech_level, -1);
+        assert_eq!(cannon.ai_base_planning_side, -1);
+        for (country, side) in [("Americans", 0), ("Russians", 1), ("YuriCountry", 2)] {
+            let (plan, _) = generated_values(rules, country, side, HouseDifficulty::Hard, 17);
+            let planned = values(&plan);
+            assert_eq!(
+                planned.contains(&cannon.base_plan_type_index),
+                side == 0,
+                "{country}: a shared Owner mask must not force a cannon past GACNST/GATECH prerequisites"
+            );
+            assert!(!planned.contains(&rules.object("GTGCAN2").unwrap().base_plan_type_index));
+        }
     }
 
     #[test]

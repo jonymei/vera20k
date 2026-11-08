@@ -151,6 +151,60 @@ fn rules() -> RuleSet {
     rules_from(RULES)
 }
 
+#[test]
+fn npatch_permanent_warhead_keeps_victim_after_controller_death() {
+    use crate::sim::projectile::{ProjectileCoord, ProjectileDetonationReason, ProjectilePayload};
+    let rules =
+        rules_from(&RULES.replace("[Controller]\n", "[Controller]\nIsPermaControlled=yes\n"));
+    let mut sim = sim(3);
+    let yuri = spawn(&mut sim, &rules, "YURI", "Americans", 10, 10);
+    let target = spawn(&mut sim, &rules, "E1", "Russians", 12, 10);
+    let warhead = sim.interner.intern("Controller");
+    sim.mind_control_detonation(
+        ProjectileDetonation {
+            projectile_id: u64::MAX,
+            source_id: yuri,
+            target: ProjectileTarget::Entity(target),
+            impact: ProjectileCoord {
+                x: 12 * 256,
+                y: 10 * 256,
+                z: 0,
+            },
+            payload: ProjectilePayload::new(1, warhead, None, false),
+            reason: ProjectileDetonationReason::ReachedTarget,
+        },
+        &rules,
+        None,
+        FrameEffects::default(),
+    );
+    assert_eq!(owner(&sim, target), "Americans");
+    let link = sim.entities().get(target).unwrap().mind_control;
+    assert_eq!(link.permanent(), crate::rules::NPATCH_ENABLED);
+    assert_eq!(link.controller().is_none(), crate::rules::NPATCH_ENABLED);
+    let damage = sim.interner.intern("KILLWH");
+    let hit = EntityDamageEvent::direct_receiver(
+        yuri,
+        100_000,
+        0,
+        RAD_NO_ATTACKER,
+        None,
+        damage,
+        ReceiverCallFlags {
+            ignore_defenses: false,
+            arg6: false,
+        },
+    );
+    sim.commit_noncombat_aoe_hits(&rules, None, &[hit], FrameEffects::default());
+    assert_eq!(
+        owner(&sim, target),
+        if crate::rules::NPATCH_ENABLED {
+            "Americans"
+        } else {
+            "Russians"
+        }
+    );
+}
+
 fn rules_from(text: &str) -> RuleSet {
     let mut rules = RuleSet::from_ini_with_fixed_art_for_test(
         &IniFile::from_str(text),

@@ -264,6 +264,51 @@ fn allegiance_matches_native_decisions_for_valid_rosters() {
 }
 
 #[test]
+fn offline_np_garrisons_keep_allegiance_but_empty_ones_still_announce_abandonment() {
+    for name in [
+        "occupied_civilian_takes_first_owner",
+        "empty_player_abandons",
+    ] {
+        let row = corpus()["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["input"]["name"] == name)
+            .unwrap();
+        let (mut sim, rules, id, _) = fixture(&row["input"]);
+        let building = sim.substrate.entities.get_mut(id).unwrap();
+        let owner = building.owner();
+        let anim = building.building_art.anim_slots()[3];
+        building.set_building_online_for_test(false);
+        let changed = reconcile_civilian_garrison_owner_for_building(
+            &mut sim,
+            &rules,
+            None,
+            id,
+            FrameEffects::default(),
+        );
+        assert_eq!(changed, !crate::rules::NPATCH_ENABLED);
+        let building = sim.substrate.entities.get(id).unwrap();
+        if crate::rules::NPATCH_ENABLED {
+            assert_eq!(building.owner(), owner);
+            assert_eq!(building.building_art.anim_slots()[3], anim);
+            assert!(!building.building_online());
+        } else {
+            assert_ne!(building.owner(), owner);
+        }
+        // C2ED3B's online check follows the sound, not the function head.
+        assert_eq!(
+            sim.sound_events
+                .iter()
+                .filter(|event| matches!(event,
+            SimSoundEvent::VocCentered { sound_id } if sound_id == "Abandon"))
+                .count(),
+            usize::from(name == "empty_player_abandons")
+        );
+    }
+}
+
+#[test]
 fn missing_civilian_roster_does_not_fabricate_a_house() {
     let corpus = corpus();
     for row in corpus["rows"].as_array().unwrap().iter().filter(|row| {

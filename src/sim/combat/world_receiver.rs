@@ -1116,7 +1116,11 @@ pub(crate) fn commit_entities(
         // `UnitClass::ReceiveDamage 0x00737CB6..0x00737D2E`: a unit still
         // inside its war factory returns 0 before FootClass::ReceiveDamage.
         if !event.receiver_flags.ignore_defenses
-            && world.unit_in_contact_war_factory(target_id, rules)
+            && world.unit_in_contact_war_factory(
+                target_id,
+                rules,
+                crate::sim::production::FactoryContactQuery::ReceiveDamage,
+            )
         {
             continue;
         }
@@ -1134,6 +1138,20 @@ pub(crate) fn commit_entities(
         } else {
             None
         };
+        // NPAE174 BuildingReceiveDamage442358 -> C2E7C4 runs after the
+        // contact snapshot but before the shared receiver gates, for any
+        // damage sign. Disallowed self damage already returned above.
+        #[cfg(feature = "npatch")]
+        if let Some(warhead) = rules.warhead(world.interner.resolve(event.warhead_ref)) {
+            crate::sim::passenger::garrison_eject::apply_bunker_penetration(
+                world,
+                target_id,
+                warhead.bunker_penetration_level(),
+                (attacker_id != RAD_NO_ATTACKER).then_some(attacker_id),
+                crate::sim::world::UninitContext::new(rules, overlay_registry)
+                    .with_effects(run.effects()),
+            );
+        }
         let prepared_event = super::receiver_call::prepare_infantry_receiver(
             event,
             &world.substrate.entities,
@@ -1573,20 +1591,6 @@ pub(crate) fn commit_entities(
                     .is_some_and(|building| building.category() == EntityCategory::Structure)
             {
                 crate::sim::docking::bunker_link::clear_bunker(world, bunker, rules, run.effects());
-            }
-            {
-                if callbacks_enabled(world) {
-                    let attacker = killing_attacker(world, std::slice::from_ref(event), target_id);
-                    world.apply_fatal_lifecycle_stage(
-                        rules,
-                        FatalLifecycleStage::BeforeDeathEffects { attacker },
-                        target_id,
-                        fatal_category,
-                        crate::sim::world::UninitContext::with_rules(rules)
-                            .with_registry(overlay_registry)
-                            .with_effects(run.effects()),
-                    );
-                };
             }
             let mut nested = handle_death(
                 world,
@@ -2135,10 +2139,6 @@ pub(crate) fn handle_death(
                 under_attack_events.extend(pings);
                 blast_effects.append(effects);
             }
-
-            // The world fatal prelude already owns garrison ejection before
-            // the nested death weapon. Callback-disabled receiver fixtures
-            // leave the cargo attached for their UnInit assertions.
         }
     }
 
@@ -2441,6 +2441,21 @@ fn finish_concrete_death(
                 postlude.commit(world, rules, effects, uninit);
             }
             ConcreteDeathSmudgePlan::Building => {
+                let attacker = killing_attacker(world, damage_events, dead_id);
+                // Building ReceiveDamage442625..44264C: Techno's death
+                // weapon and the saved-contact callbacks have returned.
+                // Reveal garrison survivors and disable the light now, before
+                // DestructionEffects442665, not before the nested blast.
+                if callbacks_enabled(world) {
+                    world.apply_fatal_lifecycle_stage(
+                        rules,
+                        FatalLifecycleStage::BeforeBuildingDestruction,
+                        dead_id,
+                        category,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(frame_effects),
+                    );
+                }
                 // DestructionEffects (`0x004415F0`): the building's own anims,
                 // centre mark, death fuse and NoSurvivor, then SpawnSurvivors
                 // (`0x00441F1B`), which interleaves each foundation cell's
@@ -2472,6 +2487,16 @@ fn finish_concrete_death(
                             );
                         },
                         frame_effects,
+                    );
+                    // Building::DestructionEffects441F1B ->441F27: every
+                    // remaining Cargo head dies only after SpawnSurvivors.
+                    // Infantry51A38A can fill Cargo with Passengers=0; neither
+                    // that nor an absorber/garrison flag permits early cleanup.
+                    world.kill_passengers(
+                        dead_id,
+                        attacker,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(frame_effects),
                     );
                 }
             }
@@ -2574,7 +2599,33 @@ fn run_special_detonation_arm(
             }
         }
         SpecialDetonationAction::MindControl => {
+            let hijacker = rules
+                .warhead(world.interner.resolve(detonation.payload.warhead))
+                .filter(|warhead| warhead.is_permanent_hijack())
+                .and_then(|_| world.entities().get(owner))
+                .filter(|firer| firer.lifecycle.in_limbo())
+                .map(|firer| firer.owner());
             world.mind_control_detonation(*detonation, rules, overlay_registry, effects);
+            if let Some(house) = hijacker {
+                // A SpyJack is a one-use boarding attack. Consume the spy
+                // only after capture; a refused/missed jump uses the same
+                // parasite release owner as an ordinary failed boarding.
+                let captured =
+                    object
+                        .and_then(|id| world.entities().get(id))
+                        .is_some_and(|target| {
+                            target.owner() == house && target.mind_control.permanent()
+                        });
+                if captured {
+                    world.uninit_with_context(
+                        owner,
+                        crate::sim::world::UninitContext::new(rules, overlay_registry)
+                            .with_effects(effects),
+                    );
+                } else {
+                    world.parasite_attach(owner, None, rules, effects);
+                }
+            }
         }
         SpecialDetonationAction::Temporal => {
             let target = match target {
@@ -3020,6 +3071,20 @@ fn emit_detonation_receivers<'r>(
                 invoker: (detonation.source_id != 0).then_some(detonation.source_id),
             });
     }
+
+    #[cfg(feature = "npatch")]
+    world.apply_npatch_emp_detonation(
+        detonation.impact,
+        match detonation.target {
+            ProjectileTarget::Entity(id) => Some(id),
+            _ => None,
+        },
+        (detonation.source_id != 0).then_some(detonation.source_id),
+        detonation.payload.base_damage,
+        warhead,
+        rules,
+        effects,
+    );
 
     // Installed Ares46920B ->100536E0/10052870 runs after radiation,
     // before the exclusive special/ordinary damage arms (including Damage=0).

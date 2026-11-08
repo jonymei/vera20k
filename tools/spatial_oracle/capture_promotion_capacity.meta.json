@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "unicorn_binding": "2.1.4",
+  "unicorn_core": [
+    2,
+    1,
+    33621247
+  ],
+  "scope": "Bounded actual NP Infantry manager birth and rank transition, not successful capture.",
+  "assumptions": [
+    "Supplied Infantry7EB058/type/House, normal MindControl Damage1, elite Damage10, MindControl warhead true and finite weapon flag. Original B959B6..C2 type-extension default fragment sets UseNewUpgradeSystem/NextStage0 with constructor EBX0. No physical INI reader or whole type/actor constructor. Original InitManagers capture arm6F4090..F8 executes GetWeapon, whole manager constructor and global registration into a supplied nonfull vector. Only manager node count1 is supplied; no fake nodes are traversed. Original IsFull executes before/after promotion.",
+    "Raw veterancy changes0 to2.0, previous cache2; original6FA054..14B executes both C28090 new-upgrade check and C2D825 spawn-promotion hook with no SpawnManager, then finite CaptureManager Update and elite GetWeapon. Nonlocal House skips sound/UI. No full TechnoAI, capture, node replacement, original SAV, external injection or match claim."
+  ],
+  "substitutions": [
+    "Inherited successful operator-new transport only; no weapon, manager, rank, IsFull, NP-hook or Update result supplied."
+  ],
+  "entry_points": {
+    "init_capture": "0x006F4090",
+    "constructor": "0x004717D0",
+    "get_weapon": "0x0070E140",
+    "rank_transition": "0x006FA054",
+    "update": "0x00471A50",
+    "is_full": "0x004722A0"
+  },
+  "replay_command": "python -m tools.spatial_oracle.capture_overload_update --promotion-capacity",
+  "payload_sha256": "3297f20bc1b6ecfa2dbe2994615f4530c90000d27e9ebcea63aad388b7a49586"
+}

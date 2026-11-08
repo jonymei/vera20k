@@ -4,7 +4,7 @@
 //! Order verified against TechnoClass::ReceiveDamage (0x00701900): the armor
 //! divides + min-1 run FIRST (in the caller), then these gates in the order
 //! below. TypeImmune -> IronCurtain/ForceShield -> WarpingOut -> Bunker -> Radiation ->
-//! Psychic -> Poison -> AffectsAllies -> Psychedelic (each short-circuits).
+//! Psychic -> Poison -> AffectsAllies -> NPatch enemy gate -> Psychedelic.
 
 use super::{DamageGate, ImmunityInputs};
 
@@ -51,6 +51,11 @@ pub(crate) fn evaluate_late_gates(g: &ImmunityInputs) -> DamageGate {
     }
     // 8. !AffectsAllies && attacker present && allied (AffectsAllies default true).
     if !g.affects_allies && g.attacker_present && g.attacker_is_allied {
+        return DamageGate::Nullified { clear_damage: true };
+    }
+    // NPAE174 TechnoClass::ReceiveDamage701CD7 -> C2D62A..C2D674:
+    // the actual attacker is required; SourceHouse alone does not filter.
+    if g.doesnt_affect_enemies && g.attacker_present && !g.attacker_is_allied {
         return DamageGate::Nullified { clear_damage: true };
     }
     // 9. Psychedelic/MindControl: allied -> 0; psionics-immune -> 0; building ->

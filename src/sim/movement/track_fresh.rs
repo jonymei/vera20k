@@ -20,12 +20,10 @@
 //! `tools/spatial_oracle/track_blocked_timers`.
 //!
 //! Residuals:
-//! - `vt+0x37C` (Unit `0x746C90`: the EMP lock Techno+504 or the Unit
-//!   death-frame counter +6D8): neither has a Rust producer (VERA has no EMP
-//!   mechanism; see `techno_ai_cloak`), so the prologue gate reads false.
-//!   Trigger: an EMP'd or dying Unit. Effect: it could start a track native
-//!   refuses. Frequency: no stock EMP source is proven reachable. Risk: this
-//!   gate is a consumer of the EMP system when it lands.
+//! - Unit's vt+37C also checks its death-frame counter+6D8, which remains
+//!   unrepresented. EMP itself now reads the existing shared Techno+504 owner.
+//!   Trigger: a dying Unit in that unrepresented state. Effect: fresh selection
+//!   can run where native refuses. This is not a new EMP state or power gate.
 //! - Crates (`CellClass::PickupCrate 0x481A00` at `0x4B405D` and
 //!   `0x4B46E6`) run through [`Simulation::pickup_crate_at`]; a host called
 //!   without the OverlayType table answers as a cell without a crate (the
@@ -180,13 +178,10 @@ impl Simulation {
         }) {
             return Ok(false);
         }
-        //4B2741..4B2761: vt+37C (Unit 0x746C90: the EMP lock +504 or the
-        //death-frame counter +6D8, neither represented; see the residual) and
-        //vt+380, FootClass::IsParalyzed 0x4DE770 (the Foot+6A0 timer a
-        //parasite arms), return with the out byte clear. Ship's vt+380 gate
-        //is6A1DA9. The consumed track_fresh_response controls cover both
-        //families with active and expired timers through this shared owner.
-        if actor.parasite.is_paralyzed(self.session.binary_frame()) {
+        // Drive4B2746 / Ship6A1D96 query vt+37C before paralysis (+380).
+        // Techno70EFD0 reads the positive EMP counter; Unit+6D8's separate
+        // death-frame override remains a residual. Return without cell/path work.
+        if actor.emp_remaining() > 0 || actor.parasite.is_paralyzed(self.session.binary_frame()) {
             return Ok(false);
         }
         let head = if head.is_some() {

@@ -3,6 +3,24 @@
 use super::*;
 
 #[test]
+fn npatch_sixth_passenger_wraps_five_ports_instead_of_reading_extra_art_slots() {
+    let registry = ArtRegistry::from_ini(&IniFile::from_str(
+        "[BFRT]\nAlternateFLH0=45,190,100\nAlternateFLH4=220,0,130\n\
+         AlternateFLH5=100,100,160\nAlternateFLH6=100,-100,160\n",
+    ));
+    let entry = registry.get("BFRT").unwrap();
+    assert_eq!(entry.alternate_fire_flh(4, 0, 0), Flh::from([220, 0, 130]));
+    assert_eq!(
+        entry.alternate_fire_flh(5, 0, 0),
+        if crate::rules::NPATCH_ENABLED {
+            entry.alternate_fire_flh(0, 0, 0)
+        } else {
+            Flh::default()
+        }
+    );
+}
+
+#[test]
 fn native_discharge_art_reader_matches_original_signed_independent_keys() {
     // Original InfantryType ART reads 5246BE..52473A call ReadInt5276D0
     // independently over E40/E44/E48/E4C. Replay every cached-input row

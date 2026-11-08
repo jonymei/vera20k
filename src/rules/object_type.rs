@@ -608,6 +608,7 @@ pub struct ObjectType {
     /// these on the map skips CanBuild's tech and prerequisite gates. Parsed
     /// like [`Self::prerequisite`].
     pub prerequisite_override: Vec<crate::rules::prerequisite::Prerequisite>,
+    pub npatch_prerequisites: crate::rules::prerequisite::NpatchPrerequisites,
     /// `BuildLimit=` (`TechnoTypeClass+0x3B8`, ReadINI `0x00713157`): the
     /// constructor's `0x7FFFFFFF` (`0x00710CF0`) when absent. `CanBuild`
     /// caps a positive limit by the house's tracked count of the type and a
@@ -627,7 +628,7 @@ pub struct ObjectType {
     /// the start skips. Clearing a building choice leaves its base-plan node
     /// unsatisfied, so the planner can select the same capped type again.
     pub aibuild_limit: i32,
-    /// `[BuildingTypes] AIPlanningCount=` — the NPSE count of plan nodes a
+    /// Retained NPatch count of plan nodes a
     /// computer house's base plan gives this building. The techno reader
     /// extension chain reads it with the current field as its default and
     /// stores the result through `al` (`0xC2E223..0xC2E237`), so the
@@ -638,7 +639,11 @@ pub struct ObjectType {
     /// per-candidate counter reaches the count with signed CMP/JL. Counts
     /// 1..127 repeat eligible entries before seed selection; 0 and high-bit
     /// counts keep one entry, rather than repeating the final priority list.
+    /// NPAE174 reads AIBasePlanningCount at C2EF3E into Type+5A2,
+    /// constructor1 at C2EF82, consumed by5056C1 -> C2D8C1. The ordered
+    /// Rules owner accepts both spellings, preferring NPAE within each pass.
     pub ai_planning_count: i32,
+    pub(crate) npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards,
     /// Requires spy infiltration of an Allied Battle Lab to unlock.
     pub requires_stolen_allied_tech: bool,
     /// Requires spy infiltration of a Soviet Battle Lab to unlock.
@@ -758,6 +763,9 @@ pub struct ObjectType {
     /// retaining the last valid fixed-catalog ID through reached rules passes.
     /// House RecordLastBuilt4FB7CA overrides its class cue with this scalar.
     create_sound: Option<String>,
+    /// BuildingType+E74: ctor45DE70=-1; ReadINI4607C8..4607F8
+    /// retains the previous fixed-catalog ID on an empty/unknown read.
+    building_create_unit_sound: Option<String>,
     /// Retained BuildingType+16B0 and EA4/EA8/EAC; Process owns reached reads.
     secret_lab: crate::rules::secret_lab::SecretLabRules,
     /// `DamageSound=` — `TechnoTypeClass+0x538`, the type's own struck cue.
@@ -922,6 +930,14 @@ pub struct ObjectType {
     /// Higher = faster turret rotation. Only meaningful when `has_turret` is true.
     /// Typical values: 5 (War Miner), 7 (Grizzly/Rhino).
     pub turret_rot: i32,
+    /// NPAE174 TechnoType byte +5A5, projected by the ordered Rules reader.
+    /// UnitCtor735584 -> C2DEB6 uses FF as the ROT fallback, not a speed.
+    npatch_turret_rot: u8,
+    /// NPAE174 TechnoType+D20, projected from the ordered current-default reader.
+    #[cfg(feature = "npatch")]
+    npatch_use_rof_as_burst_delays: bool,
+    /// NPAE174 TechnoType +5A3; compared as a signed byte by C2E7E5.
+    npatch_bunker_protection: i8,
     /// Retained TechnoType recoil reader; shared by every voxel turret.
     pub recoil: crate::rules::recoil::RecoilConfig,
     /// Six retained settings copied when this Techno creates an Airstrike manager.
@@ -1325,6 +1341,9 @@ pub struct ObjectType {
     pub airport_bound: bool,
     /// Fighter=yes — fighter aircraft classification (affects targeting).
     pub fighter: bool,
+    /// NPAE174 AircraftType+E4C: keep an airborne attack target in AI414D36.
+    /// Only the retained AircraftType reader projects this; other types stay false.
+    pub(crate) npatch_aa_combat: bool,
     /// FlyBy=yes — strafing fly-by attack pattern (continue forward after firing).
     pub fly_by: bool,
     /// FlyBack=yes — after fly-by, reverse course back over target.
@@ -2091,9 +2110,9 @@ pub struct ObjectType {
     // resolution against the particle-system registry is deferred (matches
     // the same deferred-typing decision used for ParticleType.warhead and
     // ParticleSystemType.holds_what's parse-side captures).
-    /// `NaturalParticleSystem=` — gap-generator / cloak-related particle
-    /// system. Live code path in YR (BuildingClass::UpdateGapGenerator_Tick),
-    /// but no retail INI sets the key, so the slot is normally null.
+    /// `NaturalParticleSystem=` (Type+764, reader713B9A) — Building+30C's
+    /// natural system. BuildingUnlimbo440E99 creates it; CloakingTick454E7F/
+    /// 454F3D removes/recreates it. This is distinct from damage-Smoke+310.
     pub natural_particle_system: Option<String>,
     /// `NaturalParticleLocation=` X,Y,Z offset paired with the system above.
     pub natural_particle_location: IVec3,
@@ -2258,6 +2277,46 @@ fn native_minutes_to_ticks(value: f64) -> u32 {
 }
 
 impl ObjectType {
+    /// NPAE174 UnitCtor735584 -> C2DEB6 selects only the turret's rate.
+    /// Body, Aircraft and Building controllers still consume ordinary ROT.
+    pub fn unit_turret_rot(&self) -> i32 {
+        if self.npatch_turret_rot == u8::MAX {
+            self.turret_rot
+        } else {
+            i32::from(self.npatch_turret_rot)
+        }
+    }
+
+    pub(super) fn project_npatch_turret_rot(&mut self, rot: u8) {
+        self.npatch_turret_rot = rot;
+    }
+
+    /// NPAE174 TechnoType+D20 selects ROF as each inter-shot burst delay.
+    /// Constructor7114BE defaults false; ReadINI714AF3 retains omitted keys.
+    pub fn use_rof_as_burst_delays(&self) -> bool {
+        #[cfg(feature = "npatch")]
+        {
+            self.npatch_use_rof_as_burst_delays
+        }
+        #[cfg(not(feature = "npatch"))]
+        {
+            false
+        }
+    }
+
+    #[cfg(feature = "npatch")]
+    pub(super) fn project_use_rof_as_burst_delays(&mut self, enabled: bool) {
+        self.npatch_use_rof_as_burst_delays = enabled;
+    }
+
+    pub(crate) fn bunker_protection_level(&self) -> i8 {
+        self.npatch_bunker_protection
+    }
+
+    pub(super) fn project_npatch_bunker_protection(&mut self, level: i8) {
+        self.npatch_bunker_protection = level;
+    }
+
     /// Native TechnoType `PitchSpeed` double used by the normal Fly draw gate.
     pub fn fly_pitch_speed(&self) -> f64 {
         f64::from_bits(self.pitch_speed.bits())
@@ -2769,7 +2828,12 @@ impl ObjectType {
         self.create_sound.as_deref()
     }
 
-    /// Bind TechnoType+534/+538 in original712E75..712F07 read order,
+    pub fn building_create_unit_sound(&self) -> Option<&str> {
+        self.building_create_unit_sound.as_deref()
+    }
+
+    /// Bind TechnoType+534/+538 (712E75..712F07) and BuildingType+E74
+    /// (4607C8..4607F8) through the same fixed-catalog reference reader,
     /// using only passes where this type existed in the native processing order.
     pub(crate) fn bind_scalar_sound_references(
         &mut self,
@@ -2780,6 +2844,10 @@ impl ObjectType {
             section.and_then(|section| sounds.read_rules_reference(section, "CreateSound"));
         self.damage_sound =
             section.and_then(|section| sounds.read_rules_reference(section, "DamageSound"));
+        if self.category == ObjectCategory::Building {
+            self.building_create_unit_sound =
+                section.and_then(|section| sounds.read_rules_reference(section, "CreateUnitSound"));
+        }
     }
 
     /// `Weapon[index]` (`TechnoTypeClass+0x898 + index*0x1C`): the weapon in
@@ -3226,6 +3294,7 @@ impl ObjectType {
             allowed_to_start_in_multiplayer: section.read_bool("AllowedToStartInMultiplayer", true),
             prerequisite: Vec::new(),
             prerequisite_override: Vec::new(),
+            npatch_prerequisites: Default::default(),
             // ReadInt over the constructor's 0x7FFFFFFF (`0x00713152`).
             build_limit: section.read_int("BuildLimit", i32::MAX),
             aibuild_limit: if crate::rules::NPATCH_ENABLED {
@@ -3233,12 +3302,9 @@ impl ObjectType {
             } else {
                 i32::MAX
             },
-            ai_planning_count: if crate::rules::NPATCH_ENABLED {
-                building_int(section, category, "AIPlanningCount") & 0xFF
-            } else {
-                0
-            },
+            ai_planning_count: 0,
             requires_stolen_allied_tech: section.read_bool("RequiresStolenAlliedTech", false),
+            npatch_rewards: crate::rules::npatch_rewards::NpatchTypeRewards::read(section),
             requires_stolen_soviet_tech: section.read_bool("RequiresStolenSovietTech", false),
             requires_stolen_third_tech: section.read_bool("RequiresStolenThirdTech", false),
             // Constructor value; only the ordered Process owner reads it.
@@ -3289,6 +3355,7 @@ impl ObjectType {
                 .map(|tokens| tokens.into_iter().map(str::to_owned).collect())
                 .unwrap_or_default(),
             create_sound: None,
+            building_create_unit_sound: None,
             secret_lab: Default::default(),
             damage_sound: None,
             move_sound: Vec::new(),
@@ -3345,6 +3412,10 @@ impl ObjectType {
             // gamemd writes a separate UnitType +0x398=10 for Harvester/Weeder,
             // but ROT= remains the parsed TechnoType +0x71C facing-rate field.
             turret_rot: section.read_int("ROT", 0),
+            npatch_turret_rot: u8::MAX,
+            #[cfg(feature = "npatch")]
+            npatch_use_rof_as_burst_delays: false,
+            npatch_bunker_protection: 0,
             // Constructor values. Recoil, Airstrike and RadialFireSegments
             // are read only by the ordered Process owner (`native_processing`),
             // whose retained per-pass result `RuleSet` publishes.
@@ -3536,6 +3607,7 @@ impl ObjectType {
             deploy_to_land: section.read_bool("DeployToLand", false),
             airport_bound: section.read_bool("AirportBound", false),
             fighter: section.read_bool("Fighter", false),
+            npatch_aa_combat: false,
             fly_by: section.read_bool("FlyBy", false),
             fly_back: section.read_bool("FlyBack", false),
             landable: section.read_bool("Landable", false),

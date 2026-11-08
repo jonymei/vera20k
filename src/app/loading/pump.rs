@@ -1232,6 +1232,26 @@ pub(crate) fn begin_loading(state: &mut AppState, request: LoadingRequest) {
                 .and_then(|id| rules.country_side_index(id))
                 .map_or(-1, |side| i32::from(side.0));
         }
+        if let Some(launch) = session.stage.startup().launch_session() {
+            let resolve = |priority| {
+                HouseColorIndex(
+                    crate::rules::color_scheme::multiplayer_scheme_entry_for_priority(
+                        &rules.color_schemes,
+                        rules.npatch_dropdown_colors,
+                        priority,
+                    ) as u8,
+                )
+            };
+            native.color_index = resolve(i32::from(launch.local_slot().color_index));
+            for (row, human) in native
+                .progress_row
+                .participants
+                .iter_mut()
+                .zip(&launch.humans)
+            {
+                row.color_index = resolve(i32::from(human.slot.color_index));
+            }
+        }
         native.resolve_player_colors(&rules.color_schemes, &rules.house_color_ramps);
     }
     let now_ms = crate::app::match_runtime::frame_pacer::wall_clock_ms();
@@ -2525,11 +2545,14 @@ pub(crate) fn ensure_native_loading_atlas(state: &mut AppState) -> anyhow::Resul
                 .markers
                 .iter()
                 .map(|marker| {
-                    let color_key =
-                        scheme_entry_for_priority(i32::from(marker.color_priority)) as u8;
+                    let entry = crate::rules::color_scheme::multiplayer_scheme_entry_for_priority(
+                        &rules.color_schemes,
+                        rules.npatch_dropdown_colors,
+                        i32::from(marker.color_priority),
+                    ) as u8;
                     MmpbMarkerRemap {
-                        color_key,
-                        ramp: *rules.house_color_ramps.ramp(HouseColorIndex(color_key)),
+                        color_key: marker.color_priority,
+                        ramp: *rules.house_color_ramps.ramp(HouseColorIndex(entry)),
                     }
                 })
                 .collect::<Vec<_>>()

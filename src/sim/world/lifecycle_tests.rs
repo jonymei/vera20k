@@ -3322,6 +3322,59 @@ fn lifecycle_authority_uninit_dead_limbo_remains_resolvable_until_drain() {
 }
 
 #[test]
+fn detach_all_zero_keeps_cargo_until_passenger_uninit() {
+    let rules =
+        crate::rules::ruleset::RuleSet::from_ini(&crate::rules::ini_parser::IniFile::from_str(""))
+            .unwrap();
+    let mut sim = Simulation::new();
+    insert_entity(&mut sim, 1, EntityCategory::Unit);
+    insert_entity(&mut sim, 2, EntityCategory::Infantry);
+    let _ = sim.reveal(1);
+    let _ = sim.reveal(2);
+    let mut cargo = PassengerCargo::new(6, 1.0);
+    cargo.board_forced_chain(&[(2, 1.0)]);
+    sim.substrate.entities.get_mut(1).unwrap().passenger_role = PassengerRole::transport(cargo);
+    sim.substrate.entities.get_mut(2).unwrap().passenger_role =
+        PassengerRole::inside_for_test(1, true);
+
+    // TechnoPointerExpired7077D8..7077E9 removes Cargo only for control!=0.
+    sim.detach_all_pointer_expired(2, &rules, None, super::FrameEffects::default());
+    let cargo = sim
+        .substrate
+        .entities
+        .get(1)
+        .unwrap()
+        .passenger_role
+        .cargo()
+        .unwrap();
+    assert_eq!(cargo.passengers(), [2]);
+    assert_eq!(cargo.total_size(), 1);
+    assert_eq!(
+        sim.substrate
+            .entities
+            .get(2)
+            .unwrap()
+            .passenger_role
+            .inside_transport(),
+        Some((1, true))
+    );
+
+    sim.uninit_with_rules(2, &rules);
+    assert!(
+        sim.substrate
+            .entities
+            .get(1)
+            .unwrap()
+            .passenger_role
+            .cargo()
+            .unwrap()
+            .is_empty()
+    );
+    sim.process_pending_delete();
+    assert!(sim.substrate.entities.get(2).is_none());
+}
+
+#[test]
 fn lifecycle_authority_transport_uninits_passengers_in_cargo_order_before_carrier_notify() {
     let mut sim = Simulation::new();
     insert_entity(&mut sim, 1, EntityCategory::Unit);

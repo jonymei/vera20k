@@ -261,6 +261,201 @@ fn native_mobile_rank_pips_preserve_color_a_and_z() {
     );
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR and GPU; actual AY garrison/transport colors and elite star through status replay"]
+fn aymod_class_pips_and_elite_star_reach_gpu_status_replay() {
+    use crate::app::presentation::ui_overlays::{TechnoExtras, scale_pip_draws};
+    let (rules, sim, building, transport, elite) =
+        super::super::passenger_pip_tests::aymod_pip_fixture();
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let assets = AssetManager::new(&root, MediaArchiveMode::STOCK_DIGITAL).unwrap();
+    let shapes = ["PIPS.SHP", "PIPS2.SHP"].map(|name| {
+        crate::assets::shp_file::ShpFile::from_bytes(assets.get_ref(name).unwrap()).unwrap()
+    });
+    let palette =
+        crate::assets::pal_file::Palette::from_bytes(assets.get_ref("PALETTE.PAL").unwrap())
+            .unwrap();
+    let gpu = Gpu::new();
+    let size = [96, 80];
+    for format in [
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    ] {
+        let mut batch = BatchRenderer::new_with_device(&gpu.device, &gpu.queue, format);
+        let overlay =
+            SelectionOverlay::new_on_device(&gpu.device, &gpu.queue, &batch, Some(&assets));
+        let cam = camera(size);
+        let a = ShroudBuffer::fixture(
+            &gpu.device,
+            &gpu.queue,
+            size,
+            cam.camera_pos,
+            &vec![127; (size[0] * size[1]) as usize],
+        );
+        batch.bind_shroud(&gpu.device, Some(&a));
+        batch.write_camera(&gpu.queue, cam);
+        let mut cases = Vec::new();
+        for (parent, shape) in [(building, 0), (transport, 1), (elite, 0)] {
+            let entity = sim.entities().get(parent).unwrap();
+            let coord = crate::sim::movement::ground_pose::object_get_coords(
+                entity,
+                sim.resolved_terrain(),
+            );
+            let (x, y) = crate::util::lepton::absolute_leptons_to_screen(coord.x, coord.y, coord.z);
+            let strip = techno_extras_for_parent(
+                &sim,
+                entity,
+                Some(&rules),
+                &overlay,
+                None,
+                Some("Americans"),
+                StatusViewport {
+                    camera: [x - 48.0, y - 48.0],
+                    size: size.map(|n| n as f32),
+                    ignore_visibility: true,
+                },
+            );
+            if parent == elite {
+                cases.push((
+                    parent,
+                    shape,
+                    15,
+                    strip.rank.expect("actual elite MTNK rank"),
+                ));
+                continue;
+            }
+            let draws = scale_pip_draws(&sim, entity, None, Some("Americans"), &rules);
+            let instances = if shape == 0 {
+                &strip.fills[strip.fills.len() - draws.len()..]
+            } else {
+                &strip.scale
+            };
+            assert_eq!(instances.len(), draws.len());
+            for (draw, &instance) in draws.iter().zip(instances) {
+                if draw.frame != 0 && draw.frame != 6 {
+                    cases.push((parent, shape, draw.frame, instance));
+                }
+            }
+        }
+        assert!(
+            cases.iter().any(|case| case.2 == 8),
+            "gold hero garrison pip"
+        );
+        assert!(
+            cases.iter().any(|case| case.1 == 1 && case.2 == 3),
+            "white Engineer transport pip"
+        );
+        let mut pool = InstanceBufferPool::new();
+        for (parent, shape, frame, mut instance) in cases {
+            let physical = &shapes[shape].frames[frame];
+            assert_eq!(
+                instance.size,
+                [physical.frame_width as f32, physical.frame_height as f32]
+            );
+            // Isolate the chosen status sprite without changing its UVs/material.
+            // Ordinary status geometry has separate native raster controls.
+            instance.position = [32.0, 32.0];
+            let status = if parent == elite {
+                TechnoExtras {
+                    rank: Some(instance),
+                    ..Default::default()
+                }
+            } else if shape == 0 {
+                TechnoExtras {
+                    fills: vec![instance],
+                    ..Default::default()
+                }
+            } else {
+                TechnoExtras {
+                    scale: vec![instance],
+                    ..Default::default()
+                }
+            };
+            let display = NativeDisplayOrder::new(&[parent]);
+            let mut planned = PlannedObjectInstance::object(
+                display.object_draw(parent, SpriteEncoding::Plain).unwrap(),
+                vec![],
+            );
+            planned.status = Some(status);
+            let layer = lower_ground_object_instances(vec![planned]);
+            pool.upload_on_device(
+                &gpu.device,
+                &gpu.queue,
+                "object_extras",
+                &layer.extras_instances,
+            );
+            let color = gpu.target(size, format);
+            let depth = gpu.target(size, wgpu::TextureFormat::Depth32Float);
+            let cv = color.create_view(&Default::default());
+            let dv = depth.create_view(&Default::default());
+            let mut encoder = gpu.device.create_command_encoder(&Default::default());
+            clear(
+                &mut encoder,
+                &cv,
+                &dv,
+                u16::MAX,
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            );
+            let mut terrain = TerrainDrawRenderer::new(&gpu.device, &gpu.queue, format, &batch);
+            terrain.prepare(&gpu.device, &color, &dv, cam);
+            super::object_extras::draw_object_extras(
+                &mut encoder,
+                &cv,
+                &dv,
+                &mut terrain,
+                [0, 0, size[0], size[1]],
+                &batch,
+                Some(&overlay),
+                pool.get("object_extras").map(|(buffer, _)| buffer),
+                None,
+                &layer,
+            );
+            let reads = [
+                gpu.read(&mut encoder, &color),
+                gpu.read(&mut encoder, &depth),
+            ];
+            let output = gpu.finish(encoder, &reads, size);
+            for y in 0..size[1] {
+                for x in 0..size[0] {
+                    let index = if x >= 32
+                        && y >= 32
+                        && x - 32 < u32::from(physical.frame_width)
+                        && y - 32 < u32::from(physical.frame_height)
+                    {
+                        physical.pixels
+                            [((y - 32) * u32::from(physical.frame_width) + x - 32) as usize]
+                    } else {
+                        0
+                    };
+                    let word = if index == 0 {
+                        0
+                    } else {
+                        let rgb = palette.color(index);
+                        crate::render::palette_light::PaletteLight::plain(53, 1000).rgb565(
+                            [rgb.r, rgb.g, rgb.b],
+                            index,
+                            127,
+                        )
+                    };
+                    let offset = ((y * size[0] + x) * 4) as usize;
+                    assert_eq!(
+                        &output[0][offset..offset + 4],
+                        &encoded(word, format),
+                        "AY shape{shape} frame{frame} {format:?} pixel({x},{y})"
+                    );
+                    assert_eq!(
+                        crate::render::native_z::stored_z(f32::from_le_bytes(
+                            output[1][offset..offset + 4].try_into().unwrap()
+                        )),
+                        u16::MAX
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 #[ignore = "requires retail assets and GPU; original FV passenger PIPS2 and affected scale consumers"]
 fn native_passenger_pips_preserve_color_a_z_and_parent_order() {

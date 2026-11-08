@@ -10,10 +10,19 @@ use crate::sim::world::Simulation;
 /// Eight native compass neighbors followed by the retained center identity;
 /// Cluster controls neither this count nor a second parent detonation.
 pub(super) fn emit(world: &mut Simulation, rules: &RuleSet, detonation: &ProjectileDetonation) {
+    // NPatch compatibility: a named AirburstWeapon without Airburst is a
+    // single impact child, as authored by AYMod's Tesla tank. This deliberate
+    // player-facing policy is not a claim of the original NPAE dispatch.
+    let impact_child = crate::rules::NPATCH_ENABLED
+        && detonation
+            .payload
+            .projectile_type()
+            .and_then(|id| rules.projectile(world.interner.resolve(id)))
+            .is_some_and(|kind| !kind.airburst && kind.airburst_weapon.is_some());
     // Installed Ares replaces this entire tail with1001A090, including when
     // Splits=false. Its circular AirburstSpread consumer is a separate chain;
     // never silently run the original fixed-nine implementation in that build.
-    if crate::rules::ARES_ENABLED {
+    if crate::rules::ARES_ENABLED && !impact_child {
         return;
     }
     // Native always has an actual `this` Bullet. Receiver-only packets (for
@@ -26,7 +35,7 @@ pub(super) fn emit(world: &mut Simulation, rules: &RuleSet, detonation: &Project
         .payload()
         .projectile_type()
         .and_then(|id| rules.projectile(world.interner.resolve(id)))
-        .filter(|kind| kind.airburst)
+        .filter(|kind| kind.airburst || impact_child)
     else {
         return;
     };
@@ -47,25 +56,31 @@ pub(super) fn emit(world: &mut Simulation, rules: &RuleSet, detonation: &Project
     let Some(warhead) = weapon.warhead.as_deref().and_then(|id| rules.warhead(id)) else {
         return;
     };
-    let Some(terrain) = world.resolved_terrain.as_ref() else {
-        return;
-    };
-    let center = NativeCellQuery::canonical(terrain).lookup_world(location.x, location.y);
-    for direction in 0..9 {
-        let target = {
-            let cells = NativeCellQuery::canonical(world.resolved_terrain.as_ref().unwrap());
-            let cell = cells.neighbor(center, direction);
-            match cell {
-                NativeCellIdentity::Real(_) => {
-                    let (x, y) = cells.coord(cell);
-                    ProjectileTarget::Cell {
-                        rx: x as u16,
-                        ry: y as u16,
-                    }
-                }
-                NativeCellIdentity::Dummy => ProjectileTarget::DummyCell,
-            }
+    let targets = if impact_child {
+        vec![detonation.target]
+    } else {
+        let Some(terrain) = world.resolved_terrain.as_ref() else {
+            return;
         };
+        let center = NativeCellQuery::canonical(terrain).lookup_world(location.x, location.y);
+        (0..9)
+            .map(|direction| {
+                let cells = NativeCellQuery::canonical(world.resolved_terrain.as_ref().unwrap());
+                let cell = cells.neighbor(center, direction);
+                match cell {
+                    NativeCellIdentity::Real(_) => {
+                        let (x, y) = cells.coord(cell);
+                        ProjectileTarget::Cell {
+                            rx: x as u16,
+                            ry: y as u16,
+                        }
+                    }
+                    NativeCellIdentity::Dummy => ProjectileTarget::DummyCell,
+                }
+            })
+            .collect()
+    };
+    for target in targets {
         // Source can have expired in the parent's synchronous AreaDamage.
         // current_detonation follows the existing pointer-expiry authority;
         // do not retain a firing-side house or attacker snapshot here.

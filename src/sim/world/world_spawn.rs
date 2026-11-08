@@ -590,7 +590,6 @@ impl Simulation {
                 }
                 if matches!(outcome, RevealOutcome::Revealed { .. }) {
                     Self::initialize_cloak_after_unlimbo(&sim.interner, &sim.session, &mut sim.substrate, stable_id, rules);
-                    sim.add_unit_sensor_after_unlimbo(stable_id, rules, overlay_registry);
                     sim.add_building_sensor_array_if_powered(stable_id, rules, overlay_registry);
                 }
                 Self::commit_map_placement_mission(&sim.session, &mut sim.substrate, stable_id, map_ent.mission);
@@ -1080,7 +1079,6 @@ impl Simulation {
             stable_id,
             rules,
         );
-        self.add_unit_sensor_after_unlimbo(stable_id, rules, overlay_registry);
         self.substrate.ready_finished_spawn_adapter(stable_id);
         Ok(Some(stable_id))
     }
@@ -1536,7 +1534,6 @@ impl Simulation {
             stable_id,
             rules,
         );
-        self.add_unit_sensor_after_unlimbo(stable_id, rules, overlay_registry);
         Some(stable_id)
     }
 
@@ -2349,7 +2346,13 @@ impl Simulation {
         else {
             return;
         };
-        if !matches!(category, EntityCategory::Unit | EntityCategory::Infantry) {
+        let prior_cloak = substrate
+            .entities
+            .get(stable_id)
+            .and_then(|entity| entity.cloak.as_ref());
+        let granted =
+            prior_cloak.is_some_and(crate::sim::cloak_disguise::CloakRuntime::crate_granted);
+        if !matches!(category, EntityCategory::Unit | EntityCategory::Infantry) && !granted {
             return;
         }
         let Some(object) = interner.object_type_in_category(type_ref, category.into(), rules)
@@ -2357,19 +2360,29 @@ impl Simulation {
             return;
         };
         let rank_cloak = has_weapon_ability(rank_from_u16(veterancy), object, Ability::Cloak);
-        if !object.cloakable && !rank_cloak {
+        let intrinsic = crate::sim::cloak_disguise::CloakRuntime::has_stealth_ability(
+            prior_cloak,
+            object.cloakable,
+        );
+        if !intrinsic && !rank_cloak {
             return;
         }
         let frame = session.binary_frame() as i32;
         // Only UnitClass owns the direct Unlimbo state write, and it tests the
         // copied runtime Cloakable byte rather than rank-granted CLOAK.
-        let fully_cloaked = category == EntityCategory::Unit && object.cloakable && !in_playfield;
+        let fully_cloaked = category == EntityCategory::Unit && intrinsic && !in_playfield;
         if let Some(entity) = substrate.entities.get_mut(stable_id) {
-            crate::sim::cloak_disguise::CloakRuntime::install(
-                &mut entity.cloak,
-                frame,
-                fully_cloaked,
-            );
+            // Unit737BEB is the only cloak write through Unit/Infantry,
+            // Foot4D7170, Techno6F6CA0 and Object5F4EC0 Unlimbo: constructors
+            // seed the owner once; repeated Unlimbo preserves timers/ability.
+            crate::sim::cloak_disguise::CloakRuntime::install_if_absent(&mut entity.cloak, frame);
+            if fully_cloaked {
+                entity
+                    .cloak
+                    .as_mut()
+                    .expect("installed cloak owner")
+                    .establish_unlimbo_fully_cloaked();
+            }
         }
     }
 
@@ -2760,7 +2773,6 @@ impl Simulation {
             new_sid,
             rules,
         );
-        self.add_unit_sensor_after_unlimbo(new_sid, rules, registry);
         self.mission_spawned_entities = true;
         if let Some((country_name, side_index, difficulty, tech_level, _)) = recalc_context {
             // The new Building's committed north-west anchor is the native
@@ -3006,7 +3018,6 @@ impl Simulation {
             new_sid,
             rules,
         );
-        self.add_unit_sensor_after_unlimbo(new_sid, rules, overlay_registry);
         if let Some(unit) = self.substrate.entities.get_mut(new_sid) {
             converted_health.apply(unit);
             // RESIDUAL: native Selects the new unit (vt+0x14C, `0x0044A137`)

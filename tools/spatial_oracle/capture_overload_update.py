@@ -19,7 +19,7 @@ import struct
 from pathlib import Path
 
 from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_CODE
-from unicorn.x86_const import UC_X86_REG_ECX, UC_X86_REG_EDX, UC_X86_REG_EAX, UC_X86_REG_ESP, UC_X86_REG_EIP, UC_X86_REG_FPCW
+from unicorn.x86_const import UC_X86_REG_ECX, UC_X86_REG_EDX, UC_X86_REG_EAX, UC_X86_REG_ESP, UC_X86_REG_EIP, UC_X86_REG_FPCW, UC_X86_REG_ESI, UC_X86_REG_EDI, UC_X86_REG_EBP, UC_X86_REG_EBX
 
 from tools.native_oracle import (load_image, run_checked, SCRATCH, STACK_BASE, STACK_SIZE,
                                  RET_MAGIC, NATIVE_FPCW, finish_vectors, provenance)
@@ -371,7 +371,7 @@ def metadata():
                       "static_target": STATIC_TARGET_INIT})
 
 
-def joined_inputs(root):
+def joined_inputs(root, *, npatch=False):
     """Selected physical MIND/overload readers on the existing shared VM."""
     from collections import deque
     from types import SimpleNamespace
@@ -384,7 +384,7 @@ def joined_inputs(root):
     from tools.procedural_drawing_oracle.electric_bolt import read_spark_types, prepare_spark_capacity
     import hashlib
 
-    m = host.joined_inputs(root)
+    m = host.joined_inputs(root, npatch=npatch)
     u, read = m.u, m.read32
     proxy = SimpleNamespace(m=m, trace=deque(maxlen=40), events=[], pending={}, frame=0, phase='setup')
 
@@ -622,9 +622,87 @@ def joined_metadata():
             rate_store=0x471C78, c4_reader=0x66C304, overload_readers=0x66C7A1))
 
 
+def promotion_capacity_generate():
+    """Actual Infantry weapon selection, manager birth and NP rank-change path."""
+    f = Fixture()
+    u = f.u
+    pool = 0x21000000
+    u.mem_map(pool, 0x10000)
+    kind, normal, elite, wh, extension, house = [pool + n * 0x1000 for n in range(6)]
+    u.reg_write(UC_X86_REG_FPCW, NATIVE_FPCW)
+    u.mem_write(OWNER, dwords(0x7EB058))
+    u.mem_write(OWNER + 0x6C0, dwords(kind))
+    u.mem_write(OWNER + 0x14, dwords(5))
+    u.mem_write(OWNER + 0x21C, dwords(house))
+    u.mem_write(kind + 0x898, dwords(normal))
+    u.mem_write(kind + 0xA94, dwords(elite))
+    u.mem_write(kind + 0xA90, dwords(extension))
+    for weapon, damage in ((normal, 1), (elite, 10)):
+        u.mem_write(weapon + 0xA4, dwords(damage))
+        u.mem_write(weapon + 0xAC, dwords(wh))
+    u.mem_write(wh + 0x155, b'\x01')
+    # Original type-extension defaults: UseNewUpgradeSystem=0/NextStage=0.
+    u.reg_write(UC_X86_REG_EDI, extension)
+    u.reg_write(UC_X86_REG_EBX, 0)
+    run_checked(u, 0xB959B6, 0xB959C2, count=20, required_addresses=[0xB959B6])
+    u.mem_write(0x8871E0, dwords(pool + 0x6000))
+    # Existing bounded allocation seam supplies the manager, but its whole
+    # constructor/register and original weapon-derived arguments execute.
+    u.mem_write(0x89E0F4, dwords(pool + 0x8000, 4))
+    u.mem_write(0x89E100, dwords(0))
+    u.reg_write(UC_X86_REG_ESI, OWNER)
+    u.reg_write(UC_X86_REG_EAX, 0x7EB058)
+    u.reg_write(UC_X86_REG_ESP, SP)
+    run_checked(u, 0x6F4090, 0x6F40F8, count=100000,
+                required_addresses=[0x70E140, CTOR])
+    manager = f.word(OWNER + 0x2BC)
+    assert f.word(manager + 0x3C) == 1 and f.word(0x89E100) == 1
+    u.mem_write(manager + 0x34, dwords(1))
+    normal_full = bool(f.call(0x4722A0, manager) & 0xFF)
+    u.mem_write(OWNER + 0x150, struct.pack('<f', 2.0))
+    u.mem_write(OWNER + 0x13C, dwords(2))
+    # Nonlocal owner skips only the original promotion sound/UI branch.
+    u.mem_write(0xA8B238, dwords(1))
+    u.mem_write(0xA83D4C, dwords(0))
+    u.reg_write(UC_X86_REG_ESI, OWNER)
+    u.reg_write(UC_X86_REG_EBP, 0)
+    u.reg_write(UC_X86_REG_ESP, SP)
+    run_checked(u, 0x6FA054, 0x6FA14B, count=100000,
+                required_addresses=[0xC28090, 0xC2D825])
+    f.call(UPDATE, manager)
+    assert f.word(OWNER + 0x2BC) == manager and f.word(manager + 0x3C) == 1
+    selected = f.word(f.call(0x70E140, OWNER, [0]))
+    return dict(normal_damage=1, elite_damage=10, normal_full_with_one=normal_full,
+                elite_full_with_one=bool(f.call(0x4722A0, manager) & 0xFF),
+                selected_elite_damage=f.word(selected + 0xA4),
+                elite_rank_cache=f.word(OWNER + 0x13C))
+
+
+def promotion_capacity_metadata():
+    return provenance(scope='Bounded actual NP Infantry manager birth and rank transition, not successful capture.',
+        assumptions=['Supplied Infantry7EB058/type/House, normal MindControl Damage1, elite Damage10, '
+            'MindControl warhead true and finite weapon flag. Original B959B6..C2 type-extension '
+            'default fragment sets UseNewUpgradeSystem/NextStage0 with constructor EBX0. '
+            'No physical INI reader or whole type/actor constructor. Original InitManagers capture '
+            'arm6F4090..F8 executes GetWeapon, whole manager constructor and global registration '
+            'into a supplied nonfull vector. Only manager node count1 is supplied; no fake nodes '
+            'are traversed. Original IsFull executes before/after promotion.',
+            'Raw veterancy changes0 to2.0, previous cache2; original6FA054..14B executes both '
+            'C28090 new-upgrade check and C2D825 spawn-promotion hook with no SpawnManager, '
+            'then finite CaptureManager Update and elite GetWeapon. Nonlocal House skips sound/UI. '
+            'No full TechnoAI, capture, node replacement, original SAV, external injection or match claim.'],
+        substitutions=['Inherited successful operator-new transport only; no weapon, manager, rank, '
+            'IsFull, NP-hook or Update result supplied.'],
+        entry_points=dict(init_capture=0x6F4090, constructor=CTOR, get_weapon=0x70E140,
+                          rank_transition=0x6FA054, update=UPDATE, is_full=0x4722A0))
+
+
 if __name__ == "__main__":
     import sys
-    if '--techno-order' in sys.argv:
+    if '--promotion-capacity' in sys.argv:
+        finish_vectors(promotion_capacity_generate, Path(__file__).with_name('capture_promotion_capacity.json'),
+            provenance=promotion_capacity_metadata, argv=[arg for arg in sys.argv[1:] if arg != '--promotion-capacity'])
+    elif '--techno-order' in sys.argv:
         if '--joined' in sys.argv:
             raise SystemExit('--techno-order and --joined are separate corpus modes')
         finish_vectors(techno_order_generate, Path(__file__).with_name('capture_overload_techno_order.json'),

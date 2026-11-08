@@ -61,6 +61,74 @@ fn rules() -> RuleSet {
     rules_with_ini(&IniFile::from_str(RULES))
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_spy_hijack_consumes_a_successful_boarder_and_recovers_a_missed_jump() {
+    let mut ini = IniFile::from_str(RULES);
+    ini.merge(&IniFile::from_str(
+        "[InfantryTypes]\n2=SPY\n[SPY]\nStrength=100\nArmor=none\nSpeed=4\nSight=9\n\
+         Locomotor={4A582744-9839-11d1-B709-00A024DDAFD1}\nPrimary=SpyJack\nTrainable=no\n\
+         [SpyJack]\nDamage=1\nROF=60\nRange=1.5\nProjectile=JUMP\nSpeed=100\n\
+         Warhead=SpyHijack\nLimboLaunch=yes\nFireOnce=yes\n\
+         [Warheads]\n6=SpyHijack\n[SpyHijack]\n\
+         Verses=0%,0%,0%,100%,100%,100%,0%,0%,0%,0%,0%\n\
+         MindControl=yes\nParasite=yes\nIsPermaControlled=yes\n",
+    ));
+    let mut rules = rules_with_ini(&ini);
+    rules.replace_art_registry_for_test(crate::rules::art_data::ArtRegistry::from_ini(
+        &IniFile::from_str("[DRON]\nPrimaryFireFLH=0,0,30\n[SPY]\nPrimaryFireFLH=0,0,30\n"),
+    ));
+    let mut arena = Arena::new(&rules);
+    let spy = arena.spawn(&rules, "SPY", "Americans", (10, 10));
+    let target = arena.spawn(&rules, "MTNK", "Russians", (12, 10));
+    let player = arena.sim.entities().get(spy).unwrap().owner();
+    arena.attack(spy, target);
+    arena.until(&rules, 400, |sim| {
+        sim.entities()
+            .get(target)
+            .is_some_and(|tank| tank.owner() == player)
+    });
+    assert!(
+        arena
+            .sim
+            .entities()
+            .get(target)
+            .unwrap()
+            .mind_control
+            .permanent()
+    );
+    assert!(
+        arena.sim.entities().get(spy).is_none(),
+        "successful hijacking must not leave a ghost spy"
+    );
+    arena
+        .sim
+        .uninit_with_context(target, crate::sim::world::UninitContext::with_rules(&rules));
+    arena.step(&rules);
+    assert!(
+        arena.sim.entities().get(spy).is_none(),
+        "destroying the stolen tank must not resurrect its spy"
+    );
+
+    let mut arena = Arena::new(&rules);
+    let spy = arena.spawn(&rules, "SPY", "Americans", (10, 10));
+    let target = arena.spawn(&rules, "MTNK", "Russians", (12, 10));
+    arena.attack(spy, target);
+    arena.until(&rules, 400, |sim| {
+        sim.entities()
+            .get(spy)
+            .is_some_and(|spy| spy.lifecycle.in_limbo())
+    });
+    arena
+        .sim
+        .uninit_with_context(target, crate::sim::world::UninitContext::with_rules(&rules));
+    arena.until(&rules, 400, |sim| {
+        sim.entities()
+            .get(spy)
+            .is_none_or(|spy| !spy.lifecycle.in_limbo())
+    });
+}
+
 fn rules_with_ini(ini: &IniFile) -> RuleSet {
     // Retail `[DRON] PrimaryFireFLH=`: a jump from ground height would
     // detonate on its first AI (`0x00466DB1`, old height <= 0).

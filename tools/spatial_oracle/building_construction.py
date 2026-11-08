@@ -392,7 +392,7 @@ def manual_primary_type_state(u, pointer):
 
 def joined_inputs(root, *, layers=None, building_names=JOINED_NAMES,
                   art_names=JOINED_ART_NAMES, country_names=(), unit_names=(),
-                  primary_field_names=(), planning_admission=False):
+                  primary_field_names=(), planning_admission=False, npatch=False):
     """Original constructors and scalar readers; lexical caches/file IO supplied.
 
     Sound owns the source-order INI links; Reader owns the signed-CRC caches,
@@ -425,6 +425,8 @@ def joined_inputs(root, *, layers=None, building_names=JOINED_NAMES,
     m.rules = m.alloc(0x5000)
     u.mem_write(0x8871E0, dwords(m.rules))
     m.invoke(0x665650, m.rules)
+    if npatch:
+        m.initialize_npatch_rules()
     m.scold_constructor_default = struct.unpack('<i', u.mem_read(m.rules + 0x700, 4))[0]
     m.invoke(0x4E7CF0, 0)  # all original MissionControl static constructors.
     scene = m.alloc(0x1500)
@@ -489,6 +491,8 @@ def joined_inputs(root, *, layers=None, building_names=JOINED_NAMES,
         rules_ini = m.alloc(0x40)
         u.mem_write(rules_ini, bytes(u.mem_read(INI, 0x40)))
         u.mem_write(INI, art_cache)
+        if npatch:
+            m.read_npatch_rules(rules_ini)
         for begin, end in ((0x670C99, 0x670CC0), (0x66B35E, 0x66B385),
                            (0x66A96A, 0x66A9BD)):
             u.mem_write(SP, bytes(0x200))
@@ -633,6 +637,11 @@ class JoinedFixture:
                               (0xA8E3A8, 32 * 32)):
             u.mem_write(address, bytes(inputs.u.mem_read(address, size)))
         u.mem_write(0x8871E0, dwords(inputs.rules))
+        if getattr(inputs, 'npatch', False):
+            # B97000's pointers refer into the input heap copied above.
+            # Carry real initialized state, never substitute extension defaults.
+            for address, size in ((0xBA700C, 4), (0xBA7138, 8)):
+                u.mem_write(address, bytes(inputs.u.mem_read(address, size)))
         self.types, self.rules = inputs.types, inputs.rules
         if arena_size < 0x200000 or arena_size % 0x1000:
             raise ValueError('Joined arena must be page-aligned and at least 2MiB')

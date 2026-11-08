@@ -207,6 +207,14 @@ pub(super) fn launch(
     sw_type: InternedId,
     (rx, ry): (u16, u16),
 ) -> bool {
+    // NPAE174 Super::Launch6CCD33 stores BA91E4 before rawReady+6F.
+    if let Some(sw) = rules.super_weapon(sim.interner.resolve(sw_type)) {
+        sim.session.lighting_mut().remember_superweapon_lighting(
+            crate::sim::scenario_session::ScenarioLightingProfile::Ion,
+            sw_type,
+            sw.npatch_lighting,
+        );
+    }
     if !super::is_charged(sim, owner, sw_type) {
         return false;
     }

@@ -1,0 +1,44 @@
+{
+  "schema_version": "vera20k.map-observation-expectations.v1",
+  "assertions": [
+    {
+      "name": "authored hostile target initially belongs to observer",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 0,
+      "field": "owner",
+      "op": "eq",
+      "value": "VERA-OBSERVER"
+    },
+    {
+      "name": "same target is captured after natural superweapon charge",
+      "subject": {
+        "actor": {
+          "type_id": "MTNK",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 0
+        }
+      },
+      "eventually": {
+        "from_step": 8100,
+        "through_step": 8800
+      },
+      "field": "owner",
+      "op": "eq",
+      "value": "Computer1"
+    }
+  ]
+}

@@ -1,5 +1,114 @@
 # Shell certification tooling
 
+## AYMOD Setup Observations
+
+The existing production shell capture also has four NPatch setup checkpoints:
+
+```text
+vera20k --shell-capture skirmish-expanded-colors --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
+vera20k --shell-capture skirmish-expanded-applied --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <another-new-absolute-output-directory>
+vera20k --shell-capture skirmish-expanded-in-game --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-in-game-output-directory>
+vera20k --shell-capture skirmish-expanded-reopened --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-reopened-output-directory>
+```
+
+Build the current `fast` executable with `--no-default-features --features npatch`
+through `tools.cargo_run`. Run it from an isolated directory whose `config.toml`
+points at AYMOD and a separate, fresh `settings_dir`; do not reuse personal settings.
+On the current Windows adapter use `WGPU_BACKEND=dx12` for the BGRA8 surface and
+leave `RA2_DIR` unset. Keep the child process owned and wait for its exit (for
+example with `subprocess.run`, not a detached Windows GUI invocation).
+
+All four routes enter Single Player/Skirmish through existing App handlers. The
+first three require the loaded 16-color catalog and enabled technology slider,
+open the local color combo, and use ordinary scrollbar down-arrow edges to reach
+its end. The shell wheel remains deliberately inert. `colors` captures the open
+bottom list; `applied` selects color priority 15 and clicks the technology slider's
+minimum. `in-game` then uses normal Start Game/loading and captures after 30
+presented in-game frames. Input sequences run once so repeated mouse moves cannot keep restarting
+the native status-help reveal. No UI state, catalog, slider or renderer is copied.
+
+The additive `expanded_setup` manifest block is a read-only projection of the live
+owners: available/visible color priorities, dropdown top index, selected/claimed
+color, visible technology slider and level. Check these fields and the existing
+frame byte length/SHA, then view `frame.bgra` through an external PNG decode.
+Keep decoded images outside capture directories. The ordinary checkpoint retains
+its original manifest shape and interaction guards; only these new checkpoints
+admit the local Color(0) popup.
+
+The `in-game` route additionally records `expanded_game` from the loaded local
+House, Scenario game options and presentation color map/rules scheme. It requires
+House and Scenario technology 1, a positive simulation tick and scheme `MPC16`;
+it does not assign these owners or bypass launch loading. The actual Windows
+AYMOD run reached tick 30 with scheme entry 15 and the full in-game frame.
+
+For a persistence round trip, run `in-game` in a fresh isolated settings directory,
+wait for process exit, then run `reopened` as a **new process with the same config**.
+The normal Start Game transaction writes the preferences; the reopened checkpoint
+does not open a combo, click a slider, launch a game, or assign selected values.
+It only checks the hydrated 16-color/technology page and records `expanded_setup`.
+Require selected/claimed priority 15 and technology 1, check frame bytes/SHA, and
+view the actual page. Require the isolated `VERA.INI` to remain byte-identical
+during the second run. Do not hand-author those keys as the positive fixture.
+
+Startup's capture-only audio/video defaults do **not** bypass these settings:
+`MultiplayerShellRuntime::initialize` independently reads `MultiPlayer` and
+`Skirmish` through the production INI reader, then `hydrate_shell` fills the UI.
+The actual two-process AY run passed and left the 417-byte settings file unchanged.
+As a negative control, `reopened` in another empty settings directory must fail
+with `persisted expanded setup was not hydrated`; the actual empty-directory run
+reported color 0/technology 10 and created no `VERA.INI`. This checks that the
+observer cannot silently set the expected values itself.
+
+These are MOD production observations, not enrolled stock-shell certificates.
+The sealed-native comparison commands below do not certify these checkpoints.
+They do not exercise OS/winit event dispatch, general audio/video preferences, network
+receive/reconnect or occupied-color policies. The in-game check bounds offline
+Start Game consumers; it is not a network or all-configuration certification.
+
+## AYMOD Lighting Restart Observation
+
+`skirmish-lighting-restart-in-game` observes world teardown through the actual
+shell, rather than resetting a standalone lighting object. Build with
+`--no-default-features --features npatch,dev-overlays` through `tools.cargo_run`.
+Use the isolated AYMOD config/DX12/owned-process procedure above and an isolated
+`saves/` directory containing **only a copy** of an active Dominator save. The
+[hot-load profile](../map_observation.aymod-dominator-hotload.example.json) and
+[instructions](../map_observation.md#computer-psychic-dominator-observation)
+produce one at tick 8199 through the normal save owner. Do not use personal saves
+or rewrite a source save. This is VERA same-layout snapshot loading, not native
+SAV compatibility.
+
+```text
+vera20k --shell-capture skirmish-lighting-restart-in-game --width 800 --height 600 --cursor-x 400 --cursor-y 300 --output <new-absolute-output-directory>
+```
+
+The route enters Skirmish and starts an ordinary match. After 30 presented
+in-game frames it invokes the existing quickload request owner directly (not a
+synthetic keyboard event). It requires the next presented world to have active
+custom Dominator lighting in both Scenario and the live presentation grid. Leave
+then queues ordinary EXIT; the returned Skirmish Back and Single Player Main
+Menu actions reach the root `0xE2`. The normal Single Player/Skirmish/Start Game
+route starts another match, and its 30th presented frame is captured.
+
+The additive `lighting_restart` block projects `outgoing_match` and `fresh_match`:
+clock, selected profile, effective/map Dominator RGB and presentation scheme RGB.
+The new match must select Normal, return effective Dominator RGB to that map's
+own profile (clearing the old SW source), restart its clock and match the initial
+fresh match's scheme RGB. House Convert normal RGB and map ground RGB are
+independent; the diagnostic compares the same owner across fresh matches, not
+those two different consumers. In the actual AY run, the outgoing tick 8200 was
+Dominator with effective/scheme RGB `[700,0,700]`; the new tick 30 was Normal,
+map/effective Dominator `[850,200,300]`, and fresh scheme `[1000,1000,1000]`.
+
+Check the route includes the root Main Menu, the frame length/SHA and the actual
+full in-game image. The production quit/load/input/presentation owners are reused;
+no simulation lighting or source metadata is assigned by the controller. This is
+one offline AY restart lifecycle, not OS input enrollment, every map/theater,
+network reconnection or native pixel certification. The ordinary sealed-stock
+checkpoint keeps its existing manifest and guards.
+
+## Stock Certification
+
 This package validates the one-shot production `main-menu-0xe2-steady` capture
 bundle and compares four physical presentation crops with the sealed native
 guard. It never writes to the guard and never performs desktop input or native

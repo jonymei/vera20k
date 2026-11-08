@@ -8,7 +8,7 @@ use super::super::layout::{
     RandomMapSetupControl, RectPx, SKIRMISH_AI_ROW_COUNT, SkirmishCheckboxId, SkirmishShellLayout,
     SkirmishTrackbarId, combo_face_rect,
 };
-use super::trackbars::{trackbar_ids, trackbar_rect};
+use super::trackbars::trackbar_rect;
 use super::{
     ChooseMapHoverTarget, ChooseMapModalState, OwnerDrawButton, SkirmishAiRowType, SkirmishComboId,
     SkirmishComboItem, SkirmishCountryChoice, SkirmishHoverTarget, SkirmishShellAction,
@@ -71,7 +71,7 @@ pub fn hovered_shell_control(
             return Some(SkirmishHoverTarget::Checkbox(checkbox.id));
         }
     }
-    for id in trackbar_ids() {
+    for id in state.trackbar_ids() {
         if trackbar_rect(layout, id).contains(x, y) {
             return Some(SkirmishHoverTarget::Trackbar(id));
         }
@@ -163,6 +163,10 @@ pub fn status_help_key_for_hover(target: SkirmishHoverTarget) -> Option<&'static
         }
         SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::UnitCount0x50c) => {
             Some("STT:SkirmishSliderUnit")
+        }
+        // Dialog102 gate60429D, control604593 -> BA1490 returns BA4014.
+        SkirmishHoverTarget::Trackbar(SkirmishTrackbarId::TechLevel0x512) => {
+            crate::rules::NPATCH_ENABLED.then_some("STT:SkirmishSliderTech")
         }
         SkirmishHoverTarget::FlagPicture => Some("STT:SkirmishPictureFlag"),
         SkirmishHoverTarget::GameTypeLabel0x6ec => Some("STT:SkirmishLabelGameType"),
@@ -385,12 +389,12 @@ pub fn apply_action(
         SkirmishShellAction::SelectColor(target) => {
             match target {
                 ColorComboId::Player => {
-                    state.player_color_index = (state.player_color_index + 1) % 8;
+                    state.player_color_index = (state.player_color_index + 1) % state.color_count;
                 }
                 ColorComboId::Ai(idx) => {
                     let visible = player_row_visible(state, maps, idx + 1);
                     if visible && let Some(opponent) = state.opponents.get_mut(idx) {
-                        opponent.color_index = (opponent.color_index + 1) % 8;
+                        opponent.color_index = (opponent.color_index + 1) % state.color_count;
                     }
                 }
             }

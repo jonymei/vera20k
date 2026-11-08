@@ -479,9 +479,10 @@ fn infantry_receiver_sequences_finish_through_production_frames() {
 /// Do_Action refuses a death sequence with no frames (`0x0051D70F`), and the
 /// Die2 arm ignores the answer (`0x005185E5`): the infantryman keeps his
 /// action at Health 0, and his next visit's Health reset (`0x0051BC57`)
-/// raises him to Health 1, alive.
+/// raises him to Health 1, alive in stock. NPAE174's unconditional jump at
+/// `0x0051BC67` bypasses that reset, including this non-Jumpjet case.
 #[test]
-fn zero_count_death_request_leaves_an_infantryman_the_health_reset_revives() {
+fn zero_count_death_request_observes_the_mode_specific_health_reset() {
     let art = terminal_art(3, 0);
     let (mut sim, rules) = fixture_with_art("", Some(&art));
     let victim = sim
@@ -517,8 +518,11 @@ fn zero_count_death_request_leaves_an_infantryman_the_health_reset_revives() {
         .entities
         .get(victim)
         .expect("the refused death removes no one");
-    assert_eq!(object.health.current(), 1);
-    assert!(object.is_ai_alive());
+    assert_eq!(
+        object.health.current(),
+        if crate::rules::NPATCH_ENABLED { 0 } else { 1 }
+    );
+    assert_eq!(object.is_ai_alive(), !crate::rules::NPATCH_ENABLED);
 }
 
 #[test]

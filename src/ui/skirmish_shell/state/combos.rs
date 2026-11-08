@@ -1,9 +1,7 @@
 //! Combo-box item, dropdown, scrollbar, and selection helpers for the skirmish shell.
 
 use crate::map::scenario_menu::MapMenuEntry;
-use crate::skirmish_launch::{
-    HOUSE_COLOR_COUNT, LaunchCountry, LaunchStartPosition, SKIRMISH_PLAYER_SLOT_COUNT,
-};
+use crate::skirmish_launch::{LaunchCountry, LaunchStartPosition, SKIRMISH_PLAYER_SLOT_COUNT};
 use crate::ui::shell::combobox::ComboPopup;
 
 use super::super::layout::{
@@ -103,8 +101,8 @@ pub(super) fn combo_dropdown_max_top_index(
     ScrollModel::combo(combo_dropdown_max_visible_rows(id)).max_top_index(item_count, visible_rows)
 }
 
-fn normal_color_index(color_index: usize) -> usize {
-    color_index.min(HOUSE_COLOR_COUNT - 1)
+fn normal_color_index(color_count: usize, color_index: usize) -> usize {
+    color_index.min(color_count - 1)
 }
 
 pub fn combo_dropdown_scrollbar_rect(
@@ -256,8 +254,9 @@ pub fn combo_items(
         .collect(),
         SkirmishComboId::Side(_) => state.country_catalog.items().to_vec(),
         SkirmishComboId::Color(row) => available_color_choices(
+            state.color_count,
             selected_color_claim(state, row),
-            (0..HOUSE_COLOR_COUNT)
+            (0..state.color_count)
                 .filter(|color| color_claimed_by_other_row(state, row, *color).is_some()),
         ),
         SkirmishComboId::Start(row) => {
@@ -305,13 +304,14 @@ pub fn country_choices(rules: &crate::rules::ruleset::RuleSet) -> Vec<SkirmishCo
 /// Shared4E4770/4E48E0 color catalog. A row retains its current claim while
 /// other occupied rows remove those colors from its available entries.
 pub fn available_color_choices(
+    color_count: usize,
     selected: Option<usize>,
     claimed: impl IntoIterator<Item = usize>,
 ) -> Vec<SkirmishComboItem> {
     let claimed: Vec<_> = claimed.into_iter().collect();
     std::iter::once(SkirmishComboItem::ColorSentinel(-2))
         .chain(
-            (0..HOUSE_COLOR_COUNT)
+            (0..color_count)
                 .filter(|color| selected == Some(*color) || !claimed.contains(color))
                 .map(SkirmishComboItem::Color),
         )
@@ -371,13 +371,19 @@ pub fn selected_combo_item(
             })
         }),
         SkirmishComboId::Color(0) => Some(if state.player_color_claimed {
-            SkirmishComboItem::Color(normal_color_index(state.player_color_index))
+            SkirmishComboItem::Color(normal_color_index(
+                state.color_count,
+                state.player_color_index,
+            ))
         } else {
             SkirmishComboItem::ColorSentinel(-2)
         }),
         SkirmishComboId::Color(row) => state.opponents.get(row - 1).map(|opponent| {
             if opponent.color_claimed {
-                SkirmishComboItem::Color(normal_color_index(opponent.color_index))
+                SkirmishComboItem::Color(normal_color_index(
+                    state.color_count,
+                    opponent.color_index,
+                ))
             } else {
                 SkirmishComboItem::ColorSentinel(-2)
             }
@@ -480,14 +486,17 @@ fn start_position_taken_by_other_row(
 fn selected_color_claim(state: &SkirmishShellState, row: usize) -> Option<usize> {
     if row == 0 {
         if state.player_color_claimed {
-            Some(normal_color_index(state.player_color_index))
+            Some(normal_color_index(
+                state.color_count,
+                state.player_color_index,
+            ))
         } else {
             None
         }
     } else {
         state.opponents.get(row - 1).and_then(|opponent| {
             if opponent.color_claimed {
-                Some(normal_color_index(opponent.color_index))
+                Some(normal_color_index(state.color_count, opponent.color_index))
             } else {
                 None
             }
@@ -502,7 +511,7 @@ fn color_claimed_by_other_row(
 ) -> Option<usize> {
     if row != 0
         && state.player_color_claimed
-        && normal_color_index(state.player_color_index) == color
+        && normal_color_index(state.color_count, state.player_color_index) == color
     {
         return Some(0);
     }
@@ -514,7 +523,7 @@ fn color_claimed_by_other_row(
             let opponent_row = idx + 1;
             if opponent_row != row
                 && opponent.color_claimed
-                && normal_color_index(opponent.color_index) == color
+                && normal_color_index(state.color_count, opponent.color_index) == color
             {
                 Some(opponent_row)
             } else {
@@ -531,7 +540,7 @@ fn color_claimed_by_other_row(
 fn evict_other_color_claimants(state: &mut SkirmishShellState, row: usize, color: usize) {
     if row != 0
         && state.player_color_claimed
-        && normal_color_index(state.player_color_index) == color
+        && normal_color_index(state.color_count, state.player_color_index) == color
     {
         state.player_color_claimed = false;
     }
@@ -539,7 +548,7 @@ fn evict_other_color_claimants(state: &mut SkirmishShellState, row: usize, color
         let opponent_row = idx + 1;
         if opponent_row != row
             && opponent.color_claimed
-            && normal_color_index(opponent.color_index) == color
+            && normal_color_index(state.color_count, opponent.color_index) == color
         {
             opponent.color_claimed = false;
         }
@@ -642,13 +651,13 @@ pub(super) fn apply_combo_selection(
             }
         }
         (SkirmishComboId::Color(0), SkirmishComboItem::Color(color)) => {
-            let color = color.min(HOUSE_COLOR_COUNT - 1);
+            let color = color.min(state.color_count - 1);
             evict_other_color_claimants(state, 0, color);
             state.player_color_index = color;
             state.player_color_claimed = true;
         }
         (SkirmishComboId::Color(row), SkirmishComboItem::Color(color)) => {
-            let color = color.min(HOUSE_COLOR_COUNT - 1);
+            let color = color.min(state.color_count - 1);
             evict_other_color_claimants(state, row, color);
             if let Some(opponent) = state.opponents.get_mut(row - 1) {
                 opponent.color_index = color;

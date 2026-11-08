@@ -492,6 +492,14 @@ fn launch(
     let native_kind = sw.kind.native_index();
     if (0..12).contains(&native_kind)
         && native_kind != 4
+        // These cases retain their recent lighting source before their own
+        // ready gate (NPAE1746CDA5B/6CCD33/6CCDB1).
+        && !matches!(
+            sw.kind,
+            SuperWeaponKind::MultiMissile
+                | SuperWeaponKind::LightningStorm
+                | SuperWeaponKind::PsychicDominator
+        )
         && !super::is_charged(sim, owner, sw_type_id)
     {
         return;

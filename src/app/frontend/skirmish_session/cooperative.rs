@@ -17,6 +17,8 @@ const CAMPAIGN_VALUE_CAPACITY: usize = 0x80;
 pub enum CooperativeError {
     #[error("launch Country index {index} is outside the allocated registry (count {count})")]
     InvalidCountryIndex { index: u16, count: usize },
+    #[error("random Country index {index} exceeds the launch registry identity space")]
+    InvalidRandomCountryIndex { index: i32 },
     #[error("CoopCampMD.ini was not found in the configured retail assets")]
     MissingCampaignIni,
     #[error("failed to parse CoopCampMD.ini from {source_name}: {message}")]

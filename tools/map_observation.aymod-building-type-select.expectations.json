@@ -1,0 +1,207 @@
+{
+  "schema_version": "vera20k.map-observation-expectations.v1",
+  "assertions": [
+    {
+      "name": "tap 1 keyboard.binding_command",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "keyboard.binding_command",
+      "op": "eq",
+      "value": "TypeSelect"
+    },
+    {
+      "name": "tap 1 keyboard.encoded_key",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "keyboard.encoded_key",
+      "op": "eq",
+      "value": 84
+    },
+    {
+      "name": "tap 1 keyboard.press_held",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "keyboard.press_held",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "tap 1 keyboard.release_cleared",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "keyboard.release_cleared",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "tap 1 after.local_input.selection_scope.last_outcome_key",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "after.local_input.selection_scope.last_outcome_key",
+      "op": "eq",
+      "value": "MSG:SelAcrossScreen"
+    },
+    {
+      "name": "tap 1 after.local_input.selection_scope.across_map",
+      "subject": {
+        "gesture": 1
+      },
+      "at_step": 2230,
+      "field": "after.local_input.selection_scope.across_map",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "tap 2 keyboard.binding_command",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "keyboard.binding_command",
+      "op": "eq",
+      "value": "TypeSelect"
+    },
+    {
+      "name": "tap 2 keyboard.encoded_key",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "keyboard.encoded_key",
+      "op": "eq",
+      "value": 84
+    },
+    {
+      "name": "tap 2 keyboard.press_held",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "keyboard.press_held",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "tap 2 keyboard.release_cleared",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "keyboard.release_cleared",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "tap 2 after.local_input.selection_scope.last_outcome_key",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "after.local_input.selection_scope.last_outcome_key",
+      "op": "eq",
+      "value": "MSG:SelAcrossMap"
+    },
+    {
+      "name": "tap 2 after.local_input.selection_scope.across_map",
+      "subject": {
+        "gesture": 2
+      },
+      "at_step": 2240,
+      "field": "after.local_input.selection_scope.across_map",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "normal placed pillbox [32, 88] active",
+      "subject": {
+        "actor": {
+          "type_id": "GAPILL",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            32,
+            88
+          ],
+          "bind_step": 2260
+        }
+      },
+      "at_step": 2260,
+      "field": "active",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "normal placed pillbox [32, 88] building.actually_placed",
+      "subject": {
+        "actor": {
+          "type_id": "GAPILL",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            32,
+            88
+          ],
+          "bind_step": 2260
+        }
+      },
+      "at_step": 2260,
+      "field": "building.actually_placed",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "normal placed pillbox [33, 88] active",
+      "subject": {
+        "actor": {
+          "type_id": "GAPILL",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            33,
+            88
+          ],
+          "bind_step": 2260
+        }
+      },
+      "at_step": 2260,
+      "field": "active",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "normal placed pillbox [33, 88] building.actually_placed",
+      "subject": {
+        "actor": {
+          "type_id": "GAPILL",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            33,
+            88
+          ],
+          "bind_step": 2260
+        }
+      },
+      "at_step": 2260,
+      "field": "building.actually_placed",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "normal construction spends initial funds",
+      "subject": {
+        "house": "VERA-OBSERVER"
+      },
+      "at_step": 2260,
+      "field": "economy.credits",
+      "op": "lt",
+      "value": 10000
+    }
+  ]
+}

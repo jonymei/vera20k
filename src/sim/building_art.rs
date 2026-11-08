@@ -665,6 +665,9 @@ impl Simulation {
             .anims
             .get_mut(new_id)?
             .mark_building_anim(config.y_sort);
+        //4519B9..4519F5 refreshes the EXISTING slots before copying the old
+        //frame and installing the new slot; the newborn keeps its ctor ramp.
+        self.refresh_building_anim_cloak_ramps(id);
         let old = self.substrate.entities.get(id)?.building_art.anim_slots[usize::from(slot)];
         if let Some(frame) = old
             .and_then(|old_id| self.anim(old_id))
@@ -702,6 +705,25 @@ impl Simulation {
             self.substrate.anims.get_mut(new_id)?.temporal_pause();
         }
         Some(new_id)
+    }
+
+    /// Building454E55/454EFE and slot birth4519B9 share the +178 writer.
+    /// Store only the deterministic +6ED stage. Native's locally hidden16
+    /// substitution is handled by presentation's parent-slot DrawDecision.
+    pub(crate) fn refresh_building_anim_cloak_ramps(&mut self, id: u64) {
+        let Some(building) = self.substrate.entities.get(id) else {
+            return;
+        };
+        let stage = building
+            .cloak
+            .as_ref()
+            .map_or(0, |cloak| cloak.building_stage()) as u8;
+        let slots = *building.building_art.anim_slots();
+        for anim in slots.into_iter().flatten() {
+            if let Some(anim) = self.substrate.anims.get_mut(anim) {
+                anim.set_building_cloak_ramp(stage);
+            }
+        }
     }
 
     pub fn clear_building_anim_slot(&mut self, id: u64, slot: u8) {

@@ -105,6 +105,7 @@
 pub mod airstrike;
 pub mod phobos_radiation;
 pub mod phobos_shields;
+pub(crate) mod npatch_rewards;
 /// Whether this binary includes the supported Ares extensions. INIs cannot change it.
 pub const ARES_ENABLED: bool = cfg!(feature = "ares");
 /// Whether this binary includes the supported Phobos extensions. INIs cannot change it.

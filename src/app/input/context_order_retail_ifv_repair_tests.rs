@@ -238,6 +238,97 @@ fn repair_click(sim: &Simulation, rules: &RuleSet, ifv: u64, tank: u64) -> Comma
     dispatch.commands.into_iter().next().unwrap()
 }
 
+#[test]
+fn parked_aircraft_repair_click_keeps_stock_exclusion_only_without_npatch() {
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let rules = &retail.rules;
+    let (mut sim, ifv, _) = repair_ifv(rules);
+    let pad = sim.spawn_object("GAAIRC", OWNER, 22, 16, 0, rules).unwrap();
+    let plane = sim.spawn_object("ORCA", OWNER, 22, 16, 0, rules).unwrap();
+    sim.entities_mut_for_test()
+        .get_mut(plane)
+        .unwrap()
+        .health
+        .set_for_test(rules.object("ORCA").unwrap().strength / 2);
+    assert_eq!(
+        sim.occupancy().first_building_on_layer(
+            22,
+            16,
+            crate::sim::movement::locomotor::MovementLayer::Ground,
+        ),
+        Some(pad)
+    );
+    let owner = sim.entities().get(ifv).unwrap().owner();
+    let action = sim.unit_repair_action(ifv, plane, owner, rules);
+    if cfg!(feature = "npatch") {
+        assert_eq!(action, Some(UnitRepairAction::Repair));
+        let hover = HoverTargetKindWithId {
+            kind: HoverTargetKind::FriendlyUnit,
+            stable_id: plane,
+        };
+        let feedback = capability_cursor_for_hover(
+            &sim,
+            &[ifv],
+            Some(ifv),
+            &hover,
+            Some(rules),
+            None,
+            OrderModifier::Normal,
+            false,
+            false,
+        );
+        assert_eq!(feedback, CursorFeedbackKind::RepairAction(true));
+        assert_eq!(cursor_id_for_feedback(feedback), Some(CursorId::Repair));
+        assert!(
+            matches!(repair_click(&sim, rules, ifv, plane), Command::Attack { attacker_id, target_id }
+            if attacker_id == ifv && target_id == plane)
+        );
+    } else {
+        assert_eq!(action, None);
+    }
+}
+
+#[test]
+fn organic_unit_repair_input_uses_the_npatch_non_aircraft_gate() {
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let rules = &retail.rules;
+    let (mut sim, ifv, _) = repair_ifv(rules);
+    let kind = rules.object("DLPH").unwrap();
+    assert!(kind.organic && !kind.non_vehicle);
+    let owner = sim.entities().get(ifv).unwrap().owner();
+    let type_ref = sim.intern("DLPH");
+    // Supplied target facts for the input query, not a water-spawn/movement test.
+    let mut dolphin = crate::sim::game_entity::GameEntity::new_at_frame_zero_for_test(
+        99999,
+        18,
+        16,
+        0,
+        0,
+        owner,
+        crate::sim::combat::Health::new(kind.strength / 2),
+        type_ref,
+        EntityCategory::Unit,
+        0,
+        5,
+        false,
+    );
+    dolphin.lifecycle.set_object_alive_for_test(true);
+    dolphin.lifecycle.set_in_limbo_for_test(false);
+    sim.entities_mut_for_test().insert(dolphin);
+    assert_eq!(
+        sim.unit_repair_action(ifv, 99999, owner, rules),
+        if cfg!(feature = "npatch") {
+            None
+        } else {
+            Some(UnitRepairAction::Repair)
+        }
+    );
+}
+
 /// Under the attack-move chord, ClickedMission promotes the repair click's
 /// Attack too (`0x006FFC09..0x006FFC1E`) and keeps the friend as the event
 /// target, which `Assign_Target_Command` stores as MegaTarget.

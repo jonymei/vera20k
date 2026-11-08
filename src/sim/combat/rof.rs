@@ -147,6 +147,14 @@ pub(crate) struct RofQuery<'a> {
     pub bunker_rof_multiplier: f32,
 }
 
+/// GetROF6FCFA0 returns EAX plus, under NPAE174, the EDX burst interval.
+/// Ammo/empty-slot early returns have no established EDX semantic result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RofDurations {
+    pub reload: i32,
+    pub burst_delay: Option<i32>,
+}
+
 /// `TechnoClass::GetROF @ 0x006FCFA0`, arm by arm:
 /// - a building with more than one Ammo returns 1 (`0x006FCFA9..0x006FCFBE`),
 ///   and so does an empty weapon slot (`0x006FCFD4`), with no draw;
@@ -163,38 +171,62 @@ pub(crate) struct RofQuery<'a> {
 ///   and a bunkered unit divides by `BunkerROFMultiplier=` when that is not
 ///   zero or NaN (`0x006FD1B1..0x006FD1EF`). No clamp follows.
 ///
+/// NPAE174 removes the Sonic/particle early returns, continues full ROF
+/// after a burst delay, and consumes but does not add jitter6FD0CB..CE.
+/// The capability argument lets stock native fixtures exercise this same
+/// owner; production passes NPATCH_ENABLED, never a per-entity policy.
 /// Every draw is Scenario `RandomRanged`; all x87 steps run under the
 /// process control word (53-bit, chop).
-pub(crate) fn get_rof(query: &RofQuery<'_>, rng: &mut SimRng) -> i32 {
+pub(crate) fn get_rof(query: &RofQuery<'_>, rng: &mut SimRng, npatch: bool) -> RofDurations {
     if query.building_ammo.is_some_and(|ammo| ammo > 1) {
-        return 1;
+        return RofDurations {
+            reload: 1,
+            burst_delay: None,
+        };
     }
     let Some(weapon) = query.weapon else {
-        return 1;
+        return RofDurations {
+            reload: 1,
+            burst_delay: None,
+        };
     };
-    if weapon.is_sonic
-        || (weapon.use_spark_particles && query.live.spark)
-        || (weapon.use_fire_particles && query.live.fire)
-        || (weapon.is_railgun && query.live.railgun)
+    if !npatch
+        && (weapon.is_sonic
+            || (weapon.use_spark_particles && query.live.spark)
+            || (weapon.use_fire_particles && query.live.fire)
+            || (weapon.is_railgun && query.live.railgun))
     {
-        return weapon.rof;
+        return RofDurations {
+            reload: weapon.rof,
+            burst_delay: Some(weapon.rof),
+        };
     }
+    let mut burst_delay = None;
     if query.burst_index < weapon.burst {
-        if let Some(delays) = query.unit_burst_delays
-            && (1..=4).contains(&query.burst_index)
-        {
-            let delay = delays[(query.burst_index - 1) as usize];
-            if delay != -1 {
-                return delay;
-            }
+        let explicit = query.unit_burst_delays.and_then(|delays| {
+            (1..=4)
+                .contains(&query.burst_index)
+                .then(|| delays[(query.burst_index - 1) as usize])
+                .filter(|&delay| delay != -1)
+        });
+        let delay = explicit.unwrap_or_else(|| rng.next_range_u32_inclusive(3, 5) as i32);
+        if !npatch {
+            return RofDurations {
+                reload: delay,
+                burst_delay: Some(delay),
+            };
         }
-        return rng.next_range_u32_inclusive(3, 5) as i32;
+        // NPAE1746FD075/6FD094 retain the interval and continue full ROF.
+        burst_delay = Some(delay);
     }
     let jitter = rng.next_range_u32_inclusive(0, 2) as i32;
-    let mut rof = X::ftol_i32_low_masked(X::add(
-        X::mul(X::load_i32(weapon.rof), X::load_f64(query.house_rof)),
-        X::load_i32(jitter),
-    ));
+    let scaled = X::mul(X::load_i32(weapon.rof), X::load_f64(query.house_rof));
+    //6FD0CB..CE are NOPs in NPAE174: keep the draw, omit FIADD only.
+    let mut rof = X::ftol_i32_low_masked(if npatch {
+        scaled
+    } else {
+        X::add(scaled, X::load_i32(jitter))
+    });
     if query.rof_ability {
         rof = X::ftol_i32_low_masked(X::mul(
             X::load_i32(rof),
@@ -224,13 +256,124 @@ pub(crate) fn get_rof(query: &RofQuery<'_>, rng: &mut SimRng) -> i32 {
             rof = X::ftol_i32_low_masked(X::div(X::load_i32(rof), multiplier));
         }
     }
-    rof
+    RofDurations {
+        reload: rof,
+        burst_delay: Some(burst_delay.unwrap_or(rof)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::rules::ini_parser::IniFile;
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_full_reload_and_short_interval_match_native_outputs() {
+        let rows: Vec<serde_json::Value> = serde_json::from_str(crate::test_fixture::text(
+            "tools/spatial_oracle/techno_rearm_npatch.json",
+        ))
+        .unwrap();
+        for row in rows {
+            let input = &row["input"];
+            assert_eq!(input["class"], 1, "these controls supply a Unit");
+            let ini = IniFile::from_str(&format!(
+                "[W]\nROF={}\nBurst={}\nIsSonic={}\nUseSparkParticles={}\n",
+                input["rof"],
+                input["burst"],
+                input["direct"].as_i64().unwrap_or(0) != 0,
+                input["spark"][0].as_i64().unwrap_or(0) != 0
+            ));
+            let weapon = WeaponType::from_ini_section("W", ini.section("W").unwrap());
+            let query = RofQuery {
+                building_ammo: None,
+                weapon: Some(&weapon),
+                live: LiveParticles {
+                    spark: input["spark"][1].as_i64().unwrap_or(0) != 0,
+                    ..Default::default()
+                },
+                burst_index: input["burst_index"].as_i64().unwrap() as i32,
+                unit_burst_delays: Some(
+                    input["unit_delays"].as_array().map_or([-1; 4], |values| {
+                        std::array::from_fn(|n| values[n].as_i64().unwrap() as i32)
+                    }),
+                ),
+                house_rof: NativeF64Bits::from_bits(
+                    u64::from_str_radix(
+                        input["house_bits"].as_str().unwrap_or("3ff0000000000000"),
+                        16,
+                    )
+                    .unwrap(),
+                ),
+                rof_ability: input["veteran_ability"].as_i64().unwrap_or(0) != 0
+                    && input["veterancy"].as_f64().unwrap_or(0.0) >= 1.0,
+                veteran_rof: f64::from_bits(0x3fe3333340000000),
+                occupants: None,
+                bunkered: false,
+                occupy_rof_multiplier: 1.0,
+                bunker_rof_multiplier: 1.0,
+            };
+            let mut rng = SimRng::new(input["seed"].as_u64().unwrap());
+            assert_eq!(rng.native_state_hex(), row["output"]["rng_before"]);
+            let duration = get_rof(&query, &mut rng, true);
+            let mut actor = crate::sim::game_entity::GameEntity::test_default_of_category(
+                1,
+                "TANK",
+                "H",
+                10,
+                10,
+                crate::map::entities::EntityCategory::Unit,
+            );
+            actor.rearm_after_fire(0, duration.reload, duration.burst_delay.unwrap());
+            let retained = serde_json::to_value(&actor).unwrap();
+            assert_eq!(
+                i64::from(actor.rearm_timer.duration()),
+                row["output"]["full_rof"],
+                "{input}"
+            );
+            assert_eq!(
+                retained["turret_selection"]["charge_turret_delay"], row["output"]["burst_delay"],
+                "{input}"
+            );
+            assert_eq!(
+                rng.native_state_hex(),
+                row["output"]["rng_after"],
+                "{input}"
+            );
+            if let Some(writers) = row["output"]["fire_writers"].as_array() {
+                for writer in writers {
+                    let expected = if writer["disk"].as_bool().unwrap() {
+                        RofDurations {
+                            reload: duration.reload,
+                            burst_delay: Some(duration.reload),
+                        }
+                    } else {
+                        crate::sim::combat::world_fire::fireat_rearm_frames(
+                            duration,
+                            writer["berserk"].as_bool().unwrap(),
+                            true,
+                        )
+                    };
+                    actor.rearm_after_fire(200, expected.reload, expected.burst_delay.unwrap());
+                    assert_eq!(
+                        i64::from(actor.rearm_timer.duration()),
+                        writer["reload"],
+                        "{writer}"
+                    );
+                    assert_eq!(
+                        i64::from(actor.saved_rearm_delay()),
+                        writer["saved_delay"],
+                        "{writer}"
+                    );
+                    assert_eq!(
+                        i64::from(actor.rearm_timer.start_frame()),
+                        writer["start"],
+                        "{writer}"
+                    );
+                }
+            }
+        }
+    }
 
     /// `tools/spatial_oracle/techno_rearm.py` runs the original GetROF over
     /// every arm (supplied class, weapon slot, garrison and occupant queries;
@@ -303,7 +446,7 @@ mod tests {
                 "{input}"
             );
             assert_eq!(
-                i64::from(get_rof(&query, &mut rng)),
+                i64::from(get_rof(&query, &mut rng, false).reload),
                 row["output"].as_i64().unwrap(),
                 "{input}"
             );

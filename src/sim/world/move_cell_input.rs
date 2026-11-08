@@ -516,7 +516,7 @@ impl Simulation {
             .resolved_terrain
             .as_ref()
             .is_some_and(|terrain| terrain.is_destroyable_cliff(cell.0, cell.1))
-            && !warhead.is_some_and(|warhead| warhead.fire);
+            && !warhead.is_some_and(|warhead| warhead.fire());
         if !(overlay.is_some_and(|overlay| overlay.legal_target) || cliff) {
             return false;
         }

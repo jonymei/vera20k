@@ -312,6 +312,16 @@ impl RulesLayerStack {
             ini,
             powerups,
             content_hash: self.content_hash(),
+            // Load_Game_Rules52D144 -> B98800 -> C2ADE9 reads the startup root,
+            // unlike RulesProcess668EC0's unpatched multiplayer-settings read.
+            npatch_dropdown_colors: crate::rules::NPATCH_ENABLED
+                && self.layers[0]
+                    .ini
+                    .section_or_empty("UISettings")
+                    .read_bool("UseDropDownColors", false),
+            multiplayer_color_count: crate::rules::color_scheme::startup_multiplayer_color_count(
+                &self.layers[0].ini,
+            ),
             native_type_construction_trace,
         })
     }
@@ -561,6 +571,9 @@ const PARADROP_INFANTRY_KEYS: [&str; 4] = [
 /// Result of applying an ordered rules stack.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProcessedRulesLayers {
+    #[serde(default)]
+    npatch_dropdown_colors: bool,
+    multiplayer_color_count: usize,
     ini: IniFile,
     powerups: PowerupTable,
     content_hash: u64,
@@ -568,6 +581,14 @@ pub struct ProcessedRulesLayers {
 }
 
 impl ProcessedRulesLayers {
+    pub(crate) fn npatch_dropdown_colors(&self) -> bool {
+        self.npatch_dropdown_colors
+    }
+
+    pub(crate) fn multiplayer_color_count(&self) -> usize {
+        self.multiplayer_color_count
+    }
+
     #[cfg(feature = "ares")]
     pub(crate) fn ares_global_controls(&self) -> &AresGlobalControls {
         &self
@@ -1169,6 +1190,42 @@ impl ProcessedRulesLayers {
             .map(|member| (member.native_stored_id.as_str(), &member.unit_shp))
     }
 
+    /// NPAE174's retained byte used by UnitCtor735584 -> C2DEB6.
+    pub(crate) fn unit_turret_rot_states(&self) -> impl Iterator<Item = (&str, u8)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Vehicle)
+            .into_iter()
+            .flatten()
+            .map(|member| (member.native_stored_id.as_str(), member.npatch_turret_rot))
+    }
+
+    pub(crate) fn aircraft_aa_combat_states(&self) -> impl Iterator<Item = (&str, bool)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Aircraft)
+            .into_iter()
+            .flatten()
+            .map(|member| (member.native_stored_id.as_str(), member.npatch_aa_combat))
+    }
+
+    pub(crate) fn bunker_protection_states(&self) -> impl Iterator<Item = (&str, i8)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .get(&RulesTypeFamily::Building)
+            .into_iter()
+            .flatten()
+            .map(|member| {
+                (
+                    member.native_stored_id.as_str(),
+                    member.npatch_bunker_protection,
+                )
+            })
+    }
+
     /// UnitType+67C after the last admitted Rules body; an unread type keeps
     /// constructor -1. Missing sections and missing SpeedType keys differ.
     pub(crate) fn unit_speed_type_states(&self) -> impl Iterator<Item = (&str, SpeedType)> {
@@ -1332,6 +1389,29 @@ impl ProcessedRulesLayers {
             })
     }
 
+    /// NPAE174 TechnoType+D20 after each reached ReadINI714AF3 pass.
+    #[cfg(feature = "npatch")]
+    pub(crate) fn use_rof_as_burst_delays_states(
+        &self,
+    ) -> impl Iterator<Item = (ObjectCategory, &str, bool)> {
+        self.native_type_construction_trace
+            .registry_state()
+            .families
+            .iter()
+            .filter_map(|(family, members)| {
+                family.object_category().map(|category| (category, members))
+            })
+            .flat_map(|(category, members)| {
+                members.iter().map(move |member| {
+                    (
+                        category,
+                        member.native_stored_id.as_str(),
+                        member.npatch_use_rof_as_burst_delays,
+                    )
+                })
+            })
+    }
+
     /// TechnoType+3DC after each reached ReadInt714145..714159.
     pub(crate) fn lepton_mind_control_offset_states(
         &self,
@@ -1434,6 +1514,7 @@ impl ProcessedRulesLayers {
                     occupant_anim: member.weapon.occupant_anim.as_deref(),
                     open_topped_anim: member.weapon.open_topped_anim.as_deref(),
                     attached_particle_system: member.weapon.attached_particle_system.as_deref(),
+                    npatch_electric_bolt: member.weapon.npatch_electric_bolt,
                 }
             })
     }
@@ -1546,6 +1627,20 @@ impl ProcessedRulesLayers {
                 member.super_weapon_weapon.as_deref(),
                 member.super_weapon_aux_building.as_deref(),
             )
+        })
+    }
+
+    #[cfg(feature = "npatch")]
+    pub(crate) fn super_weapon_lighting_states(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &str,
+            crate::rules::superweapon_type::NpatchSuperWeaponLighting,
+        ),
+    > {
+        self.member_states(RulesTypeFamily::SuperWeapon, |member| {
+            member.super_weapon_lighting
         })
     }
 
@@ -1711,6 +1806,9 @@ impl ProcessedRulesLayers {
             &str,
             bool,
             bool,
+            bool,
+            i8,
+            bool,
             &[String],
             &[String],
             &[NativeF64Bits; 11],
@@ -1728,6 +1826,9 @@ impl ProcessedRulesLayers {
                     &*member.native_stored_id,
                     member.warhead_anim.conventional,
                     member.warhead_anim.em_effect,
+                    member.warhead_anim.causes_delay_kill,
+                    member.npatch_bunker_penetration,
+                    member.npatch_doesnt_affect_enemies,
                     member.warhead_anim.anim_list.as_slice(),
                     member.warhead_anim.debris_types.as_slice(),
                     &member.warhead_verses,
@@ -2004,7 +2105,16 @@ impl ProcessedRulesLayers {
     /// the last pass that read them.
     pub(crate) fn prerequisite_states(
         &self,
-    ) -> impl Iterator<Item = (ObjectCategory, &str, &[Prerequisite], &[Prerequisite])> {
+    ) -> impl Iterator<
+        Item = (
+            ObjectCategory,
+            &str,
+            &[Prerequisite],
+            &[Prerequisite],
+            &crate::rules::prerequisite::NpatchPrerequisites,
+            i32,
+        ),
+    > {
         self.native_type_construction_trace
             .registry_state()
             .families
@@ -2019,6 +2129,8 @@ impl ProcessedRulesLayers {
                         member.native_stored_id.as_str(),
                         member.prerequisite.as_slice(),
                         member.prerequisite_override.as_slice(),
+                        &member.npatch_prerequisites,
+                        member.ai_planning_count,
                     )
                 })
             })
@@ -2837,6 +2949,7 @@ impl NativeRulesRegistryState {
                 .prerequisite
                 .iter()
                 .chain(&member.prerequisite_override)
+                .chain(member.npatch_prerequisites.entries())
                 .any(|entry| !valid_entry(entry))
         }) {
             return Err(RulesError::InvalidSavedState(
@@ -3205,6 +3318,8 @@ struct SelectAnimRulesState {
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 struct WarheadAnimReadState {
+    // Warhead ctor75CF31: raw +130 starts false; both aliases retain it.
+    causes_delay_kill: bool,
     conventional: bool,
     em_effect: bool,
     anim_list: Vec<String>,
@@ -3426,6 +3541,28 @@ struct ProcessedType {
     /// (`+0x654`), each read with its current list as the default.
     prerequisite: Vec<Prerequisite>,
     prerequisite_override: Vec<Prerequisite>,
+    #[serde(default)]
+    npatch_prerequisites: crate::rules::prerequisite::NpatchPrerequisites,
+    #[serde(default)]
+    ai_planning_count: i32,
+    /// AYMod NPAE174 TechnoType ctor710F93 seeds FF; ReadINI713879..71388D
+    /// passes the retained byte to ReadInt5276D0 and stores only AL.
+    npatch_turret_rot: u8,
+    /// NPAE174 TechnoType ctor7114BE clears +D20; ReadINI714AF3..714B0E
+    /// reads UseROFAsBurstDelays through current-default ReadBool5295F0.
+    #[cfg(feature = "npatch")]
+    npatch_use_rof_as_burst_delays: bool,
+    /// NPAE174 AircraftType ctor41C8D0 clears E4C; ReadINI41CD68 ->
+    /// B95875..B95889 uses ReadBool5295F0 with the retained current default.
+    npatch_aa_combat: bool,
+    /// NPAE174 TechnoType ctor710F8D -> C2EF82 zeroes +5A3. Reader
+    /// C2EF58..C2EF6C retains and truncates its current-default integer.
+    npatch_bunker_protection: i8,
+    /// NPAE174 replaces stock Fire's +14C reader at75D5DE..75D5F2;
+    /// Warhead ctor75CF83 initializes this byte to zero.
+    npatch_bunker_penetration: i8,
+    /// NPAE174 Warhead ctor75CF25 clears +129; ReadINI C2E90D retains it.
+    npatch_doesnt_affect_enemies: bool,
     weapon_slots: WeaponSlots,
     techno_references: TechnoTypeReferences,
     weapon: WeaponReadState,
@@ -3451,6 +3588,9 @@ struct ProcessedType {
     /// ParticleSystemType+294, the bound ParticleType's index: constructor -1
     /// (`0x006440B3`), rebound by every reached ReadINI (`0x0064430F..0x00644323`).
     holds_what: Option<usize>,
+    /// NPAE174 retained SuperWeaponType light reader B97080.
+    #[cfg(feature = "npatch")]
+    super_weapon_lighting: crate::rules::superweapon_type::NpatchSuperWeaponLighting,
     /// SuperWeaponType+9C `WeaponType=`, the stored ID of its WeaponType:
     /// constructor null (`0x006CE5CB`); ReadINI (`0x006CEA4A..0x006CEA8C`)
     /// keeps it on an empty ReadString128 and otherwise stores
@@ -3771,6 +3911,7 @@ pub(crate) struct WeaponState<'a> {
     pub(crate) occupant_anim: Option<&'a str>,
     pub(crate) open_topped_anim: Option<&'a str>,
     pub(crate) attached_particle_system: Option<&'a str>,
+    pub(crate) npatch_electric_bolt: crate::rules::weapon_type::NpatchElectricBolt,
 }
 
 /// Fields needed by Weapon7729F0, retained on the same live Weapon object.
@@ -3778,6 +3919,7 @@ pub(crate) struct WeaponState<'a> {
 /// name: repeated names longer than 24 bytes can allocate distinct native types.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 struct WeaponReadState {
+    npatch_electric_bolt: crate::rules::weapon_type::NpatchElectricBolt,
     speed: i32,
     /// +B4, ReadRange (`0x00474620`) at `0x00772331` with the retained value
     /// as its default, over the constructor's zero (`0x00771CB6`): leptons,
@@ -3869,6 +4011,16 @@ impl ProcessedType {
                 crate::rules::object_type::DEFAULT_LEPTON_MIND_CONTROL_OFFSET,
             prerequisite: Vec::new(),
             prerequisite_override: Vec::new(),
+            npatch_prerequisites: Default::default(),
+            // NPAE174 constructor710F8D -> C2EF82 starts the byte at1.
+            ai_planning_count: i32::from(crate::rules::NPATCH_ENABLED),
+            npatch_turret_rot: u8::MAX,
+            #[cfg(feature = "npatch")]
+            npatch_use_rof_as_burst_delays: false,
+            npatch_aa_combat: false,
+            npatch_bunker_protection: 0,
+            npatch_bunker_penetration: 0,
+            npatch_doesnt_affect_enemies: false,
             weapon_slots: WeaponSlots::default(),
             weapon: WeaponReadState::default(),
             warhead_anim: WarheadAnimReadState::default(),
@@ -3879,6 +4031,8 @@ impl ProcessedType {
             emp_type: None,
             armor_id: ArmorId::NONE,
             holds_what: None,
+            #[cfg(feature = "npatch")]
+            super_weapon_lighting: Default::default(),
             super_weapon_weapon: None,
             super_weapon_aux_building: None,
             unit_delivery: None,
@@ -5256,6 +5410,13 @@ impl RulesPassProcessor {
                     self.family_mut(RulesTypeFamily::SuperWeapon)[index]
                         .super_weapon_aux_building = building;
                 }
+                #[cfg(feature = "npatch")]
+                {
+                    let kind = crate::rules::superweapon_type::SuperWeaponKind::read(&effective);
+                    self.family_mut(RulesTypeFamily::SuperWeapon)[index]
+                        .super_weapon_lighting
+                        .read(&raw, kind);
+                }
                 #[cfg(feature = "phobos")]
                 {
                     // Phobos SWTypeExt reads its three gates in the same
@@ -5530,9 +5691,33 @@ impl RulesPassProcessor {
                     |name| self.building_index(name),
                     self.ares_prerequisites.as_ref(),
                 );
+                let mut npatch_prerequisites = member.npatch_prerequisites.clone();
+                npatch_prerequisites.apply_pass(&raw, |name| self.building_index(name));
                 let member = &mut self.families.get_mut(&family).unwrap()[index];
                 member.prerequisite = prerequisite;
                 member.prerequisite_override = prerequisite_override;
+                member.npatch_prerequisites = npatch_prerequisites;
+                if crate::rules::NPATCH_ENABLED {
+                    // NPAE174 ReadINI713879..71388D: current-byte default,
+                    // then byte truncation on every physical Rules pass.
+                    member.npatch_turret_rot =
+                        raw.read_int("TurretROT", i32::from(member.npatch_turret_rot)) as u8;
+                    // NPAE174 ReadINI7138C7 -> C2EF3E retains the byte;
+                    // NPSE359 reads AIPlanningCount at C2E223. Compatibility
+                    // policy: the legacy spelling wins within the same pass.
+                    let key = if raw.is_present("AIBasePlanningCount") {
+                        "AIBasePlanningCount"
+                    } else {
+                        "AIPlanningCount"
+                    };
+                    member.ai_planning_count = raw.read_int(key, member.ai_planning_count) & 0xff;
+                    // NPAE174 C2EF58 follows its planning-count read;
+                    // current-byte default and low-byte store, no clamp.
+                    member.npatch_bunker_protection = raw.read_int(
+                        "BunkerProtectionLevel",
+                        i32::from(member.npatch_bunker_protection),
+                    ) as i8;
+                }
                 self.families.get_mut(&family).unwrap()[index]
                     .recoil
                     .apply_pass(&raw);
@@ -5713,6 +5898,14 @@ impl RulesPassProcessor {
                             "Trailer",
                             RulesTypeFamily::Animation,
                         );
+                        #[cfg(feature = "npatch")]
+                        {
+                            // Aircraft ReadINI41CD68 -> B95875..B95889,
+                            // after the base Techno reader and fixed ART Trailer.
+                            let member = &mut self.family_mut(family)[index];
+                            member.npatch_aa_combat =
+                                raw.read_bool("AACombat", member.npatch_aa_combat);
+                        }
                     }
                     RulesTypeFamily::Vehicle => {
                         let member = &mut self.families.get_mut(&family).unwrap()[index];
@@ -6078,6 +6271,13 @@ impl RulesPassProcessor {
         let member = &mut self.family_mut(family)[index];
         member.radial_fire_segments =
             raw.read_int("RadialFireSegments", member.radial_fire_segments);
+        #[cfg(feature = "npatch")]
+        {
+            // NPAE174 ReadINI714AF3..714B0E, after RadialFireSegments.
+            // This is the literal BA4A6F, not stock's NoAutoFire key.
+            member.npatch_use_rof_as_burst_delays =
+                raw.read_bool("UseROFAsBurstDelays", member.npatch_use_rof_as_burst_delays);
+        }
     }
 
     /// A reference read from the fixed ART section the type's Image names; a
@@ -6140,6 +6340,13 @@ impl RulesPassProcessor {
                         .weapon
                         .open_topped_anim = anim;
                 }
+                // NPAE174 772901 -> B937F8/B96950/B96AC8, before
+                // AttachedParticleSystem. Colors read even when custom=false.
+                #[cfg(feature = "npatch")]
+                self.family_mut(RulesTypeFamily::Weapon)[index]
+                    .weapon
+                    .npatch_electric_bolt
+                    .apply_pass(&raw);
                 let incoming = raw.read_string("AttachedParticleSystem", "", 0x14);
                 if let Some(system) = self.find_or_create_particle_system(&incoming) {
                     let id = self.families[&RulesTypeFamily::ParticleSystem][system]
@@ -6162,6 +6369,23 @@ impl RulesPassProcessor {
                 if let Some(warhead) = warhead {
                     state.warhead = warhead;
                 }
+            }
+            // NPatch compatibility: discover through the retained pointer even
+            // when this pass omits the parent Weapon or its Projectile key.
+            // The same sweep initializes each new child, without body replay.
+            #[cfg(feature = "npatch")]
+            if let Some(child) = self.families[&RulesTypeFamily::Weapon][index]
+                .weapon
+                .projectile
+                .and_then(|projectile| {
+                    let member = &self.families[&RulesTypeFamily::Projectile][projectile];
+                    let section = pass.section(&member.native_stored_id)?;
+                    (!section.read_bool("Airburst", member.projectile_art.is_airburst()))
+                        .then_some(section)
+                })
+                .and_then(|section| section.read_name("AirburstWeapon", 0x80))
+            {
+                self.find_or_allocate(RulesTypeFamily::Weapon, child);
             }
             index += 1;
         }
@@ -6244,6 +6468,24 @@ impl RulesPassProcessor {
             if let Some((_id, raw, _effective)) =
                 self.begin_rules_member_read(RulesTypeFamily::Warhead, index, pass)
             {
+                if crate::rules::NPATCH_ENABLED {
+                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
+                    // ReadINI75D3F1 -> C2E90D precedes IsFlatExplosion;
+                    // ReadBool5295F0 uses the live +129 byte as default.
+                    member.npatch_doesnt_affect_enemies =
+                        raw.read_bool("DoesntAffectEnemies", member.npatch_doesnt_affect_enemies);
+                }
+                // NPAE174 ReadINI75D3F1 -> C2EF94 reads IsFlatExplosion
+                // into +130 first; stock75D42F..75D443 then reads
+                // CausesDelayKill into that SAME byte. Fold each raw pass,
+                // not the merged INI: a later alias can override an older key.
+                let current = &mut self.family_mut(RulesTypeFamily::Warhead)[index].warhead_anim;
+                if crate::rules::NPATCH_ENABLED {
+                    current.causes_delay_kill =
+                        raw.read_bool("IsFlatExplosion", current.causes_delay_kill);
+                }
+                current.causes_delay_kill =
+                    raw.read_bool("CausesDelayKill", current.causes_delay_kill);
                 let particle = self.resolve_scalar_from(
                     &raw,
                     "Particle",
@@ -6252,6 +6494,15 @@ impl RulesPassProcessor {
                 );
                 if let Some(particle) = particle {
                     self.family_mut(RulesTypeFamily::Warhead)[index].warhead_particle = particle;
+                }
+                if crate::rules::NPATCH_ENABLED {
+                    let member = &mut self.family_mut(RulesTypeFamily::Warhead)[index];
+                    // NPAE17475D5DE follows Particle75D4BE and replaces
+                    // Fire, retaining +14C as the signed penetration byte.
+                    member.npatch_bunker_penetration = raw.read_int(
+                        "BunkerPenetrationLevel",
+                        i32::from(member.npatch_bunker_penetration),
+                    ) as i8;
                 }
                 // Warhead ctor75CF89/75CFB3 initializes both false. The
                 // original reader uses the live field as its ReadBool default.

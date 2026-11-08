@@ -40,6 +40,14 @@ impl CloakStepTimer {
 /// every state/progress/timer write below. Stock YR exercises this continuously
 /// through DLPH/SUB/SQD/BSUB.
 pub struct CloakRuntime {
+    /// The permanent crate write to Techno+3D2 beyond its immutable type seed.
+    /// CellPickup48294F sets it; the existing cloak owner carries its lifetime.
+    #[serde(default)]
+    crate_granted: bool,
+    /// Building+6ED, zeroed by Building_ctor43B9A9. Its class tick and
+    /// VisualCharacter use this independently of Techno+224 progress.
+    #[serde(default)]
+    building_stage: i8,
     /// Native state id: 0 uncloaked, 1 cloaking, 2 fully cloaked, 3 uncloaking.
     state: i32,
     /// Native `CloakProgress +0x224`.
@@ -160,25 +168,7 @@ pub(crate) fn visual_character(
         return 0;
     }
     if state == 2 {
-        if query.force_sensor {
-            return if query.observer_present && query.observer_senses_cell {
-                3
-            } else {
-                5
-            };
-        }
-        if !query.graphical_client || owned_by_current_house || query.observer_senses_cell {
-            return 3;
-        }
-        return if !query.is_campaign
-            && owner_present
-            && query.observer_present
-            && query.mutually_allied
-        {
-            3
-        } else {
-            5
-        };
+        return fully_cloaked_visual_character(owned_by_current_house, owner_present, query);
     }
     if progress <= 0 {
         return 0;
@@ -204,6 +194,30 @@ pub(crate) fn visual_character(
         192..=254 => 4,
         _ => 5,
     }
+}
+
+/// Shared full-cloak visibility: Techno7038EE and Building4544BD.
+fn fully_cloaked_visual_character(
+    owned_by_current_house: bool,
+    owner_present: bool,
+    query: VisualCharacterQuery,
+) -> u8 {
+    if query.force_sensor {
+        return if query.observer_present && query.observer_senses_cell {
+            3
+        } else {
+            5
+        };
+    }
+    if !query.graphical_client || owned_by_current_house || query.observer_senses_cell {
+        return 3;
+    }
+    return if !query.is_campaign && owner_present && query.observer_present && query.mutually_allied
+    {
+        3
+    } else {
+        5
+    };
 }
 
 impl CloakTickFacts {
@@ -237,7 +251,7 @@ impl CloakTickFacts {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CloakTickResult {
     pub transitioned: bool,
     pub consumed_scenario_rng: bool,
@@ -258,6 +272,77 @@ pub struct CloakTickResult {
 }
 
 impl CloakRuntime {
+    pub(crate) fn building_stage(&self) -> i8 {
+        self.building_stage
+    }
+
+    /// BuildingVisualCharacter4544A0: stage zero delegates to Techno;
+    /// stages1..5/6..10 are the two ramps, above10 uses full-cloak policy.
+    pub(crate) fn building_visual_character(
+        &self,
+        owned: bool,
+        query: VisualCharacterQuery,
+    ) -> Option<u8> {
+        match self.building_stage {
+            0 => None,
+            ..=10 => Some(1 + u8::from(self.building_stage > 5)),
+            _ => Some(fully_cloaked_visual_character(owned, true, query)),
+        }
+    }
+
+    /// BuildingCloakingTick454DB0..455059: advance the byte once per AI
+    /// visit, not by the Techno progress timer; then query state2/0 policy.
+    pub(crate) fn tick_building(&mut self, facts: CloakTickFacts) -> CloakTickResult {
+        let mut result = CloakTickResult::default();
+        if self.state == 1 && self.building_stage < 15 {
+            self.building_stage = self.building_stage.wrapping_add(1);
+            if self.building_stage == 15 {
+                self.state = 2;
+                result.transitioned = true;
+            }
+        } else if self.state == 3 && self.building_stage >= 0 {
+            if self.building_stage > 0 {
+                self.building_stage -= 1;
+            }
+            if self.building_stage == 0 {
+                self.state = 0;
+                result.transitioned = true;
+            }
+        }
+        if self.state == 2 && facts.should_uncloak {
+            let start = self.start_uncloaking(
+                facts.current_frame,
+                facts.cloaking_speed,
+                facts.cloaking_stages,
+                false,
+            );
+            result.transitioned |= start.transitioned;
+            result.play_cloak_sound = start.play_sound;
+        }
+        if self.state == 0 && facts.can_auto_cloak {
+            let start = self.start_cloaking(facts.current_frame, facts.cloaking_speed, false);
+            result.transitioned |= start.transitioned;
+            result.began_cloaking = start.transitioned;
+            result.play_cloak_sound = start.play_sound;
+        }
+        result
+    }
+
+    /// HasStealthAbility70C5A0: constructor Cloakable seed or the crate write.
+    pub(crate) fn has_stealth_ability(slot: Option<&Self>, type_seed: bool) -> bool {
+        type_seed || slot.is_some_and(|state| state.crate_granted)
+    }
+
+    pub(crate) fn crate_granted(&self) -> bool {
+        self.crate_granted
+    }
+
+    /// CellPickup48294F changes ability, not cloak state, timers or rank.
+    pub(crate) fn grant_from_crate(slot: &mut Option<Self>, frame: i32) {
+        Self::install_if_absent(slot, frame);
+        slot.as_mut().expect("installed cloak owner").crate_granted = true;
+    }
+
     /// The native state id: 0 uncloaked, 1 cloaking, 2 fully cloaked, 3
     /// uncloaking.
     pub fn state(&self) -> i32 {
@@ -298,6 +383,8 @@ impl CloakRuntime {
 
     pub fn new(current_frame: i32) -> Self {
         Self {
+            crate_granted: false,
+            building_stage: 0,
             state: 0,
             depth: 0,
             step_delta: 0,
@@ -310,17 +397,6 @@ impl CloakRuntime {
     /// ability is present and stored Techno+0x3D5 is clear.
     pub fn establish_unlimbo_fully_cloaked(&mut self) {
         self.state = 2;
-    }
-
-    /// The constructor's cloak state for an object with the Cloak ability
-    /// (the constructor copy at `0x007355B6`/`0x00517D88`), fully cloaked
-    /// when Unlimbo establishes state 2 ([`Self::establish_unlimbo_fully_cloaked`]).
-    pub(crate) fn install(slot: &mut Option<Self>, current_frame: i32, fully_cloaked: bool) {
-        let mut cloak = Self::new(current_frame);
-        if fully_cloaked {
-            cloak.establish_unlimbo_fully_cloaked();
-        }
-        *slot = Some(cloak);
     }
 
     /// The cloak AI's install for an object that has the Cloak ability but no

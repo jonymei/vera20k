@@ -556,7 +556,8 @@ class TemporalGunnerReader(BulletReader):
         0x65C7E0: ('range', 2, 8),
     }
 
-    def __init__(self, root, layers):
+    def __init__(self, root, layers, *, npatch=False):
+        self.npatch = npatch
         self.phase = 'setup'
         self.read_receipts, self.platform, self.calls, self.raw_draws = [], [], [], []
         self.trace = None
@@ -575,6 +576,8 @@ class TemporalGunnerReader(BulletReader):
         self.rules = self.alloc(0x2000)
         u.mem_write(0x8871E0, dwords(self.rules))
         self.invoke(0x665650, self.rules)
+        if npatch:
+            self.initialize_npatch_rules()
         self.types = {'FV': self.alloc(0x1900), 'CLEG': self.alloc(0x1900)}
         self.invoke(0x7470D0, self.types['FV'], (self.cstring('FV'),))
         self.invoke(0x5236A0, self.types['CLEG'], (self.cstring('CLEG'),))
@@ -607,7 +610,7 @@ class TemporalGunnerReader(BulletReader):
             # General/Combat references from this component's load boundary.
             for section, keys in (
                 ('General', {'VeteranROF', 'GameSpeedBias', 'TeamDelays'}),
-                ('CombatDamage', {'OccupyROFMultiplier', 'BunkerROFMultiplier'}),
+                ('CombatDamage', {'OccupyROFMultiplier', 'BunkerROFMultiplier', *({'BountyCostMult', 'VeteranBountyCostMult', 'EliteBountyCostMult'} if npatch else set())}),
             ):
                 if section in sections:
                     sections[section] = {k: v for k, v in sections[section].items() if k in keys}
@@ -617,6 +620,8 @@ class TemporalGunnerReader(BulletReader):
             general = self.invoke(0x66D530, self.rules, (RULES,), timeout_us=30_000_000)
             self.invoke(0x674500, self.rules, (RULES,))
             combat = self.invoke(0x66BBB0, self.rules, (RULES,))
+            if npatch:
+                self.read_npatch_rules(RULES)
             type_results = {
                 'FV': self.invoke(0x747620, self.types['FV'], (RULES,)) & 255,
                 'CLEG': self.invoke(0x5240A0, self.types['CLEG'], (RULES,)) & 255,
@@ -910,17 +915,70 @@ def temporal_gunner_cases():
     return [{**base, **row} for row in rows]
 
 
-def generate_temporal_gunner():
+def temporal_gunner_reader(*, npatch=False):
     root = Path(os.environ['VERA20K_SHRAPNEL_INPUTS'])
     map_path = Path(os.environ['VERA20K_IFV_MAP'])
     assert map_path.is_file(), 'VERA20K_IFV_MAP must be physical selected map INI text'
     assert map_path.read_bytes().lstrip().startswith((b';', b'[')), 'MIX is not map INI'
     layers = [(name, root / name) for name in ('RULESMD.INI', 'LANGRULE.INI', 'MPBattleMD.ini')]
     layers.append((map_path.name, map_path))
-    m = TemporalGunnerReader(root, layers)
+    return TemporalGunnerReader(root, layers, npatch=npatch)
+
+
+def generate_temporal_gunner():
+    m = temporal_gunner_reader()
     return dict(schema_version=1, inputs=m.inputs,
                 rows=[m.execute(row) for row in temporal_gunner_cases()],
                 native_code_unchanged=True)
+
+
+def compact_temporal_state(state):
+    result = {role: {key: value for key, value in state[role].items()
+                     if key != 'charge_delay'} for role in ('transport', 'passenger')}
+    result['link'] = {**state['link'], 'fields': {'0x48': state['link']['fields']['0x48']}}
+    return result
+
+
+def generate_temporal_gunner_npatch():
+    m = temporal_gunner_reader(npatch=True)
+    cases = temporal_gunner_cases()
+    rows = []
+    for index in (0, 10, 11):
+        native = m.execute(cases[index])
+        operations = []
+        for operation in native['operations']:
+            assert all(operation['rng_after'][stream] == native['rng_initial'][stream]
+                       for stream in ('main', 'mapgen'))
+            operations.append(dict(name=operation['name'],
+                before=compact_temporal_state(operation['before']),
+                after=compact_temporal_state(operation['after']),
+                rng_after={'scenario': operation['rng_after']['scenario']},
+                rng_unchanged={'main': True, 'mapgen': True},
+                raw_draw_count=operation['raw_draw_count'],
+                raw_draws=[{key: draw[key] for key in ('stream', 'raw_u32')}
+                           for draw in operation['raw_draws']]))
+        keys = ('name', 'frame', 'seed', 'transport_rank', 'passenger_rank',
+                'transport_country', 'passenger_country')
+        rows.append(dict(input={key: native['input'][key] for key in keys},
+                         houses=native['houses'], initial=compact_temporal_state(native['initial']),
+                         rng_initial=native['rng_initial'], operations=operations))
+    return dict(schema_version=2, inputs={'final': m.inputs['final']}, rows=rows)
+
+
+def temporal_gunner_npatch_metadata():
+    return provenance(
+        scope='NPatch temporal gunner callback timers, retained managers and exact Scenario RNG',
+        assumptions=[
+            'Reuse the existing physical retail FV/CLEG reader VM and explicit retained actor/House inputs; no whole archive load, boarding or full FireAt admission claim.',
+            'Real startup52BB02/B97000 allocation and52BB07/B99000 ctor run with original EBX0; real extensionB98000 reads each supplied physical layer in EDI before type readers. No extension scalar default is supplied.',
+            'Cases are active rookie, signed burst overflow and the real FireAt rearm-tail boundary. Outputs retain only fields asserted by Rust; Main/MapGen unchanged is measured against their native initial bytes, with full Scenario state and ordered raw draws.',
+            'The FireAt tail is imported as a native boundary for subsequent callbacks, not counted as a Rust whole-shot comparison.'],
+        substitutions=[
+            'Inherited BulletReader lexical INI/file transport, allocator/TLS/Windows helpers and setup visual sinks. CRT malloc7C9430 delegates to that same allocator transport; original strdup/strlen/strcpy execute. No gameplay, RNG or ROF answer or instruction replacement.'],
+        entry_points=dict(bootstrap=0xB97000, extension_ctor=0xB99000,
+                          extension_reader=0xB98000, receive=RECEIVE_GUNNER,
+                          remove=REMOVE_GUNNER, get_rof=0x6FCFA0,
+                          fire_rearm=0x6FF274, fire_rearm_end=0x6FF2D1))
 
 
 def temporal_gunner_metadata():
@@ -951,7 +1009,11 @@ def temporal_gunner_metadata():
 
 
 if __name__ == '__main__':
-    if '--temporal-gunner' in sys.argv:
+    if '--temporal-gunner-npatch' in sys.argv:
+        finish_vectors(generate_temporal_gunner_npatch, Path(__file__).with_name('ifv_temporal_gunner_npatch.json'),
+            provenance=temporal_gunner_npatch_metadata,
+            argv=[arg for arg in sys.argv[1:] if arg != '--temporal-gunner-npatch'])
+    elif '--temporal-gunner' in sys.argv:
         finish_vectors(generate_temporal_gunner, Path(__file__).with_name('ifv_temporal_gunner.json'),
             provenance=temporal_gunner_metadata,
             argv=[arg for arg in sys.argv[1:] if arg != '--temporal-gunner'])

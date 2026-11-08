@@ -12,6 +12,111 @@ use serde_json::{Value, json};
 #[path = "can_build_ares_tests.rs"]
 mod ares_tests;
 
+#[cfg(all(feature = "npatch", not(feature = "ares")))]
+#[test]
+fn npatch_alternative_groups_unlock_complete_tech_branches() {
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[Countries]\n0=C1\n[General]\nPrerequisitePower=POWER_PLANT\n\
+         [BuildingTypes]\n0=FAB\n1=RADAR_BUILDING\n2=DEPOT\n3=POWER_PLANT\n\
+         [VehicleTypes]\n0=Q\n[Q]\nTechLevel=-1\nPrerequisite=FAB,RADAR_BUILDING\n\
+         AlternatePrerequisite=FAB,POWER\nPrerequisite2=FAB,DEPOT\n",
+    ))
+    .unwrap();
+    let q = rules.object("Q").unwrap();
+    let (sim, owner) = sim_for(&json!({"active": [["building", "DEPOT", 1]]}), &rules);
+    assert_eq!(can_build(&sim, &rules, owner, q, false, true), CanBuild::No);
+    let (sim, owner) = sim_for(
+        &json!({"active": [["building", "FAB", 1], ["building", "DEPOT", 1]]}),
+        &rules,
+    );
+    assert_eq!(
+        can_build(&sim, &rules, owner, q, false, true),
+        CanBuild::Yes
+    );
+    let (sim, owner) = sim_for(
+        &json!({"active": [["building", "FAB", 1], ["building", "POWER_PLANT", 1]]}),
+        &rules,
+    );
+    assert_eq!(
+        can_build(&sim, &rules, owner, q, false, true),
+        CanBuild::Yes
+    );
+}
+
+#[cfg(all(feature = "npatch", not(feature = "ares")))]
+#[test]
+fn npatch_negative_blocks_shortcuts_but_not_the_ordinary_ai_bypass() {
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[Countries]\n0=C1\n[BuildingTypes]\n0=YARD\n1=FAB\n\
+         [VehicleTypes]\n0=Q\n[Q]\nTechLevel=1\nPrerequisite=FAB\n\
+         PrerequisiteOverride=FAB\nNegativePrerequisite=YARD\n",
+    ))
+    .unwrap();
+    let q = rules.object("Q").unwrap();
+    let (sim, owner) = sim_for(
+        &json!({"active": [["building", "YARD", 1], ["building", "FAB", 1]]}),
+        &rules,
+    );
+    assert_eq!(can_build(&sim, &rules, owner, q, false, true), CanBuild::No);
+    assert_eq!(can_build(&sim, &rules, owner, q, true, true), CanBuild::No);
+    let (sim, owner) = sim_for(
+        &json!({"house": {"human": false}, "active": [["building", "YARD", 1]]}),
+        &rules,
+    );
+    assert_eq!(
+        can_build(&sim, &rules, owner, q, false, true),
+        CanBuild::Yes
+    );
+    assert_eq!(can_build(&sim, &rules, owner, q, true, true), CanBuild::No);
+}
+
+#[cfg(all(feature = "npatch", not(feature = "ares")))]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_RULES pointing at the maintained AYMod rulesmd.ini"]
+fn maintained_aymod_tech_branches_and_shipyard_lifecycle() {
+    let path = std::env::var_os("VERA20K_AYMOD_RULES").expect("set VERA20K_AYMOD_RULES");
+    let bytes = std::fs::read(path).unwrap();
+    let rules = RuleSet::from_ini(&IniFile::from_bytes(&bytes).unwrap()).unwrap();
+    let seal = rules.object("GHOST").unwrap();
+    let (sim, owner) = sim_for(
+        &json!({"active": [["building", "GAPILE", 1], ["building", "GADEPT", 1]]}),
+        &rules,
+    );
+    assert_eq!(
+        can_build(&sim, &rules, owner, seal, false, true),
+        CanBuild::Yes
+    );
+    let (sim, owner) = sim_for(&json!({"active": [["building", "GAPILE", 1]]}), &rules);
+    assert_eq!(
+        can_build(&sim, &rules, owner, seal, false, true),
+        CanBuild::No
+    );
+
+    let (mut sim, owner) = sim_for(&json!({"active": [["building", "GAWEAP", 1]]}), &rules);
+    let transport = rules.object("LCRF").unwrap();
+    assert_eq!(
+        can_build(&sim, &rules, owner, transport, false, true),
+        CanBuild::Yes
+    );
+    crate::sim::production::tests::spawn_structure(
+        &mut sim, &rules, 99_999, "H0", "GAYARD", 10, 10,
+    );
+    assert_eq!(
+        can_build(&sim, &rules, owner, transport, false, true),
+        CanBuild::No
+    );
+    sim.techno_limbo_with_rules(99_999, &rules, None);
+    assert_eq!(
+        can_build(&sim, &rules, owner, transport, false, true),
+        CanBuild::Yes
+    );
+    for id in [
+        "GAWEAP", "GAAIRC", "GAYARD", "AMRADR", "NAWEAP", "NAYARD", "YAWEAP", "YAYARD",
+    ] {
+        assert_eq!(rules.object(id).unwrap().ai_planning_count, 2, "{id}");
+    }
+}
+
 fn rows(section: &str) -> Vec<Value> {
     let data: Value =
         serde_json::from_str(crate::test_fixture::text("tools/can_build_oracle.json")).unwrap();

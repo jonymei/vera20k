@@ -104,6 +104,71 @@ fn country_catalog_uses_registered_identity_and_shared_native_eligibility() {
     assert_eq!(combo_items(&shell, &[], SkirmishComboId::Side(0)), expected);
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_extended_colors_survive_selection_claims_and_launch_packing() {
+    let mut text = String::from("[UISettings]\nUseDropDownColors=yes\n[Colors]\n");
+    for number in 1..=16 {
+        text.push_str(&format!("MPC{number:02}={number},255,255\n"));
+    }
+    let rules = crate::rules::ruleset::RuleSet::from_ini(&IniFile::from_str(&text)).unwrap();
+    let mut shell = SkirmishShellState::default();
+    shell.refresh_country_catalog(&rules);
+    let maps = [test_map_entry("extended.yrm")];
+    let layout = compute_layout(800, 600);
+    let id = SkirmishComboId::Color(0);
+    let rect = combo_rect(&layout, id).unwrap();
+    handle_option_mouse_down(&mut shell, &layout, &maps, rect.x + rect.w - 1, rect.y + 1);
+    let thumb = combo_dropdown_scroll_thumb_rect(&shell, &layout, &maps, id).unwrap();
+    let scrollbar = combo_dropdown_scrollbar_rect(&shell, &layout, &maps, id).unwrap();
+    handle_option_mouse_down(&mut shell, &layout, &maps, thumb.x + 1, thumb.y + 1);
+    handle_option_mouse_move(
+        &mut shell,
+        &layout,
+        &maps,
+        thumb.x + 1,
+        scrollbar.y + scrollbar.h,
+    );
+    handle_option_mouse_up(&mut shell);
+    assert!(shell.open_combo_dropdown.unwrap().top_index > 0);
+    let content = combo_dropdown_content_rect(&shell, &layout, &maps, id).unwrap();
+    let last_row = combo_dropdown_visible_row_count(&shell, &maps, id) - 1;
+    handle_option_mouse_down(
+        &mut shell,
+        &layout,
+        &maps,
+        content.x + 1,
+        content.y + last_row as i32 * COMBO_DROPDOWN_ROW_H + 1,
+    );
+    handle_option_mouse_up(&mut shell);
+    assert!(shell.open_combo_dropdown.is_none());
+    assert_eq!(
+        selected_combo_item(&shell, SkirmishComboId::Color(0)),
+        Some(SkirmishComboItem::Color(15))
+    );
+    assert!(
+        !combo_items(&shell, &[], SkirmishComboId::Color(1))
+            .contains(&SkirmishComboItem::Color(15))
+    );
+    apply_combo_selection_for_test(
+        &mut shell,
+        SkirmishComboId::Color(1),
+        SkirmishComboItem::Color(14),
+    );
+    let session =
+        pack_launch_session_without_start_validation(&shell, &maps, &stock_skirmish_modes())
+            .unwrap();
+    assert_eq!(session.local_slot().color_index, 15);
+    assert_eq!(session.opponents[0].color_index, 14);
+    // An unpatched catalog must not retain the extended admission domain.
+    let stock = crate::rules::ruleset::RuleSet::from_ini(&IniFile::empty()).unwrap();
+    shell.refresh_country_catalog(&stock);
+    assert!(
+        !combo_items(&shell, &[], SkirmishComboId::Color(0))
+            .contains(&SkirmishComboItem::Color(15))
+    );
+}
+
 #[test]
 fn choose_map_action_bubbles_without_cycling_selected_map() {
     let maps = [test_map_entry("a.mmx"), test_map_entry("b.mmx")];
@@ -279,6 +344,62 @@ fn owner_draw_button_hit_test_returns_control_identity() {
 /// The first window row a press lands on (`y > bottom - 18`, `0x0061E505`).
 fn first_admitted_row(rect: RectPx) -> i32 {
     rect.y + rect.h - 17
+}
+
+#[test]
+fn tech_slider_input_uses_launch_value_and_hidden_control_rejects_drag() {
+    let ini = IniFile::from_str(
+        "[UISettings]\nShowTechLevelSlider=yes\n[MultiplayerDialogSettings]\nTechLevel=6\n",
+    );
+    let mut shell = SkirmishShellState::default();
+    shell.trackbar_bounds = SkirmishTrackbarBounds::from_multiplayer_dialog_settings(&ini);
+    shell.apply_multiplayer_dialog_values(
+        &crate::sim::game_options::GameOptions::from_multiplayer_dialog_settings(&ini),
+    );
+    shell.apply_ui_settings(&ini);
+    let layout = compute_layout(800, 600);
+    let rect = layout.trackbars.tech_level;
+    let y = first_admitted_row(rect);
+    assert_eq!(
+        shell
+            .trackbar_bounds
+            .range(SkirmishTrackbarId::TechLevel0x512),
+        TrackbarRange::new(1, 6, 1)
+    );
+    handle_option_mouse_down(&mut shell, &layout, &[], rect.x + 7, y);
+    assert_eq!(
+        shell.launch_options_base.tech_level,
+        if crate::rules::NPATCH_ENABLED { 1 } else { 6 }
+    );
+    let launch = pack_launch_session_without_start_validation(
+        &shell,
+        &[test_map_entry("test.mmx")],
+        &stock_skirmish_modes(),
+    )
+    .unwrap();
+    assert_eq!(
+        launch.options.tech_level,
+        shell.launch_options_base.tech_level
+    );
+    handle_option_mouse_up(&mut shell);
+    let thumb = shell
+        .trackbar_bounds
+        .range(SkirmishTrackbarId::TechLevel0x512)
+        .thumb_left_in(shell.launch_options_base.tech_level, rect, layout.scale);
+    handle_option_mouse_down(&mut shell, &layout, &[], rect.x + thumb + 2, y);
+    if crate::rules::NPATCH_ENABLED {
+        assert!(shell.trackbar_hold.is_some_and(|hold| hold.dragging));
+    }
+    shell.apply_ui_settings(&IniFile::from_str("[UISettings]\nShowTechLevelSlider=no\n"));
+    let before = shell.launch_options_base.tech_level;
+    handle_option_mouse_move(&mut shell, &layout, &[], rect.x + rect.w - 51, y);
+    assert_eq!(shell.launch_options_base.tech_level, before);
+    assert!(!matches!(
+        hovered_shell_control(&layout, &shell, &[], rect.x + 7, y),
+        Some(SkirmishHoverTarget::Trackbar(
+            SkirmishTrackbarId::TechLevel0x512
+        ))
+    ));
 }
 
 /// A Skirmish state with the slider ranges retail Rules gives through the
@@ -636,6 +757,12 @@ fn status_help_keys_use_verified_stt_mappings() {
             SkirmishTrackbarId::Credits0x511
         )),
         Some("STT:SkirmishSliderCredits")
+    );
+    assert_eq!(
+        status_help_key_for_hover(SkirmishHoverTarget::Trackbar(
+            SkirmishTrackbarId::TechLevel0x512
+        )),
+        crate::rules::NPATCH_ENABLED.then_some("STT:SkirmishSliderTech")
     );
     assert_eq!(
         status_help_key_for_hover(SkirmishHoverTarget::MapPreview0x468),

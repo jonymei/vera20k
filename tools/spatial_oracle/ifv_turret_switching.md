@@ -172,3 +172,10 @@ and a body/locomotor-derived key; it does not incorporate current turret
 selection. This is instruction-level evidence. The corpus does not execute
 GPU/raster output, shadow composition, palette handling or crash rendering.
 Production visual captures and asset-backed load checks are separate evidence.
+
+## NPatch callback profile
+
+The stock callback corpus is unchanged. The separate
+[NPatch controls](ifv_temporal_gunner_npatch.md) reuse this VM with authentic
+extension initialization and three compact callback histories. Rust selects
+the matching profile rather than applying stock ROF jitter expectations to NPatch.

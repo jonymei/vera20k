@@ -119,6 +119,30 @@ result stays parseable.
 
 ## CLI equivalent
 
+`ini-type '*' --domain rules --map XMP03T4.MAP --mode-id 1` processes the
+selected scenario once and inventories its registered ObjectTypes. It reuses
+the individual type projection, including natural-particle inputs and the
+retained exact-case INI section. Retained text is not a final field or an active
+consumer: use `ini-get` with the native reader/default before interpreting it.
+The inventory also exposes the production mode catalog and mode-filtered
+concrete chooser records; discovery errors are explicit, not empty inventories.
+Its `team_ai` block loads the fixed AI root plus the map through the production
+Team AI registry and definition installer. Registered TeamTypes retain native
+order and report resolved Script/TaskForce identities, base-defense status and
+the recruitment owner's `reinforce` decision. The read-only summary does not
+expose mutable metadata, create live teams or advance simulation ticks.
+`trigger_inputs` contains the registry's pre-resolution references and enable
+flags, not proof of eligibility or live selection. AI load/install failures are
+explicit in `team_ai.error`; consumers must check it before interpreting counts.
+Campaign and generated random-map passes remain outside this tool's scope.
+For AYMOD, build the inspected binary with the NPatch capability explicitly:
+
+```powershell
+python -m tools.cargo_run -- build -p vera20k --bin asset --profile fast --no-default-features --features npatch
+$assetExe = python -m tools.cargo_run --resolve asset --profile fast
+& $assetExe ini-type '*' --domain rules --map XMP03T4.MAP --mode-id 1 --ra2-dir $env:VERA20K_AYMOD_DIR
+```
+
 Nothing here is MCP-only; the binary does the same work directly.
 
 ```powershell

@@ -46,6 +46,7 @@ pub(crate) struct ElectricBoltDraw {
     pub z_adjust: i32,
     pub phase: i32,
     pub alternate_color: bool,
+    pub custom_colors: Option<[[u8; 3]; 3]>,
 }
 
 /// Pending second half of a split. Each triplet stores center, side1, side2;
@@ -111,6 +112,15 @@ impl ElectricBoltDraw {
         } else {
             palette.ordinary
         };
+        // NPAE174 B96A50/B96A78/B96AA0 bypass Convert for each strand.
+        // B95030 always packs RGB565, even with an RGB555 display surface.
+        let colors = self.custom_colors.map_or(
+            [palette.center, outer_color, outer_color],
+            |[outer1, outer2, center]| {
+                [center, outer1, outer2]
+                    .map(|rgb| super::native_surface_format::RGB565.pack_rgb8(rgb))
+            },
+        );
         loop {
             while current.length > 64 && depth < pending.len() {
                 // The original uses ADD/SAR, including negative odd sums and
@@ -204,11 +214,7 @@ impl ElectricBoltDraw {
                             .wrapping_sub(adjust_for_z_standard(to[2]))
                             .wrapping_sub(2),
                     ],
-                    blend: SurfaceLineBlend::Replace(if strand == 0 {
-                        palette.center
-                    } else {
-                        outer_color
-                    }),
+                    blend: SurfaceLineBlend::Replace(colors[strand]),
                 });
             }
             if depth == 0 {

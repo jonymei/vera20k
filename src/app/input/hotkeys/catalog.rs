@@ -29,17 +29,20 @@ macro_rules! command {
 }
 
 pub(crate) fn registered_commands() -> &'static [CommandMetadata] {
-    #[cfg(feature = "verax")]
+    #[cfg(any(feature = "npatch", feature = "verax"))]
     {
         use std::sync::OnceLock;
         static ALL: OnceLock<Vec<CommandMetadata>> = OnceLock::new();
         ALL.get_or_init(|| {
             let mut all = RETAIL_COMMANDS.to_vec();
+            #[cfg(feature = "npatch")]
+            all.extend_from_slice(&NPATCH_COMMANDS);
+            #[cfg(feature = "verax")]
             all.extend_from_slice(&VERA_COMMANDS);
             all
         })
     }
-    #[cfg(not(feature = "verax"))]
+    #[cfg(not(any(feature = "npatch", feature = "verax")))]
     {
         retail_commands()
     }
@@ -758,6 +761,16 @@ const RETAIL_COMMANDS: [CommandMetadata; 87] = [
         None
     ),
 ];
+
+#[cfg(feature = "npatch")]
+const NPATCH_COMMANDS: [CommandMetadata; 1] = [command!(
+    HotkeyCommand::TogglePower,
+    "TogglePower",
+    "Toggle building power",
+    "TXT_INTERFACE",
+    "Turn an owned building on or off",
+    None
+)];
 
 /// VeraX's own commands, registered after every retail one. The CSF has no
 /// entries, so the page shows these strings themselves.

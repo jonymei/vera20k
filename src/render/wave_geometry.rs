@@ -54,9 +54,10 @@ pub(crate) struct PolygonSpans {
     pub rows: Vec<[i32; 2]>,
 }
 
-/// Original polygon63F080 and edge63F2E0. Wave0/3 supply convex six-/
-/// four-point polygons. Top-chain orientation, initial skip and the right-side
+/// Original polygon63F080 and edge63F2E0. Projected six-/four-point Wave
+/// polygons can lose Y-monotonicity. Top-chain orientation, initial skip and the right-side
 /// minus-one are preserved before clipping; GPU triangulation would differ.
+/// Residual: native first-allocation skip at63F1EF differs from buffer reuse.
 pub(crate) fn polygon_spans(points: &[[i32; 2]]) -> PolygonSpans {
     let mut minimum = 0;
     let mut maximum = 0;
@@ -133,8 +134,13 @@ pub(crate) fn polygon_spans(points: &[[i32; 2]]) -> PolygonSpans {
                 start[0] = start[0].wrapping_sub(1);
                 end[0] = end[0].wrapping_sub(1);
             }
+            // Polygon63F080 @ 0x63F1DF reserves count*8 + 0x640 scratch
+            // bytes. Rounded Sonic chains can descend, then emit extra rows;
+            // DrawSonic75FA90 @ 0x75FB48 draws only the declared prefix.
             span_edge(start, end, skip, |x| {
-                spans.rows[row][side] = x;
+                if let Some(span) = spans.rows.get_mut(row) {
+                    span[side] = x;
+                }
                 row += 1;
             });
             index = following;
@@ -143,7 +149,6 @@ pub(crate) fn polygon_spans(points: &[[i32; 2]]) -> PolygonSpans {
                 break;
             }
         }
-        assert_eq!(row, spans.rows.len(), "native convex polygon edge coverage");
     }
     spans
 }
@@ -439,5 +444,46 @@ impl WaveDraw {
             distance_index,
             sine_index,
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sim::combat::TargetKind;
+    use crate::sim::projectile::ProjectileCoord;
+    use crate::sim::wave::{Wave, WaveUpdateContext};
+
+    #[test]
+    fn sonic_fade_with_height_difference_keeps_drawing_without_row_overflow() {
+        let source = ProjectileCoord::new(11392, 12416, 0);
+        let target = ProjectileCoord::new(9856, 10880, -100);
+        let context = WaveUpdateContext {
+            owner_position: Some(source),
+            owner_fire_coordinate: Some(source),
+            owner_current_target: Some(TargetKind::Entity(2)),
+            target_position: Some(target),
+            target_is_unit: true,
+        };
+        let mut wave = Wave::new_owned(0, 1, TargetKind::Entity(2), source, target);
+        assert!(wave.constructor_distance_is_live());
+        wave.initialize(context, None);
+        let mut pixels = 0;
+        for _ in 0..40 {
+            let geometry = wave.sonic_draw_geometry([-256, 1280]).unwrap();
+            WaveDraw {
+                polygon: WavePolygon::Sonic(geometry.polygon),
+                source_point: geometry.source_point,
+                source_z: wave.source().z,
+                phase: wave.lifetime(),
+                direction: wave.direction_octant() as u8,
+                clip_path: WaveClipPath::Fast,
+            }
+            .rasterize([0, 0, 512, 512], [512, 512], 512, 0, |_| pixels += 1)
+            .unwrap();
+            if !wave.advance(context, None).alive {
+                break;
+            }
+        }
+        assert!(pixels > 0, "the fix must retain visible Sonic operations");
     }
 }

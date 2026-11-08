@@ -34,6 +34,15 @@
 //! team creation, its `+0x77` (forced) from reinforcement creation
 //! (`0x0065DD64`), all in `sim::team_script_vm`.
 //!
+//! NPAE174 additionally has a separate naval Unit choice at House+160F8:
+//! C2CEE9 dispatches land then naval, C2CF04 filters each TaskForce need,
+//! and C2CE9F selects a factory's slot. Exit and abandon have deliberately
+//! different slot writes; see the production owners.
+//!
+//! RESIDUAL: NPAE174 C2B479..C2B481 resets its tied-need candidate list,
+//! while the shared picker retains stock strict-greater resets. This bounded
+//! tie-selection difference is separate from land/naval queue ownership.
+//!
 //! RESIDUAL: native tallies need in stack arrays of 100 entries: a class with
 //! more than 100 types, or more than 100 candidate types, writes past them.
 //! VERA sizes them by the class. Retail classes hold fewer than 100 types.

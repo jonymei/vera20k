@@ -93,6 +93,42 @@ pub enum Prerequisite {
     GenericGroup(u32),
 }
 
+/// NPAE174 TechnoType extension vectors, read by C27010 with parser4770E0.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct NpatchPrerequisites {
+    pub alternate: Vec<Prerequisite>,
+    pub second: Vec<Prerequisite>,
+    pub negative: Vec<Prerequisite>,
+}
+
+impl NpatchPrerequisites {
+    pub(crate) fn apply_pass(
+        &mut self,
+        section: &crate::rules::ini_parser::IniSection,
+        building_index: impl Fn(&str) -> Option<i32>,
+    ) {
+        if !crate::rules::NPATCH_ENABLED {
+            return;
+        }
+        // Keep the NPAE174 128-byte stock parser even in mixed builds.
+        for (key, prior) in [
+            ("AlternatePrerequisite", &mut self.alternate),
+            ("Prerequisite2", &mut self.second),
+            ("NegativePrerequisite", &mut self.negative),
+        ] {
+            *prior =
+                parse_prerequisites(section.read_list(key, 0x80), prior, &building_index, None);
+        }
+    }
+
+    pub(crate) fn entries(&self) -> impl Iterator<Item = &Prerequisite> {
+        self.alternate
+            .iter()
+            .chain(&self.second)
+            .chain(&self.negative)
+    }
+}
+
 impl Prerequisite {
     /// The full Ares catalog slot, including the original six groups.
     pub(crate) fn group_index(self) -> Option<usize> {
@@ -143,6 +179,52 @@ mod tests {
     use super::*;
     use crate::rules::ini_parser::IniFile;
     use serde_json::Value;
+
+    #[test]
+    fn npatch_lists_and_planning_count_follow_physical_rules_passes() {
+        use crate::rules::native_processing::{RulesLayerKind, RulesLayerStack};
+        use crate::rules::ruleset::RuleSet;
+        let mut layers = RulesLayerStack::new(IniFile::from_str(
+            "[BuildingTypes]\n0=A\n1=B\n2=Q\n[Q]\n\
+             AlternatePrerequisite=A\nPrerequisite2=A,B\nNegativePrerequisite=B\n\
+             AIPlanningCount=3\nAIBasePlanningCount=2\n",
+        ));
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str(
+                "[Q]\nAlternatePrerequisite=NO_SUCH_BUILDING\nPrerequisite2=\n\
+             NegativePrerequisite=,,,\nAIBasePlanningCount=0xh\n",
+            ),
+        );
+        let rules = RuleSet::from_rules_layers(&layers).unwrap();
+        let q = rules.object("Q").unwrap();
+        assert!(q.npatch_prerequisites.alternate.is_empty());
+        assert!(q.npatch_prerequisites.negative.is_empty());
+        assert_eq!(
+            q.npatch_prerequisites.second,
+            if crate::rules::NPATCH_ENABLED {
+                vec![Prerequisite::Building(0), Prerequisite::Building(1)]
+            } else {
+                vec![]
+            }
+        );
+        assert_eq!(
+            q.ai_planning_count,
+            if crate::rules::NPATCH_ENABLED { 2 } else { 0 }
+        );
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str("[Q]\nAIPlanningCount=4\n"),
+        );
+        assert_eq!(
+            RuleSet::from_rules_layers(&layers)
+                .unwrap()
+                .object("Q")
+                .unwrap()
+                .ai_planning_count,
+            if crate::rules::NPATCH_ENABLED { 4 } else { 0 }
+        );
+    }
 
     #[cfg(not(feature = "ares"))]
     #[test]

@@ -713,7 +713,10 @@ pub(crate) fn represented_assign_target_admitted(
         if let Some(manager) = entity.spawn_manager.as_mut() {
             manager.set_target(None);
         }
-        entity.weapon_burst.reset();
+        // NPAE1746FCF5B..60 remove the target-clear burst reset.
+        if !crate::rules::NPATCH_ENABLED {
+            entity.weapon_burst.reset();
+        }
     }
     // The store (`0x006FCF3E`).
     entity.attack_target.set(requested);

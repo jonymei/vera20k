@@ -1477,6 +1477,11 @@ impl Simulation {
                 .navigation
                 .retain_threat_avoidance_after_unlimbo(object.threat_avoidance_coefficient);
         }
+        // FootClass::Unlimbo4D7309..4D7318 adds SensorsSight after the
+        // neighbor/threat-coefficient tail, before the concrete class returns.
+        // This shared boundary includes transport exits and other re-reveals,
+        // not just construction; failed/consumed Unlimbo never reaches it.
+        self.add_unit_sensor_after_unlimbo(stable_id, context.rules(), context.registry());
         // Unit737BBE..737BD2 / Aircraft414403..414417 snap Secondary after
         // Foot success, including dead-Techno success. The Techno body snap
         // above has its own alive gate and precedes idle. Diagnostic callers
@@ -4195,7 +4200,8 @@ impl Simulation {
                 entity.kill_record.is_recorded(),
                 // A Temporal erase leaves at full health with its kill
                 // already booked (`combat::record_kill::record_kill_credit`);
-                // a crashing infantryman falls at Health 1 (`0x0051BC57`)
+                // a crashing infantryman can fall at Health 1 in stock
+                // (`0x0051BC57`; NPAE174 bypasses this reset at51BC67)
                 // after the kill that booked its loss.
                 entity.health.current() == 0
                     || entity.kill_record.killer().is_some()
@@ -5111,10 +5117,13 @@ impl Simulation {
         // reference to the expiring object.
         let drops_contact =
             control == PointerExpiryControl::Uninit && listener.has_live_contact_with(expired_id);
-        let drops_passenger = listener
-            .passenger_role
-            .cargo()
-            .is_some_and(|cargo| cargo.passengers().contains(&expired_id));
+        // TechnoClass::PointerExpired7077D8..7077E9 (original gamemd):
+        // control zero skips Cargo removal, so a cloaking rider stays aboard.
+        let drops_passenger = control == PointerExpiryControl::Uninit
+            && listener
+                .passenger_role
+                .cargo()
+                .is_some_and(|cargo| cargo.passengers().contains(&expired_id));
         // `0x007077EE..0x007077FD`, after the radio and cargo, whatever the
         // control: a child whose SpawnOwner (`+0x2D4`) expires forgets it.
         let drops_spawn_owner = listener.spawn_owner_id.owner() == Some(expired_id);

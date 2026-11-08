@@ -1916,3 +1916,176 @@ fn deploy_refused_for_a_computer_owner_clears_the_site() {
         assert_eq!(team.yards(), yards, "human {human}");
     }
 }
+
+/// An idle-friendly occupied gather cell must not leave the team's Walk
+/// member permanently IsMoving: Coordinate_Move6EBAD0 waits for that owner.
+#[test]
+fn blocked_nearby_walker_releases_the_gather_action_after_batch_retry() {
+    use crate::sim::command::{Command, CommandEnvelope};
+    let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules() else {
+        return;
+    };
+    let rules = retail.rules;
+    let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0x6EBAD0);
+    sim.overlay_grid = Some(crate::sim::overlay_grid::OverlayGrid::new(32, 32));
+    let grid = sim.path_grid_snapshot().unwrap();
+    let mover = sim
+        .spawn_object("BORIS", "Americans", 10, 10, 0, &rules)
+        .unwrap();
+    sim.spawn_object("APOC", "Americans", 11, 11, 0, &rules)
+        .unwrap();
+    let owner = sim.interner.get("Americans").unwrap();
+    sim.batch_path_searches();
+    sim.set_input_delay_ticks(0);
+    sim.queue_command(CommandEnvelope::new(
+        owner,
+        1,
+        Command::Move {
+            entity_id: mover,
+            target_rx: 11,
+            target_ry: 11,
+        },
+    ));
+    for _ in 0..16 {
+        let commands = sim.take_due_commands();
+        sim.advance_tick(&commands, Some(&rules), Some(&grid), None, 67);
+    }
+    let script = sim.interner.intern("BLOCKED-GATHER");
+    sim.team_script_vm.register_script(TeamScriptDefinition {
+        id: script,
+        source: TeamAiDefinitionSource::FixedAimd,
+        actions: vec![
+            TeamScriptAction {
+                action_id: 53,
+                argument: 0,
+            },
+            TeamScriptAction {
+                action_id: 5,
+                argument: 1,
+            },
+        ],
+    });
+    let team = sim.team_script_vm.create_team(
+        owner,
+        script,
+        vec![mover],
+        sim.session.binary_frame() as i32,
+    );
+    sim.team_script_vm.teams.get_mut(&team).unwrap().focus =
+        Some(TeamTarget::Cell { x: 11, y: 11 });
+    sim.team_coordinate_move(team, &rules, None, FrameEffects::default());
+    assert!(
+        sim.team_script_vm.team(team).unwrap().advance_pending(),
+        "the stopped near member completes Coordinate_Move instead of holding action53"
+    );
+    sim.advance_tick(&[], Some(&rules), Some(&grid), None, 67);
+    assert_eq!(sim.team_script_vm.team(team).unwrap().cursor(), 1);
+}
+
+/// The saved naval team's focus lies in a different water component. Test
+/// Foot4D3810/Map56D100 admission, not merely equality of raw zone labels.
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR; Return Dubai naval gather reachability"]
+fn aymod_return_dubai_saved_naval_focus_fails_the_live_zone_precheck() {
+    use crate::headless_scenario::{battle_session, load_session};
+    use crate::skirmish_launch::{AiDifficulty, LaunchCountry};
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+    let launch = battle_session(
+        map,
+        &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+    );
+    let mut scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+    let runtime = &mut scenario.runtime;
+    let (sim, rules) = (&mut runtime.simulation, &runtime.resources.rules);
+    let guard = sim.interner.get("FFFFFFFE-G").unwrap();
+    let definition = sim.team_script_vm.team_type_definition(guard).unwrap();
+    assert!(
+        !definition.base_zone_relation_enforced,
+        "pure naval TaskForces intentionally bypass the native base-zone gate"
+    );
+    assert_eq!(
+        definition.combined_movement_zone,
+        crate::rules::locomotor_type::MovementZone::Water
+    );
+    if let Some(path) = std::env::var_os("VERA20K_AYMOD_NAVIGATION_EXPORT") {
+        let mut navigation = crate::sim::world::bridge_test_evidence::navigation_snapshot(
+            sim,
+            "aymod-return-dubai-initial",
+            [(109, 55), (108, 55), (99, 149)],
+        );
+        navigation["map"] = serde_json::json!(map);
+        serde_json::to_writer(std::fs::File::create(path).unwrap(), &navigation).unwrap();
+    }
+    let native = crate::test_fixture::json("tools/spatial_oracle/aymod_naval_connectivity.json");
+    assert_eq!(native["input"]["map"], map);
+    for query in native["queries"].as_array().unwrap() {
+        let cell = query["cell"].as_array().unwrap();
+        let coord = (
+            cell[0].as_i64().unwrap() as i32,
+            cell[1].as_i64().unwrap() as i32,
+        );
+        assert_eq!(
+            sim.zone_grid()
+                .unwrap()
+                .get_zone_id_nonbridge_native(
+                    coord,
+                    crate::rules::locomotor_type::MovementZone::Water,
+                )
+                .map(u64::from),
+            query["water_zone"].as_u64(),
+            "native56C510 water component at {coord:?}",
+        );
+    }
+    let sub = sim
+        .spawn_object("SUB", "Computer1", 109, 55, 0, rules)
+        .unwrap();
+    let center = |x, y| crate::sim::components::DriveCoord {
+        x: x * 256 + 128,
+        y: y * 256 + 128,
+        z: 0,
+    };
+    assert!(
+        sim.foot_path_zone_precheck(sub, center(108, 55), rules)
+            .unwrap()
+    );
+    assert!(
+        !sim.foot_path_zone_precheck(sub, center(99, 149), rules)
+            .unwrap()
+    );
+    // Re-run the gather-cell producer with the two recorded base centers.
+    // This is a fresh-map diagnostic, not a continuation of the player's save.
+    let owner = sim.entities().get(sub).unwrap().owner();
+    let script = sim.interner.get("FFFFFFF1-G").unwrap();
+    let team =
+        sim.team_script_vm
+            .create_team(owner, script, vec![sub], sim.session.binary_frame() as i32);
+    let own = center(117, 44);
+    let enemy = center(93, 154);
+    let position = center(109, 55);
+    let seed = gather_seed_cell(
+        [own.x, own.y],
+        [enemy.x, enemy.y],
+        [position.x, position.y],
+        rules.general.ai_safe_distance,
+    )
+    .unwrap();
+    sim.team_assign_gather_cell(
+        team,
+        seed,
+        Some(crate::rules::locomotor_type::SpeedType::Float),
+        rules,
+        None,
+        FrameEffects::default(),
+    );
+    let focus = sim.team_script_vm.teams[&team].focus;
+    let Some(TeamTarget::Cell { x, y }) = focus else {
+        panic!("no gather cell")
+    };
+    assert!(
+        !sim.foot_path_zone_precheck(sub, center(i32::from(x), i32::from(y)), rules)
+            .unwrap(),
+        "the unrestricted gather-cell producer can choose another basin: {focus:?}",
+    );
+}

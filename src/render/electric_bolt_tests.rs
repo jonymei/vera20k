@@ -160,6 +160,7 @@ fn visit_lines(row: &Value, index: usize) -> (Vec<SurfaceLine>, Vec<bool>, Vec<u
                 z_adjust: integer(&bolt["z_adjust"]),
                 phase: integer(&bolt["phase"]),
                 alternate_color: bolt["alternate"].as_bool().unwrap(),
+                custom_colors: None,
             };
             let admitted = draw.lines(
                 viewport(&row["input"]),
@@ -453,4 +454,147 @@ fn production_electric_bolt_pixels_match_native_with_bounded_edge_residuals() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires GPU; NPAE custom three-strand colors through the live bolt registry"]
+fn npatch_custom_bolt_strands_override_alternate_and_reach_gpu() {
+    use crate::app::presentation::electric_bolts::ElectricBolts;
+    use crate::render::surface_line::{SurfaceLineBlend, rasterize_z_clipped};
+    use crate::sim::combat::electric_bolt::ElectricBoltBirth;
+
+    let size = [160, 120];
+    let viewport = SurfaceLineViewport {
+        camera: [-64, -40],
+        clip: [0, 0, 160, 120],
+        z_origin_y: 0,
+        zoom: 1.0,
+    };
+    let custom = [[255, 0, 0], [0, 255, 0], [0, 0, 255]];
+    let birth = ElectricBoltBirth {
+        frame: 0,
+        from: ProjectileCoord::new(0, 0, 0),
+        to: ProjectileCoord::new(256, 0, 0),
+        z_adjust: 0,
+        phase: 127,
+        alternate_color: true,
+        custom_colors: Some(custom),
+        owner: None,
+    };
+    let composite = |birth| {
+        let mut bolts = ElectricBolts::default();
+        bolts.create(birth);
+        let main: MainRng = SimRng::new(0xB96A50).into();
+        bolts
+            .composite(viewport, Some(palette()), &mut main.draws(), |_| true)
+            .to_vec()
+    };
+    let lines = composite(birth);
+    assert!(!lines.is_empty());
+    for triplet in lines.chunks_exact(3) {
+        assert_eq!(
+            [triplet[0].blend, triplet[1].blend, triplet[2].blend],
+            [
+                SurfaceLineBlend::Replace(0xf800),
+                SurfaceLineBlend::Replace(0x07e0),
+                SurfaceLineBlend::Replace(0x001f)
+            ]
+        );
+    }
+    assert_eq!(
+        lines,
+        composite(ElectricBoltBirth {
+            alternate_color: false,
+            ..birth
+        })
+    );
+    let stock = composite(ElectricBoltBirth {
+        custom_colors: None,
+        ..birth
+    });
+    assert_eq!(stock.len(), lines.len());
+    for triplet in stock.chunks_exact(3) {
+        assert_eq!(
+            triplet[0].blend,
+            SurfaceLineBlend::Replace(palette().alternate)
+        );
+        assert_eq!(
+            triplet[1].blend,
+            SurfaceLineBlend::Replace(palette().alternate)
+        );
+        assert_eq!(
+            triplet[2].blend,
+            SurfaceLineBlend::Replace(palette().center)
+        );
+    }
+
+    let gpu = Gpu::new();
+    let format = wgpu::TextureFormat::Bgra8UnormSrgb;
+    let batch = BatchRenderer::new_with_device(&gpu.device, &gpu.queue, format);
+    batch.write_camera(&gpu.queue, camera(size));
+    let color = gpu.target(size, format);
+    let cv = color.create_view(&Default::default());
+    let depth = gpu.target(size, wgpu::TextureFormat::Depth32Float);
+    let dv = depth.create_view(&Default::default());
+    let mut terrain = TerrainDrawRenderer::new(&gpu.device, &gpu.queue, format, &batch);
+    terrain.prepare(&gpu.device, &color, &dv, batch.camera_uniform());
+    let background = 0x39e7;
+    let mut expected = encoded(background, format).repeat((size[0] * size[1]) as usize);
+    gpu.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &color,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &expected,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(size[0] * 4),
+            rows_per_image: Some(size[1]),
+        },
+        color.size(),
+    );
+    for line in &lines {
+        let SurfaceLineBlend::Replace(word) = line.blend else {
+            unreachable!()
+        };
+        rasterize_z_clipped(
+            line.from,
+            line.to,
+            line.z_adjust,
+            viewport.clip,
+            viewport.z_origin_y,
+            |pixel| {
+                let at = (pixel.point[1] as usize * size[0] as usize + pixel.point[0] as usize) * 4;
+                expected[at..at + 4].copy_from_slice(&encoded(word, format));
+            },
+        );
+    }
+    terrain.begin_surface_lines();
+    let prepared = terrain.prepare_surface_lines(
+        &gpu.device,
+        &gpu.queue,
+        None,
+        lines
+            .iter()
+            .copied()
+            .map(crate::render::surface_line::SurfaceDraw::Line),
+        &[],
+        &[],
+        &[],
+        viewport,
+        |_| true,
+        |_| 127,
+    );
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    clear(&mut encoder, &cv, &dv, 65535, wgpu::LoadOp::Load);
+    terrain.draw_surface_lines(&mut encoder, &cv, prepared);
+    let reads = [gpu.read(&mut encoder, &color)];
+    let output = gpu.finish(encoder, &reads, size);
+    assert_eq!(
+        output[0], expected,
+        "custom packed colors and strand overwrite order survive GPU composition"
+    );
 }

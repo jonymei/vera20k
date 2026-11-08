@@ -121,6 +121,16 @@ impl Deactivation {
     }
 }
 
+impl crate::sim::game_entity::GameEntity {
+    /// Techno70FBD0: stock provider latch; NPAE1747E0F9D adds nonzero+504.
+    /// Unit7360C9's spark arm and B99115's first-hit sound use this query,
+    /// unlike locomotor admission (positive EMP) or expiry (provider only).
+    pub(crate) fn power_effect_disabled(&self) -> bool {
+        self.deactivated.is_offline()
+            || (cfg!(all(feature = "npatch", not(feature = "ares"))) && self.emp_remaining() != 0)
+    }
+}
+
 impl Simulation {
     /// The `PowersUnit=` arms of the operational-edge dispatcher
     /// (`0x004549B0`), which run before the rest of it: coming online, an
@@ -393,7 +403,16 @@ impl Simulation {
             }
         }
         self.reset_orders_to_guard(id, rules, effects);
+        // NPAE17470FC0C->C2BC8B skips only PowerOn while EMP is nonzero;
+        // ResetOrders above and the provider-latch clear below still run.
+        let power_on = !cfg!(all(feature = "npatch", not(feature = "ares")))
+            || self
+                .substrate
+                .entities
+                .get(id)
+                .is_some_and(|entity| entity.emp_remaining() == 0);
         if foot
+            && power_on
             && let Some(locomotor) = self
                 .substrate
                 .entities
@@ -428,6 +447,38 @@ impl Simulation {
             return;
         };
         if entity.deactivated.is_offline() != deactivated
+            && (!cfg!(all(feature = "npatch", not(feature = "ares")))
+                || entity.emp_remaining() == 0)
+        {
+            Self::emit_power_transition_sound(
+                interner,
+                substrate,
+                sound_events,
+                id,
+                deactivated,
+                rules,
+            );
+        }
+        substrate
+            .entities
+            .get_mut(id)
+            .expect("same object")
+            .deactivated
+            .offline = deactivated;
+    }
+
+    /// Shared type-sound selector for provider edges and NPAE EMP tails
+    /// B99113/C2BC0C. AY's global Activate/Deactivate fallbacks are empty;
+    /// nonempty Rules fallback resolution is still an explicit residual.
+    pub(crate) fn emit_power_transition_sound(
+        interner: &StringInterner,
+        substrate: &ObjectSubstrate,
+        sound_events: &mut FrameChannel<SimSoundEvent>,
+        id: u64,
+        deactivated: bool,
+        rules: &RuleSet,
+    ) {
+        if let Some(entity) = substrate.entities.get(id)
             && let Some(object) = interner.object_type(entity.type_ref(), rules)
             && let Some(sound) = if deactivated {
                 object.deactivate_sound.clone()
@@ -437,12 +488,6 @@ impl Simulation {
         {
             sound_events.emit(SimSoundEvent::voc_at(sound, &entity.position));
         }
-        substrate
-            .entities
-            .get_mut(id)
-            .expect("same object")
-            .deactivated
-            .offline = deactivated;
     }
 
     /// `UnitClass::Per_Cell_Process`'s arm for a cell arrival
@@ -487,7 +532,7 @@ impl Simulation {
         let Some(entity) = self.substrate.entities.get(id) else {
             return;
         };
-        if !entity.deactivated.is_offline() {
+        if !entity.power_effect_disabled() {
             return;
         }
         let location = object_location(entity, self.resolved_terrain.as_ref());

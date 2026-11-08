@@ -95,6 +95,8 @@ fn retail_shipyard_repairs_and_releases_a_damaged_destroyer() {
         crate::sim::world::FrameEffects::default(),
     );
     let strength = rules.object("DEST").unwrap().strength;
+    let yard_type = rules.object("GAYARD").unwrap();
+    assert!(yard_type.weapons_factory && yard_type.unit_repair);
     assert_eq!(
         sim.substrate.entities.get(ship).unwrap().health.current(),
         strength - 200
@@ -118,10 +120,68 @@ fn retail_shipyard_repairs_and_releases_a_damaged_destroyer() {
         Some(NavTargetRef::object(yard)),
         "the successful docking handshake must install the repair destination"
     );
+    let mut repair_hit_checked = false;
+    let mut previous_health = strength - 200;
     for _ in 0..2000 {
         advance(&mut sim, rules);
+        let current_health = sim.substrate.entities.get(ship).unwrap().health.current();
+        if !repair_hit_checked && current_health > previous_health && linked(&sim, yard, ship) {
+            let unit = sim.substrate.entities.get(ship).unwrap();
+            assert_eq!(unit.radio_contacts.slot(0), Some(yard));
+            assert_eq!(
+                sim.substrate.occupancy.first_building_on_layer(
+                    unit.position.rx(),
+                    unit.position.ry(),
+                    crate::sim::movement::locomotor::MovementLayer::Ground
+                ),
+                Some(yard),
+                "the repaired ship must overlap the factory cell protection branch"
+            );
+            assert!(
+                sim.unit_in_contact_war_factory(
+                    ship,
+                    rules,
+                    crate::sim::production::FactoryContactQuery::WeaponsFactory
+                ),
+                "non-damage factory queries must retain the original UnitRepair behavior"
+            );
+            let yard_health = sim.substrate.entities.get(yard).unwrap().health.current();
+            // Prepared receiver input during genuine paid repair, not a
+            // projectile/AoE comparison. Do not make the yard immune to splash.
+            sim.commit_direct_damage_receiver(
+                rules,
+                None,
+                EntityDamageEvent::direct_receiver(
+                    ship,
+                    50,
+                    0,
+                    0,
+                    None,
+                    ap,
+                    ReceiverCallFlags {
+                        ignore_defenses: false,
+                        arg6: false,
+                    },
+                ),
+                crate::sim::world::FrameEffects::default(),
+            );
+            let after = sim.substrate.entities.get(ship).unwrap().health.current();
+            assert_eq!(
+                after < current_health,
+                crate::rules::NPATCH_ENABLED,
+                "NPAE174737CE4/7E0495 excludes UnitRepair from damage protection"
+            );
+            assert_eq!(
+                sim.substrate.entities.get(yard).unwrap().health.current(),
+                yard_health,
+                "this direct ship receiver does not transfer damage to the yard"
+            );
+            repair_hit_checked = true;
+        }
+        previous_health = sim.substrate.entities.get(ship).unwrap().health.current();
         let unit = sim.substrate.entities.get(ship).unwrap();
         if unit.health.current() == strength && !linked(&sim, yard, ship) {
+            assert!(repair_hit_checked, "no under-repair hit was observed");
             assert!(unit.locomotor.as_ref().unwrap().is_powered());
             assert!(sim.houses.get(&owner).unwrap().economy().credits() < 20_000);
             return;

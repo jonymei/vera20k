@@ -216,6 +216,11 @@ impl FootPathRequest {
         })
     }
 
+    /// Walk75AEC0(false) is already the bounded admission retry, not a new
+    /// outer Process. Deferring it would lose this continuation at the next visit.
+    pub(super) fn is_walk_admission_retry(&self) -> bool {
+        !self.visit.walk_retry_allowed
+    }
     /// The mover facts this request's search reads, as snapshotted.
     pub(super) fn snapshot(&self) -> &MoverSnapshot {
         &self.visit.snap
@@ -512,6 +517,16 @@ fn advance_ordinary_mover(
     }
     if let Some(head) = movement_step::completed_walk_head(&entity.position, &entity.locomotor) {
         *walk_per_cell = Some((entity_id, head));
+        return;
+    }
+    // Walk75BF87..75BFA6 queries Techno70EFD0 only after the <17-lepton
+    // completion branch. Keep its retained head/destination and IsMoving,
+    // but clear animation+36 and the Foot+68A latch before any paid step.
+    if entity.emp_remaining() > 0 {
+        if let Some(loco) = entity.locomotor.as_mut() {
+            loco.stop_movement_animation();
+        }
+        entity.navigation.path_runtime_mut().clear_scold_latch();
         return;
     }
     let object = interner.object_type(entity.type_ref(), rules);

@@ -397,6 +397,81 @@ fn compare(sim: &Simulation, id: u64, row: &Value, out: bool) {
     }
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn emp_retained_routes_refuse_fresh_admission_for_drive_and_ship() {
+    use crate::rules::ini_parser::IniFile;
+    use crate::sim::{projectile::ProjectileCoord, world::FrameEffects};
+    let visit = |family: &str, emp: bool| {
+        let (mut sim, rules, registry, id) = unit(&json!({"family": family}));
+        order(&mut sim, &rules, id, (13, 10));
+        let retained_locomotor = sim.substrate.entities.get(id).unwrap().locomotor.clone();
+        let retained_nav = sim.substrate.entities.get(id).unwrap().navigation.clone();
+        if emp {
+            let emp_rules = RuleSet::from_ini(&IniFile::from_str(
+                "[Warheads]\n0=EMP\n[EMP]\nEMEffect=yes\nVerses=100%\n",
+            ))
+            .unwrap();
+            let wh = emp_rules.warhead("EMP").unwrap();
+            sim.apply_npatch_emp_detonation(
+                ProjectileCoord::new(2688, 2688, 0),
+                Some(id),
+                None,
+                3,
+                wh,
+                &rules,
+                FrameEffects::default(),
+            );
+            assert_eq!(sim.substrate.entities.get(id).unwrap().emp_remaining(), 3);
+            // Retained-route entry, independent of Move_To: the counter's
+            // producer is real, while the suspended route is a supplied prestate.
+            let actor = sim.substrate.entities.get_mut(id).unwrap();
+            actor.locomotor = retained_locomotor;
+            actor.navigation = retained_nav;
+        }
+        let actor = sim.substrate.entities.get_mut(id).unwrap();
+        actor
+            .navigation
+            .path_replay_mut()
+            .set_directions_for_test(vec![2, 2, 2]);
+        actor
+            .navigation
+            .path_replay_mut()
+            .set_reference_cell_for_test(Some((9, 8)));
+        actor.body_facing = FacingClass::with_rate_of(2 << 13, &actor.body_facing);
+        actor.navigation.path_runtime_mut().start_movement(100, 0);
+        sim.session.set_binary_frame_for_test(101);
+        fresh_oracle_seam::install(vec![0, 0], vec![]);
+        let result = sim.run_track_process_movement(
+            id,
+            if family == "drive" {
+                TrackFamily::Drive
+            } else {
+                TrackFamily::Ship
+            },
+            ProcessMovementArgs::OUTER,
+            &rules,
+            Some(&registry),
+            FrameEffects::default(),
+        );
+        let (records, unused) = fresh_oracle_seam::finish();
+        result.unwrap();
+        (records, unused)
+    };
+    assert!(
+        !visit("drive", false).0.is_empty(),
+        "control must reach cell admission"
+    );
+    for family in ["drive", "ship"] {
+        let (records, unused) = visit(family, true);
+        assert!(
+            records.is_empty(),
+            "{family}: EMP must return before path/cell queries"
+        );
+        assert_eq!(unused, 2, "{family}");
+    }
+}
+
 #[test]
 fn fresh_arm_rows_match_the_original_responses() {
     let mut checked = 0;

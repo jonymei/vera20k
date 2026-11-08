@@ -3,6 +3,11 @@
 //! concrete-class and base Tag prefixes before the arithmetic/accounting continuation.
 
 use super::*;
+use crate::sim::anim_class::AnimWorldCoord;
+
+#[cfg(test)]
+#[path = "npatch_rewards_tests.rs"]
+mod npatch_rewards_tests;
 
 /// Pay one kill's veterancy award ([`record_the_kill`]'s `points`); the
 /// recipient's own cost divides it inside `VeterancyClass::Add @ 0x0074FF50`.
@@ -27,15 +32,18 @@ use super::*;
 ///    the key, so every garrison kill lands here: its occupants promote, the
 ///    building never does. FireAt has already advanced the index past the
 ///    shooter (`0x006FF031..0x006FF085`) when its bullet kills, so with
-///    several occupants the NEXT one in line is paid.
-///    RESIDUAL: native reads that slot unchecked; VERA pays nobody when the
-///    index is past the occupant count ([`combat_weapon::firing_occupant_id`]).
+///    several occupants stock pays the NEXT one. NPAE702FBB..702FCB instead
+///    decrements the live index and adds the live count if negative. This is
+///    kill-time selection, not retained attribution to the original shot.
+///    RESIDUAL: native reads the selected slot unchecked; VERA pays nobody
+///    when that slot is invalid for the current occupant list.
 ///    Trigger: occupants leaving, but not all of them, between the shot and
 ///    the kill. Effect: native reads a stale slot. Frequency: rare.
 /// 5. else nobody.
 ///
-/// Every cost on both sides is the type's Cost_Of for the VICTIM's house
-/// (`victim_house`; `0x00702ED1`, `0x00702F13`, `0x00702F77`, `0x00702FD4`).
+/// Transporter/self/missile Cost_Of uses the killer's house (`EDI+21C`
+/// at702ED1,702F13,702F77). The garrison arm instead uses the victim's
+/// house (`ESI+21C` at702FD4). The victim's own cost determines `points`.
 fn award_kill_experience(
     entities: &mut EntityStore,
     rules: &RuleSet,
@@ -43,15 +51,18 @@ fn award_kill_experience(
     killer_id: u64,
     victim_id: u64,
     points: i32,
-    victim_house: Option<&HouseCostFactors>,
+    houses: &crate::sim::houses::Houses,
 ) {
     if killer_id == RAD_NO_ATTACKER || killer_id == victim_id {
         return;
     }
-    let cost_of = |object: &ObjectType| rules.cost_of(object, victim_house);
     let Some(killer) = entities.get(killer_id) else {
         return;
     };
+    let killer_house = houses
+        .get(&killer.owner())
+        .map(crate::sim::house_state::HouseState::cost_factors);
+    let cost_of = |object: &ObjectType| rules.cost_of(object, killer_house.as_ref());
     let Some(killer_type) = interner.object_type(killer.type_ref(), rules) else {
         return;
     };
@@ -62,7 +73,36 @@ fn award_kill_experience(
     // Branch 1: a passenger firing from an OpenTopped transport pays its
     // transporter (the `+0x82`/`+0x11C` pair).
     let open_transporter = killer.passenger_role.open_transport_id();
-    let recipient = if let Some(transporter) = open_transporter.and_then(trainable_cost) {
+    // AYMod's TrainPassengers keeps the shooter's XP until it is elite;
+    // untrainable/elite riders retain the existing transport fallback.
+    let trains_passenger = killer_type.trainable
+        && killer.veterancy.rank() < 200
+        && open_transporter
+            .and_then(|id| entities.get(id))
+            .and_then(|carrier| interner.object_type(carrier.type_ref(), rules))
+            .is_some_and(|carrier| carrier.npatch_rewards.train_passengers);
+    // NPAE RecordKill702FF0 -> C2C49F..C2C50F: an Aircraft with a
+    // trainable SpawnOwner keeps the ordinary award AND pays its parent.
+    // The +2C0 controller arm takes a different continuation, not this bonus.
+    let spawn_parent = if crate::rules::NPATCH_ENABLED
+        && killer.category() == EntityCategory::Aircraft
+        && killer.mind_control.controller().is_none()
+    {
+        killer.spawn_owner_id.owner().and_then(|id| {
+            let parent = entities.get(id)?;
+            let kind = interner.object_type(parent.type_ref(), rules)?;
+            let house = houses
+                .get(&parent.owner())
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            kind.trainable
+                .then(|| (id, rules.cost_of(kind, house.as_ref())))
+        })
+    } else {
+        None
+    };
+    let recipient = if trains_passenger {
+        Some((killer_id, cost_of(killer_type)))
+    } else if let Some(transporter) = open_transporter.and_then(trainable_cost) {
         Some(transporter)
     } else if killer_type.trainable {
         // Branch 2: the killer itself.
@@ -71,18 +111,94 @@ fn award_kill_experience(
         // Branch 3: a spawned missile pays its launcher.
         killer.spawn_owner_id.owner().and_then(trainable_cost)
     } else {
-        // Branch 4: an occupied building pays the occupant at its fire index.
-        combat_weapon::firing_occupant_id(killer, killer_type).and_then(|occupant| {
+        // NPAE RecordKill702FB5..702FD1: select the previous live index,
+        // wrapping once when negative. GetWeapon/ROF still use the current
+        // index; do not change their shared firing_occupant_id owner.
+        let occupant = if crate::rules::NPATCH_ENABLED {
+            combat_weapon::is_occupied(killer, killer_type)
+                .then(|| {
+                    let occupants = killer.passenger_role.occupants();
+                    let previous = occupants.fire_index().wrapping_sub(1);
+                    let previous = if previous < 0 {
+                        previous.wrapping_add(occupants.ids().len() as i32)
+                    } else {
+                        previous
+                    };
+                    usize::try_from(previous)
+                        .ok()
+                        .and_then(|index| occupants.ids().get(index))
+                        .copied()
+                })
+                .flatten()
+        } else {
+            combat_weapon::firing_occupant_id(killer, killer_type)
+        };
+        occupant.and_then(|occupant| {
             let occupant_type = interner.object_type(entities.get(occupant)?.type_ref(), rules)?;
-            Some((occupant, cost_of(occupant_type)))
+            //702FD4 deliberately reads ESI (victim), not EDI (killer).
+            let house = entities
+                .get(victim_id)
+                .and_then(|victim| houses.get(&victim.owner()))
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            Some((occupant, rules.cost_of(occupant_type, house.as_ref())))
         })
     };
     let Some((recipient_id, recipient_cost)) = recipient else {
         return;
     };
-    if let Some(recipient) = entities.get_mut(recipient_id) {
-        recipient.veterancy.award_kill(
-            recipient_cost,
+    // NPAE RecordKill702FF0 -> C2C208/C2C241 reads EDI+2C0: the
+    // original killer, not ECX's redirected carrier/launcher/occupant award.
+    let controller = entities
+        .get(killer_id)
+        .and_then(|killer| killer.mind_control.controller())
+        .filter(|&id| id != killer_id)
+        .filter(|&id| {
+            entities.get(id).is_some_and(|entity| {
+                entity.is_object_alive()
+                    && entity.health.current() > 0
+                    && entity.veterancy.rank() < 200
+            })
+        })
+        // NPAE C2C269..C2C289 costs the controller through its own House.
+        .and_then(|id| {
+            let controller = entities.get(id)?;
+            let kind = interner.object_type(controller.type_ref(), rules)?;
+            let house = houses
+                .get(&controller.owner())
+                .map(crate::sim::house_state::HouseState::cost_factors);
+            kind.trainable
+                .then(|| (id, rules.cost_of(kind, house.as_ref())))
+        })
+        .filter(|&(_, cost)| cost > 0);
+    let shared = if controller.is_some() {
+        rules.npatch_rewards.controller_points(points)
+    } else {
+        0
+    };
+    // Share the existing award, never mint a second full XP award. An elite
+    // or absent controller leaves the points with the controlled shooter.
+    for (id, cost, award) in [
+        Some((recipient_id, recipient_cost, points - shared)),
+        controller.map(|(id, cost)| (id, cost, shared)),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(recipient) = entities.get_mut(id) {
+            recipient.veterancy.award_kill(
+                cost,
+                award,
+                true,
+                rules.general.veteran_ratio,
+                rules.general.veteran_cap,
+            );
+        }
+    }
+    if let Some((parent, cost)) = spawn_parent
+        && let Some(parent) = entities.get_mut(parent)
+    {
+        parent.veterancy.award_kill(
+            cost,
             points,
             true,
             rules.general.veteran_ratio,
@@ -121,9 +237,10 @@ impl KillSource {
 /// `TechnoClass::Record_The_Kill @ 0x00702D40` for `victim_id`, destroyed by
 /// `killer_id` (none for a death without an attacker) and credited to
 /// `killer_owner`: the kill/score record and the experience award
-/// ([`award_kill_experience`]). Every cost it reads is Cost_Of for the victim's
-/// house. The victim's base cost is captured before Tag callbacks at702D61;
-/// recipient costs reread the victim's current House at702ED1/702F13/702FD4.
+/// ([`award_kill_experience`]). The victim's base cost is captured through
+/// its House before Tag callbacks at702D61. Recipient costing uses the
+/// killer's current House at702ED1/702F13/702F77, except the garrison arm's
+/// victim House at702FD4; NP parent/controller bonuses use their own House.
 /// One award feeds both the score
 /// (`0x0070300F`) and the experience: the victim's cost, zero when the
 /// killer's house is allied with the victim, else doubled for a veteran or
@@ -157,9 +274,9 @@ fn record_the_kill(
     victim_cost: i32,
     callback: KillCallback,
     rules: &RuleSet,
-) {
+) -> Option<u64> {
     let Some(victim) = entities.get(victim_id) else {
-        return;
+        return None;
     };
     // E0's `DontScore=` (+C9F) returns AFTER the Tag prefix and before
     // bookkeeping. E4 has no such entry return: it awards score and victim
@@ -168,7 +285,7 @@ fn record_the_kill(
     // it on `SLAV`, `V3ROCKET`, `DMISL` and `CMISL`: without it every missile
     // shot down would promote its interceptor.
     if matches!(source, KillSource::Techno(_)) && victim.tracking_facts.dont_score() {
-        return;
+        return None;
     }
     let killer_id = match source {
         KillSource::Techno(source) => source,
@@ -183,9 +300,6 @@ fn record_the_kill(
         KillSource::House(house) => house,
     };
     let victim_owner = victim.owner();
-    let victim_house = houses
-        .get(&victim_owner)
-        .map(crate::sim::house_state::HouseState::cost_factors);
     let victim_type = interner.object_type(victim.type_ref(), rules);
     let insignificant_building = victim.category() == EntityCategory::Structure
         && victim_type.is_some_and(|object| object.insignificant);
@@ -204,17 +318,43 @@ fn record_the_kill(
     });
     let points =
         super::veterancy::kill_award_points(victim_cost, victim.veterancy.rank_kind(), allied);
+    // Bounty is a terminal hostile kill reward, not capture bookkeeping.
+    // Reuse KillRecord's existing terminal bit so callbacks cannot farm cash.
+    let bounty = if callback == KillCallback::Terminal
+        && !allied
+        && !victim.kill_record.is_recorded()
+        && killer_id
+            .and_then(|id| entities.get(id))
+            .is_some_and(|killer| {
+                interner
+                    .object_type(killer.type_ref(), rules)
+                    .is_some_and(|kind| {
+                        kind.npatch_rewards.collects_bounty(killer.veterancy.rank())
+                    })
+            }) {
+        victim_type.map_or(0, |kind| {
+            rules
+                .npatch_rewards
+                .bounty(victim_cost, victim.veterancy.rank(), &kind.npatch_rewards)
+        })
+    } else {
+        0
+    };
     if let Some(killer_id) = killer_id {
         award_kill_experience(
-            entities,
-            rules,
-            interner,
-            killer_id,
-            victim_id,
-            points,
-            victim_house.as_ref(),
+            entities, rules, interner, killer_id, victim_id, points, houses,
         );
     }
+    let paid = killer_owner
+        .and_then(|owner| houses.get_mut(&owner))
+        .map_or(0, |house| {
+            let room = (i64::from(i32::MAX) - i64::from(house.economy().available_money())).max(0);
+            let paid = i64::from(bounty).min(room) as i32;
+            if paid > 0 {
+                house.economy_mut().add_credits(paid);
+            }
+            paid
+        });
     // 702FF0 awards experience before 703003..7031DC book the House fields.
     if let Some(victim) = entities.get_mut(victim_id) {
         let count_killer = !victim.tracking_facts.dont_score();
@@ -228,6 +368,7 @@ fn record_the_kill(
             callback,
         );
     }
+    (paid > 0).then_some(killer_id).flatten()
 }
 
 impl crate::sim::world::Simulation {
@@ -280,7 +421,7 @@ impl crate::sim::world::Simulation {
             .object_type(victim.type_ref(), rules)
             .map_or(0, |object| rules.cost_of(object, victim_house.as_ref()));
         self.record_kill_tag_prefix(victim_id, source, context);
-        record_the_kill(
+        let bounty_killer = record_the_kill(
             &mut self.substrate.entities,
             &mut self.houses,
             &self.interner,
@@ -291,6 +432,23 @@ impl crate::sim::world::Simulation {
             callback,
             rules,
         );
+        if let Some(killer) = bounty_killer.and_then(|id| self.entities().get(id))
+            && let Some(name) = rules.npatch_rewards.bounty_anim.as_deref()
+        {
+            // NPAE TechnoClass::ReceiveDamage702572 -> B95D16:
+            // B95D99..B95DA9 calls the original killer's GetCoords(vt48),
+            // then B95DC4..B95DEA constructs the bounty anim there.
+            let coord = crate::sim::movement::ground_pose::object_get_coords(
+                killer,
+                self.resolved_terrain.as_ref(),
+            );
+            let location = AnimWorldCoord {
+                x: coord.x,
+                y: coord.y,
+                z: coord.z,
+            };
+            self.spawn_named_anim(rules, name, location, 0, 0x600, 0);
+        }
         #[cfg(any(test, feature = "test-support"))]
         self.trace_lifecycle_for_test(
             crate::sim::world::LifecycleTestEvent::RecordKillBookkeeping {

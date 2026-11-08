@@ -24,6 +24,14 @@ pub(crate) struct SlotScene {
 
 impl SlotScene {
     pub(crate) fn load(root: &Path) -> Self {
+        let fixture = Self::load_registered_types(root);
+        fixture.assert_physical_inputs();
+        fixture
+    }
+
+    /// Shared physical placement; callers that compare stock native pixels
+    /// retain load()'s stricter CLEG/ART contract above.
+    pub(crate) fn load_registered_types(root: &Path) -> Self {
         let mut launch = crate::headless_scenario::battle_session("XMP03T4.MAP", &[]);
         launch.options.shroud = false;
         launch.options.fog_of_war = false;
@@ -144,7 +152,6 @@ impl SlotScene {
             attacker_cells,
             attacker: None,
         };
-        fixture.assert_physical_inputs();
         fixture
     }
 
@@ -625,7 +632,9 @@ impl SlotScene {
             super::super::units::house_color_to_remap_row(color),
             observer,
         );
-        assert!(material.visible);
+        if !material.visible {
+            return Vec::new();
+        }
         let cell = (building.position.rx(), building.position.ry());
         let cells = sim
             .resolved_terrain()

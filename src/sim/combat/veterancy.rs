@@ -117,6 +117,17 @@ impl Veterancy {
         self.raw = from.raw;
     }
 
+    /// NPAE SpawnManager promotion helper C2D883..C2D8A4: only raise a
+    /// trainable child's raw experience, then invalidate its cached rank.
+    /// Both operands are stored f32, so a plain comparison is exact on all
+    /// targets; unordered (NaN) skips the copy just as FCOMPP/TEST AH,41 does.
+    pub(crate) fn inherit_spawn_promotion(&mut self, parent: &Veterancy) {
+        if f32::from_bits(parent.raw.bits()) > f32::from_bits(self.raw.bits()) {
+            self.raw = parent.raw;
+            self.rank_cache = LEVEL_UNSAMPLED;
+        }
+    }
+
     /// `VeterancyStruct::SetElite(1) @ 0x007500B0`: store 2.0f. The rank
     /// cache is deliberately left alone — native does not touch `+0x13C`
     /// here, so the next `AI_Update` sample announces the crossing (or, for a

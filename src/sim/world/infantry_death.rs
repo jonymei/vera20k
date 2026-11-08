@@ -564,7 +564,8 @@ impl Simulation {
     /// to completion (module docs). Refused, an unchanged action keeps its
     /// whole Stage, and a sequence with no frames (`0x0051D70F`) keeps the
     /// previous action: the next visit's Health reset (`0x0051BC57`) then
-    /// raises the infantryman to Health 1, alive.
+    /// raises the infantryman to Health 1, alive in stock. NPAE174 skips
+    /// that reset (`0x0051BC67`); see `infantry_health_reset`.
     ///
     /// A captured receiver can write a different action after UnInit,
     /// without restoring Logic membership or canceling its pending deletion.
@@ -822,7 +823,7 @@ mod corpse_tests {
     /// every other `[InfantryTypes]` entry has Die1 and Die2 frames once
     /// `artmd.ini`'s sequences are bound. WEEDGUY has no ART and
     /// `TechLevel=-1` (rulesmd.ini keeps it to instantiate weapons), so only
-    /// a map that places one can kill it into that revival.
+    /// a map that places one can kill it into that stock-only revival.
     #[test]
     fn retail_infantry_without_die_frames_are_the_weedguy() {
         let Some(mut rules) = crate::rules::retail_ini_fixture::retail_unlayered_rules_with_art()

@@ -512,7 +512,16 @@ class EngineerInputs(bridge_child_sound.Sound):
             # Retain the full original binary lookup, unlike the historical
             # Explosion-only Sound fixture's local two-name sample mapping.
             return
-        if not 0x400000 <= pc < 0x7E1000 and pc != RET_MAGIC:
+        if not hasattr(self, 'native_code_ranges'):
+            from tools.native_oracle import IMAGE_BASE, image_bytes, _sections
+            # The selected immutable PE owns these ranges for this VM's life.
+            # NP text is outside retail .text; data/BSS are never code inputs.
+            self.native_code_ranges = tuple(
+                (IMAGE_BASE + rva, IMAGE_BASE + rva + raw)
+                for rva, _, raw, _, flags in _sections(image_bytes())
+                if raw and flags & 0x20000000)
+        if pc != RET_MAGIC and not any(low <= pc and pc + size <= high
+                                      for low, high in self.native_code_ranges):
             raise AssertionError(('non_native_input_code', f'0x{pc:08X}'))
         super().hook(u, pc, size, data)
 
@@ -532,13 +541,13 @@ def read_repair_reference(inputs, sections):
     return struct.unpack('<i', u.mem_read(inputs.rules + 0x1C4, 4))[0]
 
 
-def prepare_joined_inputs(root, *, layers=None):
+def prepare_joined_inputs(root, *, layers=None, npatch=False):
     # Construction dynamically imports Sound, so this selects an extension of
     # that one reader/allocator owner. No existing primitive is changed.
     original = bridge_child_sound.Sound
     bridge_child_sound.Sound = EngineerInputs
     try:
-        inputs = construction.joined_inputs(root, layers=layers)
+        inputs = construction.joined_inputs(root, layers=layers, npatch=npatch)
     finally:
         bridge_child_sound.Sound = original
     u, read = inputs.u, inputs.read32
@@ -758,7 +767,6 @@ class EngineerJoinedFixture(construction.JoinedFixture):
             u.mem_write(address, bytes(inputs.u.mem_read(address, length)))
         u.mem_write(HOUSE + 0x34, dwords(inputs.country))
         u.mem_write(0x887324, dwords(construction.JOINED_MEMORY + 0x5000))
-        u.mem_write(0x87F924, dwords(0xC00000))
         u.mem_map(0x31000000, 0x600000)
         u.mem_write(0x87F7E8 + 0x68, dwords(0x31000000, 0x40000, 0x31100000))
         for entry in (0x561710, 0x5617A0, 0x5617C0, 0x5617E0):

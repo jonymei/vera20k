@@ -1337,7 +1337,9 @@ fn prism_arm(
 /// ftol) is at most the master's weapon 1 range (`vt+0x168(1)`, the Secondary
 /// `PrismSupport`'s 2048 in retail; inclusive, `0x0044B49A`). The nearest
 /// wins; a tie keeps the lower vector index (`0x0044B49E..0x0044B4AA`).
-/// Power, EMP, the tower's own target, a build-up or a sale are not asked.
+/// Stock asks no power/EMP predicate. NPAE17444B388 -> 7E04BB first
+/// requires the last operational sample (+6C8), not a fresh4555D0 query;
+/// the tower's own target, a build-up or a sale are still not asked.
 ///
 /// FireAt already started the shooter's actual rearm inside its visit
 /// (`0x006FF2B2..0x006FF2BB`); a zero ROF remains expired, as in native.
@@ -1361,7 +1363,9 @@ fn prism_supporter(
         let Some(candidate) = sim.substrate.entities.get(candidate_id) else {
             continue;
         };
-        let admitted = candidate.lifecycle.object_alive()
+        let admitted = (!crate::rules::NPATCH_ENABLED
+            || candidate.building_last_operational.is_operational())
+            && candidate.lifecycle.object_alive()
             && candidate.type_ref() == master.type_ref()
             && candidate.rearm_timer.remaining(now) == 0
             && candidate.pending_building_fire.remaining_ticks() == 0
@@ -1463,9 +1467,20 @@ pub(super) fn process_delayed_fire(
                 .get_mut(id)
                 .expect("live support source");
             entity.prism_support_count.reset();
-            entity
-                .rearm_timer
-                .start(now, rules.general.prism_support.delay);
+            let delay = rules.general.prism_support.delay;
+            // NPAE174 Support44ACC4 ->7E0636..7E065D reads cached +13C,
+            // not a fresh read of the Veterancy+150 accumulator.
+            #[cfg(feature = "npatch")]
+            let delay = match entity.veterancy.rank_cache() {
+                crate::sim::combat::veterancy::LEVEL_ELITE => {
+                    rules.general.prism_support.elite_delay
+                }
+                crate::sim::combat::veterancy::LEVEL_VETERAN => {
+                    rules.general.prism_support.veteran_delay
+                }
+                _ => delay,
+            };
+            entity.rearm_timer.start(now, delay);
         }
     }
 }

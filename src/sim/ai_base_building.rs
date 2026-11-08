@@ -308,9 +308,9 @@ pub(crate) fn update_production_choices(
     let choose_units = |sim: &mut Simulation, kinds: &[UnitChoiceKind]| {
         for &kind in kinds {
             ai_unit_choice::choose(sim, rules, owner, kind);
-            // NPSE 2.0 House::Update's C33AB0 wrapper (4F90F2/4F9252)
-            // always asks land, then naval. Mode-2 admission below still
-            // reads the original three choices only.
+            // NPAE174 C2CEE9 and NPSE 2.0's C33AB0 wrapper (4F90F2/4F9252)
+            // always ask land, then naval. Mode-2 admission below still reads
+            // the original three choices only.
             if crate::rules::NPATCH_ENABLED && kind == UnitChoiceKind::Unit {
                 ai_unit_choice::choose(sim, rules, owner, UnitChoiceKind::NavalUnit);
             }
@@ -1073,8 +1073,9 @@ fn carry_wall_tower_site(
 /// choice (`+0x564C`, `0x004FBDDC`) or a choice of `sim::ai_unit_choice`
 /// (`+0x5650`, `+0x5654`, `+0x5658`).
 ///
-/// `producer_naval` is the producing building's `Naval=`. NPSE's hook for this
-/// read (`0x4FBDAF -> 0xC2F130`) takes the vehicle choice from `+0x16130`
+/// `producer_naval` is the producing building's `Naval=`. NPAE174
+/// (`0x4FBDAF -> 0xC2CE9F`) and NPSE's hook (`0x4FBDAF -> 0xC2F130`) take
+/// the vehicle choice from the separate naval slot
 /// while the producer is naval and from `+0x5650` otherwise, so a shipyard
 /// stops reading a war factory's pick; an ordinary build has no naval slot and
 /// always reads `+0x5650`.

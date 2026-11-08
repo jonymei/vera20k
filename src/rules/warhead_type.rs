@@ -98,7 +98,9 @@ pub struct WarheadType {
     /// `0x00836f04`) over the constructor's 0 (`0x0075cf83`). Techno
     /// What_Action on a Cell keeps a Fire warhead off a destroyable cliff
     /// (`0x00700908..0x00700924`).
-    pub fire: bool,
+    /// The same native +14C byte is NPAE174 BunkerPenetrationLevel, not
+    /// a second flag. Its existing cliff consumer still tests nonzero.
+    fire_byte: i8,
     /// Whether this warhead reaches a target installed in a bunker. The active
     /// receiver has category-specific linked-building/occupant semantics.
     /// `WarheadTypeClass+0x146` (ReadINI `0x0075d53c`, key string
@@ -108,6 +110,9 @@ pub struct WarheadType {
     /// `WarheadTypeClass+0x179` (ReadINI `0x0075d9f2`, key string
     /// `0x00847cc8`).
     pub affects_allies: bool,
+    /// NPAE174 +129, constructor75CF25 clears it; retained readerC2E90D.
+    /// Independent of the Phobos AffectsEnemies key and its default.
+    pub(crate) doesnt_affect_enemies: bool,
     /// Phobos `AffectsOwner`; `None` falls back to [`Self::affects_allies`].
     pub affects_owner: Option<bool>,
     /// Phobos `AffectsEnemies`, default true.
@@ -253,6 +258,7 @@ pub struct WarheadType {
     /// string `0x0081BBC8`), tested first in the detonation chain at
     /// `BulletClass::DetonateAtCoord @ 0x00469211`.
     pub mind_control: bool,
+    pub(crate) is_perma_controlled: bool,
     /// Poison damage. `WarheadTypeClass+0x156` (ReadINI `0x0075D800`, key
     /// string `0x00847D58`).
     pub poison: bool,
@@ -348,6 +354,21 @@ pub struct WarheadType {
 }
 
 impl WarheadType {
+    pub fn fire(&self) -> bool {
+        self.fire_byte != 0
+    }
+
+    pub(crate) fn bunker_penetration_level(&self) -> i8 {
+        self.fire_byte
+    }
+
+    pub(super) fn project_npatch_bunker_penetration(&mut self, level: i8) {
+        self.fire_byte = level;
+    }
+
+    pub(crate) fn is_permanent_hijack(&self) -> bool {
+        self.is_perma_controlled && self.mind_control && self.parasite
+    }
     pub(crate) fn ares_rules(&self) -> Option<&crate::rules::ares_warhead::AresWarheadRules> {
         self.ares.as_ref()
     }
@@ -441,14 +462,22 @@ impl WarheadType {
             cell_spread_f64,
             cell_inset_f32,
             percent_at_max_f64,
-            causes_delay_kill: section.read_bool("CausesDelayKill", false),
+            // The ordered Rules processor folds CausesDelayKill and NPAE's
+            // earlier IsFlatExplosion alias per raw layer, then publishes +130.
+            causes_delay_kill: false,
             delay_kill_frames: section.read_int("DelayKillFrames", 5),
             delay_kill_at_max_f64,
             wall: section.read_bool("Wall", false),
             wood: section.read_bool("Wood", false),
-            fire: section.read_bool("Fire", false),
+            fire_byte: if crate::rules::NPATCH_ENABLED {
+                0
+            } else {
+                i8::from(section.read_bool("Fire", false))
+            },
             penetrates_bunker: section.read_bool("PenetratesBunker", false),
             affects_allies: section.read_bool("AffectsAllies", true),
+            // Published from the ordered native reader, not the merged INI.
+            doesnt_affect_enemies: false,
             affects_owner: section
                 .is_present("AffectsOwner")
                 .then(|| section.read_bool("AffectsOwner", false)),
@@ -492,6 +521,8 @@ impl WarheadType {
             psychedelic: section.read_bool("Psychedelic", false),
             ivan_bomb: section.read_bool("IvanBomb", false),
             mind_control: section.read_bool("MindControl", false),
+            is_perma_controlled: crate::rules::NPATCH_ENABLED
+                && section.read_bool("IsPermaControlled", false),
             poison: section.read_bool("Poison", false),
             airstrike: section.read_bool("Airstrike", false),
             radiation: section.read_bool("Radiation", false),
@@ -671,11 +702,11 @@ mod tests {
     #[test]
     fn postmortem_fields_preserve_signed_and_f32_inputs() {
         let ini = IniFile::from_str(
-            "[OilExplosionWH]\nCellSpread=4\nCausesDelayKill=yes\n\
+            "[Warheads]\n0=OilExplosionWH\n[OilExplosionWH]\nCellSpread=4\nCausesDelayKill=yes\n\
              DelayKillFrames=-7\nDelayKillAtMax=7.1\n",
         );
-        let wh =
-            WarheadType::from_ini_section("OilExplosionWH", ini.section("OilExplosionWH").unwrap());
+        let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
+        let wh = rules.warhead("OilExplosionWH").unwrap();
         assert!(wh.causes_delay_kill);
         assert_eq!(wh.delay_kill_frames, -7);
         assert_eq!(

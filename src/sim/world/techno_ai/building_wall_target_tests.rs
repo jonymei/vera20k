@@ -158,7 +158,16 @@ fn retail_pillbox_target_assignment_observes_wall_geometry() {
             "{wall_owner:?} endpoint={endpoint}"
         );
         let entity = scene.sim.substrate.entities.get(scene.building).unwrap();
-        assert_eq!(entity.weapon_burst.index(), if blocked { 0 } else { 7 });
+        // NPAE1746FCF5B preserves the burst when the wall rejects/clears
+        // a target; stock Assign_Target resets it. Target geometry is shared.
+        assert_eq!(
+            entity.weapon_burst.index(),
+            if blocked && !crate::rules::NPATCH_ENABLED {
+                0
+            } else {
+                7
+            }
+        );
         assert_eq!(
             entity.mission, before,
             "the setter does not change mission/timer state"
@@ -211,7 +220,7 @@ fn a_player_attack_order_cannot_keep_a_pillbox_target_behind_a_wall() {
             .unwrap()
             .weapon_burst
             .index(),
-        0
+        if crate::rules::NPATCH_ENABLED { 7 } else { 0 }
     );
     scene
         .sim
@@ -271,7 +280,14 @@ fn generic_retaliation_archives_and_overrides_before_wall_target_admission() {
             entity.attack_target.target(),
             (!blocked).then_some(TargetKind::Entity(scene.target))
         );
-        assert_eq!(entity.weapon_burst.index(), if blocked { 0 } else { 7 });
+        assert_eq!(
+            entity.weapon_burst.index(),
+            if blocked && !crate::rules::NPATCH_ENABLED {
+                0
+            } else {
+                7
+            }
+        );
     }
 }
 
@@ -302,7 +318,10 @@ fn canonical_restore_rechecks_a_wall_added_after_the_target_was_archived() {
     );
     assert_eq!(scene.target(), None);
     let entity = scene.sim.substrate.entities.get(scene.building).unwrap();
-    assert_eq!(entity.weapon_burst.index(), 0);
+    assert_eq!(
+        entity.weapon_burst.index(),
+        if crate::rules::NPATCH_ENABLED { 7 } else { 0 }
+    );
     assert_eq!(
         entity.mission.current(),
         MissionId::from_known(MissionType::Guard)

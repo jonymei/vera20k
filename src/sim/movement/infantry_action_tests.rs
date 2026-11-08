@@ -3,6 +3,31 @@ use crate::rules::ini_parser::IniFile;
 use serde_json::Value;
 
 #[test]
+fn health_reset_keeps_the_npatch_bypass_for_non_jumpjet_infantry() {
+    let mut sim = crate::sim::world::Simulation::new();
+    let mut actor = crate::sim::game_entity::GameEntity::test_default_of_category(
+        1,
+        "ENGINEER",
+        "Americans",
+        4,
+        4,
+        crate::map::entities::EntityCategory::Infantry,
+    );
+    actor.health.set_for_test(0);
+    assert!(!in_death_sequence(
+        actor.mission_leaf.as_infantry().unwrap().doing()
+    ));
+    sim.substrate.entities.insert(actor);
+    sim.substrate.infantry_health_reset(1);
+    // Stock51BC96 revives an unrecognized/no-death action; NPAE51BC67
+    // bypasses this writer without checking locomotor, action or type keys.
+    assert_eq!(
+        sim.entities().get(1).unwrap().health.current(),
+        if crate::rules::NPATCH_ENABLED { 0 } else { 1 }
+    );
+}
+
+#[test]
 fn cheer_matches_original_admission_and_shared_do_action_clock() {
     use crate::sim::mission::state::MissionTestFixture;
     use crate::sim::mission::{MissionDispatchTimer, MissionId};

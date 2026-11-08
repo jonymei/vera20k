@@ -104,6 +104,13 @@ CAPABILITIES: tuple[Capability, ...] = (
         test=False,
     ),
     Capability(
+        "verax",
+        ("verax",),
+        "VERA20K's own first-party extension: the VeraX-gated autoload, "
+        "hotkey and skirmish chains.",
+        focus=("autoload",),
+    ),
+    Capability(
         "debug-tools",
         ("debug-tools",),
         "Diagnostic builds: the browser dashboard, offline trainer and "

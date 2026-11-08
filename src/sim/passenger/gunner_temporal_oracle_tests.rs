@@ -1,6 +1,7 @@
 //! Original Unit746420/7464E0 callbacks with real GetROF6FCFA0 and LetGo71ABC0.
 //!
-//! `ifv_turret_switching --temporal-gunner` supplies the consumed native rows.
+//! `ifv_turret_switching --temporal-gunner` supplies stock rows; the
+//! `--temporal-gunner-npatch` profile supplies three compact NPAE controls.
 //! Actor placement, retained timers/bursts and one already-live Temporal chain
 //! are explicit component inputs. These are not boarding/Unlimbo comparisons;
 //! the parent regressions exercise those ordinary production paths separately.
@@ -20,7 +21,21 @@ use crate::sim::world::Simulation;
 use serde_json::{Value, json};
 
 fn corpus() -> &'static Value {
-    crate::test_fixture::json("tools/spatial_oracle/ifv_temporal_gunner.json")
+    if crate::rules::NPATCH_ENABLED {
+        crate::test_fixture::json("tools/spatial_oracle/ifv_temporal_gunner_npatch.json")
+    } else {
+        crate::test_fixture::json("tools/spatial_oracle/ifv_temporal_gunner.json")
+    }
+}
+
+/// Compact NP rows measure unchanged Main/MapGen against their initial bytes.
+fn after_rng<'a>(row: &'a Value, operation: &'a Value, stream: &str) -> &'a str {
+    if let Some(value) = operation["rng_after"].get(stream) {
+        value.as_str().unwrap()
+    } else {
+        assert_eq!(operation["rng_unchanged"][stream], true);
+        row["rng_initial"][stream].as_str().unwrap()
+    }
 }
 
 fn signed(value: &Value) -> i32 {
@@ -427,10 +442,16 @@ fn native_temporal_gunner_callbacks_match_retained_histories() {
     };
     let rules = &retail.rules;
     let native = corpus();
-    assert_eq!(native["schema_version"], 1);
+    assert_eq!(
+        native["schema_version"],
+        if crate::rules::NPATCH_ENABLED { 2 } else { 1 }
+    );
     assert_stock_inputs(rules, native);
     let rows = native["rows"].as_array().unwrap();
-    assert_eq!(rows.len(), 12);
+    assert_eq!(
+        rows.len(),
+        if crate::rules::NPATCH_ENABLED { 3 } else { 12 }
+    );
     let mut callbacks = 0;
     let mut imported_fire_boundaries = 0;
     for row in rows {
@@ -453,7 +474,8 @@ fn native_temporal_gunner_callbacks_match_retained_histories() {
             assert_state(&sim, &actors, &operation["before"], &label);
             for stream in ["main", "mapgen"] {
                 assert_eq!(
-                    operation["rng_after"][stream], row["rng_initial"][stream],
+                    after_rng(row, operation, stream),
+                    row["rng_initial"][stream].as_str().unwrap(),
                     "{label} native {stream}"
                 );
                 assert_eq!(
@@ -474,9 +496,9 @@ fn native_temporal_gunner_callbacks_match_retained_histories() {
                             &operation["after"][role],
                         );
                     }
-                    sim.scenario_rng = SimRng::from_native_state_hex_for_test(
-                        operation["rng_after"]["scenario"].as_str().unwrap(),
-                    );
+                    sim.scenario_rng = SimRng::from_native_state_hex_for_test(after_rng(
+                        row, operation, "scenario",
+                    ));
                     imported_fire_boundaries += 1;
                 }
                 callback => {
@@ -539,7 +561,7 @@ fn native_temporal_gunner_callbacks_match_retained_histories() {
             assert_state(&sim, &actors, &operation["after"], &label);
             assert_eq!(
                 sim.scenario_rng.native_state_hex(),
-                operation["rng_after"]["scenario"],
+                after_rng(row, operation, "scenario"),
                 "{label} full Scenario"
             );
             assert_eq!(
@@ -554,6 +576,9 @@ fn native_temporal_gunner_callbacks_match_retained_histories() {
             );
         }
     }
-    assert_eq!(callbacks, 45);
+    assert_eq!(
+        callbacks,
+        if crate::rules::NPATCH_ENABLED { 12 } else { 45 }
+    );
     assert_eq!(imported_fire_boundaries, 1);
 }

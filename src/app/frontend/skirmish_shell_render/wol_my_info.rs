@@ -12,21 +12,27 @@ use super::wol_login::{WolLoginPaint, wol_button_label_rgb};
 use super::{
     SHELL_CONTROL_TEXT_DEPTH, SHELL_DROPDOWN_DEPTH, SHELL_DROPDOWN_TEXT_DEPTH, SHELL_LABEL_TEXT_RGB,
 };
-use crate::app::AppState;
+use crate::render::bit_font::BitFont;
 use crate::render::shell_text::{self, ShellAlign};
+use crate::render::skirmish_shell_chrome::SkirmishShellChromeAtlas;
+use crate::rules::ruleset::RuleSet;
 use crate::ui::shell::geom::RectPx;
 use crate::ui::wol_my_info::*;
 
 pub(crate) fn paint_wol_my_info_children(
-    state: &AppState,
+    atlas: Option<&SkirmishShellChromeAtlas>,
+    font: &BitFont,
+    rules: Option<&RuleSet>,
     page: &WolMyInfoPage,
     layout: &WolMyInfoLayout,
+    label: impl Fn(&str) -> String,
 ) -> WolLoginPaint {
     let mut paint = WolLoginPaint::default();
-    let Some(atlas) = state.frontend.skirmish_shell_chrome.as_ref() else {
+    let Some(atlas) = atlas else {
         return paint;
     };
-    let font = &state.renderer.bit_font;
+    let color_schemes = rules.map_or(&[][..], |rules| rules.color_schemes.as_slice());
+    let dropdown_colors = rules.is_some_and(|rules| rules.npatch_dropdown_colors);
     let scale = layout.page.scale;
     let text = |value: &str, rect: RectPx, align: ShellAlign, rgb: [f32; 3], depth: f32| {
         shell_text::draw_in_rect_scaled(
@@ -39,13 +45,6 @@ pub(crate) fn paint_wol_my_info_children(
             depth,
             scale.factor(),
         )
-    };
-    let label = |key: &str| {
-        state
-            .process_assets
-            .csf
-            .as_ref()
-            .map_or_else(|| key.to_owned(), |csf| csf.text(key).into_owned())
     };
     for ((key, _), rect) in LABELS.iter().zip(layout.labels) {
         paint.texts.push(text(
@@ -69,7 +68,7 @@ pub(crate) fn paint_wol_my_info_children(
                 rect: face,
                 swatch: shown
                     .and_then(|row| row.swatch)
-                    .map(|index| house_color_tint(&[], index)),
+                    .map(|index| house_color_tint(color_schemes, dropdown_colors, index)),
                 open: page.popup.control == Some(id),
                 disabled,
             },
@@ -153,7 +152,11 @@ pub(crate) fn paint_wol_my_info_children(
                 scale.derive_rect(popup.row_rect(index)?, |row| {
                     RectPx::new(row.x + 2, row.y + 2, row.w - 4, 19)
                 }),
-                house_color_tint(&[], combo.rows.get(index)?.swatch?),
+                house_color_tint(
+                    color_schemes,
+                    dropdown_colors,
+                    combo.rows.get(index)?.swatch?,
+                ),
             ))
         });
         push_popup_instances(

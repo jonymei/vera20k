@@ -380,6 +380,13 @@ impl BuildingOccupants {
             self.ids.remove(index);
         }
     }
+    /// NPAE174 C2E7AC..C2E7B3 stores the captured tail index as the new
+    /// count after RecordKill/UnInit callbacks. Preserve +69C, even at zero;
+    /// truncation also avoids double-removing a placement-scope expiry.
+    #[cfg(feature = "npatch")]
+    fn finish_penetrated_tail(&mut self, prior_tail: usize) {
+        self.ids.truncate(prior_tail);
+    }
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn set_ids_for_test(&mut self, ids: Vec<u64>) {
         self.ids = ids;
@@ -688,8 +695,9 @@ pub fn can_enter_transport(
 /// building's type is `CanBeOccupied=`, it is not under construction or
 /// being sold, it stands in the playfield and is not warped out; the
 /// infantryman is an `Occupier=` of the building's house (or the building's
-/// house is `MultiplayPassive=`), the building is neither full nor at red
-/// health, and the infantryman is not mind-controlled.
+/// house is `MultiplayPassive=`), the building is not full, and the
+/// infantryman is not mind-controlled. Stock rejects red health; NPAE174
+/// exempts buildings owned by the very same House, not merely an ally.
 ///
 /// Map5785F0 tests the building's actual GetCoords through the shared
 /// height-aware playfield owner, rather than the navigation rectangle.
@@ -737,11 +745,15 @@ pub fn can_dock_occupier_garrison(
     if occupants.count() as u32 == building_obj.max_number_occupants {
         return false;
     }
-    if is_at_or_below_red_hp(
-        building.health.current(),
-        building_obj.strength,
-        rules.general.condition_red,
-    ) {
+    // NPAE174 CanBeOccupiedBy457D8D -> 7E0712..31 skips the red
+    // predicate5F5CD0 only for equal House pointers. Ejection is separate.
+    if (!crate::rules::NPATCH_ENABLED || !same_owner)
+        && is_at_or_below_red_hp(
+            building.health.current(),
+            building_obj.strength,
+            rules.general.condition_red,
+        )
+    {
         return false;
     }
     // `0x00457D98`: `TechnoClass::IsMindControlled`.
@@ -1336,10 +1348,11 @@ fn rearm_transferred_gunner(
         weapon,
         live,
         burst_index,
+        crate::rules::NPATCH_ENABLED,
     );
     let frame = session.binary_frame() as i32;
     if let Some(actor) = substrate.entities.get_mut(receiver) {
-        actor.rearm_timer.start(frame, rof);
+        actor.rearm_timer.start(frame, rof.reload);
     }
 }
 
@@ -1497,6 +1510,11 @@ pub(crate) fn reconcile_civilian_garrison_owner_for_building(
         else {
             return false;
         };
+        // NPAE458307 -> C2ED1D: the inline ChangeOwner BuildingAI runs
+        // with +660 clear. Do not recursively recapture on that old House.
+        if crate::rules::NPATCH_ENABLED && !building.building_online() {
+            return false;
+        }
         sim.refresh_garrison_anims(building_id, rules);
         sim.change_owner_with_rules(building_id, new_owner, rules, registry, effects);
         return new_owner != current_owner;
@@ -1519,6 +1537,17 @@ pub(crate) fn reconcile_civilian_garrison_owner_for_building(
                     building.position.ry(),
                 ),
             });
+        }
+        // NPAE4582DD -> C2ED3B checks +660 AFTER the abandoned notices.
+        // This is also the native re-entry guard, not a Rust recursion latch.
+        if crate::rules::NPATCH_ENABLED
+            && sim
+                .substrate
+                .entities
+                .get(building_id)
+                .is_some_and(|building| !building.building_online())
+        {
+            return false;
         }
         sim.refresh_garrison_anims(building_id, rules);
         sim.change_owner_with_rules(building_id, civilian_owner, rules, registry, effects);
@@ -1748,6 +1777,60 @@ ConditionYellow=50%
             );
         }
         stable_id
+    }
+
+    /// NPAE174457D8D -> 7E0712 exempts the same owner from the red-HP
+    /// admission check, not every passive/allied building and not ejection.
+    #[test]
+    fn garrison_red_health_admission_uses_profile_and_owner() {
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[InfantryTypes]\n0=E1\n[BuildingTypes]\n0=B\n\
+             [AudioVisual]\nConditionRed=25%\n[E1]\nStrength=100\nOccupier=yes\n\
+             [B]\nStrength=400\nTechLevel=1\nCanBeOccupied=yes\nMaxNumberOccupants=5\n",
+        ))
+        .unwrap();
+        let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0);
+        let owner = sim.interner.get("Americans").unwrap();
+        let passive = sim.interner.get("Russians").unwrap();
+        sim.houses
+            .get_mut(&passive)
+            .unwrap()
+            .set_multiplay_passive_for_test(true);
+        for (id, kind, category) in [
+            (1, "B", EntityCategory::Structure),
+            (2, "E1", EntityCategory::Infantry),
+        ] {
+            let mut entity =
+                GameEntity::test_default_of_category(id, kind, "Americans", 10, 10, category);
+            entity.set_type_ref_for_test(sim.interner.intern(kind));
+            entity.set_owner_for_test(owner);
+            entity.health.set_for_test(100);
+            sim.substrate.entities.insert(entity);
+        }
+        assert_eq!(
+            building_can_be_occupied_by(&sim, &rules, 1, 2),
+            crate::rules::NPATCH_ENABLED,
+            "same-House red bunker is the NPatch exemption"
+        );
+        sim.substrate
+            .entities
+            .get_mut(1)
+            .unwrap()
+            .set_owner_for_test(passive);
+        assert!(
+            !building_can_be_occupied_by(&sim, &rules, 1, 2),
+            "passive but different owner still rejects red health"
+        );
+        sim.substrate
+            .entities
+            .get_mut(1)
+            .unwrap()
+            .health
+            .set_for_test(101);
+        assert!(
+            building_can_be_occupied_by(&sim, &rules, 1, 2),
+            "above-red passive building retains ordinary admission"
+        );
     }
 
     // --- Contract #2: lifecycle → active-order membership (conceal/reveal) ---

@@ -2271,6 +2271,7 @@ fn evaluate_candidate(
                         ctx.interner,
                         &cells,
                         &ctx.los,
+                        super::in_range::RangeProfile::active(),
                     )
                 }
                 None => super::in_range::mapless_in_range(
@@ -2304,6 +2305,21 @@ fn evaluate_candidate(
     // `LegalTarget=` (`+0x231`) at `0x006F8260`: every retail techno leaves
     // it at its `yes` default; VERA does not read it for technos.
 
+    let frame = ctx
+        .fire_world
+        .map_or(0, |world| world.session.binary_frame());
+    // NPAE174 Evaluate_Candidate6F826E -> 7E0AFC rejects active vt160
+    // protection, then ObjectType+233 (Immune, ReadINI5F94E7..5F9510).
+    // Keep the query here, after the fire probe/range/class gates.
+    if crate::rules::NPATCH_ENABLED
+        && (crate::sim::superweapon::invulnerability::is_invulnerable(
+            candidate.invulnerability.as_ref(),
+            frame,
+        ) || candidate_obj.immune)
+    {
+        return None;
+    }
+
     // `0x006F826E..0x006F835E`: outside the campaign, a `MultiplayPassive`
     // house's objects are off limits but for the building exception.
     let passive_owner = ctx.standing.game_mode_nonzero && ctx.owner_is_passive(candidate);
@@ -2335,9 +2351,6 @@ fn evaluate_candidate(
     // running and a computer attacker's detection roll succeeds.
     let candidate_disguised_to_attacker =
         candidate.is_disguised_to(ctx.attacker.owner, ctx.fog, ctx.alliances(), ctx.interner);
-    let frame = ctx
-        .fire_world
-        .map_or(0, |world| world.session.binary_frame());
     let blink = candidate
         .disguise
         .as_ref()

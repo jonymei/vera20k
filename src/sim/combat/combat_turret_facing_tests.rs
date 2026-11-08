@@ -17,6 +17,58 @@ use crate::sim::movement::turret::{body_facing_to_turret, facing_update};
 use crate::sim::power_system::PowerState;
 use crate::sim::world::Simulation;
 
+#[test]
+fn npatch_turret_rot_keeps_byte_layers_and_does_not_change_hull_or_aircraft() {
+    use crate::rules::native_processing::{RulesLayerKind, RulesLayerStack};
+    let mut layers = RulesLayerStack::new(IniFile::from_str(
+        "[VehicleTypes]\n0=WRAPPED\n1=FALLBACK\n\
+         [AircraftTypes]\n0=PLANE\n\
+         [WRAPPED]\nStrength=300\nTurret=yes\nROT=7\nTurretROT=511\n\
+         [FALLBACK]\nStrength=300\nTurret=yes\nROT=7\nTurretROT=-1\n\
+         [PLANE]\nStrength=300\nROT=4\nTurretROT=9\n",
+    ));
+    layers.push(
+        RulesLayerKind::GameMode,
+        IniFile::from_str("[WRAPPED]\nTurretROT=256\n"),
+    );
+    layers.push(
+        RulesLayerKind::Scenario,
+        IniFile::from_str("[WRAPPED]\nROT=6\n[FALLBACK]\nROT=6\n"),
+    );
+    let rules = RuleSet::from_rules_layers(&layers).unwrap();
+    let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 0x713879);
+    let wrapped = sim
+        .spawn_object("WRAPPED", "Americans", 12, 12, 0, &rules)
+        .unwrap();
+    let fallback = sim
+        .spawn_object("FALLBACK", "Americans", 14, 12, 0, &rules)
+        .unwrap();
+    let plane = sim
+        .spawn_object("PLANE", "Americans", 16, 12, 0, &rules)
+        .unwrap();
+    let wrapped = sim.substrate.entities.get(wrapped).unwrap();
+    assert_eq!(wrapped.body_facing.rot_per_frame(), 6 << 8);
+    assert_eq!(
+        wrapped.barrel_facing.as_ref().unwrap().rot_per_frame(),
+        if crate::rules::NPATCH_ENABLED {
+            0
+        } else {
+            6 << 8
+        }
+    );
+    let fallback = sim.substrate.entities.get(fallback).unwrap();
+    assert_eq!(
+        fallback.barrel_facing.as_ref().unwrap().rot_per_frame(),
+        6 << 8
+    );
+    let plane = sim.substrate.entities.get(plane).unwrap();
+    assert_eq!(plane.body_facing.rot_per_frame(), 4 << 8);
+    assert_eq!(
+        plane.barrel_facing.as_ref().unwrap().rot_per_frame(),
+        4 << 8
+    );
+}
+
 /// Unit736F78..736FAC re-aims a turret on FACING before Facing_Update,
 /// including when +6AF blocks that later routine's ordinary aiming arm.
 /// A retail IFV's homing projectile bypasses the ROTATING refusal.

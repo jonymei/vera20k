@@ -260,7 +260,7 @@ pub fn anim_class_roots(rules: &RuleSet) -> Vec<String> {
     // First activation10062625 may fall back through Type/General, while
     // refresh uses only the explicit Warhead pointer. Bind every configured
     // producer through this same closure, for graphical and headless loads.
-    #[cfg(feature = "ares")]
+    #[cfg(any(feature = "ares", feature = "npatch"))]
     {
         for object in rules.all_objects() {
             if let Some(Some(name)) = object.emp_rules().and_then(|emp| emp.sparkles()) {

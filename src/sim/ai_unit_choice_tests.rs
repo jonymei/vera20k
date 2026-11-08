@@ -245,6 +245,57 @@ fn the_fill_earliest_gate_takes_the_native_draws() {
     }
 }
 
+/// C2B505 reaches the tied-need draw only when the earliest-team gate fails.
+/// Check the effective Return Dubai rules, not only the loose root value.
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR; actual Return Dubai earliest-team gate"]
+fn aymod_return_dubai_hard_uses_earliest_team_without_a_tie_draw() {
+    use crate::headless_scenario::{battle_session, load_session};
+    use crate::skirmish_launch::{AiDifficulty, LaunchCountry};
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+    let launch = battle_session(
+        map,
+        &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+    );
+    let scenario = load_session(&root, map, 0x00C0_FFEE, launch).unwrap();
+    let fill = &scenario
+        .runtime
+        .resources
+        .rules
+        .general
+        .fill_earliest_team_probability;
+    assert_eq!(fill, &[100, 100, 100]);
+    let candidates = [
+        Candidate {
+            index: 4,
+            need: 2,
+            earliest: 10,
+        },
+        Candidate {
+            index: 7,
+            need: 2,
+            earliest: 20,
+        },
+    ];
+    let mut draws = Vec::new();
+    let choice = pick(&candidates, fill[0], |low, high| {
+        draws.push((low, high));
+        0x7FFF_FFFE
+    });
+    assert_eq!(
+        choice,
+        Some(4),
+        "even the largest first roll fills the oldest team"
+    );
+    assert_eq!(
+        draws,
+        [(0, 0x7FFF_FFFE)],
+        "no tied-need random selection in this launch"
+    );
+}
+
 #[test]
 fn the_harvester_branch_matches_the_original() {
     let mut sim = Simulation::new();

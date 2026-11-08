@@ -142,7 +142,7 @@ fn all_to_cheer_matches_original_admission_outlist_and_reset_histories() {
                         "{label}: admitted append"
                     );
                 }
-                "reset" => input.reset_targeting_for_new_world(),
+                "reset" => input.reset_targeting_for_new_world(&mut SidebarGadgetState::default()),
                 "constructor_rate" => {
                     rules = RuleSet::from_ini(&IniFile::from_str("[General]\n")).unwrap();
                 }

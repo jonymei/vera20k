@@ -13,10 +13,12 @@ fn rules() -> RuleSet {
         "[General]\nCloakingStages=9\nCloakDelay=.02\n\
          [AudioVisual]\nCloakSound=NavalUnitEmerge\n\
          [VehicleTypes]\n0=SUB\n1=RANKED\n2=DEST\n\
+         [InfantryTypes]\n0=RANKINF\n\
          [BuildingTypes]\n0=NAYARD\n\
          [SUB]\nStrength=600\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\nSensorsSight=7\n\
          [DEST]\nStrength=600\nSpeed=6\nSensors=yes\nSensorsSight=8\n\
          [RANKED]\nStrength=600\nSpeed=4\nVeteranAbilities=CLOAK\nEliteAbilities=CLOAK\n\
+         [RANKINF]\nStrength=100\nSpeed=4\nVeteranAbilities=CLOAK\nEliteAbilities=CLOAK\n\
          [NAYARD]\nStrength=1000\nWeaponsFactory=yes\n",
     ))
     .expect("stock cloak rules")
@@ -39,6 +41,170 @@ fn spawned_sub() -> (Simulation, RuleSet, u64) {
         .spawn_object_at_height("SUB", "Soviet", rx, ry, 0, 0, &rules)
         .unwrap();
     (sim, rules, id)
+}
+
+#[test]
+fn building_cloak_stage_survives_restore_and_foreign_sensor_forces_reveal() {
+    let (mut sim, rules, sub) = spawned_sub();
+    let at = sim.entities().get(sub).unwrap().position;
+    let building = sim
+        .spawn_object("NAYARD", "Soviet", at.rx() + 4, at.ry(), 0, &rules)
+        .unwrap();
+    CloakRuntime::grant_from_crate(
+        &mut sim.substrate.entities.get_mut(building).unwrap().cloak,
+        0,
+    );
+    let visit = |sim: &mut Simulation, frame| {
+        sim.session.set_binary_frame_for_test(frame);
+        tick_stock_cloak_producer(sim, building, &rules, None, FrameEffects::default());
+    };
+    // Building454E11 advances once per visit despite its type's slower
+    // Techno progress timer. The fifteenth step completes at454E85.
+    visit(&mut sim, 0);
+    for frame in 1..=14 {
+        visit(&mut sim, frame);
+    }
+    let cloak = sim
+        .entities()
+        .get(building)
+        .unwrap()
+        .cloak
+        .as_ref()
+        .unwrap();
+    assert_eq!((cloak.state(), cloak.building_stage()), (1, 14));
+    let before = sim.state_hash();
+    let bytes = serde_json::to_vec(cloak).unwrap();
+    sim.substrate.entities.get_mut(building).unwrap().cloak =
+        Some(serde_json::from_slice(&bytes).unwrap());
+    assert_eq!(sim.state_hash(), before);
+    // Supply an attached animation at the native slot boundary so local
+    // 15/16 drawing policy cannot silently enter its network hash.
+    let anim_id = sim.substrate.allocate_stable_id();
+    let anim_type = sim.interner.intern("CLOAK_SLOT");
+    sim.substrate
+        .anims
+        .insert(crate::sim::anim_class::AnimObject::new_unattached_for_test(
+            anim_id,
+            anim_id as i32,
+            anim_type,
+            crate::sim::anim_class::AnimWorldCoord { x: 0, y: 0, z: 0 },
+            crate::sim::anim_class::AnimRuntime {
+                current_frame: 0,
+                frame_step: 1,
+                delay_remaining: 0,
+                rate_reload: 1,
+                frame_timer: crate::sim::timer::CdTimer::started(0, 1),
+                loop_remaining: 0,
+                first_ai_guard: false,
+                constructor_reverse: false,
+                inactive: false,
+                paused: false,
+                temporal_paused: false,
+            },
+        ));
+    sim.substrate
+        .entities
+        .get_mut(building)
+        .unwrap()
+        .building_art
+        .anim_slots_mut_for_test()[0] = Some(anim_id);
+    let owner = sim.entities().get(building).unwrap().owner();
+    let viewer = sim.interner.intern("Americans");
+    sim.session.set_current_house_for_test(Some(owner));
+    sim.substrate
+        .entities
+        .get_mut(building)
+        .unwrap()
+        .discovery
+        .set_owned_by_current_house_for_test(true);
+    let bytes = GameSnapshot::save(&sim, 0, 0, "building cloak viewer boundary", 0);
+    let mut other = GameSnapshot::load(&bytes).unwrap().sim;
+    let mut control = GameSnapshot::load(&bytes).unwrap().sim;
+    other.retain_process_state_for_load(super::super::SnapshotProcessState::Live(&sim));
+    control.retain_process_state_for_load(super::super::SnapshotProcessState::Live(&sim));
+    sim = control;
+    other.session.set_current_house_for_test(Some(viewer));
+    other
+        .substrate
+        .entities
+        .get_mut(building)
+        .unwrap()
+        .discovery
+        .set_owned_by_current_house_for_test(false);
+    assert_eq!(
+        sim.state_hash(),
+        other.state_hash(),
+        "paired loaded priors differ before their cloak visits"
+    );
+    visit(&mut sim, 15);
+    visit(&mut other, 15);
+    assert_eq!(
+        sim.state_hash(),
+        other.state_hash(),
+        "local viewer must not change the cloak/Anim network state: owner={:?}; enemy={:?}",
+        sim.hash_owner_diagnostics_for_test(),
+        other.hash_owner_diagnostics_for_test()
+    );
+    assert_eq!(
+        sim.anim(anim_id).unwrap().draw_runtime().translucency_ramp,
+        15
+    );
+    let actor = sim.entities().get(building).unwrap();
+    assert_eq!(actor.cloak.as_ref().unwrap().building_stage(), 15);
+    assert!(actor.cloak.as_ref().unwrap().is_fully_cloaked());
+    assert_eq!(
+        actor.visual_character(
+            rules.general.cloaking_stages,
+            false,
+            crate::sim::cloak_disguise::VisualCharacterQuery::sensor(true, false, false)
+        ),
+        5
+    );
+    let sensor = sim
+        .spawn_object("DEST", "Americans", at.rx() + 5, at.ry(), 0, &rules)
+        .unwrap();
+    visit(&mut sim, 16);
+    assert_eq!(
+        sim.entities()
+            .get(building)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .unwrap()
+            .state(),
+        3
+    );
+    for frame in 17..=31 {
+        visit(&mut sim, frame);
+    }
+    let actor = sim.entities().get(building).unwrap();
+    assert_eq!(
+        (
+            actor.cloak.as_ref().unwrap().state(),
+            actor.cloak.as_ref().unwrap().building_stage()
+        ),
+        (0, 0)
+    );
+    assert_eq!(
+        actor.visual_character(
+            rules.general.cloaking_stages,
+            false,
+            crate::sim::cloak_disguise::VisualCharacterQuery::sensor(true, false, false)
+        ),
+        0
+    );
+    sim.techno_limbo_with_rules(sensor, &rules, None);
+    visit(&mut sim, 32);
+    assert_eq!(
+        sim.entities()
+            .get(building)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .unwrap()
+            .state(),
+        1
+    );
 }
 
 #[test]
@@ -249,6 +415,36 @@ fn stock_cloak_producer_honors_rank_selected_cloak_ability() {
             .unwrap()
             .state(),
         1
+    );
+    let infantry = sim
+        .spawn_object_at_height("RANKINF", "Soviet", rx + 1, ry, 0, 0, &rules)
+        .unwrap();
+    tick_stock_cloak_producer(&mut sim, infantry, &rules, None, FrameEffects::default());
+    assert!(
+        sim.substrate
+            .entities
+            .get(infantry)
+            .unwrap()
+            .cloak
+            .is_none()
+    );
+    sim.substrate
+        .entities
+        .get_mut(infantry)
+        .unwrap()
+        .veterancy
+        .set_rank_for_test(100);
+    tick_stock_cloak_producer(&mut sim, infantry, &rules, None, FrameEffects::default());
+    assert_eq!(
+        sim.substrate
+            .entities
+            .get(infantry)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .map(|cloak| cloak.state()),
+        Some(1),
+        "promotion must install and start the shared cloak runtime for infantry"
     );
 }
 
@@ -942,6 +1138,9 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
     let rules = RuleSet::from_ini(&IniFile::from_str(
         "[General]\nCloakingStages=9\nCloakDelay=.02\n\
          [VehicleTypes]\n0=SUB\n\
+         [InfantryTypes]\n0=STEALTH\n\
+         [STEALTH]\nStrength=100\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\n\
+         Locomotor={4A582744-9839-11d1-B709-00A024DDAFD1}\n\
          [SUB]\nStrength=600\nSpeed=4\nCloakable=yes\nCloakingSpeed=1\n\
          Locomotor={4A582741-9839-11d1-B709-00A024DDAFD1}\n",
     ))
@@ -960,6 +1159,9 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
         .unwrap();
     let computer = sim
         .spawn_object_at_height("SUB", "Russians", 20, 20, 0, 0, &rules)
+        .unwrap();
+    let infantry = sim
+        .spawn_object_at_height("STEALTH", "Russians", 22, 20, 0, 0, &rules)
         .unwrap();
     let state = |sim: &Simulation, id| {
         sim.substrate
@@ -988,11 +1190,24 @@ fn completing_the_cloak_scatters_only_a_computer_owned_unit() {
         }
     }
     assert_eq!((state(&sim, human), state(&sim, computer)), (2, 2));
+    assert_eq!(state(&sim, infantry), 2, "infantry runs CloakingTick too");
+    assert!(
+        !nav(&sim, infantry),
+        "only Unit scatters at cloak completion"
+    );
     assert!(!nav(&sim, human));
     assert!(
         nav(&sim, computer),
         "the computer's sub scatters on completion"
     );
+    let saved = GameSnapshot::save(&sim, 0, 0, "infantry-cloak", 0);
+    let restored = GameSnapshot::load(&saved).unwrap().sim;
+    // Load intentionally reseeds Scenario RNG; compare the owned cloak clocks.
+    assert_eq!(
+        restored.substrate.entities.get(infantry).unwrap().cloak,
+        sim.substrate.entities.get(infantry).unwrap().cloak
+    );
+    assert_eq!(state(&restored, infantry), 2);
 }
 
 #[test]

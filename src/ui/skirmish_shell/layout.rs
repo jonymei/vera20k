@@ -160,6 +160,7 @@ pub enum SkirmishTrackbarId {
     GameSpeed0x529,
     Credits0x511,
     UnitCount0x50c,
+    TechLevel0x512,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +175,7 @@ pub struct SkirmishTrackbarRects {
     pub game_speed: RectPx,
     pub credits: RectPx,
     pub unit_count: RectPx,
+    pub tech_level: RectPx,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +183,7 @@ pub struct SkirmishTrackbarLabelRects {
     pub game_speed: RectPx,
     pub credits: RectPx,
     pub unit_count: RectPx,
+    pub tech_level: RectPx,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -405,9 +408,11 @@ pub fn translate_layout(mut layout: SkirmishShellLayout, dx: i32, dy: i32) -> Sk
     layout.trackbars.game_speed = layout.trackbars.game_speed.translate(dx, dy);
     layout.trackbars.credits = layout.trackbars.credits.translate(dx, dy);
     layout.trackbars.unit_count = layout.trackbars.unit_count.translate(dx, dy);
+    layout.trackbars.tech_level = layout.trackbars.tech_level.translate(dx, dy);
     layout.trackbar_labels.game_speed = layout.trackbar_labels.game_speed.translate(dx, dy);
     layout.trackbar_labels.credits = layout.trackbar_labels.credits.translate(dx, dy);
     layout.trackbar_labels.unit_count = layout.trackbar_labels.unit_count.translate(dx, dy);
+    layout.trackbar_labels.tech_level = layout.trackbar_labels.tech_level.translate(dx, dy);
     for rect in &mut layout.checkboxes {
         *rect = translate_checkbox(*rect, dx, dy);
     }
@@ -684,11 +689,14 @@ pub fn compute_layout(screen_w: u32, screen_h: u32) -> SkirmishShellLayout {
             game_speed: child_window(269, 176, 85, 13),
             credits: child_window(269, 193, 85, 13),
             unit_count: unit_count_trackbar,
+            // NPAE174 RT_DIALOG102/512; OnSetup6AECFF -> BA137D.
+            tech_level: child_window(269, 227, 85, 13),
         },
         trackbar_labels: SkirmishTrackbarLabelRects {
             game_speed: RectPx::new(302, 286, 90, 16),
             credits: RectPx::new(302, 314, 90, 16),
             unit_count: RectPx::new(302, 341, 90, 16),
+            tech_level: RectPx::new(302, 371, 90, 16),
         },
         checkboxes: [
             SkirmishCheckboxRect {
@@ -709,7 +717,12 @@ pub fn compute_layout(screen_w: u32, screen_h: u32) -> SkirmishShellLayout {
             },
             SkirmishCheckboxRect {
                 id: SkirmishCheckboxId::BuildOffAlly0x69d,
-                rect: checkbox_dlu_rect(201, 227, 166, 11),
+                // NPAE174 RT_DIALOG102/69D leaves room for slider512.
+                rect: if crate::rules::NPATCH_ENABLED {
+                    offset_rect_x(checkbox_dlu_rect(48, 244, 140, 10), -1)
+                } else {
+                    checkbox_dlu_rect(201, 227, 166, 11)
+                },
             },
         ],
         status_help: status_help_rect(screen_w, screen_h),
@@ -1097,6 +1110,7 @@ impl ScaledRects for SkirmishTrackbarRects {
             game_speed: self.game_speed.scaled_rects(scale),
             credits: self.credits.scaled_rects(scale),
             unit_count: self.unit_count.scaled_rects(scale),
+            tech_level: self.tech_level.scaled_rects(scale),
         }
     }
 }
@@ -1107,6 +1121,7 @@ impl ScaledRects for SkirmishTrackbarLabelRects {
             game_speed: self.game_speed.scaled_rects(scale),
             credits: self.credits.scaled_rects(scale),
             unit_count: self.unit_count.scaled_rects(scale),
+            tech_level: self.tech_level.scaled_rects(scale),
         }
     }
 }
@@ -1609,7 +1624,15 @@ mod tests {
             layout.checkboxes[4].id,
             SkirmishCheckboxId::BuildOffAlly0x69d
         );
-        assert_eq!(layout.checkboxes[4].rect, RectPx::new(302, 369, 249, 18));
+        assert_eq!(
+            layout.checkboxes[4].rect,
+            if crate::rules::NPATCH_ENABLED {
+                // NPAE174 RT_DIALOG102/69D: [48,244,140,10].
+                RectPx::new(71, 397, 210, 16)
+            } else {
+                RectPx::new(302, 369, 249, 18)
+            }
+        );
     }
 
     #[test]

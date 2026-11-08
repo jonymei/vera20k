@@ -212,6 +212,10 @@ impl Fixture {
         sim.session.set_binary_frame_for_test(FRAME as u32);
         for &id in &spawned {
             let entity = sim.substrate.entities.get_mut(id).unwrap();
+            // These sliced stock-body comparisons omit Update's sample
+            // producer. Hold the NP prerequisite true to compare the shared
+            // arm; the power-edge regression runs the real producer below.
+            entity.building_last_operational.set_for_test(true);
             assert!(
                 entity.building_art.anim_slots().iter().all(Option::is_none),
                 "the oracle's anim slots start empty"
@@ -468,6 +472,79 @@ fn slot_anim(sim: &Simulation, id: u64, slot: usize) -> Option<String> {
 /// whose SpecialAnim (or its Damaged variant) plays in slot 10; the distance
 /// and weapon-1 range of every tower the walk measures (Sqrt_Approx and ftol,
 /// elite range when elite); and no Scenario draw.
+#[test]
+fn prism_recruitment_reads_the_retained_operational_sample() {
+    let mut fixture = Fixture::new(
+        &serde_json::json!({
+            "towers": [{"name": "supporter", "offset": [512, 0, 0]}]
+        }),
+        "master",
+    );
+    let master = fixture.id("master");
+    let supporter = fixture.id("supporter");
+    let rules = &fixture.rules;
+    let object = rules.object("TWR").unwrap();
+    fixture
+        .sim
+        .visit_building_operational(supporter, rules, None, Default::default());
+    assert!(
+        fixture
+            .sim
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .building_last_operational
+            .is_operational()
+    );
+    assert_eq!(
+        prism_supporter(&fixture.sim, master, rules, object),
+        Some(supporter)
+    );
+    assert!(
+        fixture
+            .sim
+            .go_building_offline(supporter, rules, Default::default())
+    );
+    assert_eq!(
+        prism_supporter(&fixture.sim, master, rules, object),
+        Some(supporter),
+        "before its Update the old +6C8 sample still admits the supporter"
+    );
+    fixture
+        .sim
+        .visit_building_operational(supporter, rules, None, Default::default());
+    assert!(
+        !fixture
+            .sim
+            .entities()
+            .get(supporter)
+            .unwrap()
+            .building_last_operational
+            .is_operational()
+    );
+    assert_eq!(
+        prism_supporter(&fixture.sim, master, rules, object),
+        (!crate::rules::NPATCH_ENABLED).then_some(supporter),
+        "NPAE44B388/7E04BB rejects the stored offline sample"
+    );
+    assert!(
+        fixture
+            .sim
+            .go_building_online(supporter, rules, Default::default())
+    );
+    assert_eq!(
+        prism_supporter(&fixture.sim, master, rules, object),
+        (!crate::rules::NPATCH_ENABLED).then_some(supporter)
+    );
+    fixture
+        .sim
+        .visit_building_operational(supporter, rules, None, Default::default());
+    assert_eq!(
+        prism_supporter(&fixture.sim, master, rules, object),
+        Some(supporter)
+    );
+}
+
 #[test]
 fn prism_recruitment_matches_the_original() {
     let golden = golden();
@@ -815,6 +892,49 @@ fn prism_support_beam_matches_the_original() {
     }
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_support_downtime_uses_cached_rank_not_unsampled_accumulator() {
+    // Support44ACC4 ->7E0636 reads cached +13C: elite0, veteran1,
+    // all other values use ordinary delay. Distinct signed delays expose a
+    // swapped rank selector, an accidental clamp, and reading raw rank early.
+    let processed = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nPrismSupportDelay=45\nPrismSupportDelayVeteran=23\nPrismSupportDelayElite=-7\n",
+    )).process().unwrap();
+    let support = RuleSet::from_processed_rules(&processed)
+        .unwrap()
+        .general
+        .prism_support;
+    for (cache, raw_rank, expected) in [(0, 0, -7), (1, 200, 23), (-1, 200, 45)] {
+        let mut fixture = Fixture::new(&serde_json::json!({}), "supporter");
+        fixture.rules.general.prism_support = support;
+        let supporter = fixture.id("supporter");
+        fixture.apply(supporter, &serde_json::json!({"mode":2,"countdown":1}));
+        let entity = fixture.sim.substrate.entities.get_mut(supporter).unwrap();
+        entity.veterancy.set_rank_for_test(raw_rank);
+        entity.veterancy.set_rank_cache_for_test(cache);
+        process_delayed_fire(
+            &mut fixture.sim,
+            supporter,
+            &fixture.rules,
+            ObjectAiCtx::default(),
+            &mut false,
+        );
+        assert_eq!(
+            fixture
+                .sim
+                .entities()
+                .get(supporter)
+                .unwrap()
+                .rearm_timer
+                .timer()
+                .duration(),
+            expected,
+            "cached rank {cache}"
+        );
+    }
+}
+
 /// Every building's delayed fire, by id.
 fn pending_fires(fixture: &Fixture) -> BTreeMap<u64, Option<PendingBuildingFire>> {
     fixture
@@ -1040,6 +1160,10 @@ fn prism_general_reader_matches_the_original() {
         modifier: native["modifier"].as_i64().unwrap() as i32,
         max: native["max"].as_i64().unwrap() as i32,
         delay: native["delay"].as_i64().unwrap() as i32,
+        #[cfg(feature = "npatch")]
+        veteran_delay: 69,
+        #[cfg(feature = "npatch")]
+        elite_delay: 69,
         duration: native["duration"].as_i64().unwrap() as i32,
     };
     for row in reader {

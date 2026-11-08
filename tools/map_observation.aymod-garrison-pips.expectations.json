@@ -1,0 +1,321 @@
+{
+  "schema_version": "vera20k.map-observation-expectations.v1",
+  "assertions": [
+    {
+      "name": "E1 naturally entered before save",
+      "subject": {
+        "actor": {
+          "type_id": "E1",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 520,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "E1 restored inside garrison",
+      "subject": {
+        "actor": {
+          "type_id": "E1",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 620,
+      "field": "temporal.inside_transport",
+      "op": "ne",
+      "value": null
+    },
+    {
+      "name": "E1 exits after ordinary Unload",
+      "subject": {
+        "actor": {
+          "type_id": "E1",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "temporal.inside_transport",
+      "op": "eq",
+      "value": null
+    },
+    {
+      "name": "E1 active on map after Unload",
+      "subject": {
+        "actor": {
+          "type_id": "E1",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "GGI naturally entered before save",
+      "subject": {
+        "actor": {
+          "type_id": "GGI",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 520,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "GGI restored inside garrison",
+      "subject": {
+        "actor": {
+          "type_id": "GGI",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 620,
+      "field": "temporal.inside_transport",
+      "op": "ne",
+      "value": null
+    },
+    {
+      "name": "GGI exits after ordinary Unload",
+      "subject": {
+        "actor": {
+          "type_id": "GGI",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "temporal.inside_transport",
+      "op": "eq",
+      "value": null
+    },
+    {
+      "name": "GGI active on map after Unload",
+      "subject": {
+        "actor": {
+          "type_id": "GGI",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "SNIPE naturally entered before save",
+      "subject": {
+        "actor": {
+          "type_id": "SNIPE",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 520,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "SNIPE restored inside garrison",
+      "subject": {
+        "actor": {
+          "type_id": "SNIPE",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 620,
+      "field": "temporal.inside_transport",
+      "op": "ne",
+      "value": null
+    },
+    {
+      "name": "SNIPE exits after ordinary Unload",
+      "subject": {
+        "actor": {
+          "type_id": "SNIPE",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "temporal.inside_transport",
+      "op": "eq",
+      "value": null
+    },
+    {
+      "name": "SNIPE active on map after Unload",
+      "subject": {
+        "actor": {
+          "type_id": "SNIPE",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "BORIS naturally entered before save",
+      "subject": {
+        "actor": {
+          "type_id": "BORIS",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 0
+        }
+      },
+      "at_step": 520,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "BORIS restored inside garrison",
+      "subject": {
+        "actor": {
+          "type_id": "BORIS",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 620,
+      "field": "temporal.inside_transport",
+      "op": "ne",
+      "value": null
+    },
+    {
+      "name": "BORIS exits after ordinary Unload",
+      "subject": {
+        "actor": {
+          "type_id": "BORIS",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "temporal.inside_transport",
+      "op": "eq",
+      "value": null
+    },
+    {
+      "name": "BORIS active on map after Unload",
+      "subject": {
+        "actor": {
+          "type_id": "BORIS",
+          "owner": "VERA-OBSERVER",
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "in_limbo",
+      "op": "eq",
+      "value": false
+    },
+    {
+      "name": "building begins Neutral",
+      "subject": {
+        "actor": {
+          "type_id": "CAHSE01",
+          "owner": "Neutral",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 0,
+      "field": "owner",
+      "op": "eq",
+      "value": "Neutral"
+    },
+    {
+      "name": "normal entry takes the building",
+      "subject": {
+        "actor": {
+          "type_id": "CAHSE01",
+          "owner": "Neutral",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 0
+        }
+      },
+      "at_step": 520,
+      "field": "owner",
+      "op": "eq",
+      "value": "VERA-OBSERVER"
+    },
+    {
+      "name": "restored garrison remains owned",
+      "subject": {
+        "actor": {
+          "type_id": "CAHSE01",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 620
+        }
+      },
+      "at_step": 620,
+      "field": "owner",
+      "op": "eq",
+      "value": "VERA-OBSERVER"
+    },
+    {
+      "name": "last occupant exit restores Neutral owner",
+      "subject": {
+        "actor": {
+          "type_id": "CAHSE01",
+          "owner": "VERA-OBSERVER",
+          "cell": [
+            44,
+            54
+          ],
+          "bind_step": 620
+        }
+      },
+      "at_step": 800,
+      "field": "owner",
+      "op": "eq",
+      "value": "Neutral"
+    },
+    {
+      "name": "normal click captured at building body",
+      "subject": {
+        "gesture": 0
+      },
+      "at_step": 500,
+      "field": "left_press_captured",
+      "op": "eq",
+      "value": true
+    },
+    {
+      "name": "click restores neutral input",
+      "subject": {
+        "gesture": 0
+      },
+      "at_step": 500,
+      "field": "neutral_input_restored",
+      "op": "eq",
+      "value": true
+    }
+  ]
+}

@@ -3434,7 +3434,9 @@ fn fresh_targeting_reset_drops_current_and_saved_without_consuming_factories() {
     ));
     assert!(fixture.input.saved_building_placement.is_some());
     let hash = fixture.sim.state_hash();
-    fixture.input.reset_targeting_for_new_world();
+    fixture
+        .input
+        .reset_targeting_for_new_world(&mut SidebarGadgetState::default());
 
     assert!(fixture.input.targeting_mode.is_none());
     assert!(fixture.input.building_placement_preview.is_none());

@@ -33,7 +33,7 @@ const RANDOM_COMBO_ITEM_DATA: i32 = -2;
 const SLOT01_DEFAULT_TYPE: i32 = 6;
 const OTHER_SLOT_DEFAULT_TYPE: i32 = 1;
 
-/// The ten global fallback values supplied by the current Rules/session state.
+/// Global fallback values supplied by the current Rules/session state.
 ///
 /// Native `SessionClass__ReadSkirmishSettings` does not use one universal
 /// hardcoded default set: absent global keys inherit fields already loaded from
@@ -46,6 +46,7 @@ pub struct SkirmishGlobalDefaults {
     pub game_speed: i32,
     pub credits: i32,
     pub unit_count: i32,
+    pub tech_level: i32,
     pub short_game: bool,
     pub super_weapons_allowed: bool,
     pub build_off_ally: bool,
@@ -236,6 +237,7 @@ mod tests {
             game_speed: 1,
             credits: 10_000,
             unit_count: 10,
+            tech_level: 10,
             short_game: true,
             super_weapons_allowed: true,
             build_off_ally: true,

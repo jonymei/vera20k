@@ -409,6 +409,215 @@ fn multiplayer_pickup_places_one_replacement_crate() {
     );
 }
 
+fn cloak_crate_scene() -> (Simulation, RuleSet, OverlayTypeRegistry, u64) {
+    let rules = RuleSet::from_ini(&crate::sim::arena_fixture::clear_ground_ini(
+        "[VehicleTypes]\n0=TNK\n[InfantryTypes]\n0=E1\n[BuildingTypes]\n0=B\n[AircraftTypes]\n0=A\n\
+         [TNK]\nStrength=300\nSpeed=5\nSpeedType=Track\nCloakingSpeed=1\nLocomotor={4A582741-9839-11D1-B709-00A024DDAFD1}\n\
+         [E1]\nStrength=100\nSpeed=4\nSpeedType=Foot\nCloakingSpeed=1\nLocomotor={4A582744-9839-11D1-B709-00A024DDAFD1}\n\
+         [B]\nStrength=500\n[A]\nStrength=150\n\
+         [Clear]\nTrack=100%\nFoot=100%\nWheel=100%\n\
+         [CrateRules]\nCrateRadius=3.0\n[Powerups]\nCloak=10,<none>,yes\nMoney=20,<none>,yes,2000\n",
+    )).unwrap();
+    let mut sim = crate::sim::arena_fixture::rival_arena(&rules, 31);
+    sim.session
+        .set_game_mode(crate::sim::scenario_session::ScenarioGameMode::from_legacy_nonzero(true));
+    sim.session.game_options_mut_for_test().bases = false;
+    sim.session.game_options_mut_for_test().crates = false;
+    sim.session.game_options_mut_for_test().short_game = false;
+    sim.overlay_grid = Some(OverlayGrid::new(32, 32));
+    let actor = sim
+        .spawn_object("TNK", "Americans", 10, 10, 0, &rules)
+        .unwrap();
+    let registry = crate_registry();
+    place_registered_crate(&mut sim, &registry, CELL, POWERUP_CLOAK as u8);
+    (sim, rules, registry, actor)
+}
+
+#[test]
+fn cloak_crate_grants_instances_in_strict_radius_then_mobile_ai_cloaks() {
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    let infantry = sim
+        .spawn_object("E1", "Americans", 11, 10, 0, &rules)
+        .unwrap();
+    let enemy = sim
+        .spawn_object("TNK", "Russians", 12, 10, 0, &rules)
+        .unwrap();
+    let edge = sim
+        .spawn_object("TNK", "Americans", 13, 10, 0, &rules)
+        .unwrap();
+    let building = sim
+        .spawn_object("B", "Americans", 10, 11, 0, &rules)
+        .unwrap();
+    let aircraft = sim
+        .spawn_object("A", "Americans", 10, 12, 0, &rules)
+        .unwrap();
+    let unmarked = sim
+        .spawn_object("TNK", "Americans", 9, 10, 0, &rules)
+        .unwrap();
+    sim.foot_mark_remove(unmarked, &rules, Some(&registry), FrameEffects::default());
+    assert!(
+        sim.substrate
+            .display
+            .members(crate::sim::world::display_layers::DisplayLayer::GROUND)
+            .contains(&unmarked)
+    );
+    let rng = sim.scenario_rng.native_state_hex();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    assert_eq!(
+        sim.scenario_rng.native_state_hex(),
+        rng,
+        "the ability arm draws no RNG"
+    );
+    assert!(
+        sim.entities().get(unmarked).unwrap().cloak.is_none(),
+        "unmarked ground members must be skipped"
+    );
+    for id in [actor, infantry, enemy, building, aircraft] {
+        assert!(
+            sim.entities().get(id).unwrap().cloak.is_some(),
+            "recipient {id}"
+        );
+    }
+    assert!(
+        sim.entities().get(edge).unwrap().cloak.is_none(),
+        "strict radius boundary"
+    );
+    assert!(
+        !rules.object("TNK").unwrap().cloakable,
+        "do not alter the whole type"
+    );
+    for frame in 1..=120 {
+        sim.session.set_binary_frame_for_test(frame);
+        for id in [actor, infantry] {
+            sim.object_ai_visit_one(id, Some(&rules), Default::default());
+        }
+    }
+    for id in [actor, infantry] {
+        assert!(
+            sim.entities()
+                .get(id)
+                .unwrap()
+                .cloak
+                .as_ref()
+                .unwrap()
+                .is_fully_cloaked()
+        );
+    }
+}
+
+#[test]
+fn cloak_crate_ability_is_hashed_saved_and_repeated_pickup_falls_back() {
+    use crate::sim::{cloak_disguise::CloakRuntime, snapshot::GameSnapshot};
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    let granted = *sim.entities().get(actor).unwrap().cloak.as_ref().unwrap();
+    let with_grant = sim.state_hash();
+    sim.substrate.entities.get_mut(actor).unwrap().cloak =
+        Some(CloakRuntime::new(sim.session.binary_frame() as i32));
+    assert_ne!(
+        with_grant,
+        sim.state_hash(),
+        "ability alone must affect determinism"
+    );
+    sim.substrate.entities.get_mut(actor).unwrap().cloak = Some(granted);
+    let bytes = GameSnapshot::save(&sim, 0, 0, "cloak crate", 0);
+    let mut restored = GameSnapshot::load(&bytes).unwrap().sim;
+    restored.restore_after_snapshot_load().unwrap();
+    assert!(
+        restored
+            .entities()
+            .get(actor)
+            .unwrap()
+            .cloak
+            .as_ref()
+            .unwrap()
+            .crate_granted()
+    );
+    assert_eq!(
+        multiplayer_eligible_slot(
+            &restored,
+            &rules,
+            actor,
+            LandType::Clear.as_index(),
+            POWERUP_CLOAK
+        ),
+        POWERUP_MONEY
+    );
+    let owner = sim.entities().get(actor).unwrap().owner();
+    let credits = sim.houses[&owner].economy().credits();
+    place_registered_crate(&mut sim, &registry, CELL, POWERUP_CLOAK as u8);
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    assert!(sim.houses[&owner].economy().credits() > credits);
+}
+
+#[test]
+fn cloak_crate_survives_capture_and_same_identity_unlimbo_without_timer_reset() {
+    let (mut sim, rules, registry, actor) = cloak_crate_scene();
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        CELL,
+        actor,
+        FrameEffects::default()
+    ));
+    let rival = sim.interner.get("Russians").unwrap();
+    sim.change_owner_with_rules(
+        actor,
+        rival,
+        &rules,
+        Some(&registry),
+        FrameEffects::default(),
+    );
+    for frame in 1..=120 {
+        sim.session.set_binary_frame_for_test(frame);
+        sim.object_ai_visit_one(actor, Some(&rules), Default::default());
+    }
+    let before = *sim.entities().get(actor).unwrap().cloak.as_ref().unwrap();
+    assert!(before.is_fully_cloaked());
+    sim.techno_limbo_with_rules(actor, &rules, Some(&registry));
+    assert_eq!(
+        sim.reveal_constructed_object_at_height(
+            actor,
+            15,
+            10,
+            0,
+            0,
+            PlacementEvidence::MarkSucceeded,
+            &rules,
+            FrameEffects::default()
+        ),
+        Some(actor)
+    );
+    assert_eq!(
+        sim.entities().get(actor).unwrap().cloak,
+        Some(before),
+        "Unlimbo is not InitFromType"
+    );
+    assert_eq!(sim.entities().get(actor).unwrap().owner(), rival);
+}
+
 fn effect_rules(extra: &str) -> RuleSet {
     RuleSet::from_ini(&IniFile::from_str(&format!(
         "[General]\nBaseUnit=AMCV\n[InfantryTypes]\n0=E1\n1=CIV\n[VehicleTypes]\n[AircraftTypes]\n[BuildingTypes]\n\
@@ -661,9 +870,16 @@ const ARENA_RULES: &str = "[Countries]\n0=Americans\n1=Russians\n[Sides]\nAllied
              [Powerups]\nMoney=20,MONEY,yes,2000\nUnit=20,<none>,no\nHealBase=10,HEALALL,yes\n";
 
 fn arena() -> (Simulation, RuleSet, OverlayTypeRegistry, InternedId, u64) {
+    arena_with_rules(ARENA_RULES, "[YARD]\nFoundation=4x3\n")
+}
+
+fn arena_with_rules(
+    rules_ini: &str,
+    art_ini: &str,
+) -> (Simulation, RuleSet, OverlayTypeRegistry, InternedId, u64) {
     let rules = RuleSet::from_ini_with_fixed_art_for_test(
-        &IniFile::from_str(ARENA_RULES),
-        &IniFile::from_str("[YARD]\nFoundation=4x3\n"),
+        &IniFile::from_str(rules_ini),
+        &IniFile::from_str(art_ini),
     )
     .unwrap();
     let mut sim = Simulation::new();
@@ -684,13 +900,172 @@ fn arena() -> (Simulation, RuleSet, OverlayTypeRegistry, InternedId, u64) {
         .expect("the tank spawns");
     // The OverlayType table reads its land rows from the same rules, as the
     // match's table does, so the crate cell keeps `[Clear]`'s speed profile.
-    let registry = OverlayTypeRegistry::from_ini(
-        &IniFile::from_str(&format!(
-            "{ARENA_RULES}[OverlayTypes]\n0=WOOD\n[WOOD]\nCrate=yes\nCrateTrigger=yes\nLand=Clear\n"
-        )),
-        None,
-    );
+    let mut registry_ini = IniFile::from_str(rules_ini);
+    registry_ini.merge(&IniFile::from_str(
+        "[OverlayTypes]\n0=WOOD\n[WOOD]\nCrate=yes\nCrateTrigger=yes\nLand=Clear\n",
+    ));
+    let registry = OverlayTypeRegistry::from_ini(&registry_ini, None);
     (sim, rules, registry, owner, actor)
+}
+
+fn explosion_arena(
+    nullify_direct: bool,
+) -> (Simulation, RuleSet, OverlayTypeRegistry, InternedId, u64) {
+    let ini = ARENA_RULES
+        .replacen(
+            "[Super]\n",
+            "[Super]\nCellSpread=4\nPercentAtMax=1\nAnimList=BLAST\n",
+            1,
+        )
+        .replacen("[TNK]\n", "[TNK]\nImmune=yes\n", 1)
+        .replacen(
+            "[BuildingTypes]\n0=YARD",
+            "[BuildingTypes]\n0=YARD\n1=WATCH",
+            1,
+        )
+        .replacen("[Powerups]\n", "[Powerups]\nExplosion=15,TAIL,yes,500\n", 1)
+        .replacen("CrateImg=WOOD\n", "CrateImg=GOLD\n", 1)
+        .replacen("WaterCrateImg=WOOD", "WaterCrateImg=WATER", 1);
+    let ini = if nullify_direct {
+        ini.replacen("[Super]\n", "[Super]\nRadiation=yes\n", 1)
+            .replacen("[TNK]\n", "[TNK]\nImmuneToRadiation=yes\n", 1)
+    } else {
+        ini
+    };
+    let ini = format!(
+        "{ini}\n[WATCH]\nStrength=10000\nArmor=concrete\n[Animations]\n0=BLAST\n1=TAIL\n\
+        [OverlayTypes]\n0=WOOD\n1=GOLD\n2=WATER\n[WOOD]\nCrate=yes\nCrateTrigger=yes\nLand=Clear\n\
+        [GOLD]\nCrate=yes\nLand=Clear\n[WATER]\nCrate=yes\nLand=Water\n"
+    );
+    let art = "[YARD]\nFoundation=4x3\n[BLAST]\nLoopCount=1\nRate=1\nEnd=2\n[TAIL]\nLoopCount=1\nRate=1\nEnd=2\n";
+    let (mut sim, mut rules, registry, owner, actor) = arena_with_rules(&ini, art);
+    let mut art = crate::rules::art_data::ArtRegistry::from_ini(&IniFile::from_str(art));
+    for name in ["BLAST", "TAIL"] {
+        art.bind_anim_frame_count_for_test(name, 2);
+    }
+    rules.install_art_data(art);
+    sim.resolve_type_handles(&rules);
+    (sim, rules, registry, owner, actor)
+}
+
+#[test]
+fn explosion_crate_keeps_area_magnitude_when_direct_packet_is_nullified() {
+    use crate::sim::combat::CombatLightRequest;
+    let (mut sim, rules, registry, _, actor) = explosion_arena(true);
+    let watcher = sim
+        .spawn_object("WATCH", "Americans", 22, 21, 0, &rules)
+        .unwrap();
+    // The late radiation-immunity gate clears even an ignoreDefenses packet.
+    // Area recipients still receive the immutable crate magnitude.
+    place_registered_crate(&mut sim, &registry, (22, 22), 4);
+    let mut expected = sim.scenario_rng.clone();
+    // Native4825BC/49F43F: ranged radius then RAW direction; ranged calls
+    // may reject extra words. Numeric kernels have their own native coverage.
+    for _ in 0..5 {
+        expected.next_range_i32_inclusive(0, 512);
+        expected.next_u32();
+    }
+    assert!(pickup_crate(
+        &mut sim,
+        &rules,
+        &registry,
+        (22, 22),
+        actor,
+        Default::default()
+    ));
+    assert_eq!(sim.entities().get(actor).unwrap().health.current(), 300);
+    assert_eq!(
+        sim.entities().get(watcher).unwrap().health.current(),
+        7500,
+        "five 500-damage blasts retain the immutable amount after the direct packet becomes zero"
+    );
+    assert_eq!(sim.scenario_rng.logical_state(), expected.logical_state());
+    let lights: Vec<_> = sim
+        .combat_light_requests
+        .iter()
+        .filter_map(|request| match request {
+            CombatLightRequest::Impact {
+                target_id: None,
+                damage,
+                coord,
+                force_create,
+                flags,
+                ..
+            } => Some((*damage, *coord, *force_create, *flags)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lights.len(), 5);
+    assert!(
+        lights
+            .iter()
+            .all(|(damage, coord, force, flags)| *damage == 500
+                && coord.z == 0
+                && !force
+                && *flags == 0)
+    );
+    assert_eq!(
+        sim.anims()
+            .filter(|(_, anim)| sim.interner.resolve(anim.type_id()) == "BLAST")
+            .count(),
+        5
+    );
+    assert_eq!(overlay_at(&sim, (22, 22)), None);
+}
+
+#[test]
+fn moving_picker_dies_but_explosion_crate_finishes_blasts_tail_and_replacement() {
+    use crate::sim::command::{Command, CommandEnvelope};
+    let (mut sim, rules, registry, owner, actor) = explosion_arena(false);
+    sim.session.game_options_mut_for_test().crates = true;
+    place_registered_crate(&mut sim, &registry, (22, 22), 4);
+    let grid = sim.path_grid_snapshot();
+    let command = CommandEnvelope::new(
+        owner,
+        sim.session.tick() + 1,
+        Command::Move {
+            entity_id: actor,
+            target_rx: 25,
+            target_ry: 22,
+        },
+    );
+    sim.advance_tick(
+        &[command],
+        Some(&rules),
+        grid.as_deref(),
+        Some(&registry),
+        22,
+    );
+    for _ in 0..400 {
+        if overlay_at(&sim, (22, 22)).is_none() {
+            break;
+        }
+        sim.advance_tick(&[], Some(&rules), grid.as_deref(), Some(&registry), 22);
+    }
+    assert_eq!(overlay_at(&sim, (22, 22)), None);
+    assert!(
+        sim.entities()
+            .get(actor)
+            .is_none_or(|entity| entity.health.current() <= 0 || entity.death.is_dying()),
+        "direct ignoreDefenses C4 also bypasses the Immune type and kills the picker"
+    );
+    assert_eq!(
+        sim.anims()
+            .filter(|(_, anim)| sim.interner.resolve(anim.type_id()) == "BLAST")
+            .count(),
+        5
+    );
+    assert_eq!(
+        sim.anims()
+            .filter(|(_, anim)| sim.interner.resolve(anim.type_id()) == "TAIL")
+            .count(),
+        1
+    );
+    assert_eq!(
+        crate_cells(&sim, &registry).len(),
+        1,
+        "replacement survives picker death"
+    );
 }
 
 /// `0x00482041..0x00482449`: a random `CrateGoodie=` vehicle is built for the

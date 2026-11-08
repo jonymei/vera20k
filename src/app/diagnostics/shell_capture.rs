@@ -217,6 +217,11 @@ pub enum ShellCaptureCheckpoint {
     MainMenu0xE2Steady,
     MainMenu0xE2EntrySequence,
     Skirmish0x102Steady,
+    SkirmishExpandedColors,
+    SkirmishExpandedApplied,
+    SkirmishExpandedInGame,
+    SkirmishExpandedReopened,
+    SkirmishLightingRestartInGame,
     MoviesPage0x101Steady,
     /// Exit Game on `0xE2`: after the teardown slide, the confirmation over
     /// the empty shell backdrop (state 6).
@@ -555,6 +560,11 @@ impl ShellCaptureCheckpoint {
             CHECKPOINT_MAIN_MENU_0XE2_STEADY => Ok(Self::MainMenu0xE2Steady),
             CHECKPOINT_MAIN_MENU_0XE2_ENTRY_SEQUENCE => Ok(Self::MainMenu0xE2EntrySequence),
             CHECKPOINT_SKIRMISH_0X102_STEADY => Ok(Self::Skirmish0x102Steady),
+            "skirmish-expanded-colors" => Ok(Self::SkirmishExpandedColors),
+            "skirmish-expanded-applied" => Ok(Self::SkirmishExpandedApplied),
+            "skirmish-expanded-in-game" => Ok(Self::SkirmishExpandedInGame),
+            "skirmish-expanded-reopened" => Ok(Self::SkirmishExpandedReopened),
+            "skirmish-lighting-restart-in-game" => Ok(Self::SkirmishLightingRestartInGame),
             CHECKPOINT_SKIRMISH_0X6B_STEADY => Ok(Self::Skirmish0x6BSteady),
             CHECKPOINT_SKIRMISH_0X105_STEADY => Ok(Self::Skirmish0x105Steady),
             CHECKPOINT_SKIRMISH_0X105_CANCEL_STEADY => Ok(Self::Skirmish0x105CancelSteady),
@@ -767,6 +777,11 @@ impl ShellCaptureCheckpoint {
             Self::MainMenu0xE2Steady => CHECKPOINT_MAIN_MENU_0XE2_STEADY,
             Self::MainMenu0xE2EntrySequence => CHECKPOINT_MAIN_MENU_0XE2_ENTRY_SEQUENCE,
             Self::Skirmish0x102Steady => CHECKPOINT_SKIRMISH_0X102_STEADY,
+            Self::SkirmishExpandedColors => "skirmish-expanded-colors",
+            Self::SkirmishExpandedApplied => "skirmish-expanded-applied",
+            Self::SkirmishExpandedInGame => "skirmish-expanded-in-game",
+            Self::SkirmishExpandedReopened => "skirmish-expanded-reopened",
+            Self::SkirmishLightingRestartInGame => "skirmish-lighting-restart-in-game",
             Self::MoviesPage0x101Steady => CHECKPOINT_MOVIES_0X101_STEADY,
             Self::MainMenu0xE2ExitConfirm => CHECKPOINT_MAIN_MENU_0XE2_EXIT_CONFIRM,
             Self::MovieList0x129Steady => CHECKPOINT_MOVIE_LIST_0X129_STEADY,
@@ -1264,6 +1279,7 @@ impl LiveLanTransport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LiveLanConfig {
     pub transport: LiveLanTransport,
+    pub expanded_colors: bool,
     /// Host-only logical catalog name; RandMap.Sed drives the normal generator.
     pub map: Option<String>,
     /// Optional real pre-GO process-loss checkpoint. It never changes a timer.
@@ -1370,6 +1386,7 @@ where
     let mut output_dir = None;
     let mut timeout = None;
     let mut lan_production_broadcast = false;
+    let mut lan_expanded_colors = false;
     let mut lan_bind = None;
     let mut lan_peer = None;
     let mut lan_map = None;
@@ -1451,6 +1468,10 @@ where
                     "duplicate --lan-production-broadcast"
                 );
                 lan_production_broadcast = true;
+            }
+            "--lan-expanded-colors" => {
+                ensure!(!lan_expanded_colors, "duplicate --lan-expanded-colors");
+                lan_expanded_colors = true;
             }
             "--lan-bind" => set_once(
                 &mut lan_bind,
@@ -1903,6 +1924,14 @@ where
         None
     };
     let live_lan = if live {
+        ensure!(
+            !lan_expanded_colors
+                || (matches!(
+                    checkpoint,
+                    ShellCaptureCheckpoint::Lan(movies::LanTarget::LiveHost | movies::LanTarget::LiveGuest)
+                ) && !profile_check && lan_setup_crash.is_none()),
+            "--lan-expanded-colors requires a normal LAN live host or guest without profile/fault inputs"
+        );
         let transport = if lan_production_broadcast {
             LiveLanTransport::ProductionBroadcast
         } else {
@@ -1976,6 +2005,7 @@ where
         };
         Some(LiveLanConfig {
             transport,
+            expanded_colors: lan_expanded_colors,
             map: lan_map,
             setup_crash: lan_setup_crash,
             profile_check,
@@ -1984,6 +2014,7 @@ where
     } else {
         ensure!(
             !lan_production_broadcast
+                && !lan_expanded_colors
                 && lan_bind.is_none()
                 && lan_peer.is_none()
                 && lan_map.is_none()
@@ -2264,6 +2295,21 @@ impl ShellCaptureSession {
             ShellCaptureCheckpoint::Skirmish0x102Steady => {
                 Some(skirmish::SkirmishCapture::default())
             }
+            ShellCaptureCheckpoint::SkirmishExpandedColors => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Colors),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedApplied => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Applied),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedInGame => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::InGame),
+            ),
+            ShellCaptureCheckpoint::SkirmishExpandedReopened => Some(
+                skirmish::SkirmishCapture::expanded(skirmish::ExpandedSetupTarget::Reopened),
+            ),
+            ShellCaptureCheckpoint::SkirmishLightingRestartInGame => Some(
+                skirmish::SkirmishCapture::loading(skirmish::LoadingTarget::LightingRestart),
+            ),
             ShellCaptureCheckpoint::Skirmish0x102BackSlideOut(tick) => {
                 Some(skirmish::SkirmishCapture::slide_out(tick))
             }
@@ -2542,8 +2588,12 @@ impl ShellCaptureSession {
         );
         ensure!(
             started_at.elapsed() <= self.timeout(),
-            "shell capture timed out after {} seconds",
-            self.timeout().as_secs()
+            "shell capture timed out after {} seconds; {}",
+            self.timeout().as_secs(),
+            self.skirmish
+                .as_ref()
+                .map(|capture| capture.progress())
+                .unwrap_or_default()
         );
 
         if self.is_entry_sequence() {
@@ -3278,6 +3328,7 @@ mod tests {
                 map: None,
                 setup_crash: None,
                 profile_check: false,
+                expanded_colors: false,
                 failure_prefix_output: None,
             })
         );
@@ -3289,6 +3340,28 @@ mod tests {
         assert!(parse_launch_args(values.clone()).is_ok());
         values[1] = "lan-0xbb-steady".into();
         assert!(parse_launch_args(values).is_err());
+    }
+
+    #[test]
+    fn expanded_lan_colors_are_opt_in_for_normal_two_process_rounds() {
+        let output = new_output_path("lan-expanded-colors");
+        let mut values = valid_args(&output);
+        values[1] = "lan-live-host".into();
+        values.extend(args(&["--lan-bind", "127.0.0.1:31000", "--lan-peer", "127.0.0.1:31010", "--lan-expanded-colors"]));
+        let AppLaunchMode::ShellCapture(request) = parse_launch_args(values.clone()).unwrap() else {
+            panic!("capture");
+        };
+        assert!(request.live_lan.unwrap().expanded_colors);
+        values[1] = "lan-live-guest".into();
+        assert!(parse_launch_args(values.clone()).is_ok());
+        values[1] = "lan-battle-host".into();
+        assert!(parse_launch_args(values.clone()).is_err());
+        values[1] = "lan-live-host".into();
+        values.push("--lan-expanded-colors".into());
+        assert!(parse_launch_args(values).is_err());
+        let mut non_lan = valid_args(&output);
+        non_lan.push("--lan-expanded-colors".into());
+        assert!(parse_launch_args(non_lan).is_err());
     }
 
     #[test]
@@ -4423,6 +4496,28 @@ mod tests {
             ShellSlideKind::MainMenu.column(rows, None).total_ticks(),
             u32::from(ENTRY_SEQUENCE_FRAMES)
         );
+    }
+
+    #[test]
+    fn expanded_skirmish_checkpoints_keep_the_production_capture_route() {
+        for name in [
+            "skirmish-expanded-colors",
+            "skirmish-expanded-applied",
+            "skirmish-expanded-in-game",
+            "skirmish-expanded-reopened",
+            "skirmish-lighting-restart-in-game",
+        ] {
+            let output = new_output_path(name);
+            let mut values = valid_args(&output);
+            values[1] = OsString::from(name);
+            let AppLaunchMode::ShellCapture(request) = parse_launch_args(values).unwrap() else {
+                panic!("expected capture");
+            };
+            assert_eq!(request.checkpoint().as_str(), name);
+            let session = ShellCaptureSession::new(request);
+            assert!(session.skirmish.is_some());
+            assert!(session.movies.is_none());
+        }
     }
 
     #[test]

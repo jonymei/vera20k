@@ -56,6 +56,11 @@ fn team_value(team: LaunchTeam) -> i32 {
 pub(crate) fn view(state: &AppState) -> Option<SetupView> {
     let session = &state.match_state.session;
     let launch = session.network_setup()?;
+    let color_count = state
+        .rules()
+        .map_or(crate::skirmish_launch::HOUSE_COLOR_COUNT, |rules| {
+            rules.multiplayer_color_count
+        });
     let protocol = state.frontend.network_setup_protocol.as_ref()?;
     let mode = mode_by_id(&state.frontend.skirmish_modes, launch.mode.id)?;
     let host = session.host();
@@ -285,12 +290,15 @@ pub(crate) fn view(state: &AppState) -> Option<SetupView> {
                     .map(|ai| usize::from(ai.color_index)),
             );
         let color_claims =
-            color_claims.filter(|_| launch.humans.len() + launch.opponents.len() <= 8);
-        let colors =
-            skirmish_shell::available_color_choices(usize::try_from(color).ok(), color_claims)
-                .into_iter()
-                .map(|item| choice(state, item))
-                .collect::<Vec<_>>();
+            color_claims.filter(|_| launch.humans.len() + launch.opponents.len() <= color_count);
+        let colors = skirmish_shell::available_color_choices(
+            color_count,
+            usize::try_from(color).ok(),
+            color_claims,
+        )
+        .into_iter()
+        .map(|item| choice(state, item))
+        .collect::<Vec<_>>();
         let start_claims = launch
             .humans
             .iter()

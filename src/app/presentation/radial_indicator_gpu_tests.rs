@@ -142,6 +142,16 @@ fn armed_nuke_rings_reach_offscreen_surface_line_gpu() {
 
     let gpu = Gpu::new();
     let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+    assert_radials_reach_gpu(&gpu, size, format, viewport, &radials);
+}
+
+fn assert_radials_reach_gpu(
+    gpu: &Gpu,
+    size: [u32; 2],
+    format: wgpu::TextureFormat,
+    viewport: SurfaceLineViewport,
+    radials: &[crate::render::radial_indicator::RadialIndicatorDraw],
+) {
     let batch = BatchRenderer::new_with_device(&gpu.device, &gpu.queue, format);
     batch.write_camera(&gpu.queue, camera(size));
     let color = gpu.target(size, format);
@@ -170,7 +180,7 @@ fn armed_nuke_rings_reach_offscreen_surface_line_gpu() {
     );
     let mut encoder = gpu.device.create_command_encoder(&Default::default());
     let depths = vec![0u16; (size[0] * size[1]) as usize];
-    seed_depth_grid(&gpu, &mut encoder, &depth_view, &depths, size[0]);
+    seed_depth_grid(gpu, &mut encoder, &depth_view, &depths, size[0]);
     terrain.begin_surface_lines();
     let prepared = terrain.prepare_surface_lines(
         &gpu.device,
@@ -179,7 +189,7 @@ fn armed_nuke_rings_reach_offscreen_surface_line_gpu() {
         std::iter::empty(),
         &[],
         &[],
-        &radials,
+        radials,
         viewport,
         |_| true,
         |_| u16::MAX,
@@ -191,11 +201,11 @@ fn armed_nuke_rings_reach_offscreen_surface_line_gpu() {
     ];
     let output = gpu.finish(encoder, &reads, size);
 
-    for draw in &radials {
+    for draw in radials {
         let radius =
             radius_pixels(draw.radius, draw.truncate_radius).expect("bounded retail radius");
-        let x = (center[0] + radius) as usize;
-        let y = center[1] as usize;
+        let x = (draw.center[0] + radius) as usize;
+        let y = draw.center[1] as usize;
         let offset = (y * size[0] as usize + x) * 4;
         let pixel = &output[0][offset..offset + 4];
         assert_ne!(pixel, background, "ring cardinal pixel at radius {radius}");
@@ -209,4 +219,94 @@ fn armed_nuke_rings_reach_offscreen_surface_line_gpu() {
         output[1], expected_depth,
         "radial rings leave destination Z unchanged"
     );
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires GPU and VERA20K_AYMOD_DIR; selected actual defense range through production lines in RGBA/BGRA"]
+fn aymod_selected_defense_range_reaches_both_offscreen_gpu_formats() {
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let ini = crate::rules::ini_parser::IniFile::from_bytes(
+        &std::fs::read(root.join("rulesmd.ini")).unwrap(),
+    )
+    .unwrap();
+    let rules = crate::rules::ruleset::RuleSet::from_ini(&ini).unwrap();
+    let mut sim = sim(&rules);
+    let id = sim
+        .spawn_object("TESLA", "Americans", 24, 24, 0, &rules)
+        .unwrap();
+    let colors = HouseColorMap::from([(
+        "Americans".to_owned(),
+        crate::rules::house_colors::HouseColorIndex(3),
+    )]);
+    let size = [1536, 1024];
+    let mut viewport = SurfaceLineViewport {
+        camera: [0; 2],
+        clip: [0, 0, size[0] as i32, size[1] as i32],
+        z_origin_y: 0,
+        zoom: 1.0,
+    };
+    let build_range = |sim: &Simulation, selected: &[u64], viewport| {
+        build(
+            Some(sim),
+            Some(&rules),
+            selected,
+            None,
+            None,
+            &mut SuperweaponRangePulse::default(),
+            &colors,
+            viewport,
+            0,
+        )
+    };
+    let probe = build_range(&sim, &[id], viewport);
+    assert_eq!(probe.len(), 1);
+    viewport.camera = [
+        probe[0].center[0] - size[0] as i32 / 2,
+        probe[0].center[1] - size[1] as i32 / 2,
+    ];
+    let gpu = Gpu::new();
+    // Rank is an explicit presentation input here, not a simulated promotion.
+    for elite in [false, true] {
+        if elite {
+            sim.entities_mut_for_test()
+                .get_mut(id)
+                .unwrap()
+                .veterancy
+                .set_elite();
+        }
+        let before = sim.state_hash();
+        let radials = build_range(&sim, &[id], viewport);
+        assert_eq!(radials.len(), 1);
+        let object = rules.object("TESLA").unwrap();
+        let weapon = crate::sim::combat::combat_weapon::current_weapon(
+            sim.entities().get(id).unwrap(),
+            object,
+            sim.entities(),
+            &rules,
+            sim.interner(),
+        )
+        .unwrap();
+        assert_eq!(
+            weapon.id,
+            if elite {
+                object.elite_primary()
+            } else {
+                object.primary()
+            }
+            .unwrap()
+        );
+        // Building GetSensorRange456703..456741 uses the current weapon's
+        // positive Range divided by256 for this non-sensor defense.
+        assert_eq!(radials[0].radius, (weapon.range_leptons / 256) as f32);
+        assert!(radials[0].radius > 0.0 && radials[0].fade && radials[0].rays);
+        assert!(build_range(&sim, &[], viewport).is_empty());
+        for format in [
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+        ] {
+            assert_radials_reach_gpu(&gpu, size, format, viewport, &radials);
+        }
+        assert_eq!(sim.state_hash(), before);
+    }
 }

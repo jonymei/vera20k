@@ -115,7 +115,7 @@ pub use frame_error::FrameAdvanceError;
 pub(crate) use world_orders::CapturedInfantryType;
 pub use world_orders::EngineerBuildingAction;
 pub use world_orders::UnitRepairAction;
-pub use world_orders::{EntryBaseAction, EntryClickAction};
+pub use world_orders::{EntryBaseAction, EntryClickAction, EntryModifiers};
 mod projectile_collision;
 mod shroud_refresh;
 mod fog_objects;
@@ -1372,6 +1372,13 @@ pub struct Simulation {
     /// The restored match rebuilds its atlases; this is not saved or hashed.
     #[serde(skip)]
     ownership_changed_since_output: bool,
+    /// Immediate damage or inline class AI can originate in nested callbacks
+    /// without a return channel for its receipt. These presentation notices
+    /// drain at frame output; restoration rebuilds atlases. Not saved/hashed.
+    #[serde(skip)]
+    damage_destroyed_structure_since_output: bool,
+    #[serde(skip)]
+    damage_bridge_changed_since_output: bool,
     /// Ordered occupied-cell identities finalized at the authoritative frame
     /// boundary. The app drains these into its render-only overlay list.
     #[serde(skip)]
@@ -2093,20 +2100,12 @@ impl Simulation {
             crate::sim::combat::FatalLifecycleStage::MaintainDamageSmoke { state } => {
                 self.maintain_damage_smoke_after_receive(stable_id, state, rules);
             }
-            crate::sim::combat::FatalLifecycleStage::BeforeDeathEffects { attacker } => {
-                // A building's occupants. A unit's passengers stay for its own
-                // arms: an exploding unit kills them before its death weapon
-                // (`world_receiver::handle_death`), and the rest leave or die
-                // in its UnitClass arm
-                // (`crew_survival::release_dying_unit_passengers`).
-                //
-                // RESIDUAL: this runs before the Techno death arm (sounds,
-                // debris, death weapon). Natively that arm returns first, and
-                // the Building NowDead block then ejects the occupants
-                // (`0x00442625`) and turns the light off (`0x0044264C`) just
-                // before DestructionEffects (`0x00442665`), so an ejected
-                // garrison's Scatter draws follow the debris and death-weapon
-                // draws there and precede them here.
+            crate::sim::combat::FatalLifecycleStage::BeforeBuildingDestruction => {
+                // Building ReceiveDamage442625..44264C, after Techno's
+                // death weapon and the saved-contact callbacks return:
+                // SellBuilding ejects garrison occupants, then light disable
+                // precedes DestructionEffects442665. True Cargo is separate
+                // from occupants; Unit's own fatal arms remain unchanged.
                 if category != EntityCategory::Structure {
                     return;
                 }
@@ -2127,19 +2126,6 @@ impl Simulation {
                         },
                     )
                 });
-                // An absorbing building's passengers leave through
-                // SpawnSurvivors' Phase A; its KillPassengers (`0x00441F27`,
-                // crediting the attacker) runs after that and finds the list
-                // empty.
-                let absorbs = self
-                    .substrate
-                    .entities
-                    .get(stable_id)
-                    .is_some_and(|entity| {
-                        self.interner
-                            .object_type(entity.type_ref(), rules)
-                            .is_some_and(|object| object.absorbs_passengers())
-                    });
                 if let Some(event) = garrison {
                     passenger::garrison_eject::eject_destruction_garrison_with_context(
                         self,
@@ -2147,8 +2133,6 @@ impl Simulation {
                         &event,
                         uninit_context,
                     );
-                } else if !absorbs {
-                    self.kill_passengers(stable_id, attacker, uninit_context);
                 }
                 //44264C precedes the recursive destruction effects.
                 self.lighting_sources
@@ -2641,7 +2625,11 @@ impl Simulation {
                             // (`0x00737CB6..0x00737D2E`) before it touches
                             // the shared damage.
                             let post_object_damage =
-                                if self.unit_in_contact_war_factory(target_id, rules) {
+                                if self.unit_in_contact_war_factory(
+                                    target_id,
+                                    rules,
+                                    crate::sim::production::FactoryContactQuery::ReceiveDamage,
+                                ) {
                                     None
                                 } else {
                                     crate::sim::combat::wave_post_object_damage(
@@ -4365,6 +4353,8 @@ impl Simulation {
             unit_voice_visit_interest: Default::default(),
             mission_spawned_entities: false,
             ownership_changed_since_output: false,
+            damage_destroyed_structure_since_output: false,
+            damage_bridge_changed_since_output: false,
             frame_overlay_updates: Vec::new(),
             frame_overlay_removals: Vec::new(),
             terminal_score_snapshot: Default::default(),
@@ -5909,7 +5899,26 @@ impl Simulation {
             self.assess_house_spy_sat(owner, rules);
             return;
         }
-        let buildings = self.houses[&owner].base_projection().buildings();
+        self.refresh_house_radar(owner, rules, effects);
+        self.assess_house_spy_sat(owner, rules);
+    }
+
+    /// Host the shared radar assessment and its process-local publication.
+    /// HouseUpdate supplies its dirty/defeat gate; native Building EMP also
+    /// calls this action directly, before storing its new EMP counter.
+    pub(crate) fn refresh_house_radar(
+        &mut self,
+        owner: InternedId,
+        rules: &RuleSet,
+        effects: FrameEffects<'_>,
+    ) {
+        let Some(house) = self.houses.get(&owner) else {
+            return;
+        };
+        let require_discovery =
+            house.building_services_require_discovery(self.session.game_mode_nonzero());
+        let buildings = house.base_projection().buildings();
+        self.power_states.house_mut(owner).recheck_radar();
         let radar_assessed = power_system::assess_house_radar_projection(
             self.power_states
                 .get_mut(&owner)
@@ -5932,7 +5941,6 @@ impl Simulation {
                 power_system::has_active_radar(self.power_states.as_map(), owner),
             );
         }
-        self.assess_house_spy_sat(owner, rules);
     }
 
     /// Append one successfully committed BuildConst Building to its owning
@@ -6150,6 +6158,39 @@ impl Simulation {
         }
         if category == EntityCategory::Structure {
             self.houses.leave_house_base_lists(stable_id, old_owner);
+        }
+        if crate::rules::NPATCH_ENABLED && category == EntityCategory::Structure {
+            // NPAE BuildingChangeOwner448BD9 -> C2ECB9: after old-House
+            // list/sight removal, +660=0 and vt+5C (BuildingAI43FB20), still
+            // before TechnoChangeOwner7014A0. Reuse the full AI owner, not
+            // an invented counter/EMP/gattling-only substitute.
+            self.substrate
+                .entities
+                .get_mut(stable_id)
+                .unwrap()
+                .set_building_online_for_owner_change(false);
+            let mut ai = self.object_ai_visit_one_with_effects(
+                stable_id,
+                rules,
+                techno_ai::ObjectAiCtx {
+                    effects,
+                    overlay_registry: registry,
+                },
+            );
+            ai.observe_structure_retirement(self, stable_id, true);
+            self.damage_bridge_changed_since_output |= ai.bridge_state_changed;
+            self.damage_destroyed_structure_since_output |= ai.destroyed_structure;
+            self.ownership_changed_since_output |= ai.ownership_changed();
+            assert!(
+                ai.fall_error.is_none(),
+                "inline BuildingAI failed: {:?}",
+                ai.fall_error
+            );
+            // Native retirement is deferred; Rust may have already removed
+            // this ID. Its cleanup belongs to the AI/lifecycle owners above.
+            if !self.substrate.entities.contains(stable_id) {
+                return;
+            }
         }
         // Original7014DB/7014E9 dispatch the class target and destination
         // setters, then70151A clears Archive and70156E queues Guard. All run
@@ -6417,6 +6458,14 @@ impl Simulation {
             );
         }
         if category == EntityCategory::Structure {
+            if crate::rules::NPATCH_ENABLED {
+                // NPAE448BED -> C2ECD6, after the whole Techno delegate:
+                // unconditional online restoration, then LastOperational=0.
+                if let Some(entity) = self.substrate.entities.get_mut(stable_id) {
+                    entity.set_building_online_for_owner_change(true);
+                    entity.building_last_operational.reset_after_owner_change();
+                }
+            }
             crate::sim::production::initialize_factory_primary(self, rules, stable_id);
             //448CEF: Grand_Opening(1) also runs on an already placed
             //building; its6E4 gate prevents repeating first-opening slots.
@@ -7698,9 +7747,9 @@ impl Simulation {
     /// are interned and before the first gameplay tick. This is data ingress
     /// only: the installed VM contains no live TeamClass instances.
     ///
-    /// A fixed-AIMD definition that fails RuleSet resolution refuses the whole
-    /// install (`Err`, nothing installed); scenario-origin omissions install
-    /// and come back as logged, nonfatal diagnostics.
+    /// Unsupported fixed-AIMD resolution failures refuse the whole install
+    /// (`Err`, nothing installed). Native member omissions, null lookups and
+    /// scenario-origin omissions install with logged, nonfatal diagnostics.
     pub fn install_team_ai_registry(
         &mut self,
         registry: &crate::rules::team_ai_ini::TeamAiIniRegistry,
@@ -8298,6 +8347,8 @@ impl Simulation {
         let object_pass = self.advance_live_object_pass(rules, overlay_registry, effects)?;
         let ownership_changed = object_pass.ownership_changed();
         spawned_entities |= std::mem::take(&mut self.mission_spawned_entities);
+        destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         destroyed_structure |= object_pass.destroyed_structure;
         bridge_state_changed |= object_pass.bridge_state_changed;
         profile_phase!(OBJECTS);
@@ -8444,6 +8495,8 @@ impl Simulation {
         // A MindControl shot changes an existing SHP's house-colour key.
         // Publish the atlas invalidation before the next draw, even with no spawn.
         frame.ownership_changed |= std::mem::take(&mut self.ownership_changed_since_output);
+        frame.destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        frame.bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         let frame_committed = if let FrameTailResult::Complete(committed) = result { committed } else {
             let tick = TickResult {
                 tick: self.session.tick(), frame_committed: false,
@@ -8490,7 +8543,7 @@ impl Simulation {
         #[cfg(feature = "telemetry")] mut frame_clock: Option<crate::sim::frame_profile::FrameClock>,
     ) -> MasterFrameOutput {
         let FrameCompletion { commands, execute_tick: _, executed_commands,
-            mut spawned_entities, destroyed_structure, mut ownership_changed, mut bridge_state_changed } = frame;
+            mut spawned_entities, mut destroyed_structure, mut ownership_changed, mut bridge_state_changed } = frame;
         macro_rules! profile_phase {
             ($phase:ident) => {
                 #[cfg(feature = "telemetry")]
@@ -8573,6 +8626,8 @@ impl Simulation {
         }
         // Resuming a suspended frame can transfer ownership in its remaining tail.
         ownership_changed |= std::mem::take(&mut self.ownership_changed_since_output);
+        destroyed_structure |= std::mem::take(&mut self.damage_destroyed_structure_since_output);
+        bridge_state_changed |= std::mem::take(&mut self.damage_bridge_changed_since_output);
         MasterFrameOutput {
             network_failure: None,
             network_waiting: false,

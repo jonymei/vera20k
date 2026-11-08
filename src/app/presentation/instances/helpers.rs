@@ -48,6 +48,14 @@ pub(crate) fn observer_draw_context(
         crate::map::houses::is_allied_with(sim.house_alliances(), observer, owner)
     });
     let object = rules.and_then(|r| sim.interner().object_type(entity.type_ref(), r));
+    // IsSensorVisibleToPlayer70D420 asks virtual GetCoords: a building's
+    // foundation centre, not its north-west placement anchor.
+    let cloak_coord =
+        crate::sim::movement::ground_pose::object_get_coords(entity, sim.resolved_terrain());
+    let cloak_cell = (
+        crate::util::lepton::lepton_to_cell_packed(cloak_coord.x) as u16,
+        crate::util::lepton::lepton_to_cell_packed(cloak_coord.y) as u16,
+    );
     let disguise_cell = entity
         .disguise
         .as_ref()
@@ -71,7 +79,7 @@ pub(crate) fn observer_draw_context(
         observer_present: local_owner_id.is_some(),
         detects_cloak: local_owner_id.is_some_and(|observer| {
             sim.fog()
-                .has_sensor_for_house(observer, entity.position.rx(), entity.position.ry())
+                .has_sensor_for_house(observer, cloak_cell.0, cloak_cell.1)
         }),
         cloaking_stages: rules.map_or_else(
             || crate::rules::ruleset::GeneralRules::default().cloaking_stages,
@@ -654,6 +662,56 @@ mod tests {
 
     /// Stock YR sets one global `FlightLevel=1500` for every aircraft.
     const STOCK_FLIGHT_LEVEL_LEPTONS: i32 = 1500;
+
+    #[test]
+    fn building_cloak_sensor_query_uses_foundation_center_not_anchor() {
+        let rules = crate::rules::ruleset::RuleSet::from_ini_with_fixed_art_for_test(
+            &crate::rules::ini_parser::IniFile::from_str(
+                "[BuildingTypes]\n0=B\n[B]\nStrength=100\n",
+            ),
+            &crate::rules::ini_parser::IniFile::from_str("[B]\nFoundation=3x3\n"),
+        )
+        .unwrap();
+        let mut sim = crate::sim::world::Simulation::new();
+        *sim.fog_mut_for_test() = FogState::new(32, 32);
+        let building = sim
+            .spawn_object("B", "Americans", 10, 10, 0, &rules)
+            .unwrap();
+        let viewer = sim.intern("Russians");
+        let coord = crate::sim::movement::ground_pose::object_get_coords(
+            sim.entities().get(building).unwrap(),
+            sim.resolved_terrain(),
+        );
+        let center = (
+            crate::util::lepton::lepton_to_cell_packed(coord.x) as u16,
+            crate::util::lepton::lepton_to_cell_packed(coord.y) as u16,
+        );
+        assert_ne!(center, (10, 10));
+        sim.fog_mut_for_test()
+            .increment_sensor_at(viewer, center.0, center.1);
+        assert!(
+            observer_draw_context(
+                &sim,
+                sim.entities().get(building).unwrap(),
+                Some("Russians"),
+                Some(viewer),
+                Some(&rules)
+            )
+            .detects_cloak
+        );
+        sim.fog_mut_for_test().reset_sensor_counts();
+        sim.fog_mut_for_test().increment_sensor_at(viewer, 10, 10);
+        assert!(
+            !observer_draw_context(
+                &sim,
+                sim.entities().get(building).unwrap(),
+                Some("Russians"),
+                Some(viewer),
+                Some(&rules)
+            )
+            .detects_cloak
+        );
+    }
 
     #[test]
     fn item83_equal_tactical_keys_keep_live_registration_order() {

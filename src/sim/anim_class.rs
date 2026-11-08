@@ -605,6 +605,11 @@ impl AnimObject {
         self.draw_runtime
     }
 
+    /// BuildingCloakingTick454E6C/454F0F writes the attached Anim+178 ramp.
+    pub(crate) fn set_building_cloak_ramp(&mut self, value: u8) {
+        self.draw_runtime.translucency_ramp = value;
+    }
+
     pub const fn use_cell_drawer(&self) -> bool {
         self.use_cell_drawer
     }

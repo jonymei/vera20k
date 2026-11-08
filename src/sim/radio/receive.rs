@@ -321,8 +321,9 @@ pub(crate) fn can_load(
         return CanLoad::AskOccupied;
     }
     //Hospital43C58F..C61D: Infantry only, no captives or mind control;
-    //building Ammo must be nonzero. Techno's constructor starts it at0,
-    //and Building43FE98 explicitly excludes hospitals from auto-refill.
+    //building Ammo must be nonzero. Building InitManagers442C81..442C92
+    //overwrites the base ctor's0 with InitialAmmo (or Ammo when initial=-1).
+    //Unlimited -1 admits;43FE98 excludes hospitals from automatic refill.
     if building_type.hospital && unit.category() == EntityCategory::Infantry {
         let refused = unit
             .capture_manager

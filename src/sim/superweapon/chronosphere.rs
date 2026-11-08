@@ -310,7 +310,12 @@ fn warp_object(
             frame_effects,
         );
     }
-    let on_factory = category == EntityCategory::Unit && sim.unit_in_contact_war_factory(id, rules);
+    let on_factory = category == EntityCategory::Unit
+        && sim.unit_in_contact_war_factory(
+            id,
+            rules,
+            crate::sim::production::FactoryContactQuery::WeaponsFactory,
+        );
     let Some(object) = sim
         .substrate
         .entities

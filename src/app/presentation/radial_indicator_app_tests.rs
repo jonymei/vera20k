@@ -540,6 +540,47 @@ fn advance(sim: &mut Simulation, rules: &RuleSet) {
     .unwrap();
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires VERA20K_AYMOD_DIR; authored selectable armed defenses reach the selected-building radial owner"]
+fn aymod_root_armed_defenses_publish_selected_range_indicators() {
+    let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+    let ini = crate::rules::ini_parser::IniFile::from_bytes(
+        &std::fs::read(root.join("rulesmd.ini")).unwrap(),
+    )
+    .unwrap();
+    let rules = RuleSet::from_ini(&ini).unwrap();
+    let mut checked = Vec::new();
+    for object in rules.all_objects().filter(|object| {
+        object.category == crate::rules::object_type::ObjectCategory::Building
+            && (object.is_base_defense
+                || object.build_cat == Some(crate::rules::object_type::BuildCategory::Combat))
+            && object.selectable
+            && !object.invisible_in_game
+            && (object.primary().is_some() || object.weapon_at(0).is_some())
+    }) {
+        assert!(
+            object.has_radial_indicator(),
+            "{} lacks its authored radial flag",
+            object.id
+        );
+        let mut sim = state(&rules);
+        let id = sim
+            .spawn_object(&object.id, "Americans", 24, 24, 0, &rules)
+            .unwrap();
+        let draws = query(&sim, &rules, &[id], 0);
+        assert!(!draws.is_empty(), "{} has no selected range", object.id);
+        assert!(draws.iter().all(|draw| draw.radius > 0.0));
+        assert!(query(&sim, &rules, &[], 0).is_empty());
+        checked.push(object.id.as_str());
+    }
+    assert!(
+        !checked.is_empty(),
+        "the authored defense inventory must not be empty"
+    );
+    eprintln!("AY authored selectable armed defense radials: {checked:?}");
+}
+
 #[test]
 fn stock_selected_gap_uses_current_house_ledger_order_and_online_not_power() {
     let Some(retail) = crate::rules::retail_ini_fixture::retail_battle_rules_for_map("XMP03T4.MAP")

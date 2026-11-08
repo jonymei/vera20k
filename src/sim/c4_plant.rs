@@ -601,10 +601,11 @@ impl Simulation {
             weapon,
             live,
             burst_index,
+            crate::rules::NPATCH_ENABLED,
         );
         let frame = session.binary_frame() as i32;
         if let Some(planter) = substrate.entities.get_mut(id) {
-            planter.rearm_timer.start(frame, rof);
+            planter.rearm_timer.start(frame, rof.reload);
         }
     }
 }

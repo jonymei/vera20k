@@ -940,3 +940,125 @@ fn retail_dominator_takes_a_captive_from_its_controller() {
     assert!(!attached_anim(&sim, tank, "MINDANIM"));
     assert!(attached_anim(&sim, tank, "MINDANIMR"));
 }
+
+/// NPAE Launch6CCDB1 writes BA91EC before its charged gate. Exercise the
+/// real launch entry, not the lighting owner's direct mutation interface.
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_dominator_launch_remembers_type_even_when_not_charged() {
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[SuperWeaponTypes]\n0=D\n[D]\nType=PsychicDominator\nLightRed=70\n",
+    ))
+    .unwrap();
+    let mut sim = Simulation::new();
+    let owner = sim.interner.intern("Americans");
+    sim.houses
+        .register(HouseState::new(owner, 0, None, true, 0, 10));
+    super::construct_house_supers(&mut sim, &rules, owner, false);
+    let sw_type = sim.interner.get("D").unwrap();
+    assert!(!super::is_charged(&sim, owner, sw_type));
+    assert!(!super::psychic_dominator::launch(
+        &mut sim, &rules, owner, sw_type, TARGET,
+    ));
+    assert!(
+        sim.session
+            .lighting()
+            .has_superweapon_lighting(ScenarioLightingProfile::Dominator,),
+        "the type pointer is remembered before admission, not only by Start"
+    );
+    assert!(!super::psychic_dominator::active(&sim));
+}
+
+/// NPAE174 UpdateLighting53C280, LightConvert555E50 and Cell484473 have
+/// different priorities; disabled higher-priority effects must fall through.
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_dominator_disabled_fallback_and_fade_back_survive_save() {
+    use crate::sim::snapshot::GameSnapshot;
+    let rules = RuleSet::from_ini(&IniFile::from_str(
+        "[SuperWeaponTypes]\n0=D\n1=OFF\n2=N\n3=S\n\
+         [D]\nType=PsychicDominator\nLighting=yes\nLightRed=70\nLightGreen=0\nLightBlue=70\n\
+         LightAmbient=100\nLightLevel=3\nLightAmbientChangeRate=2\n\
+         [OFF]\nType=PsychicDominator\nLighting=no\nLightAmbientChangeRate=7\n\
+         [N]\nType=MultiMissile\nLighting=no\n[S]\nType=LightningStorm\nLighting=no\n",
+    ))
+    .unwrap();
+    let mut sim = Simulation::new();
+    let owner = sim.interner.intern("Americans");
+    sim.houses
+        .register(HouseState::new(owner, 0, None, true, 0, 10));
+    super::construct_house_supers(&mut sim, &rules, owner, false);
+    let d = sim.interner.get("D").unwrap();
+    let off = sim.interner.get("OFF").unwrap();
+    let n = sim.interner.get("N").unwrap();
+    let s = sim.interner.get("S").unwrap();
+    // All three Launch cases remember the type even though none is charged.
+    super::nuke::launch(
+        &mut sim,
+        &rules,
+        owner,
+        n,
+        rules.super_weapon("N").unwrap(),
+        TARGET,
+    );
+    super::lightning_storm::launch(&mut sim, &rules, owner, s, TARGET);
+    super::psychic_dominator::launch(&mut sim, &rules, owner, d, TARGET);
+    sim.lightning_storm = LightningStorm::raging_for_test(owner, (10, 10));
+    sim.session.lighting_mut().set_nuke_flash_for_test(1, 0, 30);
+    sim.psychic_dominator = PsychicDominatorState::for_test(2, ORACLE_CELL, Some(owner), None);
+    sim.update_lighting();
+    assert_eq!(
+        sim.session.lighting().selected_profile(),
+        ScenarioLightingProfile::Dominator
+    );
+    assert_eq!(sim.palette_constructor_rgb(), Some([700, 0, 700]));
+    assert_eq!(
+        sim.lighting_cell_profile(),
+        ScenarioLightingProfile::Dominator
+    );
+    assert_eq!(
+        sim.session
+            .lighting()
+            .relight_top_level(ScenarioLightingProfile::Dominator),
+        3
+    );
+
+    // The active Domi uses its own rate, not the ordinary Rules interval.
+    sim.session.lighting_mut().set_nuke_flash_for_test(0, 0, 30);
+    sim.lightning_storm = LightningStorm::default();
+    sim.session.set_binary_frame_for_test(10);
+    sim.session.lighting_mut().set_current_ambient_for_test(70);
+    sim.session
+        .lighting_mut()
+        .set_transition_timer_for_test(CdTimer::started(0, 0));
+    sim.tick_scenario_lighting_transition(&rules);
+    assert_eq!(sim.session.lighting().transition_timer().duration(), 2);
+    assert!(sim.session.lighting().current_ambient() > 70);
+
+    // Status5 restores the global palette, but cells/new palettes retain Domi.
+    sim.psychic_dominator = PsychicDominatorState::for_test(5, ORACLE_CELL, Some(owner), None);
+    sim.update_lighting();
+    assert_eq!(
+        sim.session.lighting().selected_profile(),
+        ScenarioLightingProfile::Normal
+    );
+    assert_eq!(
+        sim.lighting_cell_profile(),
+        ScenarioLightingProfile::Dominator
+    );
+    let bytes = GameSnapshot::save(&sim, 0, 0, "test_map", 0);
+    let mut sim = GameSnapshot::load(&bytes).unwrap().sim;
+    sim.restore_after_snapshot_load().unwrap();
+    assert_eq!(sim.palette_constructor_rgb(), Some([700, 0, 700]));
+    assert_eq!(sim.session.lighting().dominator_change_rate(), 2);
+    // Replacing the remembered source changes all gates, not the map profile.
+    super::psychic_dominator::launch(&mut sim, &rules, owner, off, TARGET);
+    sim.update_lighting();
+    assert_eq!(sim.lighting_cell_profile(), ScenarioLightingProfile::Normal);
+    assert_eq!(sim.palette_constructor_rgb(), None);
+    assert_eq!(sim.session.lighting().dominator_change_rate(), 7);
+    assert_eq!(
+        sim.session.lighting().dominator(),
+        ScenarioLightProfileUnits::dominator_default()
+    );
+}

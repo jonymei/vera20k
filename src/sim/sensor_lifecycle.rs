@@ -533,6 +533,44 @@ mod tests {
     }
 
     #[test]
+    fn shared_unlimbo_stamps_once_and_refused_reveals_leave_counters_unchanged() {
+        use crate::sim::world::{PlacementEvidence, RevealOutcome, RevealRequest, UninitContext};
+        let rules = rules();
+        let mut sim = sim_with_map_authority();
+        let id = sim
+            .spawn_object_at_height("DEST", "Americans", 40, 30, 0, 0, &rules)
+            .unwrap();
+        let actor = sim.entities().get(id).unwrap();
+        let (owner, position) = (actor.owner(), actor.position);
+        let index = 30 * usize::from(sim.fog.width()) + 40;
+        assert_eq!(sim.fog.sensors_by_house()[&owner][index], 1);
+        let before = sim.fog.sensors_by_house().clone();
+        assert_eq!(
+            sim.reveal_entity_with_rules(id, &rules),
+            RevealOutcome::AlreadyRevealed
+        );
+        assert_eq!(sim.fog.sensors_by_house(), &before);
+        sim.techno_limbo_with_rules(id, &rules, None);
+        let removed = sim.fog.sensors_by_house().clone();
+        let refused = sim.try_reveal_entity_with_context(
+            id,
+            RevealRequest {
+                position,
+                placement: PlacementEvidence::RejectedEarly,
+                logic_eligible: true,
+            },
+            UninitContext::with_rules(&rules),
+        );
+        assert!(matches!(refused, RevealOutcome::Failed(_)));
+        assert_eq!(sim.fog.sensors_by_house(), &removed);
+        assert!(matches!(
+            sim.reveal_entity_with_rules(id, &rules),
+            RevealOutcome::Revealed { .. }
+        ));
+        assert_eq!(sim.fog.sensors_by_house()[&owner][index], 1);
+    }
+
+    #[test]
     fn unit_sensor_unlimbo_move_owner_limbo_and_overlap_use_native_callbacks() {
         let rules = rules();
         let mut sim = sim_with_map_authority();

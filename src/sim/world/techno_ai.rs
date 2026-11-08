@@ -91,6 +91,25 @@ impl ObjectAiOutcome {
     pub(super) fn ownership_changed(&self) -> bool {
         self.ownership_changed
     }
+
+    /// The frame needs the same retirement notice for ordinary Logic visits
+    /// and a synchronous Building AI call during ownership transfer.
+    pub(super) fn observe_structure_retirement(
+        &mut self,
+        sim: &Simulation,
+        id: u64,
+        was_structure: bool,
+    ) {
+        if was_structure
+            && sim
+                .substrate
+                .entities
+                .get(id)
+                .is_none_or(|entity| entity.death.is_dying())
+        {
+            self.destroyed_structure = true;
+        }
+    }
 }
 
 impl Simulation {
@@ -737,7 +756,7 @@ fn techno_ai_shell(
         }
         sim.mission_host_promote(id, sim.session.binary_frame(), rules);
     }
-    // `InfantryClass::AI`'s Health reset (`0x0051BC57`) precedes
+    // `InfantryClass::AI`'s mode-specific Health reset (`0x0051BC57`) precedes
     // `FootClass::AI`, and with it the Techno body below.
     if category == EntityCategory::Infantry {
         sim.substrate.infantry_health_reset(id);
@@ -1049,12 +1068,28 @@ fn veterancy_promotion_step(
     let Some(entity) = substrate.entities.get_mut(id) else {
         return;
     };
-    let Some(promotion) = entity
+    let previous = entity.veterancy.rank_cache();
+    let promotion = entity
         .veterancy
-        .sample_promotion(&mut entity.flashing, rules.general.elite_flash_timer)
-    else {
+        .sample_promotion(&mut entity.flashing, rules.general.elite_flash_timer);
+    let rank_changed = entity.veterancy.rank_cache() != previous;
+    // NPAE6FA13E -> C2D825 runs this even on the silent first sample,
+    // before the rest of the common Techno AI, not at Record_The_Kill.
+    if crate::rules::NPATCH_ENABLED && rank_changed {
+        crate::sim::spawn_manager::synchronize_spawn_promotion(
+            &mut substrate.entities,
+            rules,
+            interner,
+            id,
+        );
+    }
+    let Some(promotion) = promotion else {
         return;
     };
+    let entity = substrate
+        .entities
+        .get(id)
+        .expect("promotion does not remove its owner");
     let owner = entity.owner();
     let world = crate::sim::movement::ground_pose::object_location(entity, terrain).into();
     let sound = match promotion {
@@ -1294,8 +1329,9 @@ fn self_heal_step(
 /// [`is_high_flying`](crate::sim::movement::air_movement::is_high_flying))
 /// is dropped every frame through `Assign_Target(NULL)` (vt+0x3C8), and the
 /// cloaked-target test below is skipped (`JMP 0x00414DA1`). Returns whether
-/// it dropped one. A Cell's slot (`0x00410530`) answers false, and so does a
-/// Terrain object on the ground.
+/// it dropped one. NPAE174 C27C60 skips the high-flight query for AACombat
+/// aircraft but continues the cloaked-target check. A Cell's slot (410530)
+/// answers false, and so does a Terrain object on the ground.
 fn drop_airborne_target_step(
     sim: &mut Simulation,
     id: u64,
@@ -1310,6 +1346,14 @@ fn drop_airborne_target_step(
     else {
         return false;
     };
+    // NPAE174 AircraftAI414D36 -> C27C60..C27C78 bypasses only this
+    // IsHighFlying query, not the following unsensed-cloak or weapon AA gates.
+    if sim.substrate.entities.get(id).is_some_and(|entity| {
+        sim.object_type(entity.type_ref(), rules)
+            .is_some_and(|kind| kind.npatch_aa_combat)
+    }) {
+        return false;
+    }
     if !sim.substrate.entities.get(target_id).is_some_and(|target| {
         crate::sim::movement::air_movement::is_high_flying(
             target,
@@ -1461,7 +1505,7 @@ fn techno_common_steps(
     sim.update_ares_attach_effects(id, rules);
     // Installed6F9E50 ->1004B320 owns delayed Building reactivation before
     //the stock head. EMP expiry itself must not invent a future-power sweep.
-    #[cfg(feature = "ares")]
+    #[cfg(any(feature = "ares", feature = "npatch"))]
     sim.update_ares_emp_operability(id, rules, effects);
     // Techno6F9E70..6F9EA8 re-drives +4A4 at Location before mission
     // Stop/Release. A zero gain must stop a live loop before Guard can
@@ -2039,10 +2083,7 @@ fn screen_visual_character(
         crate::sim::cloak_disguise::VisualCharacterQuery::screen(
             true,
             viewer.is_some(),
-            viewer.is_some_and(|viewer| {
-                sim.fog
-                    .has_sensor_for_house(viewer, entity.position.rx(), entity.position.ry())
-            }),
+            super::techno_ai_cloak::sensor_visible_to_player(sim, entity.stable_id()),
             viewer.is_some_and(|viewer| allied(viewer, owner) && allied(owner, viewer)),
             !sim.session.game_mode_nonzero(),
             false,
@@ -2062,7 +2103,9 @@ fn screen_visual_character(
 ///   (`0x006FAA21..0x006FAA69`);
 /// - a Unit drops an Aircraft target that is airborne (GetHeight vt+0x1C8
 ///   above 0) or stands on a building's Cell (`0x0047C520` at its Location,
-///   `0x006FAA6F..0x006FAAE9`).
+///   `0x006FAA6F..0x006FAAE9`). AY NPatch replaces the building-result
+///   branch at `0x006FAAE0` with JMP `0x006FAAEF`, retaining only the
+///   airborne refusal (source: AY GameMD.exe instructions).
 ///
 /// IsAlliedWith on an object asks its owner; a Cell or an ownerless object is
 /// never allied. Both alliance arms ask the object's own house (+0x21C).
@@ -2159,7 +2202,7 @@ fn healer_target_drop_step(sim: &mut Simulation, id: u64, rules: &RuleSet) {
             crate::sim::movement::locomotor::MovementLayer::Ground,
         )
         .is_some();
-    if airborne || padded {
+    if airborne || (!cfg!(feature = "npatch") && padded) {
         drop(sim);
     }
 }
@@ -2186,7 +2229,7 @@ fn techno_common_post(sim: &mut Simulation, id: u64, rules: &RuleSet, _effects: 
     sim.update_techno_discovery_from_shroud(id);
     // Installed Ares6FAF0D ->10053DF0, after the ordinary Techno tail.
     // No global frame sweep: limbo/skipped/dead visits never reach this slot.
-    #[cfg(feature = "ares")]
+    #[cfg(any(feature = "ares", feature = "npatch"))]
     sim.tick_ares_emp(id, rules, _effects);
 }
 
@@ -2562,7 +2605,10 @@ mod tests {
             ),
             Some(pad)
         );
-        assert_eq!(run(&mut sim, ifv, orca), None);
+        assert_eq!(
+            run(&mut sim, ifv, orca),
+            cfg!(feature = "npatch").then_some(TargetKind::Entity(orca))
+        );
         // A Cell is never allied.
         sim.substrate
             .entities
@@ -4421,6 +4467,63 @@ mod tests {
         };
         assert_eq!(visited(208), None);
         assert_eq!(visited(207), Some(TargetKind::Entity(2)));
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    fn npatch_aa_combat_keeps_airborne_targets_but_not_unsensed_cloak() {
+        let rules = RuleSet::from_ini(&IniFile::from_str(
+            "[AircraftTypes]\n0=ORCA\n1=STOCK\n[ORCA]\nStrength=150\nAACombat=yes\nPrimary=G\n\
+             [STOCK]\nStrength=150\n[G]\nDamage=10\nProjectile=P\nWarhead=WH\n\
+             [P]\nAA=no\n[WH]\nVerses=100%\n",
+        ))
+        .unwrap();
+        let kept = |kind: &str, cloaked: bool| {
+            let mut sim = Simulation::with_seed(0x414D36);
+            let plane = sim
+                .spawn_object(kind, "Americans", 5, 5, 0, &rules)
+                .unwrap();
+            let target = sim
+                .spawn_object("STOCK", "Russians", 6, 5, 0, &rules)
+                .unwrap();
+            let entity = sim.substrate.entities.get_mut(target).unwrap();
+            entity.position.set_exact_z_leptons_for_test(Some(208));
+            if cloaked {
+                let mut cloak = crate::sim::cloak_disguise::CloakRuntime::new(0);
+                cloak.set_state_for_test(2);
+                entity.cloak = Some(cloak);
+            }
+            sim.substrate
+                .entities
+                .get_mut(plane)
+                .unwrap()
+                .attack_target
+                .set_for_test(Some(TargetKind::Entity(target)));
+            sim.session.set_binary_frame_for_test(1);
+            sim.object_ai_visit_one(plane, Some(&rules), ObjectAiCtx::default());
+            if kind == "ORCA" && !cloaked {
+                let firer = sim.substrate.entities.get(plane).unwrap();
+                let subject = crate::sim::combat::fire_error_world::FireSubject {
+                    world: &sim,
+                    rules: &rules,
+                    overlay_registry: None,
+                    fog: None,
+                    firer,
+                    obj: rules.object(kind).unwrap(),
+                    target: firer.attack_target.target(),
+                    weapon_index: 0,
+                };
+                assert_eq!(
+                    subject.fire_error(false),
+                    crate::sim::combat::fire_error::FireError::Illegal,
+                    "AACombat cannot override Projectile AA=no (GetFireError6FC705)"
+                );
+            }
+            target_of(&sim, plane)
+        };
+        assert!(kept("ORCA", false).is_some());
+        assert!(kept("STOCK", false).is_none());
+        assert!(kept("ORCA", true).is_none());
     }
 
     /// `AircraftClass::AI` keeps an unsensed cloaked Target only while its own

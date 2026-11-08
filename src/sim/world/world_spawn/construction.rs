@@ -187,7 +187,13 @@ impl Simulation {
             (obj.has_turret && category != EntityCategory::Structure)
                 || category == EntityCategory::Aircraft
         }) {
-            let mut secondary = crate::sim::movement::FacingClass::new(initial, obj.turret_rot);
+            // NPAE174 UnitCtor735584 -> C2DEB6 changes only Unit's turret.
+            let rot = if category == EntityCategory::Unit {
+                obj.unit_turret_rot()
+            } else {
+                obj.turret_rot
+            };
+            let mut secondary = crate::sim::movement::FacingClass::new(initial, rot);
             if category == EntityCategory::Aircraft {
                 // Aircraft413FD2..414015 supplies ROT to BOTH controllers;
                 // Unlimbo414310 -> Foot4D7170 -> Techno6F6DAA snaps Primary;

@@ -970,7 +970,12 @@ impl MatchLighting {
             }
         }
         let cell_profile = sim.lighting_cell_profile();
-        if self.scenario != Some(*sim.session().lighting()) {
+        let state = *sim.session().lighting();
+        if self
+            .scenario
+            .as_ref()
+            .is_none_or(|previous| !state.same_refresh_state(previous))
+        {
             events.push(LightingEvent::Global {
                 state: *sim.session().lighting(),
                 cell_profile,
@@ -987,13 +992,18 @@ impl MatchLighting {
                 },
                 constructor_rgb: sim.palette_constructor_rgb(),
             });
-        } else if self.profile != scenario_profile(&sim.session().lighting(), cell_profile)
-            || self.grid.constructor_alternate_rgb() != sim.palette_constructor_rgb()
-        {
-            events.push(LightingEvent::RelightProfile {
-                cell_profile,
-                constructor_rgb: sim.palette_constructor_rgb(),
-            });
+        } else {
+            // Recent SW sources affect future cell/constructor readers, not
+            // retained scalars (Launch6CDA5B; PsyDom ending53B03F).
+            self.scenario = Some(state);
+            if self.profile != scenario_profile(&state, cell_profile)
+                || self.grid.constructor_alternate_rgb() != sim.palette_constructor_rgb()
+            {
+                events.push(LightingEvent::RelightProfile {
+                    cell_profile,
+                    constructor_rgb: sim.palette_constructor_rgb(),
+                });
+            }
         }
         self.apply_events(terrain, &events);
         if self.detail_level != detail_level.min(2) {

@@ -19,6 +19,10 @@ mod selection_voice_tests;
 mod planning_rules_tests;
 
 #[cfg(test)]
+#[path = "npatch_country_tests.rs"]
+mod npatch_country_tests;
+
+#[cfg(test)]
 #[path = "object_image_tests.rs"]
 mod object_image_tests;
 
@@ -48,6 +52,8 @@ struct NativeRulesSourceSnapshot {
     /// Logical names frozen with the selected snapshots, including MOD roots.
     rules_art_names: [String; 2],
     selected_rules_root: IniFile,
+    #[cfg(feature = "npatch")]
+    new_playable_countries: i32,
     langrule: Option<IniFile>,
     fixed_art: IniFile,
     /// ARTMD `[Movies]`, selected once by Load_Game_Rules52D121. Movie
@@ -262,6 +268,12 @@ impl NativeRulesProcessOwner {
         personal_rules: PersonalRules,
     ) -> Result<Self, RulesError> {
         let movies = crate::rules::movies::MovieRegistry::from_art(&fixed_art);
+        // NP Init_Game B9902D starts at0; Load_Game_Rules hook C275C2..DD
+        // reads only the selected root, before mode/map Rules processing.
+        #[cfg(feature = "npatch")]
+        let new_playable_countries = selected_rules_root
+            .section_or_empty("General")
+            .read_int("NewPlayableCountries", 0);
         let cold_trace = process_native_rules_cold_start(
             NativeRulesRegistryState::default(),
             &selected_rules_root,
@@ -273,6 +285,8 @@ impl NativeRulesProcessOwner {
             sources: NativeRulesSourceSnapshot {
                 rules_art_names,
                 selected_rules_root,
+                #[cfg(feature = "npatch")]
+                new_playable_countries,
                 langrule,
                 fixed_art,
                 movies,
@@ -432,6 +446,19 @@ impl NativeRulesProcessOwner {
     /// Immutable startup-selected root for consumers with a root-only native read.
     pub fn selected_rules_root(&self) -> &IniFile {
         &self.sources.selected_rules_root
+    }
+
+    /// Selected-mode Session country selector69B670; NPatch B93618 adds
+    /// its retained NewPlayableCountries to9 without clamping to the roster.
+    pub fn ordinary_random_country_upper_bound(&self) -> i32 {
+        #[cfg(feature = "npatch")]
+        {
+            9_i32.wrapping_add(self.sources.new_playable_countries)
+        }
+        #[cfg(not(feature = "npatch"))]
+        {
+            9
+        }
     }
 
     /// Include VERA's extra source and precedence policy in network admission.

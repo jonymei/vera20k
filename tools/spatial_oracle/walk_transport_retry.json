@@ -1,0 +1,36 @@
+[
+  {
+    "can_load": 1,
+    "capacity": 6,
+    "enter": {
+      "cargo_count": 1,
+      "mission": 5,
+      "nav": false
+    },
+    "failed_path": {
+      "moving": false,
+      "nav": false
+    },
+    "setter": {
+      "moving": true,
+      "nav": true
+    }
+  },
+  {
+    "can_load": 1,
+    "capacity": 5,
+    "enter": {
+      "cargo_count": 1,
+      "mission": 5,
+      "nav": false
+    },
+    "failed_path": {
+      "moving": false,
+      "nav": false
+    },
+    "setter": {
+      "moving": true,
+      "nav": true
+    }
+  }
+]

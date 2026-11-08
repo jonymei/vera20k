@@ -4485,6 +4485,58 @@ fn gsi_04_07_damage_receiver_updates_grudge_before_retaliation() {
     );
 }
 
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_flat_explosion_fatal_hit_uses_existing_building_fuse() {
+    let ini = IniFile::from_str(
+        "[BuildingTypes]\n0=BARREL\n1=PLAIN\n[Warheads]\n0=FLAT\n1=Super\n[CombatDamage]\nC4Warhead=Super\n\
+         [BARREL]\nStrength=5\nArmor=concrete\nEligibleForDelayKill=yes\n\
+         [PLAIN]\nStrength=5\nArmor=concrete\n\
+         [Super]\nCellSpread=0\n[FLAT]\nCellSpread=1\nIsFlatExplosion=yes\n",
+    );
+    let rules = RuleSet::from_ini(&ini).unwrap();
+    let mut sim = crate::sim::world::Simulation::new();
+    sim.resolve_type_handles(&rules);
+    let barrel = sim
+        .spawn_object("BARREL", "Victim", 5, 5, 0, &rules)
+        .unwrap();
+    let plain = sim
+        .spawn_object("PLAIN", "Victim", 10, 5, 0, &rules)
+        .unwrap();
+    let owner = sim.entities().get(barrel).unwrap().owner();
+    register_computer_houses(&mut sim.houses, &[owner]);
+    let wh = sim.interner.intern("FLAT");
+    let hits =
+        [barrel, plain].map(|id| EntityDamageEvent::area(id, 10, 0, RAD_NO_ATTACKER, None, wh));
+    sim.commit_noncombat_aoe_hits(&rules, None, &hits, Default::default());
+    let delayed = sim.entities().get(barrel).unwrap();
+    assert_eq!(delayed.health.current(), 1);
+    assert_eq!(
+        delayed
+            .pending_c4_detonation
+            .pending()
+            .unwrap()
+            .timer()
+            .duration(),
+        5
+    );
+    assert!(
+        sim.entities()
+            .get(plain)
+            .is_none_or(|e| e.health.current() <= 0 || e.death.is_dying())
+    );
+    sim.session.set_binary_frame_for_test(4);
+    sim.tick_pending_building_detonation(barrel, &rules, None, Default::default());
+    assert_eq!(sim.entities().get(barrel).unwrap().health.current(), 1);
+    sim.session.set_binary_frame_for_test(5);
+    sim.tick_pending_building_detonation(barrel, &rules, None, Default::default());
+    assert!(
+        sim.entities()
+            .get(barrel)
+            .is_none_or(|e| e.health.current() <= 0 || e.death.is_dying())
+    );
+}
+
 #[test]
 fn gsi_04_07_damage_postmortem_stock_barrel_delay_and_nested_order() {
     let ini = IniFile::from_str(
@@ -10518,9 +10570,10 @@ fn gsi_08_12_a_dont_score_victim_pays_no_experience() {
 /// takes its occupied-building arm (`0x00702F98..0x00702FEA`) and pays the
 /// occupant at the building's fire index. FireAt has already moved that
 /// index past the shooter (`0x006FF031..0x006FF085`) when the shot kills, so
-/// with two GIs inside the one next in line is paid for the shooter's kill.
+/// stock pays the next occupant. NPatch702FBB decrements that live index,
+/// wrapping zero to the last occupant; it does not retain a shot's shooter.
 #[test]
-fn gsi_08_12_a_garrison_kill_pays_the_occupant_next_in_line() {
+fn gsi_08_12_garrison_kill_uses_capability_specific_live_index() {
     let rules = RuleSet::from_ini(&IniFile::from_str(
         "\
 [InfantryTypes]\n0=E1\n1=E2\n\n\
@@ -10536,39 +10589,57 @@ fn gsi_08_12_a_garrison_kill_pays_the_occupant_next_in_line() {
     ))
     .expect("garrison kill fixture parses");
     assert!(!rules.object("CAGAS").unwrap().trainable);
-    let mut store = EntityStore::new();
-    let mut building = make_entity_owned(10, "CAGAS", 5, 5, 800, "Soviet");
-    building.set_category_for_test(EntityCategory::Structure);
-    // Preserve the former supplied Cargo prepend order as occupant input.
-    building
-        .passenger_role
-        .occupants_mut()
-        .set_ids_for_test(vec![3, 1]);
-    store.insert(building);
-    for id in [1, 3] {
-        let mut occupant = make_infantry_entity(id, "E1", 5, 5, 125);
-        occupant.set_owner_for_test(test_intern("Soviet"));
-        occupant.passenger_role = crate::sim::passenger::PassengerRole::inside_for_test(10, false);
-        store.insert(occupant);
-    }
-    let mut victim = make_infantry_entity(2, "E2", 8, 5, 1);
-    victim.set_owner_for_test(test_intern("Americans"));
-    store.insert(victim);
-    let mut interner = test_interner();
-    install_entity_attack_target_for_test(&mut store, 10, 2);
-    // The occupant at fire index 0 shoots; the one after it is next in line.
-    let (shooter, next) = {
-        let occupants = store.get(10).unwrap().passenger_role.occupants();
-        assert_eq!(occupants.fire_index(), 0);
-        (occupants.ids()[0], occupants.ids()[1])
-    };
-    tick(&mut store, &rules, &mut interner, 0, &mut SimRng::new(1));
+    for first_index in [0, 1] {
+        let mut store = EntityStore::new();
+        let mut building = make_entity_owned(10, "CAGAS", 5, 5, 800, "Soviet");
+        building.set_category_for_test(EntityCategory::Structure);
+        // Preserve the former supplied Cargo prepend order as occupant input.
+        building
+            .passenger_role
+            .occupants_mut()
+            .set_ids_for_test(vec![3, 1]);
+        building
+            .passenger_role
+            .occupants_mut()
+            .set_fire_index_for_test(first_index);
+        store.insert(building);
+        for id in [1, 3] {
+            let mut occupant = make_infantry_entity(id, "E1", 5, 5, 125);
+            occupant.set_owner_for_test(test_intern("Soviet"));
+            occupant.passenger_role =
+                crate::sim::passenger::PassengerRole::inside_for_test(10, false);
+            store.insert(occupant);
+        }
+        let mut victim = make_infantry_entity(2, "E2", 8, 5, 1);
+        victim.set_owner_for_test(test_intern("Americans"));
+        store.insert(victim);
+        let mut interner = test_interner();
+        install_entity_attack_target_for_test(&mut store, 10, 2);
+        // These two starts cover decrement and the post-fire zero-index wrap.
+        let (shooter, next) = {
+            let occupants = store.get(10).unwrap().passenger_role.occupants();
+            assert_eq!(occupants.fire_index(), first_index);
+            (
+                occupants.ids()[first_index as usize],
+                occupants.ids()[1 - first_index as usize],
+            )
+        };
+        tick(&mut store, &rules, &mut interner, 0, &mut SimRng::new(1));
 
-    assert_eq!(store.get(2).map_or(0, |victim| victim.health.current()), 0);
-    let raw = |id: u64| store.get(id).unwrap().veterancy.raw().bits();
-    assert_eq!(raw(10), 0, "the building never ranks");
-    assert_eq!(raw(shooter), 0, "the shooter is not the one paid");
-    assert_ne!(raw(next), 0, "the occupant next in line is");
+        assert_eq!(store.get(2).map_or(0, |victim| victim.health.current()), 0);
+        let raw = |id: u64| store.get(id).unwrap().veterancy.raw().bits();
+        assert_eq!(raw(10), 0, "the building never ranks");
+        assert_eq!(
+            raw(shooter) > 0,
+            crate::rules::NPATCH_ENABLED,
+            "start={first_index}"
+        );
+        assert_eq!(
+            raw(next) > 0,
+            !crate::rules::NPATCH_ENABLED,
+            "start={first_index}"
+        );
+    }
 }
 
 /// A garrison's rearm is the NEXT occupant's: FireAt advances the firing
@@ -10876,10 +10947,17 @@ fn gsi_08_05_rearm_frames_match_the_original() {
     for row in rows {
         let field = |name: &str| row["input"][name].as_i64().unwrap() as i32;
         assert_eq!(
-            i64::from(super::world_fire::fireat_rearm_frames(
-                field("rof"),
-                field("berserk") != 0
-            )),
+            i64::from(
+                super::world_fire::fireat_rearm_frames(
+                    super::rof::RofDurations {
+                        reload: field("rof"),
+                        burst_delay: None
+                    },
+                    field("berserk") != 0,
+                    false,
+                )
+                .reload
+            ),
             row["duration"].as_i64().unwrap(),
             "{row}"
         );

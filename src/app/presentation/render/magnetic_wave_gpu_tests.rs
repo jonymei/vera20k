@@ -522,3 +522,205 @@ fn wave_pixels_reach_retained_display_and_shared_gpu_with_immutable_z_and_a() {
         }
     }
 }
+
+#[cfg(feature = "npatch")]
+#[test]
+#[ignore = "requires AYMOD and GPU; real dolphin rescue through production Wave emission and retained drawing"]
+fn aymod_dolphin_rescue_wave_reaches_gpu_across_save_and_retirement() {
+    use crate::app::presentation::fire_effects::build_weapon_wave_draws;
+    use crate::headless_scenario::battle_test_evidence::{
+        RescueTransfer, visit_aymod_dolphin_rescue_after_load,
+    };
+    const SIZE: [u32; 2] = [512, 512];
+    let gpu = Gpu::new();
+    for transfer in [
+        RescueTransfer::None,
+        RescueTransfer::Host,
+        RescueTransfer::Parasite,
+        RescueTransfer::ParasiteToHost,
+    ] {
+        let (mut raster_frames, mut changed_frames, mut retired) = (0, 0, false);
+        let mut shot = None;
+        visit_aymod_dolphin_rescue_after_load(transfer, |label, scene, wave_id| {
+            let sim = scene.sim();
+            let before = (sim.state_hash(), sim.rng_state());
+            let world = build_weapon_wave_draws(sim, None, [0, 0])
+                .into_iter()
+                .find(|(id, _)| *id == wave_id);
+            if label == "retired" {
+                assert!(world.is_none(), "retired wave must stop emitting");
+                retired = true;
+            }
+            let view_camera = world.map_or([0, 0], |(_, draw)| {
+                let points = draw.polygon.points();
+                std::array::from_fn(|axis| {
+                    (points.iter().map(|p| p[axis]).min().unwrap()
+                        + points.iter().map(|p| p[axis]).max().unwrap())
+                        / 2
+                        - 256
+                })
+            });
+            // No endpoint or polygon reconstruction: both projections come
+            // from the same production emitter used by the live App.
+            let draws = build_weapon_wave_draws(sim, None, view_camera)
+                .into_iter()
+                .filter(|(id, _)| *id == wave_id)
+                .collect::<Vec<_>>();
+            for (_, draw) in &draws {
+                draw.rasterize([0, 0, 512, 512], [512, 512], 512, 0, |_| {})
+                    .unwrap_or_else(|error| {
+                        panic!("actual {label}/transfer{transfer:?} {draw:?}: {error:?}")
+                    });
+                raster_frames += 1;
+            }
+            let sample = label != "advance" || draws.first().is_some_and(|(_, d)| d.phase % 8 == 0);
+            if sample {
+                let order = NativeDisplayOrder::from_display(sim.display_layers());
+                let parents = draws
+                    .iter()
+                    .map(|&(id, draw)| {
+                        let mut parent = PlannedObjectInstance::object(
+                            order
+                                .object_draw(id, SpriteEncoding::Plain)
+                                .expect("actual Wave Air registration"),
+                            Vec::new(),
+                        );
+                        parent.body_draw = Some(ObjectBodyDraw::Surface(SurfaceDraw::Wave(draw)));
+                        parent
+                    })
+                    .collect();
+                let mut layers = lower_object_instances(parents);
+                let mut colors = Vec::new();
+                for format in [
+                    wgpu::TextureFormat::Bgra8UnormSrgb,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                ] {
+                    let mut batch = BatchRenderer::new_with_device(&gpu.device, &gpu.queue, format);
+                    batch.write_camera(&gpu.queue, camera(SIZE));
+                    let color = gpu.target(SIZE, format);
+                    let cv = color.create_view(&Default::default());
+                    let depth = gpu.target(SIZE, wgpu::TextureFormat::Depth32Float);
+                    let dv = depth.create_view(&Default::default());
+                    let mut terrain =
+                        TerrainDrawRenderer::new(&gpu.device, &gpu.queue, format, &batch);
+                    terrain.prepare(&gpu.device, &color, &dv, batch.camera_uniform());
+                    terrain.begin_surface_lines();
+                    let air = &mut layers[3];
+                    air.line_batches.clear();
+                    for draws in &air.surface_draws {
+                        air.line_batches.push(terrain.prepare_surface_lines(
+                            &gpu.device,
+                            &gpu.queue,
+                            std::iter::empty(),
+                            draws.iter().copied(),
+                            &[],
+                            &[],
+                            &[],
+                            SurfaceLineViewport {
+                                camera: [0; 2],
+                                clip: [0, 0, 512, 512],
+                                z_origin_y: 0,
+                                zoom: 1.,
+                            },
+                            |_| false,
+                            |_| panic!("Sonic must not sample A"),
+                        ));
+                    }
+                    let initial = (0..512u32 * 512)
+                        .flat_map(|i| encoded(((i % 512) * 7 + (i / 512) * 11) as u16, format))
+                        .collect::<Vec<_>>();
+                    gpu.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &color,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &initial,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(512 * 4),
+                            rows_per_image: Some(512),
+                        },
+                        color.size(),
+                    );
+                    let a = ShroudBuffer::fixture(
+                        &gpu.device,
+                        &gpu.queue,
+                        SIZE,
+                        [0.; 2],
+                        &vec![127; 512 * 512],
+                    );
+                    let a_before = gpu.read_float_texels(a.gpu_source().0, [0, 0], SIZE);
+                    batch.bind_shroud(&gpu.device, Some(&a));
+                    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+                    let z = vec![u16::MAX; 512 * 512];
+                    seed_depth_grid(&gpu, &mut encoder, &dv, &z, 512);
+                    draw_native_object_pass(
+                        &mut encoder,
+                        crate::app::render::merge_passes::ObjectDrawPhase::Display,
+                        &cv,
+                        &dv,
+                        &mut terrain,
+                        [0, 0, 512, 512],
+                        &batch,
+                        None,
+                        air,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        batch.default_zshape_bind_group(),
+                        None,
+                        None,
+                    );
+                    let reads = [
+                        gpu.read(&mut encoder, &color),
+                        gpu.read(&mut encoder, &depth),
+                    ];
+                    let output = gpu.finish(encoder, &reads, SIZE);
+                    let changed = output[0]
+                        .chunks_exact(4)
+                        .zip(initial.chunks_exact(4))
+                        .filter(|(a, b)| a != b)
+                        .count();
+                    eprintln!(
+                        "actual Sonic transfer{transfer:?}/{label}/{format:?}: phase{:?}, changed={changed}",
+                        draws.first().map(|(_, d)| d.phase)
+                    );
+                    changed_frames += usize::from(changed > 0);
+                    if draws.is_empty() {
+                        assert_eq!(output[0], initial);
+                    }
+                    assert_eq!(
+                        output[1],
+                        z.iter()
+                            .flat_map(|&v| crate::render::native_z::stored_depth(v).to_le_bytes())
+                            .collect::<Vec<_>>()
+                    );
+                    assert_eq!(
+                        gpu.read_float_texels(a.gpu_source().0, [0, 0], SIZE),
+                        a_before
+                    );
+                    colors.push(output[0].clone());
+                }
+                if label == "shot" {
+                    shot = Some(colors);
+                } else if label == "loaded" {
+                    assert_eq!(
+                        Some(colors),
+                        shot,
+                        "same saved wave must preserve actual pixels"
+                    );
+                }
+            }
+            assert_eq!(
+                (sim.state_hash(), sim.rng_state()),
+                before,
+                "drawing actual combat cannot mutate simulation"
+            );
+        });
+        assert!(raster_frames > 2 && changed_frames > 2 && retired);
+    }
+}

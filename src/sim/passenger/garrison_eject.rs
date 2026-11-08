@@ -365,8 +365,8 @@ fn eject_garrison_passengers_at_edges(
 
 /// A `CanBeOccupied` building destroyed in combat with live occupants —
 /// gamemd routes this through `BuildingClass::SellBuilding @ 0x00457DE0`, the
-/// same occupant-eject helper used by sell. The world fatal prelude consumes
-/// this plan synchronously, before the nested death weapon and carrier UnInit.
+/// same occupant-eject helper used by sell. Building442625 consumes this
+/// plan after the Techno death weapon, before DestructionEffects and UnInit.
 pub struct DestroyedGarrisonBuilding {
     pub building_id: u64,
     pub rx: u16,
@@ -427,6 +427,95 @@ pub(crate) fn eject_destruction_garrison_with_context(
     // is instead the refresh in KillOccupants4585C0's closing tail.
     sim.refresh_spatial_threat(event.building_id, rules, uninit_context.terrain());
     ejected
+}
+
+/// AYMod NPAE174 Building::ReceiveDamage442358 -> C2E7C4, before the
+/// LaserFence/Immune/Health0 gates and ordinary damage. Only the garrison
+/// vector participates, not absorber Cargo or a Tank Bunker's unit link.
+#[cfg(feature = "npatch")]
+pub(crate) fn apply_bunker_penetration(
+    sim: &mut Simulation,
+    building_id: u64,
+    penetration: i8,
+    attacker: Option<u64>,
+    context: UninitContext<'_>,
+) {
+    let Some(building) = sim
+        .substrate
+        .entities
+        .get(building_id)
+        .filter(|building| building.category() == EntityCategory::Structure)
+    else {
+        return;
+    };
+    let count = building.passenger_role.occupants().ids().len();
+    if count == 0 {
+        return;
+    }
+    let Some(object) = sim.interner.object_type_in_category(
+        building.type_ref(),
+        building.category().into(),
+        context.rules(),
+    ) else {
+        return;
+    };
+    // C2E7DF..C2E809 compare signed bytes, including NEG AL's overflow.
+    let level = if penetration < 0 {
+        penetration.wrapping_neg()
+    } else {
+        penetration
+    };
+    if level <= object.bunker_protection_level() {
+        return;
+    }
+    for _ in 0..if penetration < 0 { count } else { 1 } {
+        let Some((tail, victim, location)) =
+            sim.substrate
+                .entities
+                .get(building_id)
+                .and_then(|building| {
+                    let ids = building.passenger_role.occupants().ids();
+                    Some((
+                        ids.len().checked_sub(1)?,
+                        *ids.last()?,
+                        crate::sim::movement::ground_pose::position_world_coord(&building.position),
+                    ))
+                })
+        else {
+            break;
+        };
+        // C2E751's leaf: first DieSound, at building Location+9C (not its
+        // foundation centre), then Record_The_Kill702D40 and FootUnInit4DE5D0.
+        // No HP store, InfDeath animation, fire-index reset or direct RNG draw.
+        if let Some(sound) = sim
+            .substrate
+            .entities
+            .get(victim)
+            .and_then(|entity| {
+                sim.interner.object_type_in_category(
+                    entity.type_ref(),
+                    entity.category().into(),
+                    context.rules(),
+                )
+            })
+            .and_then(|object| object.die_sounds.first())
+            .cloned()
+        {
+            sim.sound_events
+                .emit(crate::sim::world::SimSoundEvent::voc_at_world_coord(
+                    sound,
+                    location.into(),
+                ));
+            context.effects().flush_sound(sim, context.rules());
+        }
+        sim.record_kill_and_uninit(victim, attacker, context);
+        if let Some(building) = sim.substrate.entities.get_mut(building_id) {
+            building
+                .passenger_role
+                .occupants_mut()
+                .finish_penetrated_tail(tail);
+        }
+    }
 }
 
 /// KillOccupants4585C0(NULL): reset +69C, UnInit the live vector last
@@ -1346,7 +1435,7 @@ pub(crate) mod tests {
         let mut sim = garrison_map(&rules);
         let building_id = 50;
         insert_garrison_building(&mut sim, building_id);
-        // The fatal prelude ejects from a building still on the map.
+        // The fatal building postlude ejects while it is still on the map.
         assert!(matches!(
             sim.reveal_entity_with_rules(building_id, &rules),
             RevealOutcome::Revealed { .. }

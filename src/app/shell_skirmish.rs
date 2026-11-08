@@ -199,7 +199,8 @@ impl App {
 
         state.frontend.skirmish_shell_chrome =
             crate::render::skirmish_shell_chrome::build_skirmish_shell_chrome_atlas(
-                &state.renderer.gpu,
+                &state.renderer.gpu.device,
+                &state.renderer.gpu.queue,
                 &state.renderer.batch_renderer,
                 assets,
             );
@@ -898,6 +899,18 @@ impl App {
             x,
             y,
         )
+        .filter(|target| {
+            !state
+                .rules()
+                .is_some_and(|rules| rules.npatch_dropdown_colors)
+                || !matches!(
+                    target,
+                    crate::ui::skirmish_shell::SkirmishHoverTarget::ComboItem {
+                        item: crate::ui::skirmish_shell::SkirmishComboItem::Color(_),
+                        ..
+                    }
+                )
+        })
         .and_then(crate::ui::skirmish_shell::status_help_key_for_hover)
         .map(|key| Self::localized_status_help_text(state, key))
         .unwrap_or_default();

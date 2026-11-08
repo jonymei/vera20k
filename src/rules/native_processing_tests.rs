@@ -4,6 +4,417 @@ use super::*;
 use crate::util::save_codec;
 
 #[test]
+fn npatch_superweapon_lighting_keeps_physical_layers_and_constructor_seeds() {
+    use crate::rules::ruleset::RuleSet;
+    let mut layers = RulesLayerStack::new(IniFile::from_str(
+        "[SuperWeaponTypes]\n0=D\n1=N\n2=S\n\
+         [D]\nType=PsychicDominator\nLighting=no\nLightRed=70\n\
+         [N]\nType=MultiMissile\n[S]\nType=LightningStorm\n",
+    ));
+    layers.push(
+        RulesLayerKind::GameMode,
+        IniFile::from_str("[D]\nLightBlue=$46\nLightGround=-2\nLightAmbientChangeRate=3tail\n"),
+    );
+    layers.push(
+        RulesLayerKind::Scenario,
+        IniFile::from_str(
+            "[SuperWeaponTypes]\n3=L\n[D]\nType=not-a-kind\nLightRed=\nlightblue=99\n\
+         [L]\nType=PsychicDominator\n\
+         [Lighting]\nDominatorAmbient=0.25\nDominatorRed=0.99\nNukeAmbient=0.1\n",
+        ),
+    );
+    let rules = RuleSet::from_processed_rules(&layers.process().unwrap()).unwrap();
+    let d = rules.super_weapon("D").unwrap();
+    assert_eq!(
+        d.kind,
+        crate::rules::superweapon_type::SuperWeaponKind::PsychicDominator
+    );
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(d.npatch_lighting.profile(), [150, 70, 20, 70, -2, 0, 3]);
+        assert!(!d.npatch_lighting.enabled());
+        for (id, expected) in [
+            ("N", [200, 175, 150, 125, 100, 100, 1]),
+            ("S", [87, 30, 40, 75, 0, 0, 200]),
+            ("L", [150, 85, 20, 30, 0, 0, 1]),
+        ] {
+            let lighting = rules.super_weapon(id).unwrap().npatch_lighting;
+            assert_eq!(lighting.profile(), expected, "{id}");
+            assert!(lighting.enabled(), "{id}");
+        }
+    } else {
+        for id in ["D", "N", "S", "L"] {
+            let lighting = rules.super_weapon(id).unwrap().npatch_lighting;
+            assert_eq!(lighting.profile(), [0; 7]);
+            assert!(!lighting.enabled());
+        }
+    }
+}
+
+#[test]
+fn npatch_superweapon_lighting_type_gate_survives_registry_save_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |red| {
+        let layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[SuperWeaponTypes]\n0=C\n1=W\n\
+             [C]\nType=ChronoSphere\nLightRed={red}\n\
+             [W]\nType=ChronoWarp\nLightRed=42\nLighting=no\n"
+        )));
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let next = RulesLayerStack::new(IniFile::from_str(
+            "[C]\nType=PsychicDominator\n[W]\nType=PsychicDominator\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&next).unwrap()
+    };
+    let a = continued(71);
+    let b = continued(72);
+    assert_eq!(a.source_ini_hash(), b.source_ini_hash());
+    assert_eq!(
+        a.simulation_config_hash() != b.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED
+    );
+    if crate::rules::NPATCH_ENABLED {
+        let c = a.super_weapon("C").unwrap().npatch_lighting;
+        assert_eq!(c.profile(), [0, 71, 0, 0, 0, 0, 0]);
+        assert!(!c.enabled());
+        let w = a.super_weapon("W").unwrap().npatch_lighting;
+        assert_eq!(w.profile(), [150, 85, 20, 30, 0, 0, 1]);
+        assert!(w.enabled());
+    } else {
+        for id in ["C", "W"] {
+            assert_eq!(
+                a.super_weapon(id).unwrap().npatch_lighting.profile(),
+                [0; 7]
+            );
+        }
+    }
+}
+
+#[test]
+fn npatch_aa_combat_retains_aircraft_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |enabled| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[AircraftTypes]\n0=A\n1=B\n2=C\n[VehicleTypes]\n0=V\n\
+             [A]\nAACombat={enabled}\n[B]\nAACombat=yes\n[V]\nAACombat=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[B]\nAACombat=no\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[A]\nAACombat=\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued("yes");
+    let second = continued("no");
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_eq!(
+        first.object("A").unwrap().npatch_aa_combat,
+        crate::rules::NPATCH_ENABLED
+    );
+    for name in ["B", "C", "V"] {
+        assert!(!first.object(name).unwrap().npatch_aa_combat, "{name}");
+    }
+    assert!(!second.object("A").unwrap().npatch_aa_combat);
+    assert_eq!(
+        first.simulation_config_hash() != second.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED
+    );
+}
+
+#[test]
+fn npatch_bolt_colors_keep_disabled_reads_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |red| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=T\n[T]\nPrimary=W\nSecondary=D\n\
+             [W]\nIsCustomColor=no\nEBoltColor1={red},-1,256\n[D]\nIsCustomColor=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[W]\nIsCustomColor=yes\nEBoltColor2=10,20,30\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed =
+            RulesLayerStack::new(IniFile::from_str("[W]\nEBoltColor1=\nEBoltColor3=4,5,6\n"))
+                .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+                .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(257);
+    let second = continued(258);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(
+            first.weapon("W").unwrap().npatch_electric_bolt.colors(),
+            Some([[1, 255, 0], [10, 20, 30], [4, 5, 6]])
+        );
+        assert_eq!(
+            first.weapon("D").unwrap().npatch_electric_bolt.colors(),
+            Some([[83, 83, 255], [255; 3], [83, 83, 255]])
+        );
+        assert_ne!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    } else {
+        assert!(
+            first
+                .weapon("W")
+                .unwrap()
+                .npatch_electric_bolt
+                .colors()
+                .is_none()
+        );
+        assert!(
+            first
+                .weapon("D")
+                .unwrap()
+                .npatch_electric_bolt
+                .colors()
+                .is_none()
+        );
+        assert_eq!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    }
+}
+
+#[test]
+fn npatch_flat_explosion_alias_keeps_layer_order_saved_state_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |flat| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(
+            "[Warheads]\n0=Later\n1=Override\n2=Default\n3=Stock\n4=Case\n\
+             [Later]\nCausesDelayKill=no\n\
+             [Override]\nIsFlatExplosion=yes\nCausesDelayKill=no\n\
+             [Stock]\nCausesDelayKill=yes\n[Case]\nisflatexplosion=yes\n",
+        ));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str(&format!(
+                "[Later]\nIsFlatExplosion={flat}\nCausesDelayKill=invalid\n"
+            )),
+        );
+        let processed = layers.process().unwrap();
+        let read = RuleSet::from_processed_rules(&processed).unwrap();
+        assert_eq!(
+            read.warhead("Later").unwrap().causes_delay_kill,
+            crate::rules::NPATCH_ENABLED && flat == "yes"
+        );
+        assert!(!read.warhead("Override").unwrap().causes_delay_kill);
+        assert!(!read.warhead("Default").unwrap().causes_delay_kill);
+        assert!(!read.warhead("Case").unwrap().causes_delay_kill);
+        assert!(read.warhead("Stock").unwrap().causes_delay_kill);
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let saved = save_codec::serialize(&state).unwrap();
+        let restored = save_codec::deserialize(&saved).unwrap();
+        let resumed = RulesLayerStack::new(IniFile::from_str(
+            "[Later]\nIsFlatExplosion=\nCausesDelayKill=invalid\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&resumed).unwrap()
+    };
+    let yes = continued("yes");
+    let no = continued("no");
+    assert_eq!(yes.source_ini_hash(), no.source_ini_hash());
+    assert_eq!(
+        yes.warhead("Later").unwrap().causes_delay_kill,
+        crate::rules::NPATCH_ENABLED
+    );
+    assert!(!no.warhead("Later").unwrap().causes_delay_kill);
+    if crate::rules::NPATCH_ENABLED {
+        assert_ne!(yes.simulation_config_hash(), no.simulation_config_hash());
+    } else {
+        assert_eq!(yes.simulation_config_hash(), no.simulation_config_hash());
+    }
+}
+
+#[test]
+fn npatch_enemy_filter_retains_exact_key_across_layers_save_and_hash() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |value| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[Warheads]\n0=W\n1=Default\n2=Case\n\
+             [W]\nDoesntAffectEnemies={value}\n\
+             [Default]\nAffectsEnemies=no\n[Case]\ndoesntaffectenemies=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[W]\nDoesntAffectEnemies=invalid\n"),
+        );
+        let processed = layers.process().unwrap();
+        let rules = RuleSet::from_processed_rules(&processed).unwrap();
+        assert!(!rules.warhead("Default").unwrap().doesnt_affect_enemies);
+        assert!(!rules.warhead("Case").unwrap().doesnt_affect_enemies);
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let resumed = RulesLayerStack::new(IniFile::from_str("[W]\nDoesntAffectEnemies=\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&resumed).unwrap()
+    };
+    let yes = continued("yes");
+    let no = continued("no");
+    assert_eq!(yes.source_ini_hash(), no.source_ini_hash());
+    assert_eq!(
+        yes.warhead("W").unwrap().doesnt_affect_enemies,
+        crate::rules::NPATCH_ENABLED
+    );
+    assert!(!no.warhead("W").unwrap().doesnt_affect_enemies);
+    assert_eq!(
+        yes.simulation_config_hash() != no.simulation_config_hash(),
+        crate::rules::NPATCH_ENABLED,
+    );
+}
+
+#[test]
+fn npatch_bunker_bytes_keep_layers_fire_alias_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |penetration| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[BuildingTypes]\n0=B\n[Warheads]\n0=W\n\
+             [B]\nBunkerProtectionLevel=257\n\
+             [W]\nFire=yes\nBunkerPenetrationLevel={penetration}\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[B]\nBunkerProtectionLevel=255\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str(
+            "[B]\nBunkerProtectionLevel=\n[W]\nFire=no\n",
+        ))
+        .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+        .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(254);
+    let second = continued(255);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_eq!(
+        first.object("B").unwrap().bunker_protection_level(),
+        if crate::rules::NPATCH_ENABLED { -1 } else { 0 }
+    );
+    assert_eq!(
+        first.warhead("W").unwrap().fire(),
+        crate::rules::NPATCH_ENABLED,
+        "NP reuses +14C for penetration; a later Fire=no cannot overwrite it"
+    );
+    if crate::rules::NPATCH_ENABLED {
+        assert_eq!(first.warhead("W").unwrap().bunker_penetration_level(), -2);
+        assert_eq!(second.warhead("W").unwrap().bunker_penetration_level(), -1);
+        assert_ne!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    } else {
+        assert_eq!(
+            first.simulation_config_hash(),
+            second.simulation_config_hash()
+        );
+    }
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_turret_rot_survives_registry_save_and_hashes_retained_speed() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |rot| {
+        let processed = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=TANK\n[TANK]\nROT=7\nTurretROT={rot}\n"
+        )))
+        .process()
+        .unwrap();
+        let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[TANK]\nROT=6\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let first = continued(9);
+    let second = continued(10);
+    assert_eq!(first.object("TANK").unwrap().unit_turret_rot(), 9);
+    assert_eq!(second.object("TANK").unwrap().unit_turret_rot(), 10);
+    assert_eq!(first.source_ini_hash(), second.source_ini_hash());
+    assert_ne!(
+        first.simulation_config_hash(),
+        second.simulation_config_hash()
+    );
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_use_rof_as_burst_delays_retains_layers_and_saved_registry() {
+    use crate::rules::ruleset::RuleSet;
+    let continued = |enabled| {
+        let mut layers = RulesLayerStack::new(IniFile::from_str(&format!(
+            "[VehicleTypes]\n0=TANK\n1=STOCK\n\
+             [TANK]\nUseROFAsBurstDelays={enabled}\n\
+             [STOCK]\nNoAutoFire=yes\n"
+        )));
+        layers.push(
+            RulesLayerKind::GameMode,
+            IniFile::from_str("[TANK]\nUseROFAsBurstDelays=\n"),
+        );
+        layers.push(
+            RulesLayerKind::Scenario,
+            IniFile::from_str("[TANK]\nuserofasburstdelays=no\nNoAutoFire=no\n"),
+        );
+        let (_, trace) = layers
+            .process()
+            .unwrap()
+            .into_ini_and_native_type_construction_trace();
+        let state = trace.into_registry_state_discarding_events();
+        let restored = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+        let processed = RulesLayerStack::new(IniFile::from_str("[TANK]\nROT=6\n"))
+            .process_with_fixed_art_and_registry_state(&IniFile::empty(), restored)
+            .unwrap();
+        RuleSet::from_processed_rules(&processed).unwrap()
+    };
+    let enabled = continued("yes");
+    let disabled = continued("no");
+    assert!(enabled.object("TANK").unwrap().use_rof_as_burst_delays());
+    assert!(!disabled.object("TANK").unwrap().use_rof_as_burst_delays());
+    assert!(!enabled.object("STOCK").unwrap().use_rof_as_burst_delays());
+    assert_eq!(enabled.source_ini_hash(), disabled.source_ini_hash());
+    assert_ne!(
+        enabled.simulation_config_hash(),
+        disabled.simulation_config_hash()
+    );
+}
+
+#[test]
 fn airburst_retained_flag_matches_native_reads_and_registry_restore() {
     let native = crate::test_fixture::json("tools/projectile_oracle/airburst_retained.json");
     let initial = IniFile::from_str(
@@ -381,6 +792,72 @@ fn maximum_cheer_rate_preserves_native_defaults_layers_and_rules_lifetime() {
     let b = continued(2);
     assert_eq!(a.source_ini_hash(), b.source_ini_hash());
     assert_ne!(a.simulation_config_hash(), b.simulation_config_hash());
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn prism_rank_delays_retain_native_defaults_and_layered_signed_reads() {
+    use crate::rules::ruleset::RuleSet;
+    let publish =
+        |processed: &ProcessedRulesLayers| RuleSet::from_processed_rules(processed).unwrap();
+    let first = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nPrismSupportDelay=45\n",
+    ))
+    .process()
+    .unwrap();
+    let rules = publish(&first);
+    assert_eq!(
+        (
+            rules.general.prism_support.delay,
+            rules.general.prism_support.veteran_delay,
+            rules.general.prism_support.elite_delay
+        ),
+        (45, 69, 69)
+    );
+    let mut stack = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nPrismSupportDelayVeteran=-7\nPrismSupportDelayElite=0\n",
+    ));
+    stack.push(
+        RulesLayerKind::Scenario,
+        // Failed hex scanning retains the current signed value; ordinary
+        // nonnumeric decimal text instead reads as atoi(0).
+        IniFile::from_str("[General]\nPrismSupportDelayVeteran=$q\nPrismSupportDelay=45\n"),
+    );
+    let processed = stack.process().unwrap();
+    let rules = publish(&processed);
+    assert_eq!(
+        (
+            rules.general.prism_support.delay,
+            rules.general.prism_support.veteran_delay,
+            rules.general.prism_support.elite_delay
+        ),
+        (45, -7, 0)
+    );
+    let (_, trace) = processed.into_ini_and_native_type_construction_trace();
+    let state = trace.into_registry_state_discarding_events();
+    let state = save_codec::deserialize(&save_codec::serialize(&state).unwrap()).unwrap();
+    let retained = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nName=next\n",
+    ))
+    .process_with_fixed_art_and_registry_state(&IniFile::empty(), state)
+    .unwrap();
+    let retained = publish(&retained);
+    assert_eq!(retained.general.prism_support, rules.general.prism_support);
+    let (_, trace) = first.into_ini_and_native_type_construction_trace();
+    let other = RulesLayerStack::new(IniFile::from_str(
+        "[General]\nPrismSupportModifier=0\nName=next\n",
+    ))
+    .process_with_fixed_art_and_registry_state(
+        &IniFile::empty(),
+        trace.into_registry_state_discarding_events(),
+    )
+    .unwrap();
+    let other = publish(&other);
+    assert_eq!(retained.source_ini_hash(), other.source_ini_hash());
+    assert_ne!(
+        retained.simulation_config_hash(),
+        other.simulation_config_hash()
+    );
 }
 
 #[test]
@@ -2272,7 +2749,7 @@ fn fixed_art_and_member_major_type_data_follow_live_native_order() {
          [UNIT]\nPrimary=W1\nSecondary=W2\n\
          [W1]\nAnim=A1,A2\nAssaultAnim=A3\nOccupantAnim=A4\nOpenToppedAnim=A5\nAttachedParticleSystem=PS1\nWarhead=WH1\nProjectile=P1\n\
          [W2]\nAnim=B1,B2\nAssaultAnim=B3\nOccupantAnim=B4\nOpenToppedAnim=B5\nAttachedParticleSystem=PS2\nWarhead=WH2\nProjectile=P2\n\
-         [P1]\nImage=P1ART\nAirburstWeapon=LATEW1\nShrapnelWeapon=LATEW2\n\
+         [P1]\nImage=P1ART\nAirburst=yes\nAirburstWeapon=LATEW1\nShrapnelWeapon=LATEW2\n\
          [P2]\nImage=P2ART\n",
     );
     let fixed_art = IniFile::from_str(
@@ -2365,6 +2842,52 @@ fn airburst_reference_retains_rebinds_and_keeps_native_factory_timing() {
             assert!(rules.weapon("LATE").unwrap().projectile.is_none());
         }
     }
+}
+
+#[cfg(feature = "npatch")]
+#[test]
+fn npatch_impact_children_follow_retained_projectiles_across_layers() {
+    let mut layers = RulesLayerStack::new(IniFile::from_str(
+        "[VehicleTypes]\n0=TANK\n[TANK]\nPrimary=PARENT\n\
+         [PARENT]\nProjectile=SHOT\nWarhead=WH\n\
+         [SHOT]\nAirburst=no\nAirburstWeapon=FIRST\n\
+         [FIRST]\nDamage=1\nProjectile=FRAGMENT\nWarhead=WH\n\
+         [FRAGMENT]\nInviso=yes\n[Warheads]\n0=WH\n[WH]\n",
+    ));
+    layers.push(
+        RulesLayerKind::GameMode,
+        IniFile::from_str(
+            "[PARENT]\nDamage=7\n[SHOT]\nAirburstWeapon=SECOND\n\
+         [SECOND]\nDamage=5\nProjectile=FRAGMENT\nWarhead=WH\n",
+        ),
+    );
+    layers.push(
+        RulesLayerKind::Scenario,
+        IniFile::from_str(
+            "[SHOT]\nAirburstWeapon=THIRD\n\
+         [THIRD]\nDamage=9\nProjectile=FRAGMENT\nWarhead=WH\n",
+        ),
+    );
+    let processed = layers.process().unwrap();
+    let rules = crate::rules::ruleset::RuleSet::from_processed_rules(&processed).unwrap();
+    assert_eq!(
+        rules.weapon("SECOND").unwrap().damage,
+        5,
+        "missing Projectile key retains the parent pointer"
+    );
+    assert_eq!(
+        rules.weapon("THIRD").unwrap().damage,
+        9,
+        "missing parent section still discovers the changed impact child"
+    );
+    assert_eq!(
+        rules.weapon("THIRD").unwrap().projectile.as_deref(),
+        Some("FRAGMENT")
+    );
+    assert_eq!(
+        rules.projectile("SHOT").unwrap().airburst_weapon.as_deref(),
+        Some("THIRD")
+    );
 }
 
 #[test]

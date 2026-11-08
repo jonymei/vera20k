@@ -260,7 +260,7 @@ JOINED_TRANSPORT = frozenset((0x527AF9, 0x527B0C, 0x41C27D, 0x41C2CB, 0x41C28C, 
 
 
 def joined_inputs(root, *, damage_fires=False, stock_smudges=False, damage_sound=False,
-                  typed_debris=False, layers=None, wall_autofill=False):
+                  typed_debris=False, layers=None, wall_autofill=False, npatch=False):
     import hashlib
     from collections import deque
     from types import SimpleNamespace
@@ -281,7 +281,7 @@ def joined_inputs(root, *, damage_fires=False, stock_smudges=False, damage_sound
         extra_assets += ('GTWALL.SHP',)
     if damage_sound:
         extra_assets += ('CTMISC03.SHP',)
-    m = er.prepare_joined_inputs(root, layers=layers)
+    m = er.prepare_joined_inputs(root, layers=layers, npatch=npatch)
     m.input_rule_layers = tuple(layers if layers is not None else
         ('RULESMD.INI', 'LANGRULE.INI', 'MPBattleMD.ini', 'Hills.map'))
     u, read = m.u, m.read32

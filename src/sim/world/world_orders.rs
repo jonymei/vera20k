@@ -87,16 +87,24 @@ pub enum EntryClickAction {
 }
 
 /// The base action (`TechnoClass::What_Action_OnObject`) the entry rows
-/// test. The input layer decides it; Attack (5), GuardArea (0x1A),
-/// ToggleSelect (8) and a Unit's GRepair (0x1D) skip every entry row, and
-/// their callers do not ask.
+/// test. Hospital can replace even Attack; later entry rows skip it.
+/// GuardArea, ToggleSelect and Unit GRepair are handled by their callers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryBaseAction {
     /// Select (7): the building rows and the passenger rows.
     Select,
-    /// Any other base action, such as Alt's Move (1): the passenger rows
-    /// only.
+    /// Move (1), including Alt: hospital precedes the deployed-move refusal.
+    Move,
+    /// Attack (5): hospital can override it; the later entry rows cannot.
+    Attack,
+    /// Other base actions still reaching the hospital/passenger rows.
     Other,
+}
+
+/// Native Ctrl input independent of the base action, not retained state.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EntryModifiers {
+    pub force_fire: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -268,7 +276,16 @@ impl Simulation {
             return (target.category() != EntityCategory::Structure)
                 .then_some(UnitRepairAction::Select);
         }
-        if target.category() == EntityCategory::Aircraft {
+        // NPAE Unit::What_Action73FDE1 ->7E09E6 keeps the Aircraft branch
+        // but NOPs73FE04..06, so a pad's building no longer rejects repair.
+        // Its non-Aircraft arm7E09EF..7E0A03 also refuses Organic targets.
+        if cfg!(feature = "npatch")
+            && target.category() != EntityCategory::Aircraft
+            && target_type.organic
+        {
+            return None;
+        }
+        if !cfg!(feature = "npatch") && target.category() == EntityCategory::Aircraft {
             //73FDE1..73FE06: a grounded aircraft on a building is excluded.
             let coord = crate::sim::movement::ground_pose::position_world_coord(&target.position);
             let cell = self.resolved_terrain.as_ref().and_then(|terrain| {
@@ -347,7 +364,10 @@ impl Simulation {
     ///   and asks CAN_LOAD of any building: a refinery, Service Depot, Tank
     ///   Bunker or Grinder that admits it. Its NoEnter skips the passenger
     ///   rung (`0x00740296`); otherwise the rung's answer replaces it.
-    /// - An Infantryman's passenger row comes first; only when it leaves the
+    /// - Infantry Hospital51E85A..51E901 precedes passenger/Move restrictions;
+    ///   it needs neither Passengers nor Engineer. Armory's later override for
+    ///   dual Hospital+Armory types is a separate residual (AY hospitals lack it).
+    /// - An Infantryman's passenger row follows it; only when it leaves the
     ///   base action Select does the grinder row (`0x0051F0AF..0x0051F111`)
     ///   answer, without asking: a `Grinding=` building (`+0x16AD`) that is
     ///   not 1x1-with-undeploy (IsStrange vt+0x80, `0x00457620`) answers Grind
@@ -361,6 +381,8 @@ impl Simulation {
     ///   building (`+0x16A9`) and answers NoEnter; Aircraft ClickedAction
     ///   (`0x00417BD0`) orders nothing for it. Its other rows have their own
     ///   owners.
+    ///   NPAE174 changes417E24 from JZ to JMP417E7D, skipping this whole
+    ///   UnitRepair/Dock override; the original Select/Alt Move remains.
     ///
     /// Foot ClickedAction (`0x004D74E0`) turns Enter into mission Enter and
     /// Grind into mission Eaten, each with the object as Destination, for a
@@ -391,12 +413,16 @@ impl Simulation {
         target_id: u64,
         base: EntryBaseAction,
         rules: &RuleSet,
+        modifiers: EntryModifiers,
     ) -> Option<EntryClickAction> {
         let actor = self.substrate.entities.get(actor_id)?;
         let target = self.substrate.entities.get(target_id)?;
         let select = base == EntryBaseAction::Select;
         match actor.category() {
             EntityCategory::Unit => {
+                if base == EntryBaseAction::Attack {
+                    return None;
+                }
                 let building = if select {
                     self.unit_building_click_action(actor_id, target_id, rules)
                 } else {
@@ -409,6 +435,67 @@ impl Simulation {
                     .or(building)
             }
             EntityCategory::Infantry => {
+                let actor_type = self.object_type(actor.type_ref(), rules)?;
+                let target_type = self.object_type(target.type_ref(), rules)?;
+                // Infantry WhatAction51E85A..51E901: independent of Passengers
+                // and Select/Alt's base. HP is a signed comparison, before the
+                // deployed-Doing gate. Source: original gamemd.exe instructions.
+                if target.category() == EntityCategory::Structure
+                    && target_type.hospital
+                    && !modifiers.force_fire
+                    && !target.is_warped_out()
+                    && self.house_is_human_player(actor.owner())
+                    && combat::combat_weapon::is_ally_by_object(
+                        Some(self.house_alliances.as_map()),
+                        &self.interner,
+                        actor.owner(),
+                        target.owner(),
+                    )
+                {
+                    //51E6DC..51E794's earlier healer prefix returns before
+                    //Hospital for an allied building with no passenger slots.
+                    //Its broader Attack/Select rewrite is a separate residual;
+                    //do not introduce a new Hospital override on that path.
+                    if target_type.passengers == 0
+                        && combat::combat_weapon::weapon_damage_value(
+                            actor,
+                            actor_type,
+                            &self.substrate.entities,
+                            rules,
+                            &self.interner,
+                        ) < 0
+                    {
+                        return None;
+                    }
+                    if actor.health.current() >= actor_type.strength {
+                        return Some(EntryClickAction::NoEnter);
+                    }
+                    if !actor_type.deployer || !actor.infantry_deploy_doing() {
+                        match crate::sim::radio::receive::can_load_query(
+                            self, target_id, actor_id, rules,
+                        ) {
+                            crate::sim::radio::RadioResponse::Roger => {
+                                return Some(EntryClickAction::Enter);
+                            }
+                            crate::sim::radio::RadioResponse::Negatory => {
+                                return Some(EntryClickAction::NoEnter);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                if base == EntryBaseAction::Attack {
+                    return None;
+                }
+                //51EB81..51EBD7 tests base Move, not an Alt flag. This follows
+                //Hospital but precedes the passenger row.
+                if base == EntryBaseAction::Move
+                    && self.house_is_human_player(actor.owner())
+                    && actor_type.deployer
+                    && actor.infantry_deploy_doing()
+                {
+                    return None;
+                }
                 if let Some(action) = self.passenger_click_action(actor_id, target_id, rules) {
                     return Some(action);
                 }
@@ -428,7 +515,8 @@ impl Simulation {
             }
             EntityCategory::Aircraft => {
                 let target_obj = self.object_type(target.type_ref(), rules)?;
-                (select
+                (!crate::rules::NPATCH_ENABLED
+                    && select
                     && self.house_is_human_player(actor.owner())
                     && target.category() == EntityCategory::Structure
                     && target_obj.unit_repair)

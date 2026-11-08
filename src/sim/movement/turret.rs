@@ -52,9 +52,10 @@ pub fn body_facing_to_turret(body: u8) -> u16 {
 // `+0x388` (`GameEntity::body_facing`) and the turret at `+0x3A0` (`+0x3B8` is
 // `CurrentBurstIndex`, not a fourth). `barrel_facing` here is native's turret
 // facing, and the fire location reads that same value — the claimed coupling to
-// the FLH slice (`GSI-08.04`) does not exist. `TurretROT=` likewise does not
-// exist in gamemd; the only `TurretRot`-shaped string in the image is
-// `TurretRotateSound`, so driving turret rotation from `ROT=` is correct.
+// the FLH slice (`GSI-08.04`) does not exist. Stock has no TurretROT reader;
+// NPAE174 UnitCtor735584 -> C2DEB6 adds an independent turret rate. The
+// constructor and unit_post share ObjectType::unit_turret_rot for that rate;
+// the same FacingClass and fire gate still own interpolation and alignment.
 
 /// Lepton-precise facing from `entity` toward a resolved attack target, using
 /// the target's own coordinate slot. gamemd reaches the target through

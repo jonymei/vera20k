@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "unicorn_binding": "2.1.4",
+  "unicorn_core": [
+    2,
+    1,
+    33621247
+  ],
+  "scope": "Same-cell Infantry object destination, failed Walk path and Foot Enter idle continuation.",
+  "assumptions": [
+    "AY executable selected by VERA20K_GAMEMD_EXE. Live object/House/type/map fields are supplied, not a scene constructor. Sender cell10,10 sub192,64, transport sub128,128; equal height0, cargo one Size2, sender Size1, SizeLimit2, capacities6/5. Original vtables and Drive/Walk constructors run. Contacts empty, ordinary human Enter7, no Archive, no Team or mega-mission; Foot4D32EC initializes mega-mission to-1 (zero is active). NavQueue vtable7E91EC and no voice index follow Foot constructor state.",
+    "Original CanLoad, setters, failed-path wrapper, Stop and Enter execute. Enter stops at 4D946C before Rate/RNG tail, after idle receiver and Commence. No whole InfantryAI, full command admission, occupancy lifecycle, nonempty contacts or native SAV replay."
+  ],
+  "substitutions": [
+    "Only AStar4CBBA0 result NULL, grounded in original same-cell/same-height 429BF3..429C0A to42A451. Original caller/failure/idle effects execute; no supplied radio reply or cargo mutation. OS Interlocked imports retain the existing fixture seam."
+  ],
+  "entry_points": {
+    "setter": "0x0051AA40",
+    "walk": "0x0075AEC0",
+    "find_path": "0x004D3920",
+    "enter": "0x004D9290",
+    "can_load": "0x00737430",
+    "foot_constructor_defaults": "0x004D31E0"
+  },
+  "replay_command": "python -m tools.spatial_oracle.walk_failed_path --transport-retry",
+  "payload_sha256": "58389760d80b7940773d86277f2ea378f506e76c95f5b3b3c5ad842b36d399a4"
+}

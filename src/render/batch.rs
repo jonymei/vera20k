@@ -178,7 +178,7 @@ pub fn create_r8_texture_view(
     create_r8_texture_view_on_device(&gpu.device, &gpu.queue, label, bytes, width, height)
 }
 
-fn create_r8_texture_view_on_device(
+pub(crate) fn create_r8_texture_view_on_device(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     label: &str,

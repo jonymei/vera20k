@@ -97,6 +97,7 @@ pub(crate) fn set_place_beacon_mode(state: &mut AppState, request: BeaconModeReq
     gadgets.repair_mode_on = next.repair;
     gadgets.sell_mode_on = next.sell;
     gadgets.place_beacon_mode_on = next.beacon;
+    gadgets.power_mode_on = false;
     if next.beacon {
         crate::app::input::dispatch::unselect_all(state);
     }

@@ -148,6 +148,12 @@ pub(super) fn launch(
     sw: &SuperWeaponType,
     cell: (u16, u16),
 ) -> bool {
+    // NPAE174 Super::Launch6CDA5B stores BA91E0 before rawReady+6F.
+    sim.session.lighting_mut().remember_superweapon_lighting(
+        crate::sim::scenario_session::ScenarioLightingProfile::Nuke,
+        sw_type_id,
+        sw.npatch_lighting,
+    );
     if !super::is_charged(sim, owner, sw_type_id) {
         return false;
     }

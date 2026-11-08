@@ -54,6 +54,10 @@ use crate::util::native_x87::{NativeF32Bits, NativeF64Bits};
 mod building_damage_sound_tests;
 
 #[cfg(test)]
+#[path = "building_creation_sound_tests.rs"]
+mod building_creation_sound_tests;
+
+#[cfg(test)]
 #[path = "command_bar_sound_rules_tests.rs"]
 mod command_bar_sound_rules_tests;
 
@@ -2252,6 +2256,12 @@ pub struct PrismSupportRules {
     pub max: i32,
     /// `PrismSupportDelay=` (`Rules+0x4A4`), a supporter's downtime in frames.
     pub delay: i32,
+    /// NPAE174 ReadGeneral66F185/66F19F, Rules+63C. Retained signed int.
+    #[cfg(feature = "npatch")]
+    pub veteran_delay: i32,
+    /// NPAE174 ReadGeneral66F1AB/66F1C5, Rules+644. Retained signed int.
+    #[cfg(feature = "npatch")]
+    pub elite_delay: i32,
     /// `PrismSupportDuration=` (`Rules+0x4A8`), signed support-laser lifetime
     /// in frames. ReadInt retains the current value; no clamp or byte cast.
     pub duration: i32,
@@ -2265,6 +2275,11 @@ impl Default for PrismSupportRules {
             modifier: 100,
             max: 8,
             delay: 100,
+            // RulesClass665EFE/665F16 initialise both to 0x45, not Delay.
+            #[cfg(feature = "npatch")]
+            veteran_delay: 69,
+            #[cfg(feature = "npatch")]
+            elite_delay: 69,
             duration: 15,
         }
     }
@@ -2277,6 +2292,12 @@ impl PrismSupportRules {
     /// also chops ReadDouble's own percent product: a modded `35%` reads 34.
     pub(crate) fn read_pass(self, general: &crate::rules::ini_parser::IniSection) -> Self {
         use crate::util::native_x87::{MaskedX87Chop53 as X87, NativeF64Bits};
+        // NPAE174 reads these before the original Prism keys. Exact literals
+        // BA4A83/BA4A9C; ReadInt5276D0 retains each current value, no clamp.
+        #[cfg(feature = "npatch")]
+        let veteran_delay = general.read_int("PrismSupportDelayVeteran", self.veteran_delay);
+        #[cfg(feature = "npatch")]
+        let elite_delay = general.read_int("PrismSupportDelayElite", self.elite_delay);
         let percent = general.read_double("PrismSupportModifier", f64::from(self.modifier));
         let modifier = X87::ftol_i32_low_masked(X87::mul(
             X87::load_f64(NativeF64Bits::from_bits(percent.to_bits())),
@@ -2286,6 +2307,10 @@ impl PrismSupportRules {
             modifier,
             max: general.read_int("PrismSupportMax", self.max),
             delay: general.read_int("PrismSupportDelay", self.delay),
+            #[cfg(feature = "npatch")]
+            veteran_delay,
+            #[cfg(feature = "npatch")]
+            elite_delay,
             duration: general.read_int("PrismSupportDuration", self.duration),
         }
     }
@@ -4187,6 +4212,10 @@ pub struct RuleSet {
     /// house-color producer (loading-bar backing, lobby swatch, map `Color=`,
     /// skirmish slot priority).
     pub color_schemes: Vec<crate::rules::color_scheme::ColorSchemeEntry>,
+    /// Startup RULESMD[UISettings], not scenario/map-layer state (52D144/C2ADE9).
+    pub npatch_dropdown_colors: bool,
+    /// Derived once from startup MenuColors/MPC entries, never map overrides.
+    pub multiplayer_color_count: usize,
     /// Per-`[Colors]`-entry team-color ramps (palette indices 16..31), built once
     /// from `color_schemes`. Indexed by `HouseColorIndex` (= `[Colors]` entry
     /// index). Consumed by unit/building atlas bake, the voxel GPU ramp texture,
@@ -4351,6 +4380,7 @@ pub struct RuleSet {
     pub super_weapon_order: Vec<String>,
     /// Default particle systems from `[CombatDamage]` (smoke, sparks, debris, fire-stream).
     pub combat_damage: CombatDamageDefaults,
+    pub(crate) npatch_rewards: crate::rules::npatch_rewards::NpatchRewards,
     /// Pre-resolved bridge-related warhead names (`[CombatDamage]
     /// IonCannonWarhead=`, `C4Warhead=`, `CrushWarhead=`). Resolution to interned IDs happens
     /// at world init.
@@ -4602,8 +4632,18 @@ impl RuleSet {
         rules.combat_damage.ammo_crate_damage = processed.ammo_crate_damage();
         rules.combat_damage.death_weapon =
             processed.combat_damage_death_weapon().map(str::to_owned);
-        for (name, conventional, em_effect, anim_list, debris_types, verses, ares_verses) in
-            processed.warhead_read_states()
+        for (
+            name,
+            conventional,
+            em_effect,
+            causes_delay_kill,
+            penetration,
+            doesnt_affect_enemies,
+            anim_list,
+            debris_types,
+            verses,
+            ares_verses,
+        ) in processed.warhead_read_states()
         {
             if let Some(warhead) = rules
                 .warheads
@@ -4612,6 +4652,11 @@ impl RuleSet {
             {
                 warhead.conventional = conventional;
                 warhead.em_effect = em_effect;
+                warhead.causes_delay_kill = causes_delay_kill;
+                if crate::rules::NPATCH_ENABLED {
+                    warhead.project_npatch_bunker_penetration(penetration);
+                    warhead.doesnt_affect_enemies = doesnt_affect_enemies;
+                }
                 warhead.anim_list = anim_list.to_vec();
                 warhead.debris_types = debris_types.to_vec();
                 warhead.verses_f64 = verses.map(|value| f64::from_bits(value.bits()));
@@ -4753,7 +4798,51 @@ impl RuleSet {
                 object.lepton_mind_control_offset = offset;
             }
         }
-        for (category, name, prerequisite, prerequisite_override) in processed.prerequisite_states()
+        for (name, level) in processed.bunker_protection_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Building && object.id == name)
+            {
+                object.project_npatch_bunker_protection(level);
+            }
+        }
+        for (name, rot) in processed.unit_turret_rot_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Vehicle && object.id == name)
+            {
+                object.project_npatch_turret_rot(rot);
+            }
+        }
+        #[cfg(feature = "npatch")]
+        for (category, name, enabled) in processed.use_rof_as_burst_delays_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == category && object.id == name)
+            {
+                object.project_use_rof_as_burst_delays(enabled);
+            }
+        }
+        for (name, enabled) in processed.aircraft_aa_combat_states() {
+            if let Some(object) = rules
+                .object_list
+                .iter_mut()
+                .find(|object| object.category == ObjectCategory::Aircraft && object.id == name)
+            {
+                object.npatch_aa_combat = enabled;
+            }
+        }
+        for (
+            category,
+            name,
+            prerequisite,
+            prerequisite_override,
+            npatch_prerequisites,
+            ai_planning_count,
+        ) in processed.prerequisite_states()
         {
             if let Some(object) = rules
                 .object_list
@@ -4762,6 +4851,8 @@ impl RuleSet {
             {
                 object.prerequisite = prerequisite.to_vec();
                 object.prerequisite_override = prerequisite_override.to_vec();
+                object.npatch_prerequisites = npatch_prerequisites.clone();
+                object.ai_planning_count = ai_planning_count;
             }
         }
         for (category, name, gunner_turrets) in processed.gunner_turret_states() {
@@ -4962,6 +5053,16 @@ impl RuleSet {
             {
                 super_weapon.weapon_type = weapon.map(str::to_owned);
                 super_weapon.aux_building = aux_building.map(str::to_owned);
+            }
+        }
+        #[cfg(feature = "npatch")]
+        for (name, lighting) in processed.super_weapon_lighting_states() {
+            if let Some(super_weapon) = rules
+                .super_weapons
+                .values_mut()
+                .find(|super_weapon| super_weapon.id.eq_ignore_ascii_case(name))
+            {
+                super_weapon.npatch_lighting = lighting;
             }
         }
         for (name, requirements) in processed.super_weapon_building_requirements() {
@@ -5619,6 +5720,7 @@ impl RuleSet {
             weapon.occupant_anim = state.occupant_anim.map(str::to_owned);
             weapon.open_topped_anim = state.open_topped_anim.map(str::to_owned);
             weapon.attached_particle_system = state.attached_particle_system.map(str::to_owned);
+            weapon.npatch_electric_bolt = state.npatch_electric_bolt;
             weapons.insert(section.name.clone(), weapon);
         }
 
@@ -5804,6 +5906,8 @@ impl RuleSet {
             side_indices: country_side_registry.side_indices,
             country_sides: country_side_registry.country_sides,
             color_schemes,
+            npatch_dropdown_colors: processed.npatch_dropdown_colors(),
+            multiplayer_color_count: processed.multiplayer_color_count(),
             house_color_ramps,
             color_add,
             production,
@@ -5873,6 +5977,7 @@ impl RuleSet {
             super_weapons,
             super_weapon_order,
             combat_damage,
+            npatch_rewards: crate::rules::npatch_rewards::NpatchRewards::read(ini),
             bridge_warheads,
             mind_control,
             missile_spawn,
@@ -6352,6 +6457,71 @@ impl RuleSet {
         // v34: Country starting-veterancy; optional extensions add domains below.
         b"rules-simulation-config-v34".hash(&mut hasher);
         self.source_ini_hash.hash(&mut hasher);
+        if crate::rules::NPATCH_ENABLED {
+            b"npatch-superweapon-lighting-v1".hash(&mut hasher);
+            self.super_weapons
+                .values()
+                .map(|weapon| (&weapon.id, weapon.npatch_lighting))
+                .collect::<BTreeMap<_, _>>()
+                .hash(&mut hasher);
+            b"npatch-rewards-v1".hash(&mut hasher);
+            self.npatch_rewards.hash(&mut hasher);
+            self.object_list
+                .iter()
+                .map(|object| (&object.id, &object.npatch_rewards))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            // NPAE174's retained +5A5 byte can outlive its authored pass.
+            b"npatch-unit-turret-rot-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Vehicle)
+                .map(|object| (&object.id, object.unit_turret_rot()))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            #[cfg(feature = "npatch")]
+            {
+                b"npatch-use-rof-as-burst-delays-v1".hash(&mut hasher);
+                self.object_list
+                    .iter()
+                    .map(|object| (&object.id, object.use_rof_as_burst_delays()))
+                    .collect::<Vec<_>>()
+                    .hash(&mut hasher);
+            }
+            b"npatch-aircraft-aa-combat-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Aircraft)
+                .map(|object| (&object.id, object.npatch_aa_combat))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            b"npatch-bunker-levels-v1".hash(&mut hasher);
+            self.object_list
+                .iter()
+                .filter(|object| object.category == ObjectCategory::Building)
+                .map(|object| (&object.id, object.bunker_protection_level()))
+                .collect::<Vec<_>>()
+                .hash(&mut hasher);
+            self.warheads
+                .values()
+                .map(|warhead| (&warhead.id, warhead.bunker_penetration_level()))
+                .collect::<BTreeMap<_, _>>()
+                .hash(&mut hasher);
+            b"npatch-doesnt-affect-enemies-v1".hash(&mut hasher);
+            self.warheads
+                .values()
+                .map(|warhead| (&warhead.id, warhead.doesnt_affect_enemies))
+                .collect::<BTreeMap<_, _>>()
+                .hash(&mut hasher);
+        }
+        // ReadINI75D42F/C2EF94 can retain +130 across an absent/invalid
+        // later pass; source_ini_hash alone cannot describe that history.
+        b"warhead-delay-kill-v1".hash(&mut hasher);
+        self.warheads
+            .values()
+            .map(|warhead| (&warhead.id, warhead.causes_delay_kill))
+            .collect::<BTreeMap<_, _>>()
+            .hash(&mut hasher);
         // OverlayRead5FE8BE / InitTheater5FE620 retain typed history that a
         // flattened Image key cannot recover; saved resource plans matter too.
         self.overlay_registry.hash_configuration(&mut hasher);
@@ -6574,7 +6744,7 @@ impl RuleSet {
             .collect::<BTreeMap<_, _>>()
             .hash(&mut hasher);
 
-        #[cfg(feature = "ares")]
+        #[cfg(any(feature = "ares", feature = "npatch"))]
         {
             b"ares-emp-rules-v1".hash(&mut hasher);
             self.emp_sparkles.hash(&mut hasher);
@@ -7091,6 +7261,7 @@ impl RuleSet {
                             weapon.laser_outer_color,
                             weapon.laser_outer_spread,
                         ),
+                        weapon.npatch_electric_bolt,
                     ),
                 )
             })

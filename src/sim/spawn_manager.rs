@@ -111,6 +111,46 @@ impl SpawnOwner {
     }
 }
 
+/// NPAE Techno AI6FA13E -> C2D825/C2D851, only on a changed rank cache
+/// (including the first sample). This is not a kill-reward callback.
+pub(crate) fn synchronize_spawn_promotion(
+    entities: &mut crate::sim::entity_store::EntityStore,
+    rules: &RuleSet,
+    interner: &crate::sim::intern::StringInterner,
+    owner_id: u64,
+) {
+    let Some(owner) = entities.get(owner_id) else {
+        return;
+    };
+    if owner.category() == crate::map::entities::EntityCategory::Infantry {
+        return;
+    }
+    let Some(manager) = owner.spawn_manager.as_ref() else {
+        return;
+    };
+    // C2D85F..C2D865 literally skips pools of zero or one, even though the
+    // descending body would otherwise visit slot zero. Preserve that edge.
+    if manager.slots.len() <= 1 {
+        return;
+    }
+    let veterancy = owner.veterancy.clone();
+    let children = manager
+        .slots
+        .iter()
+        .rev()
+        .filter_map(SpawnSlot::spawn)
+        .collect::<Vec<_>>();
+    for child in children {
+        if let Some(child) = entities.get_mut(child)
+            && interner
+                .object_type(child.type_ref(), rules)
+                .is_some_and(|kind| kind.trainable)
+        {
+            child.veterancy.inherit_spawn_promotion(&veterancy);
+        }
+    }
+}
+
 /// Frames the manager waits before its very first AI pass
 /// (`UpdateTimer.Duration = 0x14` at construction).
 const FIRST_UPDATE_DELAY_FRAMES: i32 = 20;
@@ -1511,8 +1551,33 @@ impl SpawnHost for WorldSpawn<'_, '_> {
     }
 
     fn adopt(&mut self, child: u64) {
+        // NPAE6B78EF -> C2D7F3: the regenerated child's own Trainable
+        // gates copying the owner's +150. The cached rank is not copied.
+        let trainable = self
+            .sim
+            .substrate
+            .entities
+            .get(child)
+            .and_then(|entity| {
+                self.sim
+                    .interner
+                    .object_type(entity.type_ref(), self.context.rules())
+            })
+            .is_some_and(|kind| kind.trainable);
+        let veterancy = (crate::rules::NPATCH_ENABLED && trainable)
+            .then(|| {
+                self.sim
+                    .substrate
+                    .entities
+                    .get(self.owner_id)
+                    .map(|owner| owner.veterancy.clone())
+            })
+            .flatten();
         if let Some(entity) = self.sim.substrate.entities.get_mut(child) {
             entity.spawn_owner_id.owner = Some(self.owner_id);
+            if let Some(veterancy) = veterancy {
+                entity.veterancy.inherit(&veterancy);
+            }
         }
     }
 

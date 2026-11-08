@@ -271,6 +271,30 @@ impl Simulation {
         Some(record)
     }
 
+    /// Manual power uses the existing Event01/02 target codec, whose
+    /// receivers4C6CF0/4C6D4D already own GoOnline/GoOffline.
+    pub fn encode_building_online_record(
+        &self,
+        command_owner: InternedId,
+        entity_id: u64,
+        on: bool,
+    ) -> Option<CommandRecord> {
+        let opcode = if on {
+            BUILDING_ON_LINE_OPCODE
+        } else {
+            BUILDING_OFF_LINE_OPCODE
+        };
+        let header = self.encode_header_event(command_owner, opcode)?;
+        BuildingOnLineRecord {
+            house_id: header.house_id(),
+            frame: header.frame_stamp(),
+            entity_id: i32::try_from(entity_id).ok()?,
+            on,
+        }
+        .encode()
+        .ok()
+    }
+
     /// TargetEvent4C65E0 is used by SELL16 (Execute4C6F12) and
     /// PRIMARY11 (Execute4C718C). Eject is the existing VERA bunker action,
     /// carried explicitly rather than claiming a native self-Unload mapping.

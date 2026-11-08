@@ -546,6 +546,16 @@ impl ResolvedTerrainGrid {
                 cell.final_tile_index
             }
         });
-        BridgeRecalcCatalog::for_tiles(theater, assets, rules, lat_enabled, cliff_back, ids)
+        // Baseline filled-clear cells can retain a valid different tile id;
+        // both that live Cell receiver and the baseline's ClearTile owner are
+        // needed by the two distinct restore projections.
+        BridgeRecalcCatalog::for_tiles(
+            theater,
+            assets,
+            rules,
+            lat_enabled,
+            cliff_back,
+            ids.chain(std::iter::once(clear_tile)),
+        )
     }
 }

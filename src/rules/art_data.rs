@@ -314,12 +314,19 @@ impl ArtEntry {
     /// `AlternateFLH[k-1]` for `k <= 5`, else a zero FLH
     /// (`0x006F3AF5..0x006F3B21`). A slot the coordinate read left at its
     /// default holds Weapon[0]'s FLH as the weapon arm stored it (`+0x89C`).
+    /// AYMod NPAE174 GetFLH6F3AFB -> C2E196 wraps `(k - 1) % 5`;
+    /// its ART reader715FA4..716005 still reads only AlternateFLH0..4.
     pub(crate) fn alternate_fire_flh(
         &self,
         port: usize,
         turret_count: i32,
         weapon_count: i32,
     ) -> Flh {
+        let port = if crate::rules::NPATCH_ENABLED {
+            port % self.alternate_flh.len()
+        } else {
+            port
+        };
         match self.alternate_flh.get(port) {
             Some(Some(flh)) => *flh,
             Some(None) => self.weapon_flh(turret_count, weapon_count, 0, false),

@@ -215,13 +215,14 @@ pub(crate) struct WeaponFacts {
 /// A WarheadTypeClass, as the tests read it against this target.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct WarheadFacts {
-    pub mind_control: bool, // +0x155
-    pub ivan_bomb: bool,    // +0x157
-    pub parasite: bool,     // +0x159
-    pub temporal: bool,     // +0x15A
-    pub is_locomotor: bool, // +0x15B
-    pub psychedelic: bool,  // +0x16D
-    pub bomb_disarm: bool,  // +0x16E
+    pub mind_control: bool,          // +0x155
+    pub ivan_bomb: bool,             // +0x157
+    pub parasite: bool,              // +0x159
+    pub temporal: bool,              // +0x15A
+    pub is_locomotor: bool,          // +0x15B
+    pub psychedelic: bool,           // +0x16D
+    pub doesnt_affect_enemies: bool, // NPAE174 +0x129
+    pub bomb_disarm: bool,           // +0x16E
     /// Rule-owned armor interaction refuses this target. Vanilla T54 uses
     /// `FCOMP` zero/unordered; Ares100542A0 uses its independent fire flag.
     pub armor_rejects_fire: bool,
@@ -548,6 +549,8 @@ pub(crate) trait FireQuery {
     /// HouseClass `0x004F9A50`: the target's house is allied with the
     /// firer's (T17).
     fn allied(&mut self) -> bool;
+    /// NPAE174 C2EA34: the firer's House asks, unlike T17's reverse query.
+    fn firer_allied_with_target(&mut self) -> bool;
     /// `0x00703B10` IsOnBridge_ForFiring (T35).
     fn bridge_for_firing(&mut self) -> bool;
     /// ParasiteClass `0x0062A8E0` CanInfect (T50) and CaptureManager
@@ -912,6 +915,11 @@ fn techno(facts: &FireFacts, query: &mut impl FireQuery, check_range: bool) -> F
     }
     // T25 `0x006FC3C5`.
     if class == FirerClass::Unit && firer.deploying {
+        return Illegal;
+    }
+    // NPAE174 GetFireError6FC3FE -> C2EA23..C2EA41 rejects enemy
+    // Techno targets with code5. Cell/Object targets skip this extension.
+    if warhead.doesnt_affect_enemies && kind.is_techno() && !query.firer_allied_with_target() {
         return Illegal;
     }
     // T26/T27 `0x006FC3F4`: gas.

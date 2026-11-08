@@ -65,6 +65,30 @@ use crate::util::fixed_math::SimFixed;
 use crate::util::lepton::{
     BRIDGE_DECK_HEIGHT_LEPTONS, LEPTONS_PER_LEVEL, WEAPON_RANGE_ALWAYS_IN_RANGE_LEPTONS,
 };
+
+/// InRange6F73F6's trajectory branch. Both engine profiles share the same
+/// numeric body; original-executable controls select Stock explicitly.
+#[derive(Clone, Copy)]
+pub(crate) enum RangeProfile {
+    Stock,
+    Npatch,
+}
+
+impl RangeProfile {
+    pub(crate) const fn active() -> Self {
+        if crate::rules::NPATCH_ENABLED {
+            Self::Npatch
+        } else {
+            Self::Stock
+        }
+    }
+
+    fn uses_arcing(self, projectile: &ProjectileType) -> bool {
+        // NPAE174 InRange6F7404 -> C2D5ED additionally reads BulletType+296
+        // (SubjectToCliffs, ReadINI46BFE4..46BFF8); false takes direct6F751E.
+        projectile.arcing && (matches!(self, Self::Stock) || projectile.subject_to_cliffs)
+    }
+}
 use crate::util::native_ballistics::{ballistic_can_reach, ballistic_launch_speed};
 use crate::util::native_x87::{
     NativeF64Bits, X87Chop53, X87Ordering, sqrt_approx_f32, sqrt_approx_length,
@@ -388,6 +412,7 @@ pub(crate) fn compute_in_range_in_query(
         interner,
         cells,
         los,
+        RangeProfile::active(),
     )
 }
 
@@ -442,7 +467,15 @@ pub(crate) fn cell_target_in_range(
     let target = RangeTarget::Cell(target);
     let source = fire_source_for_target(attacker, target, weapon, &cells, (rules, interner))?;
     Some(compute_range_target(
-        attacker, source, target, weapon, rules, interner, &cells, los,
+        attacker,
+        source,
+        target,
+        weapon,
+        rules,
+        interner,
+        &cells,
+        los,
+        RangeProfile::active(),
     ))
 }
 
@@ -455,6 +488,7 @@ pub(crate) fn compute_range_target(
     interner: &StringInterner,
     cells: &NativeCellQuery<'_>,
     los: &LineOfFireInputs<'_>,
+    profile: RangeProfile,
 ) -> bool {
     let weapon_range_lep: i64 = i64::from(weapon.range_leptons);
 
@@ -505,7 +539,7 @@ pub(crate) fn compute_range_target(
     // the 2-D distance through Sqrt_Approx and ftol, and against the range
     // without the direct bonus or a building's foundation (`EBX = EDI` at
     // `0x006F7457`), plus the arcing bonus.
-    if let Some(projectile) = projectile.filter(|p| p.arcing) {
+    if let Some(projectile) = projectile.filter(|p| profile.uses_arcing(p)) {
         let range = initial_range_lep + elevation_bonus(ElevationArm::Arcing);
         if !arcing_reaches(src, (tx, ty, tz), range, projectile, rules) {
             return false;
@@ -960,7 +994,15 @@ pub fn can_fire_at_target_in_query(
         return false;
     };
     compute_range_target(
-        attacker, source, target, weapon, rules, interner, cells, los,
+        attacker,
+        source,
+        target,
+        weapon,
+        rules,
+        interner,
+        cells,
+        los,
+        RangeProfile::active(),
     )
 }
 
@@ -1020,7 +1062,7 @@ pub fn mapless_in_range(
         .projectile
         .as_deref()
         .and_then(|name| rules.projectile(name));
-    if let Some(projectile) = projectile.filter(|p| p.arcing) {
+    if let Some(projectile) = projectile.filter(|p| RangeProfile::active().uses_arcing(p)) {
         return arcing_reaches(src, target, range, projectile, rules);
     }
     let foundation = techno.map_or(0, |entity| {
@@ -1175,12 +1217,149 @@ mod tests {
     }
 
     #[test]
+    fn npatch_non_cliff_shell_uses_direct_range_for_entity_and_mapless_queries() {
+        for cliffs in [false, true] {
+            let rules = rules_with_weapon(
+                &format!(
+                    "Range=3.515625\nProjectile=SHELL\nWarhead=WH\n[SHELL]\nArcing=yes\nSubjectToCliffs={cliffs}\n"
+                ),
+                "",
+                "",
+            );
+            let weapon = rules.weapon("GUN").unwrap();
+            assert_eq!(weapon.range_leptons, 900);
+            let attacker = ground_attacker(0, 0, 0, "ATKR");
+            let mut target = ground_target(3, 0, 2, "TGT");
+            target.position.set_sub_x_for_test(SimFixed::from_num(194));
+            let mut terrain = flat_terrain(16, 16);
+            terrain.cells_mut_for_test()[3].level = 2;
+            let interner = test_interner();
+            let expected = crate::rules::NPATCH_ENABLED && !cliffs;
+            // The existing native arc controls establish the 834-lepton,
+            // two-level climb: direct range900 admits it, ballistic range900
+            // does not. This changes branch admission, not either numeric kernel.
+            assert_eq!(
+                mapless_in_range(
+                    &attacker,
+                    MaplessTarget::Techno(&target),
+                    weapon,
+                    &rules,
+                    &interner,
+                ),
+                expected
+            );
+            let mut world = Simulation::new();
+            world.substrate.entities.insert(target);
+            assert_eq!(
+                compute_in_range(
+                    &attacker,
+                    src_at_cell(0, 0, 0),
+                    &TargetKind::Entity(200),
+                    weapon,
+                    &rules,
+                    &interner,
+                    &world,
+                    &terrain,
+                    &LineOfFireInputs::terrain_only(),
+                ),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn retained_cell_range_matches_original_geometry_and_query_order() {
         let rows: serde_json::Value = serde_json::from_str(crate::test_fixture::text(
             "tools/spatial_oracle/walk_cell_range.json",
         ))
         .unwrap();
         assert_original_range_rows(&rows);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Grand Cannon rules and NP foundation reach"]
+    fn aymod_grand_cannon_uses_direct_reach_without_changing_weapon_range() {
+        use crate::headless_scenario::{battle_session, load_session};
+        use crate::skirmish_launch::{AiDifficulty, LaunchCountry};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let scene = load_session(
+            &root,
+            map,
+            0x00C0_FFEE,
+            battle_session(
+                map,
+                &[(LaunchCountry::from_country_index(1), AiDifficulty::Hard)],
+            ),
+        )
+        .unwrap();
+        let rules = &scene.runtime.resources.rules;
+        // Production-loaded types on supplied flat query geometry; this is
+        // a range-call comparison, not a complete native match or muzzle test.
+        let mut actor = ground_attacker(4, 4, 0, "GTGCAN2");
+        actor.set_category_for_test(EntityCategory::Structure);
+        let mut target = ground_target(20, 10, 0, "NACNST");
+        target.set_category_for_test(EntityCategory::Structure);
+        target
+            .type_facts
+            .set_foundation_for_test(rules.object("NACNST").unwrap().foundation.clone().into());
+        let terrain = flat_terrain(64, 64);
+        let point = object_get_coords(&target, Some(&terrain));
+        let mut world = Simulation::new();
+        world.substrate.entities.insert(target);
+        let interner = test_interner();
+        for elite in [false, true] {
+            if elite {
+                actor.veterancy.set_elite();
+            }
+            let weapon = crate::sim::combat::combat_weapon::get_weapon(
+                &actor,
+                rules.object("GTGCAN2").unwrap(),
+                0,
+                &world.substrate.entities,
+                rules,
+                &interner,
+            )
+            .unwrap();
+            let projectile = rules
+                .projectile(weapon.projectile.as_deref().unwrap())
+                .unwrap();
+            assert!(projectile.arcing && !projectile.subject_to_cliffs);
+            assert!(weapon.range_leptons > 0);
+            let source = (
+                i64::from(point.x - weapon.range_leptons - 128),
+                i64::from(point.y),
+                i64::from(point.z),
+            );
+            let cells = NativeCellQuery::canonical(&terrain);
+            let target = RangeTarget::Techno(world.entities().get(200).unwrap());
+            assert!(!compute_range_target(
+                &actor,
+                source,
+                target,
+                weapon,
+                rules,
+                &interner,
+                &cells,
+                &LineOfFireInputs::terrain_only(),
+                RangeProfile::Stock
+            ));
+            assert!(
+                compute_in_range(
+                    &actor,
+                    source,
+                    &TargetKind::Entity(200),
+                    weapon,
+                    rules,
+                    &interner,
+                    &world,
+                    &terrain,
+                    &LineOfFireInputs::terrain_only()
+                ),
+                "the NP direct arm includes the target foundation, without editing range"
+            );
+        }
     }
 
     #[test]
@@ -1190,6 +1369,80 @@ mod tests {
         ))
         .unwrap();
         assert_original_range_rows(&native["rows"]);
+    }
+
+    #[cfg(feature = "npatch")]
+    #[test]
+    #[ignore = "requires VERA20K_AYMOD_DIR; actual Magnetron normal/elite vehicle and building reach"]
+    fn aymod_magnetron_elite_slots_keep_the_authored_extra_cell_of_reach() {
+        use crate::headless_scenario::{battle_session, load_session};
+        use crate::sim::combat::combat_weapon::{get_weapon, weapon_range};
+        let root = std::path::PathBuf::from(std::env::var_os("VERA20K_AYMOD_DIR").unwrap());
+        let map = "\u{91cd}\u{8fd4}\u{8fea}\u{62dc}.yrm";
+        let scene = load_session(&root, map, 17, battle_session(map, &[])).unwrap();
+        let rules = &scene.runtime.resources.rules;
+        let terrain = flat_terrain(64, 64);
+        for (target_type, index, normal_name, elite_name, normal_cells) in [
+            ("MTNK", 0, "MagneticBeam", "MagneticBeamE", 12),
+            ("GAPOWR", 1, "MagneShake", "MagneShakeE", 11),
+        ] {
+            let mut actor = ground_attacker(4, 4, 0, "TELE");
+            let mut target = ground_target(24, 24, 0, target_type);
+            if index == 1 {
+                target.set_category_for_test(EntityCategory::Structure);
+                target.type_facts.set_foundation_for_test(
+                    rules.object(target_type).unwrap().foundation.clone().into(),
+                );
+            }
+            let interner = test_interner();
+            let point = object_get_coords(&target, Some(&terrain));
+            let foundation = foundation_reach_leptons(&target, rules, &interner);
+            let source = (
+                i64::from(point.x) - normal_cells * 256 - foundation - 128,
+                i64::from(point.y),
+                i64::from(point.z),
+            );
+            let mut world = Simulation::new();
+            world.substrate.entities.insert(target);
+            let kind = rules.object("TELE").unwrap();
+            let normal =
+                get_weapon(&actor, kind, index, world.entities(), rules, &interner).unwrap();
+            assert_eq!(normal.id, normal_name);
+            assert_eq!(i64::from(normal.range_leptons), normal_cells * 256);
+            assert!(!compute_in_range(
+                &actor,
+                source,
+                &TargetKind::Entity(200),
+                normal,
+                rules,
+                &interner,
+                &world,
+                &terrain,
+                &LineOfFireInputs::terrain_only()
+            ));
+            actor.veterancy.set_elite();
+            // GetWeapon70E15F..70E17C selects the authored elite slot; the
+            // extra reach comes from AY rules, not a new elite range bonus.
+            let elite =
+                get_weapon(&actor, kind, index, world.entities(), rules, &interner).unwrap();
+            assert_eq!(elite.id, elite_name);
+            assert_eq!(i64::from(elite.range_leptons), (normal_cells + 1) * 256);
+            assert_eq!(
+                weapon_range(&actor, kind, index, world.entities(), rules, &interner),
+                elite.range_leptons
+            );
+            assert!(compute_in_range(
+                &actor,
+                source,
+                &TargetKind::Entity(200),
+                elite,
+                rules,
+                &interner,
+                &world,
+                &terrain,
+                &LineOfFireInputs::terrain_only()
+            ));
+        }
     }
 
     fn assert_original_range_rows(rows: &serde_json::Value) {
@@ -1409,16 +1662,16 @@ mod tests {
                     native_source[1],
                     "row {index}: source"
                 );
-                let actual = compute_in_range_in_query(
+                let actual = compute_range_target(
                     &actor,
                     source,
-                    &target,
+                    RangeTarget::from_target(&target, &objects, &terrain),
                     &weapon,
                     rules,
                     &interner,
-                    &objects,
                     &cells,
                     &LineOfFireInputs::terrain_only(),
+                    RangeProfile::Stock,
                 );
                 assert_eq!(Some(actual), row["result"].as_bool(), "row {index}: object");
                 let dummy = cells.dummy().snapshot().coord;
@@ -1460,15 +1713,29 @@ mod tests {
             // production call; all queried level/slope/flags stayed unchanged.
             terrain.stamp_dummy_cell_requested_coord(99, 98);
             let identity = terrain.native_cell_identity(coord);
-            let actual = cell_target_in_range(
+            // This corpus executed stock InRange. Reuse the production
+            // source builder and sole range kernel with that explicit profile,
+            // rather than treating stock numeric rows as NP observations.
+            let actual = fire_source_for_target(
                 &actor,
-                identity,
+                RangeTarget::Cell(identity),
                 &weapon,
-                rules,
-                &interner,
-                &terrain,
-                &LineOfFireInputs::terrain_only(),
-            );
+                &cells,
+                (rules, &interner),
+            )
+            .map(|source| {
+                compute_range_target(
+                    &actor,
+                    source,
+                    RangeTarget::Cell(identity),
+                    &weapon,
+                    rules,
+                    &interner,
+                    &cells,
+                    &LineOfFireInputs::terrain_only(),
+                    RangeProfile::Stock,
+                )
+            });
             assert_eq!(actual, row["result"].as_bool(), "row {index}: full range");
             let dummy = terrain.dummy_cell_requested_coord();
             assert_eq!(
@@ -1498,16 +1765,16 @@ mod tests {
                     (rules, &interner),
                 )
                 .unwrap();
-                let actual = compute_in_range_in_query(
+                let actual = compute_range_target(
                     &actor,
                     source,
-                    &target,
+                    RangeTarget::from_target(&target, &entities, &terrain),
                     &weapon,
                     rules,
                     &interner,
-                    &entities,
                     &cells,
                     &LineOfFireInputs::terrain_only(),
+                    RangeProfile::Stock,
                 );
                 assert_eq!(
                     Some(actual),
@@ -2639,10 +2906,12 @@ mod tests {
     /// exact XYZ to the line walk on both the arcing and direct branches.
     #[test]
     fn in_range_preserves_resolved_target_z_and_isolated_line_domain() {
-        for arcing in [false, true] {
+        // Include NP's newly direct-routed arcing projectile. Walls keep
+        // the final line walk active even when SubjectToCliffs is false.
+        for (arcing, cliffs) in [(false, true), (true, true), (true, false)] {
             let rules = rules_with_weapon(
                 &format!(
-                    "Damage=1\nROF=20\nRange=8\nWarhead=WH\nProjectile=SHELL\n\n[SHELL]\nSubjectToCliffs=yes\nArcing={arcing}"
+                    "Damage=1\nROF=20\nRange=8\nWarhead=WH\nProjectile=SHELL\n\n[SHELL]\nSubjectToWalls=yes\nSubjectToCliffs={cliffs}\nArcing={arcing}"
                 ),
                 "",
                 "",
@@ -2656,6 +2925,11 @@ mod tests {
             let mut terrain = flat_terrain(16, 16);
             terrain
                 .cell_mut_for_test(6, 2)
+                .unwrap()
+                .bridge_facts
+                .raw_flags |= 0x100;
+            terrain
+                .cell_mut_for_test(2, 2)
                 .unwrap()
                 .bridge_facts
                 .raw_flags |= 0x100;
@@ -2686,6 +2960,20 @@ mod tests {
             assert!(allowed);
             assert_eq!(samples.len(), 4);
             assert!(samples.iter().all(|point| i64::from(point.z) == resolved.2));
+            assert!(
+                !compute_in_range_in_query(
+                    &attacker,
+                    (source.0, source.1, 0),
+                    &TargetKind::Entity(200),
+                    weapon,
+                    &rules,
+                    &interner,
+                    &entities,
+                    &cells,
+                    &LineOfFireInputs::terrain_only(),
+                ),
+                "both profiles must retain the under-deck ceiling check"
+            );
         }
     }
 }

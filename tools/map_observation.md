@@ -450,6 +450,147 @@ fills a slot while it is still Reloading, and ReadyDocked does not add another
 filled pip. The example's ending step bounds a production witness, not a native
 timing golden. A parent-removal witness needs a separate ordinary damage case.
 
+## AYMOD Garrison Pip Lifecycle
+
+The [garrison profile](map_observation.aymod-garrison-pips.example.json) uses
+ordinary infantry entry, a screen click, quicksave/quickload and Unload to cover
+the full client, not a translated single-sprite probe. Use AYMOD and the current
+`fast` executable with `npatch,dev-overlays`, an isolated config/settings/saves
+directory and DX12 on the current Windows adapter. Generate the map in scratch
+from the existing flat authored terrain; do not edit the MOD or tracked map:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-garrison-pips.map")
+text = source.read_text(encoding="utf-8")
+start = text.index("[Structures]")
+end = text.index("[OverlayPack]", start)
+placements = """[Structures]
+0=Neutral,CAHSE01,256,44,54,0,None,0,0,1,0,0,None,None,None,0,0
+
+[Units]
+
+[Infantry]
+0=<human player>,E1,256,42,54,0,Guard,0,None,0,-1,0,0,0
+1=<human player>,GGI,256,43,56,0,Guard,0,None,0,-1,0,0,0
+2=<human player>,SNIPE,256,45,56,0,Guard,0,None,0,-1,0,0,0
+3=<human player>,BORIS,256,45,52,0,Guard,0,None,0,-1,0,0,0
+
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text[:start] + placements + text[end:])
+```
+
+Set a profile copy's map path to that absolute destination. The four normal
+`CaptureBuilding` orders bind the initial Neutral CAHSE01 and each specific
+human infantry, then their movement/admission owners fill it. Facilities and
+infantry are explicit placements, not paid production or injected occupants.
+Production layered `asset ini-get` on this map reads capacity 5/CanBeOccupied yes
+and E1/GGI/SNIPE/BORIS OccupyPip green/blue/red/yellow. The shared display owner
+uses OccupyPip, not transport Pip (`Techno Display709C27..709D17`,
+`ui_overlays::scale_pip_draws`); empty slots use frame 6. Unload delegates to
+the existing garrison ejection/ownership owners, not diagnostic cleanup.
+
+At step 500 a literal click at `(300,280)` selects the occupied building body.
+The initial `(316,245)` probe missed that body and selected nothing; it is not
+the successful input. Save is at 520, load at 580 (actually rewinding to tick
+520), and Unload at 650. The full 800-step run ends at tick 740. Run with the
+[expectations](map_observation.aymod-garrison-pips.expectations.json), which
+rebind actors at 620 after the load epoch instead of assuming an ID survived it.
+All 22 checks passed in the actual full run.
+
+For selected/restored frame endpoints, copy this profile with ticks 520 and 620
+respectively, **filtering commands and gestures to `issue_after_step < ticks`**.
+The actual three endpoints passed bundle checks, their frame length/SHA matched,
+and complete 800x600 images were viewed. Dynamically read the building's ID in
+each epoch: it must be the sole selected object with selection settled, and all
+four infantry's `temporal.inside_transport.transport` links must equal that ID.
+After Unload all four links are null and the infantry are out of limbo; the
+building is Neutral again. Do not commit observed actor IDs as fixtures.
+
+The selected and restored colored pip region `[258,282) x [290,317)` was
+byte-identical in this camera/viewport. After ordinary Unload the four colored
+figures became five empty outlines, with no injected list or UI reset. This is
+a relationship check, not a committed pixel golden or native coordinate proof.
+Radar has its own post-load animation; no whole-frame equality is claimed.
+This bounds four real class-color consumers and their save/exit lifecycle.
+Transport pips, elite stars/natural promotion, other families/maps and OS event
+dispatch remain separate; no veterancy prior was set in this scene.
+
+## AYMOD Earned-Elite Star
+
+The [earned-star profile](map_observation.aymod-earned-elite-star.example.json)
+continues F25 through actual weapon kills, rather than an authored elite rank or
+a direct XP write. Use the same isolated AYMOD `fast`/`npatch,dev-overlays`/DX12
+procedure as the garrison scene. Materialize its scratch map:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-earned-elite-star.map")
+text = source.read_text(encoding="utf-8")
+start = text.index("[Structures]")
+end = text.index("[OverlayPack]", start)
+placements = """[Structures]
+
+[Units]
+0=<human player>,MTNK,256,44,54,0,Guard,None,0,-1,0,-1,0,0
+1=Computer,APOC,1,47,54,0,Sleep,None,0,-1,0,-1,0,0
+2=Computer,APOC,1,47,56,0,Sleep,None,0,-1,0,-1,0,0
+3=Computer,APOC,1,44,57,0,Sleep,None,0,-1,0,-1,0,0
+
+[Infantry]
+
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text[:start] + placements + text[end:])
+```
+
+Resolve a profile copy's map path to that absolute destination. The APOCs'
+authored health fraction `1/256` and Sleep mission are explicit pressure inputs,
+not ordinary full-health combat or runtime damage injection. Their real AI may
+retask them and they still self-heal. Production rules on this input read MTNK
+Cost 700, APOC Cost 2000/Strength 900 and VeteranRatio 3; no rule/cost/weapon or
+experience values are overridden. MTNK begins with zero experience.
+
+The first ordinary Attack is issued at 0, a screen click selects MTNK at 20,
+and the second ordinary Attack at 80 binds the **sole remaining living** APOC
+by type/owner, not its initial cell. In the first probe a single order killed
+only two targets; a later fixed-cell selector correctly failed because the AI
+had moved the third away. The final input follows that live target instead of
+freezing its controller or teleporting it back. The tank fires real `105mm`
+projectiles, retires all three targets, crosses rookie/veteran/elite and starts
+its normal elite-flash timer. This is kill-earned promotion in a wounded-target
+fixture, not evidence for autonomous battles or economy.
+
+Save at 600 and load at 660 restore the real clock to 600; the 700-step endpoint
+is tick 640. The [expectations](map_observation.aymod-earned-elite-star.expectations.json)
+check zero initial XP, sampled rookie/veteran/elite, actual fire, retired original
+targets, the promotion timer and live restored elite state. The raw positive
+experience threshold `0x40000000` is native 2.0f (IsElite750010), not a captured
+pixel/arithmetic golden. Rebind at 700 for the restored epoch. All 15 assertions
+passed in the actual full capture. Separately resolve the actual tank ID in each
+endpoint and require it alone selected, with `selection_pending=false`.
+
+The rank draw reads the **raw accumulator**, not its AI cache, through the
+existing `techno_extras_for_parent` (`70A9B2..70A9D2`) and emits original PIPS
+frame 15 (`70AA20..70AA4F`). The earlier isolated material test established
+that AY's actual frame is a star; this scene adds the complete tactical frame,
+body, health strip, terrain, sidebar and real earned promotion. No rank sprite,
+palette or simulated state is synthesized by the observer.
+
+For the pre-save image, shorten a copy to 600 and omit the later gestures
+(`issue_after_step >= ticks`). Both actual endpoints passed bundle checks and
+frame SHA/length checks and were viewed. The star region `[349,364) x [329,344)`
+was byte-identical before/after load at this camera and stopped tank pose. This
+is only a relationship check; no output pixels/actor IDs are committed. Radar's
+post-load animation is not full-frame equality. Other unit families, normal
+full-health battles, promotion while embarked/controlled and native whole-window
+parity remain separate, as do elite-weapon firing and other F/V/A work.
+
 Optional v2 `observe_audio` records device-mixer queue pulls from requested ordinary
 SFX Players. For example:
 
@@ -731,8 +872,11 @@ global tactical clip and the existing MOUSEPAL material.
 Literal `key` gestures may optionally include a unique `modifiers` list containing
 `Ctrl`, `Shift`, `Alt`, and/or `Super`. These use the shared modifier-key owner and
 ordinary key edges, and release every modifier before rendering. Bare historical
-gestures keep their existing receipts. The release game's Ctrl+Shift+M/N shortcuts
-exercise the production quicksave/quickload owner. A quickload gesture requires
+gestures keep their existing receipts. With the `dev-overlays` feature enabled,
+Ctrl+Shift+M/N exercise the production quicksave/quickload owner. This feature is
+required even for a `fast` or `release` capture: `--no-default-features --features
+npatch` alone excludes these shortcuts and cannot run a quickload profile.
+A quickload gesture requires
 `allow_load_segments: true` and must actually restore an earlier clock. Up to 16
 `load_segments` retain the triggering gesture ordinal and before/after tick,
 binary frame and simulation milliseconds. Capture-step numbering remains
@@ -741,6 +885,14 @@ rewind. This is VERA same-content snapshot loading, not original SAV compatibili
 Run these profiles with a fresh scratch working directory/config: the production
 save repository uses that working directory's `saves/` folder. There is no
 diagnostic save backend or bypass of preparation/commit.
+
+The [AY Dominator hot-load profile](map_observation.aymod-dominator-hotload.example.json)
+extends the natural-charge lighting scene with save at step 8199 and load at
+8500. Use AYMOD, `npatch,dev-overlays`, an isolated configuration/save directory,
+and an absolute authored-map path as for the original lighting profile. The
+facilities are preplaced; charging and AI launch are not injected. Check the
+actual load segment's clock rewind before interpreting the final image; the
+profile is not a native save-format or whole-frame parity certificate.
 
 The [planning mode profile](map_observation.planning-mode.example.json) selects
 the opening AMCV through the ordinary production command, holds literal Z across
@@ -1219,7 +1371,87 @@ commit. The final planning path should retain two nodes with editing disabled.
 These are Rust production-input observations; they do not establish whole-run
 native equivalence.
 
+## Paid AYMOD defense range lifecycle
+
+The [defense-range profile](map_observation.aymod-defense-range.example.json)
+uses Soviet Battle/XMP03T4, tech 10 and 10000 starting credits. Ordinary MCV
+deployment, paid production and placement build power, refinery, radar, a second
+power plant and TESLA. No ready product, selection, range or power is injected.
+The formal layered TESLA prerequisites are POWER,RADAR,NACNST; its primary
+CoilBolt retains Range=8.5. The existing Building GetSensorRange4566B0 and
+Game DrawRadialIndicator456980 owners perform their normal integer-range
+consumption and drawing; the profile does not compute or fit a screen radius.
+
+Use an isolated config/settings directory pointing at AYMOD, the NPatch
+`fast` app with `dev-overlays`, and on the current Windows adapter
+`WGPU_BACKEND=dx12`. Keep `RA2_DIR` absent. At step 4770 the literal click
+at (447,260) selects the normally placed TESLA at (30,85). Ctrl+Shift+M at
+4800 saves, Ctrl+Shift+N at 4860 restores, and an ordinary **right** click
+at (580,500) at 4880 deselects. A left click there is a ground-order gesture,
+not a deselect. The final completed step 4900 is simulation/binary frame 4840.
+Check the load-segment receipt for the real 4860-to-4800 rewind.
+
+The [expectations](map_observation.aymod-defense-range.expectations.json)
+check the live placed tower before/after restore and the neutral input edges.
+Also resolve the unique local TESLA ID from each epoch's actor rows: at 4800
+and 4880 its ID must be the exact final `input.selected_ids` member, and at
+4900 the selection must be empty, with `selection_pending=false` throughout
+those settled boundaries. Do not commit observed actor IDs as goldens.
+
+For actual image comparison, make scratch copies of the profile:
+
+- Selected: end at 4800; retain only gesture 0 and omit `allow_load_segments`.
+- Unselected control: end at 4800; remove all gestures and `allow_load_segments`.
+- Restored selected: end at 4900; retain gestures 0..2 (no right click).
+- Restored deselected: run the committed profile unchanged.
+
+Compare selected/control and restored-selected/deselected at their matching
+clocks, first requiring identical actor rows. Decode BGRA outside the sealed
+run directories and view the full frames. In this fixture the top ground
+rectangle [250,600)x[80,160) and bottom ground [220,610)x[420,465) show the
+ring contribution away from the tower brackets/health bar. Require actual
+changed pixels, not a hand-calculated radius or a hard-coded screenshot hash.
+The ring is clipped at the tactical viewport and its rays/fade vary with the
+binary frame; do not demand equality between frame 4800 and 4840. Radar's
+post-load animation is also not a full-frame equality failure.
+
+This covers one common normally built defense through the shared input,
+save/load and complete App compositor. It is not an OS/winit input test,
+native frame certification, every defense type/map, power/EMP/ownership
+transition or long-game coverage. Captures and saves remain scratch artifacts.
+
 ## Literal keyboard gestures
+
+The [AYMOD building TypeSelect profile](map_observation.aymod-building-type-select.example.json)
+loads Battle/XMP03T4, deploys the starting MCV and uses ordinary paid production
+and placement for power, barracks and two GAPILL. At step 2200 a screen click
+selects the first pillbox; short literal `T` gestures at 2230 and 2240 select the
+screen group and then map scope. There is no supplied Select command or spawned
+building. Run a current NPatch `fast` executable with an isolated `config.toml`
+pointing at AYMOD and a fresh `settings_dir` whose `VERA.INI` contains:
+
+```ini
+[Hotkey]
+TypeSelect=84
+```
+
+The [expectations](map_observation.aymod-building-type-select.expectations.json)
+check the actual binding/release, scope/HUD keys, placed named actors and spending.
+They do not hard-code runtime entity IDs. To check exact selection membership,
+resolve the two own GAPILL at cells `(32,88)` and `(33,88)` from the final actor
+rows, compare their IDs as a set with both key receipts' `after.selected_ids`
+and final `input.selected_ids`, and require final `selection_pending=false`.
+The click receipt must select only the first named actor. These are outcome
+assertions, not a second implementation of selection or a native pixel golden.
+
+This is an actual AppState/production-input/compositor observation, but the
+gesture driver enters the shared keyboard/mouse owners directly: it does not
+inject OS events or exercise the outer winit event pump. It does not cover
+cross-factory groups, offscreen additional objects, held keys, all maps or saves.
+On the current Windows adapter, use `WGPU_BACKEND=dx12` to obtain the BGRA8 surface
+the existing capture contract requires; an incompatible surface is a failed
+preflight, not evidence of a TypeSelect gameplay failure. Keep `RA2_DIR` absent
+and use the isolated config as required by the capture contract.
 
 A v2 profile can send a literal key press and release through the same in-game
 keyboard edge owner used by `WindowEvent::KeyboardInput`:
@@ -1583,6 +1815,177 @@ These are Rust production observations: the chain's native comparisons are the
 with gamemd is claimed.
 
 ## Computer Psychic Dominator observation
+
+The separate [AYMOD lighting profile](map_observation.aymod-dominator-lighting.example.json)
+uses the same authored map with AY's Yuri Country index 2, rather than stock 9.
+Point an isolated config/settings directory at AYMOD and resolve the profile's
+map path to the tracked map's absolute path, as for the stock example below.
+Use the current NPatch `fast` executable; on the current Windows adapter the
+existing capture requires `WGPU_BACKEND=dx12` for BGRA8 readback. Keep `RA2_DIR`
+absent. The two GAPOWR and YAPPET are explicit pre-placed facilities, not proof
+of natural technology or paid construction. There are no supplied commands or
+readiness/charge edits: the computer waits for its real charge and selects a target.
+
+For this input/seed, make profile copies ending at 8170 (before), 8200 (tint) and
+8800 (restored). These are production capture checkpoints, not native timing
+goldens. The 8800-step profile retains the whole cell-light/ownership trajectory;
+the [expectations](map_observation.aymod-dominator-lighting.expectations.json)
+check the same authored target's eventual capture, not lighting or pixel parity.
+The full run omits Super rows to stay within the retained-sample budget. A short
+100-step copy with only `Computer1` observed and `observe_super_weapons=true`
+can inspect its granted, unheld, not-ready PsychicDominatorSpecial and actual
+8100-frame charge duration without modifying it.
+
+For lighting, compare the observed `(40,58)` cell's `render.palette_light`,
+`atlas_key` and `a_center` across the three runs. Require the tile and A-buffer
+to stay the same, lighting to change during the effect and return afterward.
+Derive the cell-center screen point from retained `cell_center_world` minus
+`camera_top_left` and inspect that pixel in each checked `frame.bgra`: it must
+change to nonzero red/blue with zero green and return byte-for-byte afterward.
+This is a relationship check against AY's enabled RGB profile, not a committed
+pixel golden. View the complete frames too; scalar/CPU evidence alone is not a
+rendered-output witness. Decode PNGs **outside** sealed run directories so later
+integrity inspection continues to accept their exact artifact inventory.
+
+The hot-load variant saves during the tint at 8199, waits until it has ended,
+then restores at completed step 8500. With `npatch,dev-overlays`, the checked
+load transition rewinds tick 8500 to 8199; completed step 8501 renders tick 8200
+with the saved tint again. The full 9101-step profile ends at tick 8800 with
+normal lighting. To reproduce the active endpoint, stop a profile copy at 8501;
+compare it with a fresh 8170-step baseline (omit gestures/load permission) and
+the full hot-load endpoint using the same terrain/pixel relationship above.
+All three actual DX12 captures passed bundle validation and were viewed. The
+sample tile/A-buffer remained unchanged; tint returned after load and the ground
+RGB returned byte-for-byte after the restored effect ended. This bounds one
+full-client same-content save/load lifecycle, not other simultaneous effects or
+map replacement. Keep saves, captures and decoded images in scratch only.
+
+### Replacing an active Dominator world with another map save
+
+The same normal quickload route can test a different map's lighting without a
+new diagnostic loader. Use a **new, empty** scratch working directory with the
+isolated AYMOD config above and `npatch,dev-overlays`. First create a contrasting
+destination map and two profiles from the tracked input (run from the checkout;
+replace the absolute scratch path with a new directory):
+
+```python
+import json
+from pathlib import Path
+
+repo = Path.cwd()
+scratch = Path("C:/path/to/new-crossmap-capture")
+scratch.mkdir(exist_ok=False)
+original = repo / "tools/map_observation/examples/ai_psychic_dominator.map"
+text = original.read_text(encoding="utf-8")
+normal_rgb = "Red=1.0\nGreen=1.0\nBlue=1.0"
+assert text.count(normal_rgb) == 1
+text = text.replace(normal_rgb, "Red=0.4\nGreen=0.7\nBlue=0.3", 1)
+text = text.replace("Name=Computer Psychic Dominator Observation",
+                    "Name=AY Cross-map Normal Lighting Fixture", 1)
+alternate = scratch / "alternate-lighting.map"
+alternate.write_text(text, encoding="utf-8")
+source = repo / "tools/map_observation.aymod-dominator-lighting.example.json"
+for name, map_path, ticks, at, key in [
+    ("seed", alternate, 101, 100, "M"),
+    ("crossmap", original, 8600, 8200, "N"),
+]:
+    profile = json.loads(source.read_text(encoding="utf-8"))
+    profile["launch"]["selected_map_file"] = str(map_path)
+    profile["ticks"] = ticks
+    profile["gestures"] = [{"issue_after_step": at, "gesture": {
+        "kind": "key", "key": key, "modifiers": ["Ctrl", "Shift"]}}]
+    if key == "N":
+        profile["allow_load_segments"] = True
+    (scratch / (name + ".json")).write_text(
+        json.dumps(profile, indent=2) + "\n", encoding="utf-8")
+```
+
+Add the isolated `config.toml` to this directory, then capture `seed.json` before
+`crossmap.json`, using the existing wrapper, the same executable and the same
+scratch `--cwd`. The seed's sole save at tick 100 must be the repository's newest
+save. Do not copy personal saves or reuse a directory with other saves. The
+outgoing map still naturally charges and launches its Dominator; the second
+profile only loads the other map at step 8200, during the tint.
+
+In the actual DX12 run, the ordinary prepared-load/commit route rewound 8200 to
+100. The destination `(40,58)` cell's palette matched the independently captured
+seed for all 400 restored steps, ending at tick 500. Its tile, A-buffer and
+physical pixel matched too, rather than retaining outgoing Dominator RGB. The
+seed, immediate restored endpoint (an 8201-step copy) and continued endpoint
+passed bundle checks and were viewed. These establish a different-lighting map
+save replacing an active effect, not main-menu/new-game transitions, arbitrary
+theater/size replacement, simulation-hash equality, or whole-window pixel parity.
+The capture's top-level source identity describes the initial launch; use the
+actual load segment and destination baseline to interpret the restored epoch.
+Do not apply the original target-identity expectations across that epoch.
+
+### Dominator and storm lighting handoff
+
+The [overlap profile](map_observation.aymod-dominator-storm.example.json)
+adds a timed **map-trigger** storm to the ordinary AI Dominator scene, not a
+second AI-fired Super. Generate a scratch map from the existing authored input:
+
+```python
+from pathlib import Path
+
+source = Path("tools/map_observation/examples/ai_psychic_dominator.map")
+destination = Path("C:/path/to/new-scratch/aymod-dominator-storm.map")
+text = source.read_text(encoding="utf-8")
+assert "[Triggers]" not in text and "[Tags]" not in text
+text += """
+[Triggers]
+F11STORM=Neutral,<none>,F11 timed storm overlap,0,1,1,1,0
+[Events]
+F11STORM=1,13,0,541
+[Actions]
+F11STORM=1,102,0,0,0,0,0,0,A
+[Tags]
+F11STORMTAG=0,F11 timed storm overlap,F11STORM
+"""
+with destination.open("x", encoding="utf-8") as output:
+    output.write(text)
+```
+
+Set a copy of the profile's map path to that absolute destination. Use the
+isolated AYMOD config/DX12 capture procedure above. The sole command deploys
+the observer's ordinary AMCV; neither charging nor launch readiness is edited.
+TEvent13 uses native logical seconds (15 frames each), and TAction102 calls the
+existing storm Start with the retail duration/deferment and incoming House.
+Sources: `trigger_runtime.rs`'s TAction102 (`6DD9EC..6DDAB8`, Start539EB0),
+`light_sources.rs`'s distinct Scenario53C280/Cell484473/LightConvert555E50
+selectors, and PsyDom Process53AF40. A trigger has no SWType lighting source;
+the storm here exercises its map/default Ion profile, not a custom storm SW.
+
+Run copies ending at 8100 (before), 8200 (Dominator), 8220 (overlap) and 9000
+(after). These are observed Rust checkpoints, not native timing goldens.
+The actual run entered Dominator RGB at 8154, switched to Ion RGB at 8215 and
+its ambient at 8216, and returned to normal RGB/ambient at 8632/8633. At 8220,
+the retained PDFXCLD/PDFXLOC animations were unfinished at frames 22/9. Retail
+PDFXLOC.SHP has 21 frames (production `asset info`); Process follows that
+second anim after the strike and has not reached its end/fade branch at 9.
+Thus the storm profile really takes over during the Dominator's lifecycle.
+Later snapshots have no such animations, while the storm profile remains.
+
+All four actual full-client captures passed bundle checks and were viewed.
+Compare the same `(40,58)` terrain sample as above: tile/A-buffer stay fixed,
+the pixel changes from normal to zero-green Dominator to nonzero-green/dimmer
+storm, then returns byte-for-byte to normal. Do not commit these pixels as
+goldens. This is one shared-lighting overlap and recovery, not all effect orders,
+disabled profiles, nuclear/chrono combinations, or native full-window parity.
+
+A two-facility AI scene also naturally produced a **sequential** Dominator to
+storm handoff; it did not prove overlap. Early manual launch receipts
+did not shift that observed timing and are not accepted-launch evidence.
+Current-player authored buildings in nonzero modes are rejected before their
+constructor (BuildingReadINI44F8CB..44F8DB), so do not bypass that policy to
+preplace player-controlled Supers. Full-length Super-instance observations also
+exceed the existing sample cap; inspect grants in a short probe and omit those
+rows from the lifecycle run rather than increasing its bound.
+
+The original map's Ambient=1.0 matches this AY SuperType's Ambient=100, so that case
+demonstrates RGB switching/restoration, not an ambient fade curve. It does not
+replace the existing saved/two-launch TMP tests or prove simultaneous effects,
+map-switch cleanup, all height cases, or native whole-window pixel equality.
 
 [`map_observation.ai-psychic-dominator.example.json`](map_observation.ai-psychic-dominator.example.json)
 starts America/Battle against a Yuri computer opponent (`Computer1`, Easy) with stock

@@ -411,10 +411,9 @@ pub(crate) fn set_walk_destination_coord(
     coord: DriveCoord,
     terrain: Option<&ResolvedTerrainGrid>,
 ) {
-    // Walk75ACBD/75ACD0/75ACE3 checks EMP and both owner warp bytes.
-    // The teleport owner represents the latter; the native EMP timer still
-    // lacks its production writer. There is deliberately no power gate here.
-    if super::locomotor_owner::owner_is_warping(entity) {
+    // Walk75ACBD reads Techno70EFD0's positive EMP counter before the
+    // owner warp bytes75ACD0/75ACE3. There is deliberately no power gate.
+    if entity.emp_remaining() > 0 || super::locomotor_owner::owner_is_warping(entity) {
         return;
     }
     let Some(loco) = entity
@@ -746,11 +745,12 @@ fn drive_set_destination(
     terrain: Option<&ResolvedTerrainGrid>,
     binary_frame: u32,
 ) -> bool {
-    // Drive4AFD5E calls FootIsParalyzed4DE770 before destination/map access,
-    // including a zero Move_To. Refusal retains Foot's NavCom/timer writes.
-    // Owner warp bytes follow at4AFD71/80; EMP/Unit+6D8 is still unported.
-    // Original whole-call comparisons: tools/spatial_oracle/track_destination.
-    if entity.parasite.is_paralyzed(binary_frame)
+    // Drive4AFD4B's vt+37C reads the positive Techno70EFD0 EMP counter,
+    // then4AFD5E checks paralysis, before even a zero Move_To. Foot's earlier
+    // NavCom/timer writes survive refusal. Unit+6D8's death override remains
+    // unrepresented. Original whole-call controls: track_destination corpus.
+    if entity.emp_remaining() > 0
+        || entity.parasite.is_paralyzed(binary_frame)
         || super::locomotor_owner::owner_is_warping(entity)
     {
         return false;
@@ -821,9 +821,11 @@ fn ship_set_destination(
     terrain: Option<&ResolvedTerrainGrid>,
     binary_frame: u32,
 ) {
-    // Ship69F46E calls FootIsParalyzed4DE770 before even a zero destination
-    // write. Warp gates69F481/90 follow; Stop69F510 is a separate entry.
-    if entity.parasite.is_paralyzed(binary_frame)
+    // Ship69F45B has the same Techno70EFD0 EMP gate before paralysis
+    // (69F46E) and even a zero destination write. Warp69F481/90 follows;
+    // Stop69F510 is separate. Unit+6D8's death override is still a residual.
+    if entity.emp_remaining() > 0
+        || entity.parasite.is_paralyzed(binary_frame)
         || super::locomotor_owner::owner_is_warping(entity)
     {
         return;

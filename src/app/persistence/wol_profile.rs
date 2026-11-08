@@ -573,5 +573,8 @@ mod tests {
              MatchByRes=yes\r\nUpdateTime=Oct 12:00\r\n"
         );
         assert_eq!(file.load_persona("ECHO", &csf).server, "USA West");
+        persona.set_color(15);
+        file.save_persona(&mut persona, "Echo", &csf);
+        assert_eq!(file.load_persona("ECHO", &csf).color, 15);
     }
 }

@@ -1,4 +1,11 @@
-//! Headless telemetry demo: a live simulation with the browser dashboard,
+//! Local save/map inspection and headless telemetry demo.
+//!
+//! `--inspect-save` reads a layout-compatible save through production admission
+//! and prints retained owners locally without running the simulation. The
+//! explicit `--trace-save` mode cold-loads and advances selected observers.
+//! `--inspect-map` instead observes selected cells after initial map construction,
+//! without advancing frames.
+//! Otherwise, this runs a live synthetic simulation with the browser dashboard,
 //! no retail assets required.
 //!
 //! Builds the same synthetic two-house world `parity-digest` validates
@@ -49,6 +56,15 @@ struct Args {
     structures: u16,
     ticks: u64,
     seed: u32,
+    inspect_save: Option<PathBuf>,
+    inspect_map: Option<String>,
+    trace_save: Option<PathBuf>,
+    trace_skirmish: Option<String>,
+    ai_countries: Vec<u16>,
+    ra2_dir: Option<PathBuf>,
+    observe_entities: Vec<u64>,
+    observe_teams: Vec<u64>,
+    observe_cells: Vec<(u16, u16)>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -58,10 +74,62 @@ fn parse_args() -> Result<Args, String> {
     let mut structures = DEFAULT_STRUCTURES;
     let mut ticks = 0u64;
     let mut seed = 0x5EED_0001u32;
+    let mut inspect_save = None;
+    let mut inspect_map = None;
+    let mut trace_save = None;
+    let mut trace_skirmish = None;
+    let mut ai_countries = Vec::new();
+    let mut ra2_dir = None;
+    let mut observe_entities = Vec::new();
+    let mut observe_teams = Vec::new();
+    let mut observe_cells = Vec::new();
     let mut argv = std::env::args().skip(1);
     while let Some(flag) = argv.next() {
         let mut next = |what: &str| argv.next().ok_or(format!("{flag} needs {what}"));
         match flag.as_str() {
+            "--observe-cell" => {
+                let raw = next("x,y cell coordinates")?;
+                let (x, y) = raw.split_once(',').ok_or("--observe-cell takes x,y")?;
+                let x = x
+                    .parse::<u16>()
+                    .map_err(|_| "--observe-cell takes unsigned u16 x,y")?;
+                let y = y
+                    .parse::<u16>()
+                    .map_err(|_| "--observe-cell takes unsigned u16 x,y")?;
+                if observe_cells.len() == 32 {
+                    return Err("--observe-cell accepts at most 32 cells".into());
+                }
+                observe_cells.push((x, y));
+            }
+            "--observe-entity" | "--observe-team" => {
+                let id = next("an unsigned stable ID")?
+                    .parse::<u64>()
+                    .map_err(|_| format!("{flag} takes an unsigned stable ID"))?;
+                let ids = if flag == "--observe-entity" {
+                    &mut observe_entities
+                } else {
+                    &mut observe_teams
+                };
+                if ids.len() == 32 {
+                    return Err(format!("{flag} accepts at most 32 IDs"));
+                }
+                ids.push(id);
+            }
+            "--trace-skirmish" => trace_skirmish = Some(next("a map file name")?),
+            "--ai-country" => {
+                if ai_countries.len() == 7 {
+                    return Err("--ai-country accepts at most seven opponents".into());
+                }
+                ai_countries.push(
+                    next("a zero-based country index")?
+                        .parse::<u16>()
+                        .map_err(|_| "--ai-country takes an unsigned u16 index")?,
+                );
+            }
+            "--trace-save" => trace_save = Some(PathBuf::from(next("a save path")?)),
+            "--ra2-dir" => ra2_dir = Some(PathBuf::from(next("an asset root")?)),
+            "--inspect-save" => inspect_save = Some(PathBuf::from(next("a save path")?)),
+            "--inspect-map" => inspect_map = Some(next("a map file name")?),
             "--addr" => {
                 let raw = next("an address")?;
                 addr = raw
@@ -96,7 +164,19 @@ fn parse_args() -> Result<Args, String> {
                 println!(
                     "usage: telemetry-serve [--addr 127.0.0.1:9741] [--web tools/telemetry-dashboard] \
                      [--units 120] [--structures 6] [--ticks 0] [--seed 0x5EED0001]\n\
+                     or: telemetry-serve --inspect-map <file> --ra2-dir <root> --observe-cell <x,y>...\n\
+                     or: telemetry-serve --trace-skirmish <map> --ra2-dir <root> --ai-country <index>... [--ticks 12000]\n\
+                     or: telemetry-serve --inspect-save <path>\n\
+                     or: telemetry-serve --trace-save <path> --ra2-dir <root> [--ticks 300]\n\
+                     (--observe-entity <id> | --observe-team <id> | --observe-cell <x,y>)...\n\
                      \n\
+                     --inspect-save <path> prints a local read-only JSON report and exits.\n\
+                     Inspection admits only compatible saves; no server or ticks are started.\n\
+                     Trace instead cold-loads and advances at most 300 frames locally.\n\
+                     Trace requires observers (at most 32 entities, 32 teams and 32 cells).\n\
+                     Skirmish tracing starts a fresh Battle with Hard opponents and a passive human;\n\
+                     it runs at most 24000 ordinary frames, with full entities only at the final sample.\n\
+                     Inspection reports contain complete retained owners; traces contain requested IDs.\n\
                      Runs the synthetic two-house simulation headlessly and serves the\n\
                      browser dashboard. --ticks 0 (the default) runs until interrupted."
                 );
@@ -112,6 +192,15 @@ fn parse_args() -> Result<Args, String> {
         structures,
         ticks,
         seed,
+        inspect_save,
+        inspect_map,
+        trace_save,
+        trace_skirmish,
+        ai_countries,
+        ra2_dir,
+        observe_entities,
+        observe_teams,
+        observe_cells,
     })
 }
 
@@ -362,6 +451,68 @@ fn synthetic_terrain(width: u16, height: u16) -> TerrainGrid {
     }
 }
 
+fn retained_world_report(
+    sim: &Simulation,
+    include_entities: bool,
+) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    use vera20k_core::sim::intern::InternedId;
+    let interner = sim.interner();
+    let strings: Vec<_> = (0..interner.len())
+        .map(|index| interner.resolve(InternedId::from_index(index as u32)))
+        .collect();
+    let houses: Vec<_> = sim.houses().in_order().collect();
+    let factories = sim.production().factories().iter_insertion_ordered();
+    let entities: Vec<_> = sim
+        .entities()
+        .iter_sorted()
+        .filter(|_| include_entities)
+        .map(|(id, entity)| {
+            json!({"id": id, "type": interner.resolve(entity.type_ref()),
+            "owner": interner.resolve(entity.owner()), "retained": entity})
+        })
+        .collect();
+    let teams = serde_json::to_value(sim.team_script_vm())
+        .map_err(|error| format!("cannot project retained teams: {error}"))?;
+    Ok(
+        json!({"strings": strings, "houses": houses, "factories": factories,
+        "teams_and_definitions": teams, "entities": entities}),
+    )
+}
+
+/// Project complete retained owners, not the dashboard's bounded collections.
+/// Production admission stays authoritative; no resource binding or ticks occur.
+fn inspect_save(path: &std::path::Path) -> Result<(), String> {
+    use serde_json::json;
+    use vera20k_core::sim::snapshot::GameSnapshot;
+
+    let bytes =
+        std::fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let snapshot = GameSnapshot::load_with_resources(&bytes)
+        .map_err(|error| format!("cannot inspect {}: {error}", path.display()))?;
+    let state = retained_world_report(&snapshot.sim, true)?;
+    let report = json!({
+        "inspection_schema": 1,
+        "metadata": {"layout": format!("{:#010x}", snapshot.layout),
+            "tick": snapshot.tick, "map_name": snapshot.map_name,
+            "map_hash": format!("{:#018x}", snapshot.map_hash),
+            "rules_hash": format!("{:#018x}", snapshot.rules_hash)},
+        "coverage": {"houses": "all in registration order",
+            "factories": "all in construction order", "entities": "all in stable-id order",
+            "teams_and_definitions": "complete retained TeamScriptVm, including task forces and scripts",
+            "interned_ids": "indices into strings",
+            "interpretation": "point-in-time retained state; no AI-strength or progress claim",
+            "load_policy": "normal production load admission and planning reset; no ticks advanced",
+            "resources": "not rebound; derived caches and provider availability are not recomputed"},
+        "strings": state["strings"], "houses": state["houses"], "factories": state["factories"],
+        "teams_and_definitions": state["teams_and_definitions"], "entities": state["entities"],
+    });
+    serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
+        .map_err(|error| format!("cannot write inspection: {error}"))?;
+    println!();
+    Ok(())
+}
+
 fn main() -> Result<(), String> {
     let args = match parse_args() {
         Ok(args) => args,
@@ -370,6 +521,213 @@ fn main() -> Result<(), String> {
             std::process::exit(2);
         }
     };
+    if [
+        args.trace_save.is_some(),
+        args.trace_skirmish.is_some(),
+        args.inspect_save.is_some(),
+        args.inspect_map.is_some(),
+    ]
+    .into_iter()
+    .filter(|selected| *selected)
+    .count()
+        > 1
+    {
+        return Err(
+            "save tracing, skirmish tracing, save inspection and map inspection are mutually exclusive".into(),
+        );
+    }
+    if args.trace_skirmish.is_none() && !args.ai_countries.is_empty() {
+        return Err("--ai-country requires --trace-skirmish".into());
+    }
+    if let Some(map) = &args.trace_skirmish {
+        use vera20k_core::skirmish_launch::{AiDifficulty, LaunchCountry};
+        if args.ai_countries.is_empty()
+            || !args.observe_entities.is_empty()
+            || !args.observe_teams.is_empty()
+            || !args.observe_cells.is_empty()
+        {
+            return Err(
+                "--trace-skirmish requires explicit AI countries and no ID/cell observers".into(),
+            );
+        }
+        let root = args
+            .ra2_dir
+            .as_deref()
+            .ok_or("--trace-skirmish requires --ra2-dir")?;
+        let frames = if args.ticks == 0 { 12000 } else { args.ticks };
+        if frames > 24000 {
+            return Err("--trace-skirmish is bounded to 24000 frames".into());
+        }
+        let opponents: Vec<_> = args
+            .ai_countries
+            .iter()
+            .map(|&country| {
+                (
+                    LaunchCountry::from_country_index(u32::from(country)),
+                    AiDifficulty::Hard,
+                )
+            })
+            .collect();
+        let launch = vera20k_core::headless_scenario::battle_session(map, &opponents);
+        let mut scenario =
+            vera20k_core::headless_scenario::load_session(root, map, args.seed, launch)?;
+        let initial_options = serde_json::to_value(scenario.sim().session().game_options())
+            .map_err(|e| e.to_string())?;
+        let map_hash = scenario.map.ini.content_hash();
+        let rules_hash = scenario.runtime.resources.rules.simulation_config_hash();
+        let mut samples = Vec::new();
+        let mut shots: std::collections::BTreeMap<String, [u64; 3]> = Default::default();
+        let mut unresolved_fire_sources = 0u64;
+        let mut stop_reason = "frame_limit";
+        for frame in 0..=frames {
+            if frame == 0 || frame % 1500 == 0 || frame == frames {
+                samples.push(serde_json::json!({"elapsed_frames": frame,
+                    "tick": scenario.sim().session().tick(),
+                    "shots_by_live_source_house": shots,
+                    "retained": retained_world_report(scenario.sim(), frame == frames)?}));
+            }
+            if frame < frames {
+                let due = scenario.runtime.simulation.take_due_commands();
+                let output = scenario
+                    .runtime
+                    .advance_frame(
+                        &due,
+                        vera20k_core::headless_scenario::SIM_TICK_MS,
+                        vera20k_core::sim::world::TickLane::Ordinary,
+                        vera20k_core::sim::world::FrameEffects::default(),
+                    )
+                    .map_err(|e| e.to_string())?;
+                let sim = scenario.sim();
+                let outcome_waiting = output.outcome_waiting;
+                for event in output.fire_events {
+                    let Some(source) = sim.entities().get(event.attacker_id) else {
+                        unresolved_fire_sources += 1;
+                        continue;
+                    };
+                    let counters = shots
+                        .entry(sim.interner().resolve(source.owner()).to_owned())
+                        .or_default();
+                    counters[0] += 1;
+                    if source.category() == EntityCategory::Structure {
+                        continue;
+                    }
+                    let vera20k_core::sim::combat::TargetKind::Entity(target) = event.target else {
+                        continue;
+                    };
+                    let Some(target) = sim.entities().get(target) else {
+                        continue;
+                    };
+                    if vera20k_core::sim::combat::combat_weapon::is_ally_by_object(
+                        Some(sim.house_alliances()),
+                        sim.interner(),
+                        source.owner(),
+                        target.owner(),
+                    ) {
+                        continue;
+                    }
+                    counters[1] += 1;
+                    if sim.team_script_vm().teams_in_order().any(|team| {
+                        team.formed() && team.members().any(|id| id == event.attacker_id)
+                    }) {
+                        counters[2] += 1;
+                    }
+                }
+                let outcome_ready = sim
+                    .session()
+                    .current_house()
+                    .and_then(|owner| sim.ready_outcome_for_owner(owner))
+                    .is_some();
+                if outcome_waiting || outcome_ready {
+                    stop_reason = if outcome_waiting {
+                        "outcome_wait"
+                    } else {
+                        "outcome_ready"
+                    };
+                    samples.push(serde_json::json!({"elapsed_frames": frame + 1,
+                        "tick": sim.session().tick(), "shots_by_live_source_house": shots,
+                        "retained": retained_world_report(sim, true)?}));
+                    break;
+                }
+            }
+        }
+        let report = serde_json::json!({"skirmish_trace_schema":1,
+            "stop_reason":stop_reason,"requested_frames":frames,
+            "metadata":{"map":map,"seed":args.seed,"ai_country_indices":args.ai_countries,
+                "difficulty":"Hard","options":initial_options,"human_actions":"none",
+                "map_hash":format!("{map_hash:#018x}"),"rules_hash":format!("{rules_hash:#018x}")},
+            "coverage":"fresh production Battle load; passive human; ordinary tooling cadence; no save writes, server or GUI; not a player replay or whole-match AI acceptance; complete Houses/factories/teams in every sample, entities only in final sample",
+            "shot_counter_columns":["all","mobile_vs_resolved_nonally","formed_team_member_mobile_vs_resolved_nonally"],
+            "shot_counter_boundary":"owner, target and membership observed after the frame; missing/changed entities can undercount or reattribute; not authoritative fire-tick history",
+            "unresolved_fire_sources":unresolved_fire_sources,"samples":samples});
+        serde_json::to_writer(std::io::stdout().lock(), &report).map_err(|e| e.to_string())?;
+        println!();
+        return Ok(());
+    }
+    if let Some(map) = &args.inspect_map {
+        if args.ticks != 0
+            || !args.observe_entities.is_empty()
+            || !args.observe_teams.is_empty()
+            || args.observe_cells.is_empty()
+        {
+            return Err("--inspect-map requires cells only and no advancing ticks".into());
+        }
+        let root = args
+            .ra2_dir
+            .as_deref()
+            .ok_or("--inspect-map requires --ra2-dir")?;
+        let scenario = vera20k_core::headless_scenario::load(root, map, args.seed)?;
+        let sim = scenario.sim();
+        let cells: Vec<_> = args
+            .observe_cells
+            .iter()
+            .map(|&cell| sim.telemetry_cell_observation(cell))
+            .collect();
+        let report = serde_json::json!({"map_inspection_schema": 1,
+            "metadata": {"map": map, "seed": args.seed,
+                "dimensions": [sim.session().map_width(), sim.session().map_height()],
+                "theater": scenario.map.header.theater, "tick": sim.session().tick(),
+                "map_hash": format!("{:#018x}", scenario.map.ini.content_hash()),
+                "rules_hash": format!("{:#018x}", scenario.runtime.resources.rules.simulation_config_hash())},
+            "coverage": "production headless initial Battle local-only load; no frames, new orders, save writes or server; not the played 1v1 or native execution; compare connectivity, not zone-number identity across sessions",
+            "cells": cells});
+        serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
+            .map_err(|error| error.to_string())?;
+        println!();
+        return Ok(());
+    }
+    if args.trace_save.is_none()
+        && (!args.observe_entities.is_empty()
+            || !args.observe_teams.is_empty()
+            || !args.observe_cells.is_empty())
+    {
+        return Err("observer arguments require --trace-save".into());
+    }
+    if let Some(path) = &args.trace_save {
+        let root = args
+            .ra2_dir
+            .as_deref()
+            .ok_or("--trace-save requires --ra2-dir")?;
+        let ticks = if args.ticks == 0 {
+            300
+        } else {
+            u32::try_from(args.ticks).map_err(|_| "trace ticks exceed u32")?
+        };
+        let report = vera20k::app::telemetry::trace_saved_game(
+            path,
+            root,
+            ticks,
+            &args.observe_entities,
+            &args.observe_teams,
+            &args.observe_cells,
+        )?;
+        serde_json::to_writer_pretty(std::io::stdout().lock(), &report)
+            .map_err(|error| error.to_string())?;
+        println!();
+        return Ok(());
+    }
+    if let Some(path) = &args.inspect_save {
+        return inspect_save(path);
+    }
     vera20k::util::logging::init_stderr_logger("info").map_err(|error| error.to_string())?;
 
     let mut runtime = SimRuntime {

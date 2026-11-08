@@ -591,12 +591,13 @@ pub(crate) fn camera_input_idle(state: &AppState) -> bool {
         && !input.tactical_mouse.right_pan_engaged
         && input.edge_scroll.coasting_direction().is_none()
         && !touch_owns_pointer(input)
-        && edge_scroll_intent(
-            (input.cursor_x, input.cursor_y),
-            state.render_width() as i32,
-            state.render_height() as i32,
-        )
-        .is_none()
+        && (!state.platform.pointer_in_client
+            || edge_scroll_intent(
+                (input.cursor_x, input.cursor_y),
+                state.render_width() as i32,
+                state.render_height() as i32,
+            )
+            .is_none())
 }
 
 /// One edge-scroll step. Returns the camera delta in **window pixels**.
@@ -613,6 +614,7 @@ pub(crate) fn camera_input_idle(state: &AppState) -> bool {
 /// `right_button_held` selects the slower `clamp(index + 1, 4, 8)` lane.
 fn edge_scroll_step_with_context(
     state: &mut EdgeScrollState,
+    pointer_in_client: bool,
     cursor: (f32, f32),
     view_w: i32,
     view_h: i32,
@@ -622,6 +624,14 @@ fn edge_scroll_step_with_context(
     movement_allowed: bool,
     now: u32,
 ) -> (f32, f32) {
+    // Windowed-play policy: leaving the client retires edge/coast intent,
+    // rather than polling the last border coordinate indefinitely. Captured
+    // right-drag uses its separate owner and never enters this step.
+    if !pointer_in_client {
+        state.coast_level = 0;
+        state.last_coast_change = None;
+        return (0.0, 0.0);
+    }
     let active_direction = edge_scroll_intent(cursor, view_w, view_h);
 
     // ScrollRate caps the peak speed by flooring the table index, and the coast
@@ -687,6 +697,7 @@ fn edge_scroll_step(
 ) -> (f32, f32) {
     edge_scroll_step_with_context(
         state,
+        true,
         cursor,
         view_w,
         view_h,
@@ -1321,6 +1332,7 @@ pub(crate) fn poll_mouse_scroll(state: &mut AppState) -> (f32, f32) {
         });
         let (dx, dy) = edge_scroll_step_with_context(
             &mut state.match_state.input.edge_scroll,
+            state.platform.pointer_in_client,
             (
                 state.match_state.input.cursor_x,
                 state.match_state.input.cursor_y,
@@ -2593,6 +2605,7 @@ mod tests {
         assert_eq!(
             edge_scroll_step_with_context(
                 &mut st,
+                true,
                 (0.0, 300.0),
                 VIEW_W,
                 VIEW_H,
@@ -2614,6 +2627,7 @@ mod tests {
         for tick in 0..5 {
             edge_scroll_step_with_context(
                 &mut st,
+                true,
                 (0.0, 300.0),
                 VIEW_W,
                 VIEW_H,
@@ -2629,6 +2643,7 @@ mod tests {
         assert_eq!(
             edge_scroll_step_with_context(
                 &mut st,
+                true,
                 (500.0, 300.0),
                 VIEW_W,
                 VIEW_H,
@@ -2646,11 +2661,48 @@ mod tests {
     }
 
     #[test]
+    fn pointer_exit_stops_stale_edge_and_drops_coast_before_reentry() {
+        let mut st = state();
+        let edge = ((VIEW_W - 1) as f32, 300.0);
+        assert!(edge_scroll_step(&mut st, edge, VIEW_W, VIEW_H, DEFAULT_SCROLL_RATE, 0).0 > 0.0);
+        assert!(st.coasting_direction().is_some());
+        assert_eq!(
+            edge_scroll_step_with_context(
+                &mut st,
+                false,
+                edge,
+                VIEW_W,
+                VIEW_H,
+                DEFAULT_SCROLL_RATE,
+                DEFAULT_SCROLL_MULTIPLIER,
+                false,
+                true,
+                1
+            ),
+            (0.0, 0.0)
+        );
+        assert!(st.coasting_direction().is_none());
+        assert_eq!(
+            edge_scroll_step(
+                &mut st,
+                (400.0, 300.0),
+                VIEW_W,
+                VIEW_H,
+                DEFAULT_SCROLL_RATE,
+                2
+            ),
+            (0.0, 0.0)
+        );
+        assert!(edge_scroll_step(&mut st, edge, VIEW_W, VIEW_H, DEFAULT_SCROLL_RATE, 3).0 > 0.0);
+    }
+
+    #[test]
     fn item82_uncaptured_rmb_caps_edge_speed_at_thirteen() {
         let mut st = state();
         st.coast_level = 7;
         let (dx, dy) = edge_scroll_step_with_context(
             &mut st,
+            true,
             ((VIEW_W - 1) as f32, 300.0),
             VIEW_W,
             VIEW_H,
@@ -2669,6 +2721,7 @@ mod tests {
         assert_eq!(
             edge_scroll_step_with_context(
                 &mut st,
+                true,
                 ((VIEW_W - 1) as f32, 300.0),
                 VIEW_W,
                 VIEW_H,

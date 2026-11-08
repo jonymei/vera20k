@@ -584,13 +584,20 @@ impl AoECollector {
             .occupancy
             .filter(|_| layer_context.terrain.is_some());
         if native_occupancy.is_some() {
-            // Native enters the entire airborne query only when the exact impact
-            // coordinate is strictly above GetGroundHeight at that same XY. Keep
-            // this gate outside bucket materialization: equality observes no air
-            // vector at all.
+            // Apply_area_damage @ 0x004893B5 always samples GetGroundHeight.
+            // Stock requires an impact above it; NPAE174 0x004893BA ->0x007E03A8
+            // skips air only for WH+130 (IsFlatExplosion/CausesDelayKill).
+            // Preserve the floor query and keep either gate before materializing
+            // the air buckets, including for ordinary ground-level explosions.
             if let Some(air_impact) = layer_context.air_impact
                 && layer_context.terrain.as_deref().is_some_and(|terrain| {
-                    impact_is_above_ground(terrain, impact_rx, impact_ry, air_impact)
+                    let above_ground =
+                        impact_is_above_ground(terrain, impact_rx, impact_ry, air_impact);
+                    if cfg!(feature = "npatch") {
+                        !warhead.causes_delay_kill
+                    } else {
+                        above_ground
+                    }
                 })
             {
                 // Native appends airborne receiver records before entering the
@@ -1911,10 +1918,11 @@ mod tests {
              [VehicleTypes]\n\
              [AircraftTypes]\n0=AIR\n\
              [BuildingTypes]\n\
-             [Warheads]\n0=BlastWH\n\
+             [Warheads]\n0=BlastWH\n1=FlatWH\n\
              [AIR]\nStrength=1000\nArmor=none\n\
              [JUMP]\nStrength=1000\nArmor=none\n\
-             [BlastWH]\nCellSpread=1\nPercentAtMax=.25\nVerses=100%,100%,100%,100%,100%,100%,100%,100%,100%,100%,100%\n",
+             [BlastWH]\nCellSpread=1\nPercentAtMax=.25\nVerses=100%,100%,100%,100%,100%,100%,100%,100%,100%,100%,100%\n\
+             [FlatWH]\nCellSpread=1\nIsFlatExplosion=yes\n",
         );
         let rules = RuleSet::from_ini(&ini).expect("3D air rules");
         let warhead = rules.warhead("BlastWH").unwrap().clone();
@@ -1961,10 +1969,22 @@ mod tests {
             (crate::sim::combat::RAD_NO_ATTACKER, warhead_ref),
             native_lists(&occupancy, &mut terrain, Some(0)),
         );
-        assert!(
-            at_ground.hits.is_empty(),
-            "impact Z equal to exact ground height skips the entire air query"
-        );
+        if cfg!(feature = "npatch") {
+            assert_eq!(
+                at_ground
+                    .hits
+                    .iter()
+                    .map(|hit| hit.target_id)
+                    .collect::<Vec<_>>(),
+                vec![1, 2, 3, 5],
+                "NP ground impacts collect nearby air receivers before the spread walk"
+            );
+        } else {
+            assert!(
+                at_ground.hits.is_empty(),
+                "stock skips air at ground height"
+            );
+        }
 
         let one_above = apply_aoe_damage(
             &mut entities,
@@ -1982,6 +2002,28 @@ mod tests {
             vec![(1, 0), (2, 128), (3, 128), (5, 256)],
             "low Aircraft 129 and high Aircraft 257/2 both capture 128; airborne Infantry stays unhalved and raw distance 299 stays outside"
         );
+        let flat = apply_aoe_damage(
+            &mut entities,
+            5,
+            5,
+            100,
+            rules.warhead("FlatWH").unwrap(),
+            &rules,
+            &mut interner,
+            (crate::sim::combat::RAD_NO_ATTACKER, warhead_ref),
+            native_lists(&occupancy, &mut terrain, Some(1)),
+        );
+        if cfg!(feature = "npatch") {
+            assert!(
+                flat.hits.is_empty(),
+                "NP flat explosions skip all air receivers"
+            );
+        } else {
+            assert_eq!(
+                hit_id_distances(&flat.hits),
+                hit_id_distances(&one_above.hits)
+            );
+        }
     }
 
     /// The airborne phase (`0x004893F2..0x00489410`) takes each member that
@@ -3212,7 +3254,7 @@ mod tests {
     }
 
     #[test]
-    fn gsi_04_07_damage_receiver_pipeline_source_admission_and_house_snapshot() {
+    fn gsi_04_07_damage_receiver_retains_source_house_but_filters_live_attacker_house() {
         fn run(
             damage_self: bool,
             warhead_name: &str,
@@ -3278,8 +3320,10 @@ mod tests {
             let ids = hit_ids(&aoe.hits);
             let captured_houses = aoe.hits.iter().map(|event| event.source_house).collect();
 
-            // Prove alliance resolution reads the detonation ABI snapshot, not
-            // a later live-source owner value.
+            // ReceiveDamage701CA1..701CB9 reads the actual attacker argument
+            // and asks its current House+21C IsAlliedWith4F9A50. The separate
+            // detonation SourceHouse remains on the receipts for attribution;
+            // it does not freeze the AffectsAllies operand across receivers.
             entities.change_owner(1, enemy_house);
             let mut commit = ReceiverCommit::new();
             commit
@@ -3312,15 +3356,17 @@ mod tests {
         let (ordinary_ids, ordinary_houses, ordinary_hp) = run(false, "OrdinaryWH");
         assert_eq!(ordinary_ids, vec![2, 3]);
         assert_eq!(ordinary_houses, vec![Some(source_house); 2]);
-        assert_eq!(ordinary_hp, [100, 100, 60]);
+        assert_eq!(ordinary_hp, [100, 60, 100]);
 
         let (damage_self_ids, _, damage_self_hp) = run(true, "OrdinaryWH");
         assert_eq!(damage_self_ids, vec![1, 2, 3]);
-        assert_eq!(damage_self_hp, [60, 100, 60]);
+        // DamageSelf and CrushWarhead admit the source into the AoE list, but
+        // neither bypasses the receiver's later allied-damage protection.
+        assert_eq!(damage_self_hp, [100, 60, 100]);
 
         let (crush_ids, _, crush_hp) = run(false, "CrushWH");
         assert_eq!(crush_ids, vec![1, 2, 3]);
-        assert_eq!(crush_hp, [60, 100, 60]);
+        assert_eq!(crush_hp, [100, 60, 100]);
     }
 
     #[test]

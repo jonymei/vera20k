@@ -417,10 +417,6 @@ pub(super) fn settle_abandoned(
         refund_abandoned(sim, rules, owner_id, category, &abandoned);
     }
     let category = category.map(ProductionCategory::object_category);
-    // NPSE 2.0 AbandonProduction C33B50..C33B79 reads product Naval.
-    let naval = sim
-        .object_type(abandoned.type_id, rules)
-        .is_some_and(|ty| ty.naval);
     sim.production
         .factories_mut()
         .reset_for_abandon(holder, sim.session.binary_frame());
@@ -429,7 +425,9 @@ pub(super) fn settle_abandoned(
         && let Some(house) = sim.houses.get_mut(&owner_id)
         && !house.is_controlled_by_human(game_mode_nonzero)
     {
-        match UnitChoiceKind::of(category, naval) {
+        // NPAE174 AbandonProduction4CA004 -> C2BEED returns to stock:
+        // Unit4CA0B1 still clears land, even for a naval product.
+        match UnitChoiceKind::of(category, false) {
             Some(kind) => house.ai_unit_choices_mut().clear(kind),
             None => house.ai_production_mut().clear_building_choice(),
         }

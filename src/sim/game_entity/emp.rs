@@ -1,16 +1,29 @@
-//! Ordinary ground-victim and independent powered-building Ares EMP.
+//! Shared EMP state and lifecycle for Ares and NPatch compatibility delivery.
 //! The Techno+504 counter and held Anim have one private owner; the existing powered-unit owner keeps +1C8.
 //! Installed Bullet46920B ->100536E0/10062320 and AI6FAF0D ->10053DF0.
 //! Evidence/transport bounds: tools/rules_oracle/ares_emp.{py,json,meta.json};
-//! full chain ownership and residuals: docs/ares-emp.md.
+//! Full chain ownership and residuals: docs/ares-emp.md and docs/npatch-emp.md.
 use super::GameEntity;
 use std::hash::{Hash, Hasher};
+
+#[cfg(all(feature = "npatch", not(feature = "ares")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+enum EmpLifecycle {
+    Legacy,
+    Native,
+    // Retained NP queue policy after counter expiry, not provider+1C8.
+    NativeFactoryAwaitingPower,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub(super) struct EmpState {
     remaining: i32,
     sparkle: Option<u64>,
     last_mission: i32,
+    // Delivery policy belongs to the same counter owner and survives save/load.
+    // Native Building/ground Drive vs legacy locomotors/mixed-build lifecycle.
+    #[cfg(all(feature = "npatch", not(feature = "ares")))]
+    lifecycle: EmpLifecycle,
 }
 impl Default for EmpState {
     fn default() -> Self {
@@ -19,6 +32,8 @@ impl Default for EmpState {
             remaining: 0,
             sparkle: None,
             last_mission: -1,
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            lifecycle: EmpLifecycle::Legacy,
         }
     }
 }
@@ -28,6 +43,18 @@ impl GameEntity {
     }
     pub(crate) fn emp_sparkle(&self) -> Option<u64> {
         self.emp.sparkle
+    }
+    /// The documented NP paid-head recovery wait is not provider+1C8.
+    /// Only factory admission consumes it; it never suspends service missions.
+    pub(crate) fn emp_factory_recovery_pending(&self) -> bool {
+        #[cfg(all(feature = "npatch", not(feature = "ares")))]
+        {
+            self.emp.lifecycle == EmpLifecycle::NativeFactoryAwaitingPower
+        }
+        #[cfg(not(all(feature = "npatch", not(feature = "ares"))))]
+        {
+            false
+        }
     }
     pub(crate) fn emp_anim_pointer_expired(&mut self, expired: u64) {
         if self.emp.sparkle == Some(expired) {
@@ -42,7 +69,7 @@ impl GameEntity {
     }
 }
 
-#[cfg(feature = "ares")]
+#[cfg(any(feature = "ares", feature = "npatch"))]
 mod receiver {
     use super::*;
     use crate::map::entities::EntityCategory;
@@ -58,6 +85,7 @@ mod receiver {
     use crate::util::native_x87::{MaskedX87Chop53 as X87, NativeF64Bits};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[cfg(feature = "ares")]
     enum EmpDelivery {
         Rejected,
         Applied,
@@ -65,6 +93,7 @@ mod receiver {
         Unsupported,
     }
     /// Installed10062476..100624B4; signed32 addition wraps before max0.
+    #[cfg(feature = "ares")]
     fn capped_duration(old: i32, delta: i32, cap: i32) -> i32 {
         let sum = old.wrapping_add(delta);
         // Preserve10062476..A7's separate signed branches: moving max/min
@@ -84,6 +113,7 @@ mod receiver {
         };
         new.max(0)
     }
+    #[cfg(feature = "ares")]
     fn duration_delta(duration: i32, modifier: NativeF64Bits) -> i32 {
         X87::fistp_i32_masked(X87::mul(
             X87::load_i32(duration),
@@ -186,9 +216,126 @@ mod receiver {
         square[0] + square[1] + square[2] <= cutoff * cutoff
     }
     impl Simulation {
+        /// VERA's NPatch compatibility policy, not a claim of NPAE arithmetic:
+        /// positive Damage is EMP frames (zero uses 90), capped at 900. Rehits
+        /// refresh rather than stack. The shared EMP owner handles all expiry.
+        #[cfg(feature = "npatch")]
+        pub(crate) fn apply_npatch_emp_detonation(
+            &mut self,
+            impact: crate::sim::projectile::ProjectileCoord,
+            direct_target: Option<u64>,
+            source: Option<u64>,
+            damage: i32,
+            warhead: &WarheadType,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            if !warhead.em_effect {
+                return;
+            }
+            // An explicitly configured Ares EMP owns delivery in mixed builds.
+            if warhead.ares_rules().is_some_and(|emp| emp.duration() != 0) {
+                return;
+            }
+            let duration = if damage == 0 {
+                90
+            } else {
+                damage.clamp(1, 900)
+            };
+            let targets = if warhead.cell_spread_f64 <= 0.0 {
+                direct_target.into_iter().collect()
+            } else {
+                self.ares_effect_ground_targets(impact, warhead.cell_spread_f64, rules)
+            };
+            for target in targets {
+                let Some(victim) = self.substrate.entities.get(target) else {
+                    continue;
+                };
+                let Some(object) = self.interner.object_type(victim.type_ref(), rules) else {
+                    continue;
+                };
+                let source_owner = source
+                    .and_then(|source| self.substrate.entities.get(source))
+                    .map(|entity| entity.owner());
+                let allied = source_owner.is_some_and(|owner| {
+                    crate::sim::combat::combat_weapon::is_ally_by_object(
+                        Some(self.house_alliances.as_map()),
+                        &self.interner,
+                        owner,
+                        victim.owner(),
+                    )
+                });
+                let susceptible = match victim.category() {
+                    EntityCategory::Unit => !object.organic,
+                    EntityCategory::Infantry => object.cyborg,
+                    EntityCategory::Structure => !object.invisible_in_game && object.powered,
+                    _ => false,
+                };
+                if !susceptible
+                    || victim.lifecycle.in_limbo()
+                    || !victim.lifecycle.object_alive()
+                    || victim.is_warped_out()
+                    || victim.is_falling_down()
+                    || !advisable(victim)
+                    || allied && !warhead.affects_allies
+                    || matches!(
+                        victim.locomotor.as_ref().map(|loco| loco.active_kind()),
+                        Some(LocomotorKind::Fly | LocomotorKind::Jumpjet | LocomotorKind::Rocket)
+                    )
+                    || crate::sim::superweapon::invulnerability::is_invulnerable(
+                        victim.invulnerability.as_ref(),
+                        self.session.binary_frame(),
+                    )
+                    || f64::from_bits(warhead.interaction(object.armor_id()).multiplier().bits())
+                        .abs()
+                        < 0.001
+                    || object.emp_rules().is_some_and(|emp| {
+                        emp.immune() == Some(true) || emp.rank_immune(victim.veterancy.rank())
+                    })
+                    || self.unit_in_contact_war_factory(
+                        target,
+                        rules,
+                        crate::sim::production::FactoryContactQuery::WeaponsFactory,
+                    )
+                {
+                    continue;
+                }
+                #[cfg(not(feature = "ares"))]
+                {
+                    // Keep the first activation's lifecycle until this counter
+                    // expires. Reclassifying a legacy positive-height hit on
+                    // landing would turn its synthetic offline latch into a
+                    // permanent provider outage. Special-path migration remains
+                    // explicit policy, not a second owner for this same timer.
+                    let native = if victim.emp.remaining > 0 {
+                        victim.emp.lifecycle != EmpLifecycle::Legacy
+                    } else {
+                        victim.category() == EntityCategory::Structure
+                            || victim.category() == EntityCategory::Unit
+                                && victim
+                                    .locomotor
+                                    .as_ref()
+                                    .is_some_and(|loco| loco.active_kind() == LocomotorKind::Drive)
+                                && crate::sim::movement::air_movement::current_fly_height(
+                                    victim,
+                                    self.resolved_terrain.as_ref(),
+                                ) <= 0
+                    };
+                    if native {
+                        self.commit_npatch_native_emp(target, duration, rules, effects);
+                        continue;
+                    }
+                }
+                let remaining = victim.emp.remaining.max(duration);
+                let sparkle = rules.emp_sparkles().map(str::to_owned);
+                self.commit_emp_duration(target, source, remaining, sparkle, true, rules, effects);
+            }
+        }
+
         /// Installed Bullet46920B calls this pre-effect even when Damage=0.
         /// The bounded producer collects the ground CellClass lists. Airborne
         /// victims and their half-distance collector remain a later mechanism.
+        #[cfg(feature = "ares")]
         pub(crate) fn apply_ares_emp_detonation(
             &mut self,
             impact: crate::sim::projectile::ProjectileCoord,
@@ -293,6 +440,7 @@ mod receiver {
         /// One actual10062320 delivery. Supported victims are human
         /// Drive/Walk and ordinary AI Drive, with no Team/managers/harvester/positive death threshold.
         /// Their distinct detach/AI/aircraft/building paths remain explicit residuals.
+        #[cfg(feature = "ares")]
         fn deliver_ares_emp(
             &mut self,
             target: u64,
@@ -415,7 +563,11 @@ mod receiver {
             {
                 return EmpDelivery::Unsupported;
             }
-            if self.unit_in_contact_war_factory(target, rules) {
+            if self.unit_in_contact_war_factory(
+                target,
+                rules,
+                crate::sim::production::FactoryContactQuery::WeaponsFactory,
+            ) {
                 return EmpDelivery::Rejected;
             }
             let delta = duration_delta(settings.duration(), kind.modifier());
@@ -435,6 +587,171 @@ mod receiver {
                     }
                 })
                 .map(str::to_owned);
+            self.commit_emp_duration(
+                target,
+                source,
+                remaining,
+                sparkle_name,
+                settings.sparkles().is_some(),
+                rules,
+                effects,
+            );
+            EmpDelivery::Applied
+        }
+
+        /// NPAE174 B9517D..C6/B990DC..B991DF: Building/ground Drive chain.
+        /// Duration/target admission upstream remains the documented NP policy.
+        /// Equal rehits repeat side effects; stronger existing timers reject.
+        #[cfg(all(feature = "npatch", not(feature = "ares")))]
+        fn commit_npatch_native_emp(
+            &mut self,
+            target: u64,
+            duration: i32,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            let Some(victim) = self.substrate.entities.get(target) else {
+                return;
+            };
+            if victim.emp.remaining > duration {
+                return;
+            }
+            let building = victim.category() == EntityCategory::Structure;
+            let radar_owner = building
+                .then(|| self.object_type(victim.type_ref(), rules))
+                .flatten()
+                .filter(|object| object.radar)
+                .map(|_| victim.owner());
+            if let Some(owner) = radar_owner {
+                // B951A5..B951C6 calls House508DF0 BEFORE B9914E stores
+                // the new counter. A fresh hit sees the old zero; rehit sees
+                // the previous live counter. Reuse the radar action owner.
+                self.refresh_house_radar(owner, rules, effects);
+            }
+            if !building && let Some(name) = rules.emp_sparkles() {
+                // C2EFD3: one Scenario [0,25] constructor-delay draw per
+                // admitted Foot hit, including equality. Building skips it.
+                let Some(victim) = self.substrate.entities.get(target) else {
+                    return;
+                };
+                let coord = crate::sim::movement::ground_pose::object_get_coords(
+                    victim,
+                    self.resolved_terrain.as_ref(),
+                );
+                let world = AnimWorldCoord {
+                    x: coord.x,
+                    y: coord.y,
+                    z: coord.z,
+                };
+                let (rx, ry, sub_x, sub_y, z) = world.to_cell_sub_z();
+                let descriptor = AnimClassSpawnDescriptor {
+                    delay: self.scenario_rng.next_range_i32_inclusive(0, 25) as u16,
+                    draw_flags: 0x600,
+                    ..AnimClassSpawnDescriptor::new(
+                        self.interner.intern(name),
+                        rx,
+                        ry,
+                        sub_x,
+                        sub_y,
+                        z,
+                    )
+                };
+                if let Ok(anim) = self.spawn_anim_at_world(rules, descriptor, world) {
+                    self.set_anim_owner_object(anim, Some(target), rules);
+                }
+            }
+            // B951C6 skips B990DC..B9914C for Buildings: no Foot NavCom,
+            // disguise or Off sound, and crucially no mission/radio reset.
+            // Foot calls base4D94B0, not Unit's override or Guard reset.
+            if !building
+                && self.begin_foot_destination(
+                    target,
+                    false,
+                    rules,
+                    effects.overlay_registry(),
+                    effects,
+                )
+            {
+                self.foot_null_destination(target, rules, effects.overlay_registry(), effects);
+            }
+            let Some(victim) = self.substrate.entities.get_mut(target) else {
+                return;
+            };
+            if !building
+                && self
+                    .interner
+                    .object_type(victim.type_ref(), rules)
+                    .is_some_and(|object| !object.perma_disguise)
+                && let Some(disguise) = victim
+                    .disguise
+                    .as_mut()
+                    .filter(|state| state.is_disguised())
+            {
+                // Unit746720, reached by B990EB's virtual ClearDisguise.
+                disguise.clear_unit();
+            }
+            let play_sound = !building && !victim.power_effect_disabled();
+            if play_sound {
+                Self::emit_power_transition_sound(
+                    &self.interner,
+                    &self.substrate,
+                    &mut self.sound_events,
+                    target,
+                    true,
+                    rules,
+                );
+            }
+            let victim = self
+                .substrate
+                .entities
+                .get_mut(target)
+                .expect("same EMP receiver");
+            victim.emp.remaining = duration; // B9914C; never writes provider+1C8.
+            victim.emp.lifecycle = EmpLifecycle::Native;
+            // B99154..6D call the existing managers in this order.
+            self.free_all_captures(target, rules, effects.overlay_registry(), effects);
+            crate::sim::spawn_manager::kill_all_spawns_with_context(
+                self,
+                target,
+                crate::sim::world::UninitContext::new(rules, effects.overlay_registry())
+                    .with_effects(effects),
+            );
+            // Building/ground Unit B9917E bypass PowerOff. No provider latch
+            // write: Building service missions survive while firing and
+            // factory admission independently consume the positive counter.
+            let _ = self.assign_target_represented(
+                target,
+                None,
+                rules,
+                effects.overlay_registry(),
+                effects,
+            );
+            if building {
+                // Retained NP queue policy: pause the same paid head, without
+                // borrowing Deactivate's unrelated mission/provider writes.
+                self.update_emp_factory_queue(target, rules, effects);
+            }
+        }
+
+        fn commit_emp_duration(
+            &mut self,
+            target: u64,
+            source: Option<u64>,
+            remaining: i32,
+            sparkle_name: Option<String>,
+            refresh_sparkle: bool,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            let Some(old) = self
+                .substrate
+                .entities
+                .get(target)
+                .map(|entity| entity.emp.remaining)
+            else {
+                return;
+            };
+            let first_activation = old <= 0 && remaining > 0;
             self.substrate
                 .entities
                 .get_mut(target)
@@ -494,12 +811,11 @@ mod receiver {
                     }
                 }
             } else if old == remaining {
-                return EmpDelivery::Applied;
+                return;
             }
-            if first_activation || settings.sparkles().is_some() {
+            if first_activation || refresh_sparkle {
                 self.ares_emp_sparkle(target, sparkle_name.as_deref(), rules);
             }
-            EmpDelivery::Applied
         }
         fn enable_ares_emp(&mut self, target: u64, rules: &RuleSet, effects: FrameEffects<'_>) {
             let building = self
@@ -544,6 +860,7 @@ mod receiver {
                         .set_archive_target(focus);
                 }
             }
+            self.update_emp_factory_queue(target, rules, effects);
         }
         fn disable_ares_emp(&mut self, target: u64, rules: &RuleSet, effects: FrameEffects<'_>) {
             let building = self
@@ -590,16 +907,59 @@ mod receiver {
             }
             self.retire_ares_emp_sparkle(target);
             self.recover_ares_emp_ai_mission(target, rules);
+            self.update_emp_factory_queue(target, rules, effects);
+        }
+        // Compatibility policy: EMP transitions notify the existing509140
+        // queue owner, just like manual power. Physical factory searches still
+        // see the building, preserving the paid head instead of refunding it.
+        fn update_emp_factory_queue(
+            &mut self,
+            target: u64,
+            rules: &RuleSet,
+            effects: FrameEffects<'_>,
+        ) {
+            use crate::sim::production::{
+                ProductionCategory, factory_category_for_building, update_factory_queue,
+            };
+            let Some((owner, category)) = self.substrate.entities.get(target).and_then(|entity| {
+                let object = self.entity_object_type(entity, rules)?;
+                Some((entity.owner(), factory_category_for_building(object)?))
+            }) else {
+                return;
+            };
+            update_factory_queue(self, rules, owner, category, effects);
+            if category == ProductionCategory::Building {
+                update_factory_queue(self, rules, owner, ProductionCategory::Defense, effects);
+            }
         }
         /// Installed common TechnoUpdate1004B528..575, before original tint:
         /// an offline Building recovers on its next reached head after power
-        /// returns. This is not EnableStuff and does not restore saved Focus.
+        /// returns. VERA also restores Stuff here so lights/powered art do not
+        /// remain permanently dark; this deliberately improves the Ares hook.
         pub(crate) fn update_ares_emp_operability(
             &mut self,
             target: u64,
             rules: &RuleSet,
             effects: FrameEffects<'_>,
         ) {
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            if self
+                .substrate
+                .entities
+                .get(target)
+                .is_some_and(|entity| entity.emp_factory_recovery_pending())
+            {
+                if self.building_operational_state(target, rules) == Some(true) {
+                    self.substrate
+                        .entities
+                        .get_mut(target)
+                        .unwrap()
+                        .emp
+                        .lifecycle = EmpLifecycle::Legacy;
+                    self.update_emp_factory_queue(target, rules, effects);
+                }
+                return;
+            }
             let Some(entity) = self.substrate.entities.get(target) else {
                 return;
             };
@@ -609,16 +969,18 @@ mod receiver {
                 || !self
                     .interner
                     .object_type(entity.type_ref(), rules)
-                    .is_some_and(ordinary_building)
+                    .is_some_and(|object| crate::rules::NPATCH_ENABLED || ordinary_building(object))
                 || self.building_operational_state(target, rules) != Some(true)
             {
                 return;
             }
             let owner = entity.owner();
+            self.set_building_stuff_enabled(target, true, rules);
             self.techno_reactivate(target, rules, effects);
             if let Some(house) = self.houses.get_mut(&owner) {
                 house.request_tech_recheck();
             }
+            self.update_emp_factory_queue(target, rules, effects);
         }
         /// Installed disable100627F0's final1006293A block, after the
         /// Reactivate/manager/Anim owners. Human control is50B730, not merely
@@ -632,9 +994,12 @@ mod receiver {
             if !entity.category().is_foot() || self.owner_is_human(entity.owner()) {
                 return;
             }
+            #[cfg(feature = "ares")]
             let mission = rules
                 .ares_emp_ai_recover_mission()
                 .unwrap_or(MissionType::Hunt);
+            #[cfg(not(feature = "ares"))]
+            let mission = MissionType::Hunt;
             let _ = self.mission_queue_exact(
                 target,
                 crate::sim::mission::MissionId::from_known(mission),
@@ -653,6 +1018,98 @@ mod receiver {
             let Some(entity) = self.substrate.entities.get_mut(target) else {
                 return;
             };
+            #[cfg(all(feature = "npatch", not(feature = "ares")))]
+            if entity.emp.lifecycle != EmpLifecycle::Legacy {
+                // TechnoAI6FAF0D/C2BB3E: positive countdown; HP0 skips only
+                // the store. Expiry is not Reactivate and never queues Hunt.
+                if entity.emp.remaining <= 0 {
+                    return;
+                }
+                let next = entity.emp.remaining - 1;
+                if entity.health.current() != 0 {
+                    entity.emp.remaining = next;
+                }
+                if next != 0 {
+                    return;
+                }
+                entity.emp.lifecycle = if entity.emp.remaining != 0 {
+                    EmpLifecycle::Native
+                } else {
+                    EmpLifecycle::Legacy
+                };
+                if entity.category() == EntityCategory::Structure {
+                    let owner = entity.owner();
+                    let object = self.interner.object_type(entity.type_ref(), rules);
+                    let visible = object.is_some_and(|object| !object.invisible_in_game);
+                    let radar = object.is_some_and(|object| object.radar);
+                    let factory = object.is_some_and(|object| object.has_factory());
+                    // Building6FAF2A..6FAF81 bypasses Foot activation and the
+                    // global sparkle loop.4547C0 is the existing slot loss
+                    // owner, not EnableStuff or ResetOrdersToGuard. The next
+                    // ordinary4549B0 edge owns any operational slot restore.
+                    if visible {
+                        self.apply_building_anim_power(target, false, rules);
+                        if radar {
+                            self.power_states.house_mut(owner).recheck_radar();
+                        }
+                    }
+                    if factory && self.building_operational_state(target, rules) != Some(true) {
+                        if let Some(entity) = self.substrate.entities.get_mut(target)
+                            && entity.emp.remaining == 0
+                        {
+                            // Preserve the documented paid-head wait through
+                            // low power/manual Off without inventing a provider
+                            // latch or destroying the Building mission.
+                            entity.emp.lifecycle = EmpLifecycle::NativeFactoryAwaitingPower;
+                        }
+                    }
+                    self.update_emp_factory_queue(target, rules, effects);
+                    return;
+                }
+                let online = !entity.deactivated.is_offline();
+                if online {
+                    Self::emit_power_transition_sound(
+                        &self.interner,
+                        &self.substrate,
+                        &mut self.sound_events,
+                        target,
+                        false,
+                        rules,
+                    );
+                    if let Some(loco) = self
+                        .substrate
+                        .entities
+                        .get_mut(target)
+                        .and_then(|entity| entity.locomotor.as_mut())
+                    {
+                        loco.power_on();
+                    }
+                }
+                // 6FAFB9..6FAFFB ends ALL attached anims of the current
+                // Rules EMP sparkle type; no competing retained ID list.
+                let sparkle = rules
+                    .emp_sparkles()
+                    .and_then(|name| self.interner.get(name));
+                if let Some(sparkle) = sparkle {
+                    let matches: Vec<_> = self
+                        .substrate
+                        .anims
+                        .iter()
+                        .filter_map(|(&id, anim)| {
+                            (anim.owner_entity() == Some(target) && anim.type_id() == sparkle)
+                                .then_some(id)
+                        })
+                        .collect();
+                    for id in matches {
+                        self.substrate
+                            .anims
+                            .get_mut(id)
+                            .expect("matched EMP anim")
+                            .end_loops();
+                    }
+                }
+                return;
+            }
             if entity.emp.remaining == 0 {
                 return;
             }
@@ -716,7 +1173,7 @@ mod receiver {
             }
         }
     }
-    #[cfg(test)]
+    #[cfg(all(test, feature = "ares"))]
     mod tests {
         use super::*;
         use crate::rules::ini_parser::IniFile;
@@ -1146,12 +1603,12 @@ mod receiver {
                 .get_mut(&owner)
                 .unwrap()
                 .set_total_output_for_test(100);
-            // First operational edge resumes the existing powered slot. The reached
-            //Techno head then activates; it must not invent a delayed EnableStuff.
+            // The native hook omits EnableStuff here. VERA deliberately restores
+            // the shared light/animation gate as well as the operational latch.
             sim.object_ai_visit_one(target, Some(&rules), ObjectAiCtx::default());
             assert!(!sim.entities().get(target).unwrap().deactivated.is_offline());
             assert!(
-                !sim.entities()
+                sim.entities()
                     .get(target)
                     .unwrap()
                     .building_art
@@ -1534,7 +1991,11 @@ mod receiver {
                     );
                     assert_eq!(
                         victim.building_art.stuff_enabled(),
-                        expected["stuff"].as_bool().unwrap(),
+                        expected["stuff"].as_bool().unwrap()
+                            // This corpus ends the restore row at the common
+                            // Techno head. VERA fixes that native dark-Stuff edge.
+                            || (row["name"] == "AI_lowpower_restore"
+                                && index + 1 == row["steps"].as_array().unwrap().len()),
                         "{label}"
                     );
                     assert_eq!(
@@ -2717,3 +3178,7 @@ mod receiver {
         }
     }
 }
+
+#[cfg(all(test, feature = "npatch"))]
+#[path = "npatch_emp_tests.rs"]
+mod npatch_tests;

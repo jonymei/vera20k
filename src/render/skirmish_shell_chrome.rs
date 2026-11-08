@@ -17,7 +17,6 @@ use crate::assets::pal_file::Palette;
 use crate::assets::pcx_file::PcxFile;
 use crate::assets::shp_file::ShpFile;
 use crate::render::batch::{BatchRenderer, BatchTexture};
-use crate::render::gpu::GpuContext;
 use crate::render::native_surface_format::ACTIVE_RETAIL_RGB565_PRESENTATION;
 use crate::ui::sidebar::SidebarTheme;
 
@@ -379,7 +378,8 @@ struct RenderedShellEntry {
 }
 
 pub fn build_skirmish_shell_chrome_atlas(
-    gpu: &GpuContext,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
     batch: &BatchRenderer,
     assets: &AssetManager,
 ) -> Option<SkirmishShellChromeAtlas> {
@@ -661,7 +661,7 @@ pub fn build_skirmish_shell_chrome_atlas(
         push_optional(&mut rendered, render_flag_pcx_entry(assets, name), name);
     }
 
-    let (texture, packed) = pack_entries(gpu, batch, &rendered)?;
+    let (texture, packed) = pack_entries(device, queue, batch, &rendered)?;
     let by_label: HashMap<String, SkirmishShellChromeEntry> = rendered
         .iter()
         .map(|entry| entry.label.clone())
@@ -1175,7 +1175,8 @@ fn average_rgb(a: [u8; 3], b: [u8; 3]) -> [u8; 3] {
 }
 
 fn pack_entries(
-    gpu: &GpuContext,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
     batch: &BatchRenderer,
     entries: &[RenderedShellEntry],
 ) -> Option<(BatchTexture, Vec<SkirmishShellChromeEntry>)> {
@@ -1227,7 +1228,8 @@ fn pack_entries(
         log::info!("  {}: {}x{}", entry.label, entry.width, entry.height);
     }
 
-    let texture = batch.create_texture(gpu, &rgba, atlas_width, atlas_height);
+    let texture =
+        batch.create_texture_on_device(device, queue, &rgba, atlas_width, atlas_height, None);
     let atlas_entries = entries
         .iter()
         .zip(placements)

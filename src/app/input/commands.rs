@@ -123,7 +123,11 @@ pub(crate) fn cancel_build_by_type(state: &mut AppState, type_id: &str, all: boo
 }
 
 /// Stable id of the visible object selected by the tactical object picker.
-fn visible_object_under_point(state: &AppState, world_x: f32, world_y: f32) -> Option<u64> {
+pub(super) fn visible_object_under_point(
+    state: &AppState,
+    world_x: f32,
+    world_y: f32,
+) -> Option<u64> {
     let sim = state
         .match_state
         .sim_runtime
@@ -1247,6 +1251,10 @@ pub(crate) fn encode_ordinary_local_command(
         }
         Command::ToggleRepair { entity_id } => {
             let record = sim.encode_repair_record(owner, entity_id)?;
+            Some(CommandEnvelope::synchronized(record, execute_tick))
+        }
+        Command::SetBuildingOnLine { entity_id, on } => {
+            let record = sim.encode_building_online_record(owner, entity_id, on)?;
             Some(CommandEnvelope::synchronized(record, execute_tick))
         }
         payload => Some(CommandEnvelope::new(owner, execute_tick, payload)),

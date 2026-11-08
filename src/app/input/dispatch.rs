@@ -287,6 +287,11 @@ pub(crate) fn tactical_mouse(state: &mut AppState, button: MouseButton, btn_stat
                         .match_presentation
                         .sidebar_gadget_state
                         .sell_mode_on
+                    || state
+                        .match_state
+                        .match_presentation
+                        .sidebar_gadget_state
+                        .power_mode_on
                     // The held-drag 4AC380 never starts a band in beacon
                     // mode (4AC3A3).
                     || crate::app::input::beacon::mode_active(state)
@@ -435,6 +440,10 @@ fn tactical_left_up(state: &mut AppState) {
         }
         super::state::TacticalPointerMode::RepairSell => {
             crate::app::input::commands::try_repair_sell_mode_click(state);
+            return;
+        }
+        super::state::TacticalPointerMode::Power => {
+            crate::app::input::power::click(state);
             return;
         }
         super::state::TacticalPointerMode::Ordinary => {}
@@ -1848,6 +1857,7 @@ fn dispatch_retail_hotkey(state: &mut AppState, command: HotkeyCommand) {
         HotkeyCommand::TypeSelect => {}
         HotkeyCommand::ToggleRepair => apply_sidebar_action(state, SidebarAction::ToggleRepairMode),
         HotkeyCommand::ToggleSell => apply_sidebar_action(state, SidebarAction::ToggleSellMode),
+        HotkeyCommand::TogglePower => crate::app::input::power::toggle_mode(state),
         HotkeyCommand::CenterBase => jump_camera_to_base(state),
         HotkeyCommand::CenterOnRadarEvent => {
             // Native's eight-cell review ring lives in RadarClass and holds

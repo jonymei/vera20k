@@ -1047,6 +1047,22 @@ def secret_lab_generate():
                 ])
 
 
+def npatch_secret_lab_generate():
+    """Small RNG/selection controls for the patched assignment owner."""
+    rows = []
+    for name, labs, counts, override in (
+            ('full_pool', 4, (4, 0, 0), None),
+            ('wrap_reset_with_override', 7, (1, 1, 1), (1, 0)),
+            ('single_choice', 3, (1, 0, 0), None)):
+        row = secret_assignment(name, 1, labs, counts, override=override)
+        rows.append({key: row[key] for key in (
+            'name', 'lab_count', 'counts', 'override', 'assignments',
+            'getters', 'raw_store_count')} | {
+                'scenario_before': row['rng_before']['scenario'],
+                'scenario_after': row['rng_after']['scenario']})
+    return dict(cases=rows)
+
+
 def secret_lab_metadata():
     return provenance(
         scope='Original authored Post_Map admission gate and SecretLab startup '
@@ -1315,6 +1331,21 @@ def main(argv=None):
         finish_vectors(construction_options_generate,
                        Path(__file__).with_name('can_build_construction_options.json'),
                        provenance=construction_options_metadata, argv=args)
+    elif '--npatch-secret-lab' in args:
+        args.remove('--npatch-secret-lab')
+        finish_vectors(npatch_secret_lab_generate,
+                       Path(__file__).with_name('can_build_secret_lab_npatch.json'),
+                       provenance=lambda: provenance(
+                           scope='NPatch assignment selection and Scenario RNG consumption',
+                           assumptions=['Declared typed lists and global lab vector; original '
+                               '68C050, C2E5E8, C2E5FC and RNG execute. Compact outputs '
+                               'retain only inputs and results asserted by Rust. No whole '
+                               'scenario load, capture or UI equivalence is claimed.'],
+                           substitutions=['Existing Emu allocation/free transport only; '
+                               'no selection, getter or RNG answers are supplied.'],
+                           entry_points={'assignment': ASSIGN_SECRET_PRODUCTION,
+                                         'selection': 0xC2E5FC}),
+                       argv=args)
     elif '--secret-lab' in args:
         args.remove('--secret-lab')
         finish_vectors(secret_lab_generate, Path(__file__).with_name('can_build_secret_lab.json'),

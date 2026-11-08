@@ -793,7 +793,9 @@ fn flh_world_delta(
 /// from the head (`CargoClass::IndexOf @ 0x00473500`), it asks the
 /// transport's GetFLH (vtable `+0xB0`, `TechnoClass::GetFLH` for a Unit) for
 /// weapon `-k` with a zero offset: `AlternateFLH[k-1]` of the transport's
-/// type for `k <= 5`, else a zero FLH (`0x006F3AF5..0x006F3B21`), through
+/// type for `k <= 5`, else a zero FLH in stock (`0x006F3AF5..0x006F3B21`).
+/// NPAE174's hook6F3AFB -> C2E196 cycles the same five ports for later riders.
+/// Both paths use the existing ArtEntry::alternate_fire_flh owner, through
 /// the transport's matrix, facings and burst parity (`+0x3B8`) from the
 /// transport's coordinate. The shot keeps the rider's aim facing for its
 /// muzzle animation (`Fire_At` picks it from the firer).
@@ -1437,6 +1439,11 @@ mod control_link_port_tests {
             .as_u64()
             .unwrap() as u16;
         for row in data["cases"].as_array().unwrap() {
+            // The stock overflow controls are deliberately not NPAE goldens:
+            // its C2E196 hook wraps those ports, covered by the sixth-rider test.
+            if crate::rules::NPATCH_ENABLED && row["weapon_index"].as_i64().unwrap() < -5 {
+                continue;
+            }
             let mut art = retail_art.clone();
             let mut overrides = String::from("[DRED]\n");
             for (port, flh) in row["alternate_flh"].as_array().unwrap().iter().enumerate() {

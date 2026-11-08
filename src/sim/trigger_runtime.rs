@@ -415,9 +415,7 @@ impl RuntimeDefinitions {
                 // source order before the retained reverse traversal.
                 for event in events.iter_mut().rev() {
                     if let Some(team) = event.team_name.as_deref() {
-                        event.team_name = definitions
-                            .team_type(team)
-                            .map(|index| definitions.team_types[index].clone());
+                        event.team_name = teams.find_team_type(team).map(|team| team.id.clone());
                     }
                 }
                 //727530..7275A3: a present entry rebuilds the action list.
